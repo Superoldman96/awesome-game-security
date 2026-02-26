@@ -3035,16 +3035,16 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/JeanToBinks/Fortnite-Cheato-UD-EAC-BE
 - https://github.com/gmh5225/BE-Forcer-Fortnite [BE forcer for fortnite]
 - https://github.com/gmh5225/Fortnite-External [External]
-- https://github.com/percpopper/Fortnite-CameraCachePOV
-- https://github.com/percpopper/Fortnite-FNameEntry
-- https://github.com/ritz-1337/fortnite-external-evo.gj [External]
-- https://github.com/simply-codes/Fortnite-External-P2C [External]
-- https://github.com/Zetolac/FortniteExternalExploits [External Exploits]
-- https://github.com/xetzzy/Fortnite-External-Source [External]
+- https://github.com/gmh5225/Fortnite-CameraCachePOV
+- https://github.com/gmh5225/Fortnite-FNameEntry
+- https://github.com/gmh5225/fortnite-external-evo.gj [External]
+- https://github.com/gmh5225/Fortnite-External-P2C [External]
+- https://github.com/gmh5225/FortniteExternalExploits [External Exploits]
+- https://github.com/gmh5225/Fortnite-External-Source [External]
 - https://github.com/gmh5225/fortnite-triadz [External]
 - https://github.com/gmh5225/Fortnite-External-5 [External]
-- https://github.com/DontCry361x/ritz-amazing-fortnite-internal-updated [internal]
-- https://github.com/NurdAlert/flirtnite [External]
+- https://github.com/gmh5225/ritz-amazing-fortnite-internal-updated [internal]
+- https://github.com/gmh5225/flirtnite [External]
 - https://github.com/gmh5225/Fortnite-3.5 [Internal]
 - https://github.com/gmh5225/ZeroGui-Fortnite-Internal [Internal]
 - https://github.com/gmh5225/Fortnite-VoyagerTF [Voyager]
@@ -3053,7 +3053,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 
 > Game:Bloodhunt
 - https://github.com/ZZZ-Monster/bloodhunt_External
-- https://github.com/PhysX1337/BloodHunt-v1.1
+- https://github.com/gmh5225/BloodHunt-v1.1
 - https://github.com/gmh5225/blood-hunt
 
 > Game:Super People
@@ -3062,17 +3062,17 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/superpeople-client
 
 > Game:Splitgate
-- https://github.com/percpopper/Splitgate-Internal
+- https://github.com/gmh5225/Splitgate-Internal
 
 > Game:PUBG
 - https://github.com/gmh5225/pubg-dumper [Dump]
 - https://github.com/gmh5225/pubg_dump_offset [Offset]
 - https://github.com/gmh5225/pubg-external-cheat
-- https://github.com/ajkhoury/pubg_internal
-- https://github.com/iCollin/pubg-internal
-- https://github.com/K-cazb/pubg-public
+- https://github.com/gmh5225/pubg_internal
+- https://github.com/gmh5225/pubg-internal
+- https://github.com/gmh5225/pubg-public
 - https://github.com/gmh5225/PlayerUnknown-s-Battlegrounds-Pubg-Steam-Hack-Esp-Aimbot
-- https://github.com/dot1991/lilypublic
+- https://github.com/gmh5225/lilypublic
 - https://github.com/gmh5225/PUBG_Internal
 - https://github.com/gmh5225/PUBG-DX
 - https://github.com/gmh5225/PUBGSTAR
@@ -3082,15 +3082,15 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 
 > Game:PUBGM
 - https://github.com/gmh5225/pubgm_sdk_and_offsets [Offset]
-- https://github.com/atulkunal999/pubg_mobile_memory_hacking
+- https://github.com/gmh5225/pubg_mobile_memory_hacking
 - https://github.com/Mood-Coding/pubgm_shitty_source
 - https://github.com/gmh5225/PUBGM-PUBGPatcher
 - https://github.com/gmh5225/PUBGM1.6-DeadGame
-- https://github.com/mut1234/BYPASS-PUBG-MOBILE-IMGUI
+- https://github.com/gmh5225/BYPASS-PUBG-MOBILE-IMGUI
 - https://github.com/gmh5225/LastIslandOfSurvival-iOSCheat-Source
-- https://github.com/halloweeks/pubg-mobile-pak-extract [pak extracting tool]
+- https://github.com/gmh5225/pubg-mobile-pak-extract [pak extracting tool]
 - https://github.com/gmh5225/pubg_mobile_memory_hacking_examples
-- https://github.com/Super-Cssdiv/ChinaPubg
+- https://github.com/gmh5225/ChinaPubg
 - https://github.com/gmh5225/pubg
 
 > Game:Sausage Man
@@ -3100,39 +3100,39 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/the-finals-interior-cheat
 
 > Game:EFT
-- https://github.com/patrickcjk/TOG [Offsets Generator]
+- https://github.com/gmh5225/TOG [Offsets Generator]
 - https://github.com/fcancelog/EftStreamedCheat
 - https://github.com/Nou4r/pKernelInterface-EFT
 - https://github.com/sailro/EscapeFromTarkov-Trainer
 - https://github.com/gmh5225/tiny_eft
 - https://github.com/gmh5225/Nathans-Tarkov-Radar-Public [Vmread + Radar]
-- https://github.com/frankie-11/eft-external
+- https://github.com/gmh5225/eft-external
 - https://github.com/Splitx12/eft
 - https://github.com/gmh5225/eft-internal
 - https://github.com/gmh5225/EFT-Veil-EFT
 - https://github.com/Qemu-Gang/Escape-from-TuxKov [QEMU]
 - https://github.com/gmh5225/Comm-ImMiraclela
 - https://github.com/gmh5225/Simple-EFT-Base
-- https://github.com/bytemyass/EFTLeecher [DMA]
+- https://github.com/gmh5225/EFTLeecher [DMA]
 - https://github.com/gmh5225/eft-dma-radar-1 [DMA Radar]
 - https://github.com/gmh5225/EFT-MonoEFT
-- https://github.com/ZhaoKunqi/simple-eft-superman-training-bot
+- https://github.com/gmh5225/simple-eft-superman-training-bot
 - https://github.com/gmh5225/EFT-NewTarkovCheatProject
 
 > Game:Arena Breakout Infinite
-- https://github.com/cra0/UE426_ABInfinite-Win64-Shipping [SDK]
-- https://github.com/Ke4ton/hardware_bypass [GPU check bypass]
+- https://github.com/gmh5225/UE426_ABInfinite-Win64-Shipping [SDK]
+- https://github.com/gmh5225/hardware_bypass [GPU check bypass]
 
 > Game:R6
-- https://github.com/NMan1/Rainbow-Six-Cheat
-- https://github.com/NMan1/OverflowR6V2
-- https://github.com/NMan1/Internal-Rainbow-Six-Cheat-V3
-- https://github.com/beans42/epic-r6-v9
+- https://github.com/gmh5225/Rainbow-Six-Cheat
+- https://github.com/gmh5225/OverflowR6V2
+- https://github.com/gmh5225/Internal-Rainbow-Six-Cheat-V3
+- https://github.com/gmh5225/epic-r6-v9
 - https://github.com/Kix48/R6Updater
 - https://github.com/gmh5225/R6Table_Internal
-- https://github.com/JGonz1337/r6-internal
+- https://github.com/gmh5225/r6-internal
 - https://github.com/gmh5225/External-R6S-Cheat
-- https://github.com/vctr74/R6-Internal-V3
+- https://github.com/gmh5225/R6-Internal-V3
 - https://github.com/gmh5225/R6S-internal-Cheat
 - https://github.com/gmh5225/Rainbow-Six-Siege-Rs6-External-Esp-Aimbot-Hack-Cheat
 - https://github.com/gmh5225/Rainbow-6-Siege-Cheat
@@ -3155,7 +3155,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/Overwatch-2-Cheat-Aimbot-Esp
 - https://github.com/gmh5225/meowsense
 - https://github.com/gmh5225/Ow-Outlines [Shows Players through walls]
-- https://github.com/ZEROWyt/Overwatch-2-TOPE-EXTERNAL-CHEAT
+- https://github.com/gmh5225/Overwatch-2-TOPE-EXTERNAL-CHEAT
 - https://github.com/gmh5225/OW2-wardenrekter [Emulate OW2 AC]
 
 > Game:Paladins
@@ -3163,26 +3163,26 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/Paladins-internal-Cheat
 
 > Game:DayZ
-- https://github.com/zhitkur/DayZzz
+- https://github.com/gmh5225/DayZzz
 - https://github.com/gmh5225/External-Dayz-Cheat
 - https://github.com/gmh5225/DayZ-Cheat
-- https://github.com/JonathanEke/DayZ-Server-Battleye-Remover [Disable battleye]
+- https://github.com/gmh5225/DayZ-Server-Battleye-Remover [Disable battleye]
 
 > Game:Rust
 - https://github.com/gmh5225/rust-auto-dumper [Auto Dump]
 - https://github.com/gmh5225/OxideDumper [Auto Dump]
-- https://github.com/NMan1/OverflowRust
+- https://github.com/gmh5225/OverflowRust
 - https://github.com/gmh5225/simple-rust-hack
 - https://github.com/gmh5225/rust-internal
 - https://github.com/gmh5225/Rust-External
 - https://github.com/gmh5225/Rico-Cheat-rust-external
 - https://github.com/spyder1g/a-pasted-rust-script
-- https://github.com/LordAbbot/Rust-External-Cheat
-- https://github.com/ZentifyZ/Kors_lol [Internal]
+- https://github.com/gmh5225/Rust-External-Cheat
+- https://github.com/gmh5225/Kors_lol [Internal]
 - https://github.com/gmh5225/Rust-Internal [Internal]
-- https://github.com/ZentifyZ/CRC32
+- https://github.com/gmh5225/CRC32
 - https://github.com/gmh5225/Rust-Cheat-External
-- https://github.com/krispybyte/Simple-Rust-Base
+- https://github.com/gmh5225/Simple-Rust-Base
 - https://github.com/gmh5225/sapphire
 - https://github.com/gmh5225/Rust-Cheat-External-main
 - https://github.com/gmh5225/Rust-RustInternal [Internal]
@@ -3191,24 +3191,24 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/Rust-ExternaL-and-Driver-AlienCheats [External]
 - https://github.com/gmh5225/Rust-External-Source [External]
 - https://github.com/gmh5225/immortal-rust
-- https://github.com/IntelSDM/RustDMACheat [DMA]
+- https://github.com/gmh5225/RustDMACheat [DMA]
 
 > Game:Arma3
 - https://github.com/gmh5225/arma3-external-variable-manager
-- https://github.com/R3voA3/3den-Enhanced [Mod Editor]
-- https://github.com/tym32167/arma3beclient [BattlEye Tool]
+- https://github.com/gmh5225/3den-Enhanced [Mod Editor]
+- https://github.com/gmh5225/arma3beclient [BattlEye Tool]
 
 > Game:7 Days To Die
 - https://github.com/gmh5225/7DTD
 
 > Game:AVA
-- https://github.com/boylin0/AVA-Hack
+- https://github.com/gmh5225/AVA-Hack
 
 > Game:Mordhau
 - https://github.com/gmh5225/mordhau-simple-auto-block-cheat
 
 > Game:Smite  [UE3]
-- https://github.com/JackBro/SmiteESPAimbot 
+- https://github.com/gmh5225/SmiteESPAimbot 
 
 > Game:POLYGON [UE5]
 - https://github.com/gmh5225/POLYGON_UE5
@@ -3219,23 +3219,23 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/Palworld-Server-Modding
 - https://github.com/gmh5225/PalWorld-ServerInjector
 - https://github.com/gmh5225/PalWorld-NetCrack
-- https://github.com/luciouskami/palworld_rcon [Server on Windows]
-- https://github.com/luciouskami/palworld_rcon [Server on Windows]
+- https://github.com/gmh5225/palworld_rcon [Server on Windows]
+- https://github.com/gmh5225/palworld_rcon [Server on Windows]
 - https://github.com/gmh5225/HowTo-Palworld [Server on Linux]
-- https://github.com/jammsen/docker-palworld-dedicated-server [Server based on Linux and Docker]
+- https://github.com/gmh5225/docker-palworld-dedicated-server [Server based on Linux and Docker]
 - https://github.com/gmh5225/PalWorld-Server-Unoffical-Fix [Server patch]
-- https://github.com/NattKh/PalWorld-Tools [Mod Patcher]
-- https://github.com/localcc/PalworldModdingKit [A modding kit for Palworld]
-- https://github.com/weizhking/PalworldSaved [Save]
-- https://github.com/cheahjs/palworld-save-tools [Save]
+- https://github.com/gmh5225/PalWorld-Tools [Mod Patcher]
+- https://github.com/gmh5225/PalworldModdingKit [A modding kit for Palworld]
+- https://github.com/gmh5225/PalworldSaved [Save]
+- https://github.com/gmh5225/palworld-save-tools [Save]
 - https://github.com/gmh5225/PalEdit Save]
-- https://github.com/DysonCheng/PalWorldSettingGenerator [Setting Generator]
-- https://github.com/hualuoo/palworld-helper [Helper]
-- https://github.com/shalzuth/PalWorldAntiCheat [Anti Cheat]
+- https://github.com/gmh5225/PalWorldSettingGenerator [Setting Generator]
+- https://github.com/gmh5225/palworld-helper [Helper]
+- https://github.com/gmh5225/PalWorldAntiCheat [Anti Cheat]
 - https://github.com/gmh5225/PalAntiCheat-poc [Anti Cheat]
 
 > Game:Genshin Impact
-- https://github.com/khang06/mhynot2
+- https://github.com/gmh5225/mhynot2
 - https://github.com/gmh5225/genshinjumpfixer2 [Decode CFG]
 - https://github.com/gmh5225/misc/tree/master/reversing/genshin [Decode CFG]
 - https://github.com/DNLINYJ/Anti_miHoYo_Jcc_Obfuscate [Decode CFG By X64DBG]
@@ -3247,7 +3247,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/YaeAchievement
 - https://github.com/phonowell/genshin-impact-script [A sweet genshin impact script]
 - https://github.com/gmh5225/GenshinImpact-Base
-- https://github.com/360NENZ/Taiga74164-Akebi-GC
+- https://github.com/gmh5225/Taiga74164-Akebi-GC
 - https://github.com/gmh5225/EasyPeasy-GC
 - https://github.com/gmh5225/GenshinDebuggerBypass
 - https://github.com/gmh5225/Genshin-EasyPeasy-Bypass [Anti-Debug Bypass]
