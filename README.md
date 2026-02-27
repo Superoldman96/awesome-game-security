@@ -3487,24 +3487,24 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/awesome-executable-packing
 - https://github.com/phra/PEzor
 - https://github.com/gmh5225/PE-Packer [X86]
-- https://github.com/longqun/Packer [X86]
+- https://github.com/gmh5225/Packer [X86]
 - https://github.com/gmh5225/pe-protector [X86]
 - https://github.com/gmh5225/ConfuserEx [.NET]
 - https://github.com/iArtorias/debug_remover [Strip Debug Info]
 - https://github.com/ytk2128/pe32-password
-- https://github.com/frkngksl/Huan
-- https://github.com/frkngksl/HintInject [Hint/Name Table]
+- https://github.com/gmh5225/Huan
+- https://github.com/gmh5225/HintInject [Hint/Name Table]
 - https://github.com/ClaudiuGeorgiu/Obfuscapk [Android]
-- https://github.com/magnussen7/Embuche [ELF]
+- https://github.com/gmh5225/Embuche [ELF]
 - https://github.com/gmh5225/amber
-- https://github.com/SamLarenN/PePacker
-- https://github.com/Systemcluster/wrappe [Rust]
-- https://github.com/vsteffen/woody_woodpacker [ELF]
-- https://github.com/n4sm/m0dern_p4cker [ELF]
-- https://github.com/JonDoNym/peinjector
-- https://github.com/craids/AresFramework
-- https://github.com/andrew9382/exe_packer
-- https://github.com/dr4k0nia/Origami [Compressing .net assemblies]
+- https://github.com/gmh5225/PePacker
+- https://github.com/gmh5225/wrappe [Rust]
+- https://github.com/gmh5225/woody_woodpacker [ELF]
+- https://github.com/gmh5225/m0dern_p4cker [ELF]
+- https://github.com/gmh5225/peinjector
+- https://github.com/gmh5225/AresFramework
+- https://github.com/gmh5225/exe_packer
+- https://github.com/gmh5225/Origami [Compressing .net assemblies]
 - https://github.com/gmh5225/ELFpacker [ELF]
 - https://github.com/gmh5225/shibari [Linking multiple PE\PE + files to one]
 - [Simple ELF runtime packer for creating stealthy droppers](https://github.com/gmh5225/ward)
@@ -3512,52 +3512,52 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/petoy [PE]
 - [An ELF / PE packer written in pure C](https://github.com/gmh5225/Silent_Packer)
 - https://github.com/gmh5225/ELFcrypt [ELF RC4]
-- https://github.com/timhsutw/elfuck [ELF]
-- https://github.com/Eronana/packer [PE]
+- https://github.com/gmh5225/elfuck [ELF]
+- https://github.com/gmh5225/packer [PE]
 - https://github.com/gmh5225/hXOR-Packer [PE XOR]
 - https://github.com/gmh5225/midgetpack [ELF]
 - https://github.com/gmh5225/netcrypt [.NET]
 - https://github.com/gmh5225/pakkero [ELF]
 - https://github.com/gmh5225/papaw [LZMA]
-- https://github.com/akawashiro/sloader [ELF loader which aims to replace ld-linux.so of glibc]
-- https://github.com/cryonumb/elfloader [ELF Loader for ps5-jar-loader]
+- https://github.com/gmh5225/sloader [ELF loader which aims to replace ld-linux.so of glibc]
+- https://github.com/gmh5225/elfloader [ELF Loader for ps5-jar-loader]
 - https://github.com/gmh5225/IAT-Obfuscation [IAT Obfuscation]
 - https://github.com/gmh5225/shellcode-EntropyFix [Reducing entropy]
 - https://github.com/gmh5225/AtomPePacker [PE X64]
-- https://github.com/Lima-X/Win32.Nebula [PE X64]
+- https://github.com/gmh5225/Win32.Nebula [PE X64]
 - https://github.com/gmh5225/hm-pe-packer [PE X64]
 - https://github.com/gmh5225/PEPacker [PE X64]
-- https://github.com/xsj3n/x64-EXE-Packer [PE X64]
+- https://github.com/gmh5225/x64-EXE-Packer [PE X64]
 - https://github.com/gmh5225/Shoggoth [Polymorphic Encryptor]
-- https://github.com/GunshipPenguin/kiteshield [ELF X64]
+- https://github.com/gmh5225/kiteshield [ELF X64]
 - https://github.com/gmh5225/KitsuPE [PE]
 - https://github.com/gmh5225/Evader [PE]
 - https://github.com/gmh5225/GreyM [PE]
-- https://github.com/DavidBuchanan314/stelf-loader [ELF X64 loader]
-- https://github.com/frank2/oxide [Written by Rust]
-- https://github.com/Washi1337/AwaitFuscator [.NET]
-- https://github.com/Fatmike-GH/Fatpack [A Windows PE packer with full TLS (Thread Local Storage) support]
+- https://github.com/gmh5225/stelf-loader [ELF X64 loader]
+- https://github.com/gmh5225/oxide [Written by Rust]
+- https://github.com/gmh5225/AwaitFuscator [.NET]
+- https://github.com/gmh5225/Fatpack [A Windows PE packer with full TLS (Thread Local Storage) support]
 - https://github.com/gmh5225/rel-fuscate [Modifying the jmprel_entry->r_offset]
 - https://github.com/gmh5225/SuperMega [Stealthily inject shellcode into an executable]
 
 > CLR Protection
-- https://github.com/endgameinc/ClrGuard
+- https://github.com/gmh5225/ClrGuard
 
 > Anti Disassembly
-- https://github.com/rrbranco/blackhat2012
+- https://github.com/gmh5225/blackhat2012
 
 > Sample Unpacker
-- https://github.com/hasherezade/mal_unpack_drv
+- https://github.com/gmh5225/mal_unpack_drv
 - https://github.com/gmh5225/android-unpacker [Android]
 
 > Dump Fix
 - https://github.com/gmh5225/unmapper
-- https://github.com/d35ha/DumpPE
+- https://github.com/gmh5225/DumpPE
 - https://github.com/gmh5225/fix-arxan
 
 > Encrypt Variable
 - https://github.com/gmh5225/encrypted_value [C++]
-- https://github.com/momalab/e3 [C++]
+- https://github.com/gmh5225/e3 [C++]
 - https://github.com/gmh5225/xor-float [C++]
 - https://github.com/gmh5225/xv [C++]
 - https://github.com/gmh5225/obfuscxx [Header-only compile-time variables obfuscation library for C++20 and later. Compiler Support: MSVC (+WDM), LLVM, GCC. Architecture Support: x86-64, ARM]
@@ -3567,44 +3567,44 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/kli
 - https://github.com/gmh5225/kli-ex
 - https://github.com/gmh5225/zeroimport
-- https://github.com/emlinhax/blitz
+- https://github.com/gmh5225/blitz
 
 > Anti-Cheat Programming
-- https://github.com/m417z/thread-call-stack-scanner [Safely manage the unloading of DLLs that have been hooked into a process. Context]
+- https://github.com/gmh5225/thread-call-stack-scanner [Safely manage the unloading of DLLs that have been hooked into a process. Context]
 
 > Compile Time
 - https://github.com/gmh5225/malstring [Using c++23 compile-time magic to produce obfuscated PIC strings and arrays]
 - https://github.com/gmh5225/Android-Native-Import-Hide [A library for hiding and retrieving imports in ELF binaries]
-- https://github.com/emlinhax/blitz [a header-only library to dynamically resolve modules and exports while also being able to call them directly]
+- https://github.com/gmh5225/blitz [a header-only library to dynamically resolve modules and exports while also being able to call them directly]
 - https://github.com/gmh5225/xv [single-header pointer/value encryption]
-- https://github.com/ac3ss0r/obfusheader.h [Obfusheader.h is a portable header file for C++14 compile-time obfuscation]
+- https://github.com/gmh5225/obfusheader.h [Obfusheader.h is a portable header file for C++14 compile-time obfuscation]
 - https://github.com/gmh5225/DriverBase/blob/dev/Dependencies/obfusheader.h [obfusheader.h for windows driver]
 - https://github.com/gmh5225/rust-obfuscator [Automatic Rust Obfuscator and Macro Library]
-- https://github.com/Sherman0236/XorData [A C++17 framework designed to enable obfuscation of constants, variables, and strings]
+- https://github.com/gmh5225/XorData [A C++17 framework designed to enable obfuscation of constants, variables, and strings]
 - https://github.com/gmh5225/crycall [Compile-Time Calls Obfuscator for C++14]
-- https://github.com/JustasMasiulis/inline_syscall [Inline syscalls made easy for windows on clang]
+- https://github.com/gmh5225/inline_syscall [Inline syscalls made easy for windows on clang]
 - https://github.com/gmh5225/inline-syscall [A simple direct syscall wrapper written in C++ with compatibility for x86 and x64 programs]
 - https://github.com/gmh5225/syscalls-cpp [A modern C++20 header-only library for advanced direct system call invocation]
 - https://github.com/gmh5225/STB [Compile-time conversion library, from IDA-style string to array]
-- https://github.com/Deniskore/CompileTimeRandom [Compile time random implementation using C++11]
-- https://github.com/ThatLing/limba [compile-time control flow obfuscation using mba]
-- https://github.com/Nou4r/Polymorphic-Engine [Prototype runtime C++ polymorphic type engine]
+- https://github.com/gmh5225/CompileTimeRandom [Compile time random implementation using C++11]
+- https://github.com/gmh5225/limba [compile-time control flow obfuscation using mba]
+- https://github.com/gmh5225/Polymorphic-Engine [Prototype runtime C++ polymorphic type engine]
 - https://github.com/gmh5225/cthash [constexpr implementation of SHA-2 and SHA-3 family of hashes]
 - https://github.com/gmh5225/Dynamizer [Reduce Dynamic Analysis Detection Rates With Built-In Unhooker, Anti Analysis Techniques, And String Obfuscator Modules]
-- https://github.com/hanickadot/compile-time-regular-expressions [Compile Time Regular Expression in C++]
-- https://github.com/CasualX/obfstr [String Crypter for rust]
+- https://github.com/gmh5225/compile-time-regular-expressions [Compile Time Regular Expression in C++]
+- https://github.com/gmh5225/obfstr [String Crypter for rust]
 - https://github.com/gmh5225/obfuscatxor [String Crypter for golang]
 - https://github.com/gmh5225/static_string_obfuscation [String Crypter for Zig]
-- https://github.com/pykaso/Swift-String-Obfuscator [String Crypter for Swift]
+- https://github.com/gmh5225/Swift-String-Obfuscator [String Crypter for Swift]
 - https://github.com/gmh5225/crystr [String Crypter]
 - https://github.com/gmh5225/Obfuscate [String Crypter]
-- https://github.com/igozdev/xorlit [String Crypter]
+- https://github.com/gmh5225/xorlit [String Crypter]
 - https://github.com/gmh5225/xorstr [String Crypter]
 - https://github.com/gmh5225/skCrypter [String Crypter]
-- https://github.com/rad9800/BloatedHammer [API Hammering with C++20 by folding (avoiding loops)]
+- https://github.com/gmh5225/BloatedHammer [API Hammering with C++20 by folding (avoiding loops)]
 - https://github.com/gmh5225/xor-float [xor float]
 - https://github.com/gmh5225/oxorany [obfuscated any constant encryption in compile time on any platform]
-- https://github.com/DosX-dev/obfus.h [Macro-header for compile-time C obfuscation (tcc, win x86/x64)]
+- https://github.com/gmh5225/obfus.h [Macro-header for compile-time C obfuscation (tcc, win x86/x64)]
 - https://github.com/gmh5225/Obfusk8 [Obfusk8: C++17-Based Obfuscation Library]
 - https://github.com/gmh5225/obfuscxx [Header-only compile-time variables obfuscation library for C++20 and later. Compiler Support: MSVC (+WDM), LLVM, GCC. Architecture Support: x86-64, ARM]
 - https://github.com/gmh5225/vm_str.hpp [Header only C++20 compile time string obfuscator]
@@ -3614,41 +3614,41 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/scc [shellcode compiler]
 - https://github.com/gmh5225/obj2shellcode
 - https://github.com/lainswork/shellcode-factory
-- https://github.com/H1d3r/GPU_ShellCode [hide the payload inside the gpu memory]
+- https://github.com/gmh5225/GPU_ShellCode [hide the payload inside the gpu memory]
 - https://github.com/gmh5225/Shellcrypt [A QoL tool to obfuscate shellcode. In the future will be able to chain encoding/encryption/compression methods]
 - https://github.com/gmh5225/SuperMega [Stealthily inject shellcode into an executable]
 - https://github.com/mrexodia/RiscyWorkshop [Payload Obfuscation for Red Teams workshop materials]
 - https://github.com/gmh5225/byvalver [Shellcode bad-byte banisher with preserved functionalities]
-- https://github.com/wbenny/scfw [A cross-platform C++ framework for building Windows shellcode]
+- https://github.com/gmh5225/scfw [A cross-platform C++ framework for building Windows shellcode]
 
 > Obfuscation Engine
 - https://github.com/vi3t1/vmprotect-3.5.1
-- https://github.com/DosX-dev/obfus.h [Macro-header for compile-time C obfuscation (tcc, win x86/x64)]
+- https://github.com/gmh5225/obfus.h [Macro-header for compile-time C obfuscation (tcc, win x86/x64)]
 - https://github.com/gmh5225/BinaryShield
 - https://github.com/gmh5225/perses
-- https://github.com/weak1337/Alcatraz
 - https://github.com/gmh5225/Alcatraz
-- https://github.com/es3n1n/obfuscator
+- https://github.com/gmh5225/Alcatraz
+- https://github.com/gmh5225/obfuscator
 - https://github.com/gmh5225/furikuri
-- https://github.com/nickcano/RelocBonus [Attack Reloc]
+- https://github.com/gmh5225/RelocBonus [Attack Reloc]
 - https://github.com/maoabc/nmmp [Dex]
 - https://github.com/gmh5225/BlackObfuscator [Dex]
-- https://github.com/d35ha/CallObfuscator [Call Obfuscation]
-- https://github.com/nelfo/Milfuscator
+- https://github.com/gmh5225/CallObfuscator [Call Obfuscation]
+- https://github.com/gmh5225/Milfuscator
 - https://github.com/gmh5225/the-poor-mans-obfuscator [elf/macho]
-- https://github.com/Guardsquare/proguard [Java]
-- https://github.com/xiaoweime/WProtect
-- https://github.com/DeDf/WProtect
-- https://github.com/jokerNi/WProtectSDK
-- https://github.com/cxxrev0to1dev/nb_obfuscator
+- https://github.com/gmh5225/proguard [Java]
+- https://github.com/gmh5225/WProtect
+- https://github.com/gmh5225/WProtect
+- https://github.com/gmh5225/WProtectSDK
+- https://github.com/gmh5225/nb_obfuscator
 - https://github.com/gmh5225/cerberus [VM]
 - https://github.com/gmh5225/phantasm-x86-virtualizer [VM]
-- https://github.com/felix-rs/guardian-rs [VM]
+- https://github.com/gmh5225/guardian-rs [VM]
 - https://github.com/gmh5225/covirt [VM]
 - https://github.com/gmh5225/simplify [Java]
 - https://github.com/gmh5225/dProtect [Java/Kotlin]
 - https://github.com/gmh5225/EntropyReducer [Reduce Entropy]
-- https://github.com/Washi1337/AwaitFuscator [.NET]
+- https://github.com/gmh5225/AwaitFuscator [.NET]
 - https://github.com/gmh5225/stitch [X86: Rewrite and obfuscate code in compiled binaries]
 - https://github.com/gmh5225/Ryujin [X86 PE BIN2BIN]
 - https://github.com/gmh5225/shredder-rs [A high-fidelity x86_64 polymorphic mutation engine focused on instruction-level fragmentation and context preservation]
@@ -3659,93 +3659,93 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/dwm-screen-shot [DWM]
 - https://github.com/gmh5225/screencapture [DX11]
 - https://github.com/gmh5225/WindowsDesktopDuplicationSample [DXGI]
-- https://github.com/PierreCiholas/GetPixel-vs-BitBlt_GetDIBits [GetPixel]
+- https://github.com/gmh5225/GetPixel-vs-BitBlt_GetDIBits [GetPixel]
 - https://github.com/gmh5225/ScreenShot [BitBlt]
 
 > Game Engine Protection:Unreal
-- https://github.com/zompi2/Static-Variables-Obfuscator-UE4
+- https://github.com/gmh5225/Static-Variables-Obfuscator-UE4
 - https://github.com/gmh5225/UE-Plugin-SCUE4-Plugin
 - https://github.com/gmh5225/UnrealEngine-Protection
 
 > Game Engine Protection:Unity
-- https://github.com/ls9512/USecurity
+- https://github.com/gmh5225/USecurity
 - https://github.com/gmh5225/Unity3D_Obfuscator
-- https://github.com/Ether2023/Ether-Uprotector
+- https://github.com/gmh5225/Ether-Uprotector
 - https://github.com/gmh5225/Il2cppEncrtypt
-- https://github.com/focus-creative-games/obfuz
+- https://github.com/gmh5225/obfuz
 
 > Game Engine Protection:Source
 - [Source Engine serverside anti-cheat plugin. (CS:S, CS:GO, CS:P, TF2)](https://github.com/gmh5225/NoCheatZ-3)
 
 > Open Source Anti Cheat System
-- https://github.com/mq1n/NoMercy
+- https://github.com/gmh5225/NoMercy
 - https://github.com/NoMercy-ac [NoMercy]
-- https://github.com/JackBro/BetaShield
+- https://github.com/gmh5225/BetaShield
 - https://github.com/chztbby/RebirthGuard
 - https://github.com/gmh5225/Avanguard
-- https://github.com/Rycooop/Bloom-Anticheat
+- https://github.com/gmh5225/Bloom-Anticheat
 - https://github.com/gmh5225/Kernel-Anticheat [Kernel Anticheat]
 - https://github.com/gmh5225/Stresser [Anti Virus in fact but also Anti Cheat]
 - https://github.com/gmh5225/antivirus [Anti Virus in fact but also Anti Cheat]
 - https://github.com/gmh5225/PeaceMaker [Anti Virus in fact but also Anti Cheat]
 - https://github.com/gmh5225/VAC [Reversed VAC]
-- https://github.com/ApexLegendsUC/anti-cheat-emulator
+- https://github.com/gmh5225/anti-cheat-emulator
 - https://github.com/gmh5225/EAC-Reversal [Reversed EAC]
-- https://github.com/weak1337/BE-Shellcode [Reversed BE Shellcode]
+- https://github.com/gmh5225/BE-Shellcode [Reversed BE Shellcode]
 - https://github.com/gmh5225/be_shellcode_dump [Reversed BE Shellcode]
-- https://github.com/codetronik/AndroidAntiCheat [Android Platform]
+- https://github.com/gmh5225/AndroidAntiCheat [Android Platform]
 - https://github.com/gmh5225/Lazenca-S [Android Platform]
-- https://github.com/MrDiamond64/Scythe-AntiCheat [Minecraft]
-- https://github.com/GrimAnticheat/Grim [Minecraft]
+- https://github.com/gmh5225/Scythe-AntiCheat [Minecraft]
+- https://github.com/gmh5225/Grim [Minecraft]
 - https://github.com/gmh5225/AntiCheat
 - https://github.com/gmh5225/openedr [EDR]
 - https://github.com/0xrawsec/whids [EDR]
-- https://github.com/Neo23x0/Raccine [EDR]
-- https://github.com/ION28/BLUESPAWN [EDR]
+- https://github.com/gmh5225/Raccine [EDR]
+- https://github.com/gmh5225/BLUESPAWN [EDR]
 - https://github.com/gmh5225/TheHive [EDR]
 - https://github.com/gmh5225/Sanctum [Sanctum is an experimental proof-of-concept EDR, designed to detect modern malware techniques, above and beyond the capabilities of antivirus. Built in Rust]
-- https://github.com/wazuh/wazuh [XDR]
+- https://github.com/gmh5225/wazuh [XDR]
 - https://github.com/gmh5225/UltimateAntiCheat
-- https://github.com/JonathanBerkeley/Quack
+- https://github.com/gmh5225/Quack
 - [Source Engine serverside anti-cheat plugin. (CS:S, CS:GO, CS:P, TF2)](https://github.com/gmh5225/NoCheatZ-3)
 - [This is the Anti Cheat System for Knight Online Gamesoft vversion](https://github.com/gmh5225/GamesoftACS)
 - [User-mode C++ Anti-Cheat written for German Roleplay Server GVMP.de](https://github.com/gmh5225/gvmp-anticheat)
 - [Cheat developer platform](https://github.com/gmh5225/UAC)
-- https://github.com/ekknod/Anti-Cheat-TestBench [TestBench]
+- https://github.com/gmh5225/Anti-Cheat-TestBench [TestBench]
 - https://github.com/gmh5225/Malicious-code-detection-bugu [Malicious code detection and obfuscation]
-- [Kernel Security driver used to block past, current and future process injection techniques on Windows Operating System](https://github.com/PI-Defender/pi-defender)
+- [Kernel Security driver used to block past, current and future process injection techniques on Windows Operating System](https://github.com/gmh5225/pi-defender)
 - https://github.com/gmh5225/Anticheat-android-cheap-engine [Sample implementation of anti-cheat in android]
 - [Proof of concept Anti-Cheat plugin for CS:GO](https://github.com/gmh5225/CSGO-AC)
 - [Deep Learning Anti-Cheat For CSGO](https://github.com/gmh5225/DLAC)
 - [Deep Learning Anti-Cheat For CSGO](https://github.com/gmh5225/anti-cheat)
 - https://github.com/gmh5225/anti-cheat
-- https://github.com/jnastarot/ice9
+- https://github.com/gmh5225/ice9
 - https://github.com/gmh5225/Reborn [Designed with Rust]
 - https://github.com/gmh5225/Dynsec
 - https://github.com/gmh5225/Basic_Anti-Cheat
 - https://github.com/MegaAntiCheat
-- https://github.com/donnaskiez/ac
+- https://github.com/gmh5225/ac
 - https://github.com/gmh5225/AcDrv
 - https://github.com/gmh5225/Mandragora [For Assault Cube]
 - https://github.com/gmh5225/Little-Anti-Cheat [For Source Games]
 - https://github.com/gmh5225/darken-anticheat [Kernel anti-cheat for protecting software]
 
 > Analysis Framework
-- https://github.com/pandora-analysis/pandora
+- https://github.com/gmh5225/pandora
 
 > Detection:Hook
-- https://github.com/hasherezade/pe-sieve
+- https://github.com/gmh5225/pe-sieve
 - https://github.com/mike1k/HookHunter
 - https://github.com/gmh5225/hook-buster
 - https://github.com/gmh5225/Driver-Detect-nullshit
-- https://github.com/paranoidninja/EtwTi-Syscall-Hook [Instrumentation Callback]
-- https://github.com/Luchinkin/device-control-hooks-scanner [device-control-hooks-scanner]
-- https://github.com/ORCx41/KnownDllUnhook [Replace the .txt section of the current loaded modules from \KnownDlls\]
+- https://github.com/gmh5225/EtwTi-Syscall-Hook [Instrumentation Callback]
+- https://github.com/gmh5225/device-control-hooks-scanner [device-control-hooks-scanner]
+- https://github.com/gmh5225/KnownDllUnhook [Replace the .txt section of the current loaded modules from \KnownDlls\]
 - https://github.com/gmh5225/nt_unhooker [demo unhooking functions in ntdll]
 
 > Detection:Memory Integrity
-- https://github.com/afulsamet/integrity
-- https://github.com/Midi12/QueryWorkingSetExample
+- https://github.com/gmh5225/integrity
+- https://github.com/gmh5225/QueryWorkingSetExample
 - https://github.com/gmh5225/integrity_experiments [header only]
 - https://github.com/DejavuSecure/DetectNtoskrnlIntegrity [Windows Kernel Security: Memory Integrity Verification with Disk Verification of ntoskrnl.exe]
 - https://github.com/MatheuZSecurity/ksentinel [Linux kernel integrity monitor for detecting syscall hooking]
@@ -3762,11 +3762,11 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/Detect-MouseClassServiceCallback
 - https://github.com/changeofpace/MouHidInputHook
 - https://github.com/KelvinMsft/UsbMon
-- https://github.com/87andrewh/DeepAimDetector [Deep Learning]
-- https://github.com/waldo-vision/waldo [Deep Learning]
+- https://github.com/gmh5225/DeepAimDetector [Deep Learning]
+- https://github.com/gmh5225/waldo [Deep Learning]
 - https://github.com/gmh5225/aimbot-detection-prototype [Deep Learning]
 - https://github.com/gmh5225/anti-cheat [Deep Learning for CSGO]
-- https://github.com/hkx3upper/Karlann [Keyboard]
+- https://github.com/gmh5225/Karlann [Keyboard]
 - https://github.com/gmh5225/HotkeybasedKeyloggerDetector [Detect RegisterHotKey API]
 - https://github.com/gmh5225/MouseDetection [Mouse]
 - https://github.com/chrisgdt/DELBOT-Mouse [Deep learning to distinguish human and bot from mouse movements]
@@ -3774,7 +3774,7 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 
 > Detection:Hide
 - https://github.com/gmh5225/Detect-HiddenThread-via-KPRCB
-- https://github.com/ekknod/Anti-Cheat-TestBench [KPRCB+PTE]
+- https://github.com/gmh5225/Anti-Cheat-TestBench [KPRCB+PTE]
 - https://github.com/gmh5225/SystemThreadFinder
 - https://github.com/gmh5225/HiddenModuleDetector
 - https://github.com/KelvinMsft/ThreadSpy
@@ -3903,7 +3903,7 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 
 > Detection:Frida
 - https://github.com/gmh5225/DetectFrida
-- https://github.com/qtfreet00/AntiFrida
+- https://github.com/gmh5225/AntiFrida
 - https://github.com/gmh5225/frida-detection
 - https://github.com/gmh5225/Anti-Frida [Some Of Anti-Frida Stuff]
 
@@ -3968,7 +3968,7 @@ Adds drag- to- resize functionality to the main GTA V window](https://github.com
 - https://github.com/gmh5225/instrumentation_callbacks [Instrumentation Callback]
 - https://github.com/gmh5225/beservice_intcallbacks [Instrumentation Callback]
 - https://github.com/gmh5225/Hooking-via-InstrumentationCallback [Instrumentation Callback]
-- https://github.com/paranoidninja/EtwTi-Syscall-Hook [Instrumentation Callback]
+- https://github.com/gmh5225/EtwTi-Syscall-Hook [Instrumentation Callback]
 - https://github.com/gmh5225/syscall-detect [Instrumentation Callback]
 - https://github.com/gmh5225/anticheat-poc [Instrumentation Callback]
 - https://github.com/gmh5225/InstrumentationCallbacks [Instrumentation Callback]
