@@ -1,0 +1,1343 @@
+Project Path: arc_gmh5225_unKover_trkmp_6u
+
+Source Tree:
+
+```txt
+arc_gmh5225_unKover_trkmp_6u
+├── README.md
+├── Unkover.inf
+├── Unkover.sln
+├── Unkover.vcxproj
+├── Unkover.vcxproj.filters
+├── img
+│   └── detect.jpg
+└── unKover
+    ├── Driver.cpp
+    ├── apc.hpp
+    ├── deviceobjects.hpp
+    ├── meta.hpp
+    ├── nmi.hpp
+    ├── threads.hpp
+    └── utils.hpp
+
+```
+
+`README.md`:
+
+```md
+# unKover
+
+A PoC anti-rootkit that can detect drivers mapped to kernel memory. Think [Moneta](https://github.com/forrest-orr/moneta), but for the kernel (obviously this is a simplified comparison).
+
+Blog post available at: https://eversinc33.com/posts/anti-anti-rootkit-part-i/
+
+The idea is to have a small & concise anti-rootkit to aid you (the rootkit dev) in honing your rootkits evasion abilities while also showcasing detection vectors with minimal FP rate that can detect many of the openly available driver mapper + rootkit combinations. 
+
+While some open source anti-cheats with capabilities far beyond this tool's exist (such as donnaskiez [ac](https://github.com/donnaskiez/ac)), I wanted something that I can easily tweak according to my needs. Maybe it will be useful for you too.
+
+Techniques implemented:
+
+* NMI Callbacks: Periodically sends Non-Maskable Interrupts (NMIs) to each core and analyzes the currently running thread's call stack for any pointers to unbacked memory.
+* APC StackWalks: Same as the NMI check, but with an APC queued to each system thread.
+* System thread analysis: Periodically check all system threads for start-addresses pointing to unbacked memory.
+* Driver Object analysis: Periodically check all driver objects registered on the system, and check if their DriverEntry points to unbacked memory.
+
+<p align="center">
+<img src="./img/detect.jpg" alt="unKover output"/>
+</p>
+
+So far its quite trivial to bypass these, especially given the implementations :) Hopefully that will change in the future.
+
+## Installation
+
+You need to enable testsigning to load the driver. I also recommend to enable debugging for the kernel.
+
+Download the driver from releases, run the following from an administrative prompt and reboot afterwards:
+
+```cmd
+bcdedit /set testsigning on
+bcdedit /debug on
+```
+
+Then you can load the driver with `sc.exe` or use OSR DriverLoader:
+
+```cmd
+sc.exe create Unkover binPath= "C:\path\to\Unkover.sys" type= kernel start= demand
+sc.exe start Unkover
+```
+
+Afterwards, output will appear in the debug logs (view with e.g. WinDbg or DebugView)
+
+### Credits
+
+* DeviceObject scanning code partly taken from https://github.com/not-wlan/driver-hijack
+
+```
+
+`Unkover.inf`:
+
+```inf
+;
+; Unkover.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+DriverVer=
+CatalogFile=Unkover.cat
+PnpLockdown=1
+
+;This template is supported for OS version 17763 (Windows 10 version 1809) and after.
+;For Windows OS prior to Windows 10 1809 set DefaultDestDir = 12
+[DestinationDirs]
+DefaultDestDir = 13
+
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+
+
+[Manufacturer]
+
+[Strings]
+ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+DiskName="Unkover Source Disk"
+
+```
+
+`Unkover.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34031.279
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Unkover", "Unkover.vcxproj", "{CA2BD34A-0096-4A66-B78E-8645283F2CF4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|ARM64.Build.0 = Debug|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|x64.ActiveCfg = Debug|x64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|x64.Build.0 = Debug|x64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Debug|x64.Deploy.0 = Debug|x64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|ARM64.ActiveCfg = Release|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|ARM64.Build.0 = Release|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|ARM64.Deploy.0 = Release|ARM64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|x64.ActiveCfg = Release|x64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|x64.Build.0 = Release|x64
+		{CA2BD34A-0096-4A66-B78E-8645283F2CF4}.Release|x64.Deploy.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7D2F4B82-117C-4D89-8C66-30BD8AB2E52E}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`Unkover.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{CA2BD34A-0096-4A66-B78E-8645283F2CF4}</ProjectGuid>
+    <TemplateGuid>{dd38f7fc-d7bd-488b-9242-7d8754cde80d}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <RootNamespace>Unkover</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>WDM</DriverType>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+    <ClCompile>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ControlFlowGuard>false</ControlFlowGuard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Inf Include="Unkover.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="unKover\Driver.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="unKover\apc.hpp" />
+    <ClInclude Include="unKover\deviceobjects.hpp" />
+    <ClInclude Include="unKover\meta.hpp" />
+    <ClInclude Include="unKover\nmi.hpp" />
+    <ClInclude Include="unKover\threads.hpp" />
+    <ClInclude Include="unKover\utils.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`Unkover.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Driver Files">
+      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
+      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="Unkover.inf">
+      <Filter>Driver Files</Filter>
+    </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="unKover\Driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="unKover\meta.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unKover\nmi.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unKover\threads.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unKover\utils.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unKover\deviceobjects.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="unKover\apc.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
+</Project>
+```
+
+`unKover/Driver.cpp`:
+
+```cpp
+#include <ntifs.h>
+#include <ntddk.h>
+#include "meta.hpp"
+#include "nmi.hpp"
+#include "threads.hpp"
+#include "apc.hpp"
+#include "deviceobjects.hpp"
+
+HANDLE g_hScanSystemThreads;
+HANDLE g_hSendNmis;
+HANDLE g_hCheckDriverObjects;
+HANDLE g_hAPCCheck;
+
+VOID 
+UkShutdownThread(PHANDLE pThreadHandle, PKEVENT pFinishedEvent)
+{
+	KeWaitForSingleObject(pFinishedEvent, Executive, KernelMode, FALSE, NULL);
+	if (pThreadHandle)
+	{
+		ZwClose(pThreadHandle);
+	}
+}
+
+VOID 
+DriverUnload(PDRIVER_OBJECT drvObj)
+{
+	UNREFERENCED_PARAMETER(drvObj);
+
+	LOG_DBG("Unload called\n");
+	LOG_DBG("Stopping all threads. This can a few seconds...\n");
+
+	g_doAPCStackWalk = FALSE;
+	g_sendNmis = FALSE;
+	g_scanSystemThreads = FALSE;
+	g_scanDriverObjects = FALSE;
+	UkShutdownThread(&g_hAPCCheck, &g_apcFinishedEvent);
+	UkShutdownThread(&g_hSendNmis, &g_sendNmisFinishedEvent);
+	UkShutdownThread(&g_hScanSystemThreads, &g_scanSystemThreadsFinishedEvent);
+	UkShutdownThread(&g_hCheckDriverObjects, &g_scanDriverObjectsFinishedEvent);
+
+	// Wait 5 seconds for termination
+	UkSleepMs(5000);
+
+	// Unload NMI module
+	UkUnloadNMI();
+}
+
+extern "C"
+{
+	NTSTATUS 
+		DriverEntry(PDRIVER_OBJECT drvObj, PUNICODE_STRING regPath)
+	{
+		UNREFERENCED_PARAMETER(regPath);
+
+		LOG_DBG("unKover driver entry\n");
+
+		g_drvObj = drvObj;
+		drvObj->DriverUnload = DriverUnload;
+
+		NTSTATUS NtStatus = STATUS_SUCCESS;
+
+		if (!UkRegisterNmiCallbacks())
+		{
+			UkUnloadNMI();
+			return STATUS_FAILED_DRIVER_ENTRY;
+		}
+
+		// Start monitoring threads
+		LOG_MSG("Creating thread to scan system threads\n");
+		NtStatus = PsCreateSystemThread(&g_hScanSystemThreads, THREAD_ALL_ACCESS, NULL, NULL, NULL, UkScanSystemThreads, NULL);
+		if (!NT_SUCCESS(NtStatus))
+		{
+			return NtStatus;
+		}
+
+		LOG_MSG("Creating thread to send NMIs and analyze call stacks\n");
+		NtStatus = PsCreateSystemThread(&g_hSendNmis, THREAD_ALL_ACCESS, NULL, NULL, NULL, UkSendNMI, NULL);
+		if (!NT_SUCCESS(NtStatus))
+		{
+			return NtStatus;
+		}
+
+		LOG_MSG("Creating thread to check DriverObjects in object manager\n");
+		NtStatus = PsCreateSystemThread(&g_hCheckDriverObjects, THREAD_ALL_ACCESS, NULL, NULL, NULL, UkCheckDriverObjects, NULL);
+		if (!NT_SUCCESS(NtStatus))
+		{
+			return NtStatus;
+		}
+
+		LOG_MSG("Creating thread to check call stacks via APC\n");
+		NtStatus = PsCreateSystemThread(&g_hAPCCheck, THREAD_ALL_ACCESS, NULL, NULL, NULL, UkAPCStackWalk, NULL);
+		if (!NT_SUCCESS(NtStatus))
+		{
+			return NtStatus;
+		}
+
+		// TODO: check physmem handles
+		// TODO: compare drivers on disk to mem
+		// TODO: compare PIDs in PspCidTable and EPROCESS linked list to check for potentially hiding threads
+		// TODO: more
+
+		return NtStatus;
+	}
+}
+```
+
+`unKover/apc.hpp`:
+
+```hpp
+#pragma once
+
+#include <ntddk.h>
+#include "meta.hpp"
+#include "utils.hpp"
+
+typedef enum _KAPC_ENVIRONMENT {
+	OriginalApcEnvironment,
+	AttachedApcEnvironment,
+	CurrentApcEnvironment,
+	InsertApcEnvironment
+} KAPC_ENVIRONMENT;
+
+typedef VOID(*PKNORMAL_ROUTINE)(
+	_In_ PVOID NormalContext,
+	_In_ PVOID SystemArgument1,
+	_In_ PVOID SystemArgument2
+);
+
+typedef VOID(*PKKERNEL_ROUTINE) (
+	IN PKAPC Apc,
+	IN OUT PKNORMAL_ROUTINE* NormalRoutine,
+	IN OUT PVOID* NormalContext,
+	IN OUT PVOID* SystemArgument1,
+	IN OUT PVOID* SystemArgument2
+);
+
+typedef VOID(*PKRUNDOWN_ROUTINE) (
+	IN  PKAPC Apc
+);
+
+EXTERN_C VOID KeInitializeApc(
+	IN  PKAPC Apc,
+	IN  PKTHREAD Thread,
+	IN  KAPC_ENVIRONMENT Environment,
+	IN  PKKERNEL_ROUTINE KernelRoutine,
+	IN  PKRUNDOWN_ROUTINE RundownRoutine OPTIONAL,
+	IN  PKNORMAL_ROUTINE NormalRoutine OPTIONAL,
+	IN  KPROCESSOR_MODE ApcMode OPTIONAL,
+	IN  PVOID NormalContext OPTIONAL
+);
+
+EXTERN_C BOOLEAN KeInsertQueueApc(
+	IN  PKAPC Apc,
+	IN  PVOID SystemArgument1,
+	IN  PVOID SystemArgument2,
+	IN  KPRIORITY Increment
+);
+
+BOOLEAN g_doAPCStackWalk = TRUE;
+KEVENT g_kernelApcSyncEvent;
+KEVENT g_rundownApcSyncEvent;
+KEVENT g_apcFinishedEvent;
+
+#define MAX_STACK_DEPTH 32
+
+VOID
+UkNormalAPC(_In_opt_ PVOID NormalContext,
+	_In_opt_ PVOID SystemArgument1,
+	_In_opt_ PVOID SystemArgument2)
+{
+	UNREFERENCED_PARAMETER(NormalContext);
+	UNREFERENCED_PARAMETER(SystemArgument1);
+	UNREFERENCED_PARAMETER(SystemArgument2);
+}
+
+VOID
+UkRundownAPC(_In_ PRKAPC Apc)
+{
+	ExFreePoolWithTag(Apc, POOL_TAG);
+}
+
+VOID 
+UkCaptureStackAPC(
+	IN PKAPC Apc,
+	IN OUT PKNORMAL_ROUTINE* NormalRoutine,
+	IN OUT PVOID* NormalContext,
+	IN OUT PVOID* SystemArgument1,
+	IN OUT PVOID* SystemArgument2
+)
+{
+	UNREFERENCED_PARAMETER(Apc);
+	UNREFERENCED_PARAMETER(NormalRoutine);
+	UNREFERENCED_PARAMETER(NormalContext);
+	UNREFERENCED_PARAMETER(SystemArgument1);
+	UNREFERENCED_PARAMETER(SystemArgument2);
+
+	PVOID* stackFrames = (PVOID*)ExAllocatePoolWithTag(NonPagedPoolNx, MAX_STACK_DEPTH * sizeof(PVOID), POOL_TAG);
+	if (!stackFrames)
+	{
+		// Signal that APC is done
+		ExFreePoolWithTag(Apc, POOL_TAG);
+		KeSetEvent(&g_kernelApcSyncEvent, 0, FALSE);
+		return;
+	}
+
+	RtlSecureZeroMemory(stackFrames, MAX_STACK_DEPTH * sizeof(PVOID));
+	HANDLE threadId = PsGetCurrentThreadId();
+	USHORT framesCaptured = RtlCaptureStackBackTrace(0, MAX_STACK_DEPTH, stackFrames, NULL);
+
+	// Stack trace analysis
+	for (auto i = 0; i < framesCaptured; ++i)
+	{
+		// Check if address of frame is from unbacked memory
+		ULONG_PTR addr = (ULONG_PTR)stackFrames[i];
+		if (UkGetDriverForAddress(addr) == NULL)
+		{
+			LOG_MSG("[APCStackWalk] -> Detected stack frame pointing to unbacked region: TID: %lu @ 0x%llx\n", HandleToUlong(threadId), addr);
+			
+			// Print stack frame TODO: clean this code
+			for (auto j = 0; j < framesCaptured; ++j)
+			{
+				ULONG_PTR address = (ULONG_PTR)stackFrames[j];
+				PKLDR_DATA_TABLE_ENTRY driver = UkGetDriverForAddress(address);
+				if (driver == NULL) 
+				{ 
+					LOG_MSG("  [%d] Stack frame %lu: 0x%llx // %ws\n", HandleToUlong(threadId), j, address, L"??? <------ Unbacked!"); 
+				}
+				else 
+				{
+					auto offsetToFunction = (driver == NULL) ? address : (address - (ULONG_PTR)driver->DllBase);
+					PWCHAR driverName = driver->BaseDllName.Buffer;
+					LOG_MSG("  [%d] Stack frame %lu: 0x%llx+0x%llx // %ws\n", HandleToUlong(threadId), j, (ULONG_PTR)driver->DllBase, offsetToFunction, driverName);
+				}
+			}
+		}
+	}
+
+	if (stackFrames) { ExFreePoolWithTag(stackFrames, POOL_TAG); }
+
+	// Signal that APC is done
+	ExFreePoolWithTag(Apc, POOL_TAG);
+	KeSetEvent(&g_kernelApcSyncEvent, 0, FALSE);
+}
+
+/**
+ */
+VOID
+UkAPCStackWalk(IN PVOID StartContext)
+{
+	UNREFERENCED_PARAMETER(StartContext);
+
+	NTSTATUS NtStatus;
+
+	KeInitializeEvent(&g_apcFinishedEvent, NotificationEvent, FALSE);
+	KeInitializeEvent(&g_kernelApcSyncEvent, NotificationEvent, FALSE);
+
+	do
+	{
+		LOG_DBG("Scanning running system thread call stacks via APC...\n");
+
+		// Queue APCs to system threads. TIDs are a multiple of 4. TODO: max number?
+		for (auto tid = 4; tid < 0xFFFF; tid += 4)
+		{
+			PETHREAD ThreadObj;
+			PKAPC apc;
+
+			// Get ETHREAD object for TID
+			if (!NT_SUCCESS(PsLookupThreadByThreadId(UlongToHandle(tid), &ThreadObj)))
+			{
+				continue;
+			}
+
+			// Ignore current thread and non system threads
+			if (!PsIsSystemThread(ThreadObj) || ThreadObj == KeGetCurrentThread())
+			{
+				ObDereferenceObject(ThreadObj);
+				continue;
+			}
+
+			// Initialize APC
+			apc = (PKAPC)ExAllocatePoolWithTag(
+				NonPagedPool,
+				sizeof(KAPC),
+				POOL_TAG
+			);
+			KeInitializeApc(apc,
+				ThreadObj,
+				OriginalApcEnvironment,
+				UkCaptureStackAPC,
+				UkRundownAPC,
+				UkNormalAPC,
+				KernelMode,
+				NULL
+			);
+
+			// Queue APC
+			NtStatus = KeInsertQueueApc(apc, NULL, NULL, IO_NO_INCREMENT);
+			if (!NT_SUCCESS(NtStatus))
+			{
+				LOG_DBG("KeInsertQueueApc failed\n");
+				KeSetEvent(&g_kernelApcSyncEvent, 0, FALSE);
+				KeSetEvent(&g_rundownApcSyncEvent, 0, FALSE);
+			}
+
+			// Wait for event to signal that the apc is done before queueing the next one
+			UkSleepMs(50);
+			LARGE_INTEGER timeout;
+			timeout.QuadPart = 2000;
+			NtStatus = KeWaitForSingleObject(&g_kernelApcSyncEvent, Executive, KernelMode, FALSE, &timeout);
+			if (NtStatus == STATUS_TIMEOUT)
+			{
+				LOG_DBG("APC did not return before timeout (tid: %u)\n", tid);
+			}
+			KeResetEvent(&g_kernelApcSyncEvent);
+
+			// Clean up
+			if (ThreadObj) { ObDereferenceObject(ThreadObj); }
+		}
+
+		UkSleepMs(5000);
+
+	} while (g_doAPCStackWalk);
+
+	KeSetEvent(&g_apcFinishedEvent, 0, FALSE);
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+```
+
+`unKover/deviceobjects.hpp`:
+
+```hpp
+#pragma once
+
+#include <ntddk.h>
+#include "meta.hpp"
+#include "utils.hpp"
+
+EXTERN_C NTSTATUS ZwQueryDirectoryObject(
+    IN HANDLE DirectoryHandle,
+    OUT PVOID Buffer,
+    IN ULONG BufferLength,
+    IN BOOLEAN ReturnSingleEntry,
+    IN BOOLEAN RestartScan,
+    IN OUT PULONG Context,
+    OUT PULONG ReturnLength OPTIONAL
+);
+
+EXTERN_C NTSTATUS ObReferenceObjectByName(
+    IN PUNICODE_STRING ObjectPath,
+    IN ULONG Attributes,
+    IN PACCESS_STATE PassedAccessState,
+    IN ACCESS_MASK DesiredAccess,
+    IN POBJECT_TYPE ObjectType,
+    IN KPROCESSOR_MODE AccessMode,
+    IN OUT PVOID ParseContext,
+    OUT PVOID* ObjectPtr
+);
+
+typedef struct _OBJECT_DIRECTORY_INFORMATION {
+    UNICODE_STRING Name;
+    UNICODE_STRING TypeName;
+} OBJECT_DIRECTORY_INFORMATION, *POBJECT_DIRECTORY_INFORMATION;
+
+typedef struct _OBJECT_TYPE_INITIALIZER
+{
+    USHORT Length;
+    UCHAR ObjectTypeFlags;
+    ULONG CaseInsensitive : 1;
+    ULONG UnnamedObjectsOnly : 1;
+    ULONG UseDefaultObject : 1;
+    ULONG SecurityRequired : 1;
+    ULONG MaintainHandleCount : 1;
+    ULONG MaintainTypeList : 1;
+    ULONG ObjectTypeCode;
+    ULONG InvalidAttributes;
+    GENERIC_MAPPING GenericMapping;
+    ULONG ValidAccessMask;
+    POOL_TYPE PoolType;
+    ULONG DefaultPagedPoolCharge;
+    ULONG DefaultNonPagedPoolCharge;
+    PVOID DumpProcedure;
+    LONG* OpenProcedure;
+    PVOID CloseProcedure;
+    PVOID DeleteProcedure;
+    LONG* ParseProcedure;
+    LONG* SecurityProcedure;
+    LONG* QueryNameProcedure;
+    UCHAR* OkayToCloseProcedure;
+} OBJECT_TYPE_INITIALIZER, * POBJECT_TYPE_INITIALIZER;
+
+typedef struct _OBJECT_TYPE
+{
+    // ERESOURCE Mutex; -> not in WinDbg probably negative offset or removed
+    LIST_ENTRY TypeList;
+    UNICODE_STRING Name;
+    PVOID DefaultObject;
+    UCHAR Index;
+    ULONG TotalNumberOfObjects;
+    ULONG TotalNumberOfHandles;
+    ULONG HighWaterNumberOfObjects;
+    ULONG HighWaterNumberOfHandles;
+    OBJECT_TYPE_INITIALIZER TypeInfo;
+    EX_PUSH_LOCK TypeLock;
+    ULONG Key;
+    LIST_ENTRY CallbackList;
+} OBJECT_TYPE, * POBJECT_TYPE;
+
+typedef struct _DEVICE_MAP* PDEVICE_MAP;
+
+typedef struct _OBJECT_DIRECTORY_ENTRY
+{
+    _OBJECT_DIRECTORY_ENTRY* ChainLink;
+    PVOID Object;
+    ULONG HashValue;
+} OBJECT_DIRECTORY_ENTRY, * POBJECT_DIRECTORY_ENTRY;
+
+typedef struct _OBJECT_DIRECTORY
+{
+    POBJECT_DIRECTORY_ENTRY HashBuckets[37];
+    EX_PUSH_LOCK Lock;
+    PDEVICE_MAP DeviceMap;
+    ULONG SessionId;
+    PVOID NamespaceEntry;
+    ULONG Flags;
+} OBJECT_DIRECTORY, * POBJECT_DIRECTORY;
+
+BOOLEAN g_scanDriverObjects = TRUE;
+KEVENT g_scanDriverObjectsFinishedEvent;
+ULONG_PTR g_hashBucketLock = NULL;
+
+/**
+ * Iterates all driver objects to check for hints to unbacked memory.
+ * 
+ * Original Credit: https://github.com/not-wlan/driver-hijack/blob/master/memedriver/hijack.cpp#L136
+ */
+VOID 
+UkCheckDriverObjects(IN PVOID StartContext)
+{
+    UNREFERENCED_PARAMETER(StartContext);
+
+    KeInitializeEvent(&g_scanDriverObjectsFinishedEvent, NotificationEvent, FALSE);
+
+    NTSTATUS status;
+    PVOID directory;
+    HANDLE handle;
+    OBJECT_ATTRIBUTES attributes;
+    UNICODE_STRING directoryName = RTL_CONSTANT_STRING(L"\\Driver");
+
+    // Get Handle to \Driver directory
+    InitializeObjectAttributes(&attributes, &directoryName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = ZwOpenDirectoryObject(&handle, DIRECTORY_ALL_ACCESS, &attributes);
+    if (!NT_SUCCESS(status))
+    {
+        LOG_DBG("Couldnt get \\Driver directory handle\n");
+        return;
+    }
+
+    status = ObReferenceObjectByHandle(handle, DIRECTORY_ALL_ACCESS, nullptr, KernelMode, &directory, nullptr);
+    if (!NT_SUCCESS(status))
+    {
+        ZwClose(handle);
+        LOG_DBG("Couldnt get \\Driver directory object from handle\n");
+        return;
+    }
+
+    POBJECT_DIRECTORY directoryObject = (POBJECT_DIRECTORY)directory;
+    g_hashBucketLock = directoryObject->Lock;
+
+    do
+    {
+        LOG_DBG("Scanning DriverObjects...\n");
+
+        // Lock for the hashbucket
+        KeEnterCriticalRegion(); 
+        ExAcquirePushLockExclusiveEx(&g_hashBucketLock, 0);
+
+        for (POBJECT_DIRECTORY_ENTRY entry : directoryObject->HashBuckets)
+        {
+            if (!entry)
+            {
+                continue;
+            }
+
+            while (entry != nullptr && entry->Object)
+            {
+                PDRIVER_OBJECT driver = (PDRIVER_OBJECT)entry->Object;
+
+                // Check memory of DriverStart
+                if (UkGetDriverForAddress((ULONG_PTR)driver->DriverStart) == NULL)
+                {
+                    LOG_MSG("[DeviceObjectScanner] -> Detected DriverObject.DriverStart pointing to unbacked or invalid region %ws @ 0x%llx\n",
+                        driver->DriverName.Buffer,
+                        (ULONG_PTR)driver->DriverStart
+                    );
+                }
+                if (UkGetDriverForAddress((ULONG_PTR)driver->DriverInit) == NULL)
+                {
+                    LOG_MSG("[DeviceObjectScanner] -> Detected DriverEntry pointing to unbacked region %ws @ 0x%llx\n",
+                        driver->DriverName.Buffer,
+                        (ULONG_PTR)driver->DriverInit
+                    );
+                }
+
+                entry = entry->ChainLink;
+            }
+        }
+
+        ExReleasePushLockExclusiveEx(&g_hashBucketLock, 0);
+        KeLeaveCriticalRegion();
+
+        UkSleepMs(5000);
+
+    } while (g_scanDriverObjects);
+
+    ObDereferenceObject(directory);
+    ZwClose(handle);
+    KeSetEvent(&g_scanDriverObjectsFinishedEvent, 0, FALSE);
+    PsTerminateSystemThread(STATUS_SUCCESS);
+}
+```
+
+`unKover/meta.hpp`:
+
+```hpp
+#pragma once
+
+#define POOL_TAG 'rvkU'
+#define DRIVER_LOG_PREFIX "[unKover] :: "
+#define DRIVER_DBG_PREFIX "          :: "
+#define LOG_MSG(x, ...) DbgPrint((DRIVER_LOG_PREFIX x), __VA_ARGS__)
+#define LOG_DBG(x, ...) DbgPrint((DRIVER_DBG_PREFIX x), __VA_ARGS__)
+
+PDRIVER_OBJECT g_drvObj = NULL;
+```
+
+`unKover/nmi.hpp`:
+
+```hpp
+#pragma once
+
+#include <ntddk.h>
+#include "meta.hpp"
+#include <intrin.h>
+#include "utils.hpp"
+
+typedef struct _KAFFINITY_EX
+{
+	USHORT Count;
+	USHORT Size;
+	ULONG Reserved;
+	ULONGLONG Bitmap[20];
+} KAFFINITY_EX, *PKAFFINITY_EX;
+
+#define STACK_CAPTURE_SIZE 32
+
+typedef struct _NMI_CONTEXT
+{
+	ULONG threadId;
+	INT numFired;
+	USHORT framesCaptured;
+	ULONG_PTR stackFrames[STACK_CAPTURE_SIZE];
+} NMI_CONTEXT, *PNMI_CONTEXT;
+
+EXTERN_C VOID KeInitializeAffinityEx(PKAFFINITY_EX affinity);
+EXTERN_C VOID KeAddProcessorAffinityEx(PKAFFINITY_EX affinity, INT num);
+EXTERN_C VOID HalSendNMI(PKAFFINITY_EX affinity);
+
+ULONG g_numCores;
+PVOID g_NmiCallbackHandle;
+PKAFFINITY_EX g_NmiAffinity;
+PNMI_CONTEXT g_NmiContext;
+HANDLE SendNMIThreadHandle;
+
+BOOLEAN g_sendNmis = TRUE;
+KEVENT g_sendNmisFinishedEvent;
+
+/**
+ * Callback function to be called on NMI
+ */
+BOOLEAN 
+UkNmiCallback(PVOID context, BOOLEAN handled)
+{
+	UNREFERENCED_PARAMETER(handled);
+
+	PNMI_CONTEXT nmiContext = (PNMI_CONTEXT)context;
+	ULONG procNum = KeGetCurrentProcessorNumber();
+	
+	nmiContext[procNum].numFired++;
+	nmiContext[procNum].threadId = HandleToULong(PsGetCurrentThreadId());
+	nmiContext[procNum].framesCaptured = RtlCaptureStackBackTrace(
+		0, 
+		STACK_CAPTURE_SIZE, 
+		(PVOID*)nmiContext[procNum].stackFrames,
+		NULL
+	);
+
+	return TRUE;
+}
+
+VOID
+UkAnalyzeNmiData()
+{
+	for (auto core=0u; core<g_numCores; ++core)
+	{
+		PETHREAD ThreadObj = NULL;
+		NMI_CONTEXT nmiContext = g_NmiContext[core];
+
+		LOG_DBG("NMI callback data: TID: %d\n", nmiContext.threadId);
+
+		if (nmiContext.threadId == 0)
+		{
+			continue;
+		}
+
+		if (!NT_SUCCESS(PsLookupThreadByThreadId(ULongToHandle(nmiContext.threadId), &ThreadObj)))
+		{
+			LOG_DBG("PsLookupThreadByThreadId error\n");
+			continue;
+		}
+
+		// Check each stack frame for origin
+		for (auto i = 0; i < nmiContext.framesCaptured; ++i)
+		{
+			ULONG_PTR addr = (ULONG_PTR)(nmiContext.stackFrames[i]);
+			PKLDR_DATA_TABLE_ENTRY driver = UkGetDriverForAddress(addr);
+
+			if (driver == NULL)
+			{
+				LOG_MSG("[NmiCallback] -> Detected stack frame pointing to unbacked region. TID: %u @ 0x%llx", nmiContext.threadId, addr);
+			
+				// Print stack frame TODO: clean this code
+				for (auto j = 0; j < nmiContext.framesCaptured; ++j)
+				{
+					ULONG_PTR address = (ULONG_PTR)nmiContext.stackFrames[j];
+					PKLDR_DATA_TABLE_ENTRY currDriver = UkGetDriverForAddress(address);
+					if (currDriver == NULL)
+					{
+						LOG_MSG("  [%d] Stack frame %lu: 0x%llx // %ws\n", nmiContext.threadId, j, address, L"??? <------ Unbacked!");
+					}
+					else
+					{
+						auto offsetToFunction = (currDriver == NULL) ? address : (address - (ULONG_PTR)currDriver->DllBase);
+						PWCHAR driverName = currDriver->BaseDllName.Buffer;
+						LOG_MSG("  [%d] Stack frame %lu: 0x%llx+0x%llx // %ws\n", nmiContext.threadId, j, (ULONG_PTR)currDriver->DllBase, offsetToFunction, driverName);
+					}
+				}
+			}
+		}
+		
+		if (ThreadObj)
+		{
+			ObDereferenceObject(ThreadObj);
+		}
+	}
+}
+
+BOOLEAN 
+UkRegisterNmiCallbacks()
+{
+	g_numCores = KeQueryActiveProcessorCountEx(0);
+	ULONG nmiContextLength = g_numCores * sizeof(NMI_CONTEXT);
+
+	g_NmiContext = (PNMI_CONTEXT)ExAllocatePoolWithTag(NonPagedPool, nmiContextLength, POOL_TAG);
+	g_NmiAffinity = (PKAFFINITY_EX)ExAllocatePoolWithTag(NonPagedPool, sizeof(KAFFINITY_EX), POOL_TAG);
+
+	if (!g_NmiAffinity || !g_NmiContext)
+		return FALSE;
+
+	RtlSecureZeroMemory(g_NmiContext, nmiContextLength);
+
+	return TRUE;
+}
+
+VOID 
+UkUnloadNMI()
+{
+	if (g_NmiCallbackHandle) KeDeregisterNmiCallback(g_NmiCallbackHandle);
+	if (g_NmiAffinity) ExFreePoolWithTag(g_NmiAffinity, POOL_TAG);
+	if (g_NmiContext) ExFreePoolWithTag(g_NmiContext, POOL_TAG);
+}
+
+VOID
+UkSendNMI(IN PVOID StartContext)
+{
+	UNREFERENCED_PARAMETER(StartContext);
+
+	NTSTATUS NtStatus;
+
+	KeInitializeEvent(&g_sendNmisFinishedEvent, NotificationEvent, FALSE);
+
+	do
+	{
+		// Register callback
+		g_NmiCallbackHandle = KeRegisterNmiCallback(UkNmiCallback, g_NmiContext);
+
+		// Fire NMI for each core
+		for (auto core=0u; core<g_numCores; ++core)
+		{
+			KeInitializeAffinityEx(g_NmiAffinity);
+			KeAddProcessorAffinityEx(g_NmiAffinity, core);
+
+			LOG_DBG("Sending NMI to analyze thread running on core %d...\n", core);
+			HalSendNMI(g_NmiAffinity);
+
+			// Sleep for 1 seconds between each NMI to allow completion
+			UkSleepMs(1000);
+		}
+
+		// Unregister callback
+		if (g_NmiCallbackHandle)
+		{
+			NtStatus = KeDeregisterNmiCallback(g_NmiCallbackHandle);
+			if (!NT_SUCCESS(NtStatus))
+			{
+				LOG_DBG("KeDeregisterNmiCallback error: %d\n", NtStatus);
+			}
+		}
+
+		// Analyze data
+		UkAnalyzeNmiData();
+
+		UkSleepMs(5000);
+
+	} while (g_sendNmis);
+
+	KeSetEvent(&g_sendNmisFinishedEvent, 0, FALSE);
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+```
+
+`unKover/threads.hpp`:
+
+```hpp
+#pragma once
+
+#include <ntddk.h>
+#include "utils.hpp"
+
+BOOLEAN g_scanSystemThreads = TRUE;
+KEVENT g_scanSystemThreadsFinishedEvent;
+
+/**
+ * Scans all system threads for memory that is not backed by a module on disk.
+ */
+VOID 
+UkScanSystemThreads(IN PVOID StartContext)
+{
+	UNREFERENCED_PARAMETER(StartContext);
+
+	KeInitializeEvent(&g_scanSystemThreadsFinishedEvent, NotificationEvent, FALSE);
+
+	do
+	{
+		LOG_DBG("Scanning running system threads...\n");
+
+		// Scan system threads. TIDs are a multiple of 4 TODO: max number?
+		for (auto tid=4; tid<0xFFFF; tid += 4)
+		{
+			PETHREAD ThreadObj;
+
+			// Get ETHREAD object for TID
+			if (tid == 0 || !NT_SUCCESS(PsLookupThreadByThreadId(ULongToHandle(tid), &ThreadObj)))
+			{
+				continue;
+			}
+
+			// Ignore current thread and non system threads
+			if (!PsIsSystemThread(ThreadObj) || ThreadObj == KeGetCurrentThread())
+			{
+				if (ThreadObj) { ObDereferenceObject(ThreadObj); }
+				continue;
+			}
+
+			// Resolve start address
+			ULONG_PTR startAddress = UkGetThreadStartAddress(ThreadObj);
+			if (startAddress != 0)
+			{
+				if (UkGetDriverForAddress(startAddress) == NULL)
+				{
+					LOG_MSG("[SystemThreadScanner] -> Detected system thread start address pointing to unbacked region: TID: %lu @ 0x%llx\n", tid, startAddress);
+				}
+			}
+
+			ObDereferenceObject(ThreadObj);
+		}
+
+		UkSleepMs(5000);
+
+	} while(g_scanSystemThreads);
+	
+	KeSetEvent(&g_scanSystemThreadsFinishedEvent, 0, FALSE);
+	PsTerminateSystemThread(STATUS_SUCCESS);
+}
+```
+
+`unKover/utils.hpp`:
+
+```hpp
+#pragma once
+
+#include <ntifs.h>
+#include <ntddk.h>
+#include "meta.hpp"
+
+typedef struct _NON_PAGED_DEBUG_INFO
+{
+	USHORT Signature;                                                       //0x0
+	USHORT Flags;                                                           //0x2
+	ULONG Size;                                                             //0x4
+	USHORT Machine;                                                         //0x8
+	USHORT Characteristics;                                                 //0xa
+	ULONG TimeDateStamp;                                                    //0xc
+	ULONG CheckSum;                                                         //0x10
+	ULONG SizeOfImage;                                                      //0x14
+	ULONGLONG ImageBase;                                                    //0x18
+} NON_PAGED_DEBUG_INFO;
+
+typedef struct _KLDR_DATA_TABLE_ENTRY
+{
+	LIST_ENTRY InLoadOrderLinks;
+	PVOID ExceptionTable;
+	UINT32 ExceptionTableSize;
+	PVOID GpValue;
+	NON_PAGED_DEBUG_INFO* NonPagedDebugInfo;
+	PVOID DllBase;
+	PVOID EntryPoint;
+	UINT32 SizeOfImage;
+	UNICODE_STRING FullDllName;
+	UNICODE_STRING BaseDllName;
+	UINT32 Flags;
+	UINT16 LoadCount;
+	UINT16 SignatureInfo;
+	PVOID SectionPointer;
+	UINT32 CheckSum;
+	UINT32 CoverageSectionSize;
+	PVOID CoverageSection;
+	PVOID LoadedImports;
+	PVOID Spare;
+	UINT32 SizeOfImageNotRounded;
+	UINT32 TimeDateStamp;
+} KLDR_DATA_TABLE_ENTRY, * PKLDR_DATA_TABLE_ENTRY;
+
+typedef struct _SYSTEM_MODULE_ENTRY
+{
+	HANDLE Section;
+	PVOID MappedBase;
+	PVOID ImageBase;
+	ULONG ImageSize;
+	ULONG Flags;
+	USHORT LoadOrderIndex;
+	USHORT InitOrderIndex;
+	USHORT LoadCount;
+	USHORT OffsetToFileName;
+	UCHAR FullPathName[256];
+} SYSTEM_MODULE_ENTRY, *PSYSTEM_MODULE_ENTRY;
+
+typedef struct _SYSTEM_MODULE_INFORMATION
+{
+	ULONG Count;
+	SYSTEM_MODULE_ENTRY Module[0];
+} SYSTEM_MODULE_INFORMATION, *PSYSTEM_MODULE_INFORMATION;
+
+typedef enum _SYSTEM_INFORMATION_CLASS
+{
+	SystemBasicInformation,
+	SystemProcessorInformation,
+	SystemPerformanceInformation,
+	SystemTimeOfDayInformation,
+	SystemPathInformation,
+	SystemProcessInformation,
+	SystemCallCountInformation,
+	SystemDeviceInformation,
+	SystemProcessorPerformanceInformation,
+	SystemFlagsInformation,
+	SystemCallTimeInformation,
+	SystemModuleInformation,
+	SystemLocksInformation,
+	SystemStackTraceInformation,
+	SystemPagedPoolInformation,
+	SystemNonPagedPoolInformation,
+	SystemHandleInformation,
+	SystemObjectInformation,
+	SystemPageFileInformation,
+	SystemVdmInstemulInformation,
+	SystemVdmBopInformation,
+	SystemFileCacheInformation,
+	SystemPoolTagInformation,
+	SystemInterruptInformation,
+	SystemDpcBehaviorInformation,
+	SystemFullMemoryInformation,
+	SystemLoadGdiDriverInformation,
+	SystemUnloadGdiDriverInformation,
+	SystemTimeAdjustmentInformation,
+	SystemSummaryMemoryInformation,
+	SystemNextEventIdInformation,
+	SystemEventIdsInformation,
+	SystemCrashDumpInformation,
+	SystemExceptionInformation,
+	SystemCrashDumpStateInformation,
+	SystemKernelDebuggerInformation,
+	SystemContextSwitchInformation,
+	SystemRegistryQuotaInformation,
+	SystemExtendServiceTableInformation,
+	SystemPrioritySeperation,
+	SystemPlugPlayBusInformation,
+	SystemDockInformation,
+	SystemProcessorSpeedInformation,
+	SystemCurrentTimeZoneInformation,
+	SystemLookasideInformation
+} SYSTEM_INFORMATION_CLASS, *PSYSTEM_INFORMATION_CLASS;
+
+EXTERN_C NTSTATUS ZwQuerySystemInformation(IN SYSTEM_INFORMATION_CLASS SystemInformationClass, OUT PVOID SystemInformation, IN ULONG SystemInformationLength, OUT PULONG ReturnLength OPTIONAL);
+EXTERN_C NTSTATUS ZwQueryInformationThread(HANDLE ThreadHandle, THREADINFOCLASS ThreadInformationClass, PVOID ThreadInformation, ULONG ThreadInformationLength, PULONG ReturnLength);
+
+/**
+ * compares two wchar strings without case sensitivity
+ *
+ * @param s1 first string
+ * @param s2 second string
+ * @return INT 0 if both string are qual
+ */
+INT
+_strcmpi_w(const wchar_t* s1, const wchar_t* s2)
+{
+	WCHAR c1, c2;
+
+	if (s1 == s2)
+		return 0;
+
+	if (s1 == 0)
+		return -1;
+
+	if (s2 == 0)
+		return 1;
+
+	do {
+		c1 = RtlUpcaseUnicodeChar(*s1);
+		c2 = RtlUpcaseUnicodeChar(*s2);
+		s1++;
+		s2++;
+	} while ((c1 != 0) && (c1 == c2));
+
+	return (INT)(c1 - c2);
+}
+
+PKLDR_DATA_TABLE_ENTRY
+UkGetDriverForAddress(ULONG_PTR address)
+{
+	if (!address)
+	{
+		return NULL;
+	}
+
+	PKLDR_DATA_TABLE_ENTRY entry = (PKLDR_DATA_TABLE_ENTRY)(g_drvObj)->DriverSection;
+
+	for (auto i = 0; i < 512; ++i)
+	{
+		UINT64 startAddr = UINT64(entry->DllBase);
+		UINT64 endAddr = startAddr + UINT64(entry->SizeOfImage);
+		if (address >= startAddr && address < endAddr)
+		{
+			return (PKLDR_DATA_TABLE_ENTRY)entry;
+		}
+		entry = (PKLDR_DATA_TABLE_ENTRY)entry->InLoadOrderLinks.Flink;
+	}
+
+	return NULL;
+}
+
+ULONG_PTR 
+UkGetThreadStartAddress(PETHREAD ThreadObj)
+{
+	HANDLE hThread;
+	ULONG_PTR startAddress;
+	ULONG bytesReturned;
+
+	if (ObOpenObjectByPointer(ThreadObj, OBJ_KERNEL_HANDLE, NULL, GENERIC_READ, *PsThreadType, KernelMode, &hThread) != 0)
+	{
+		return NULL;
+	}
+
+	if (ZwQueryInformationThread(hThread, (THREADINFOCLASS)ThreadQuerySetWin32StartAddress, &startAddress, sizeof(startAddress), &bytesReturned) != 0)
+	{
+		ZwClose(hThread);
+		return NULL;
+	}
+
+	if (!MmIsAddressValid((PVOID)startAddress))
+	{
+		ZwClose(hThread);
+		return NULL;
+	}
+
+	ZwClose(hThread);
+	return startAddress;
+}
+
+VOID
+UkSleepMs(INT milliseconds)
+{
+	LARGE_INTEGER interval;
+	interval.QuadPart = -1 * (LONGLONG)(milliseconds * 10000);
+	KeDelayExecutionThread(KernelMode, FALSE, &interval);
+}
+```

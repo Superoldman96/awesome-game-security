@@ -1,0 +1,1565 @@
+Project Path: arc_gmh5225_nmi-callback-handler_rwgeok40
+
+Source Tree:
+
+```txt
+arc_gmh5225_nmi-callback-handler_rwgeok40
+├── app
+│   ├── app.vcxproj
+│   ├── app.vcxproj.filters
+│   ├── driver.cpp
+│   ├── driver.h
+│   └── main.cpp
+├── image.png
+├── nmi-callback-handler
+│   ├── driver.c
+│   ├── driver.h
+│   ├── nmi-callback-handler.inf
+│   ├── nmi-callback-handler.vcxproj
+│   └── nmi-callback-handler.vcxproj.filters
+├── nmi-callback-handler.sln
+└── readme.md
+
+```
+
+`app/app.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{daf8bf17-477c-4d0e-bba0-eeb4689f574c}</ProjectGuid>
+    <RootNamespace>app</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="driver.cpp" />
+    <ClCompile Include="driver.h" />
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`app/app.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="driver.h">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
+```
+
+`app/driver.cpp`:
+
+```cpp
+#include "driver.h"
+
+//L"\\\\.\\nmi_handler"
+DriverInterface::DriverInterface( LPCWSTR DeviceName )
+{
+	if ( !DeviceName )
+	{
+		std::cout << "Invalid device name passed as argument" << std::endl;
+		return;
+	}
+
+	this->device_name = DeviceName;
+	this->status = FALSE;
+
+	device_handle = CreateFileW(
+		DeviceName,
+		GENERIC_WRITE | GENERIC_READ | GENERIC_EXECUTE,
+		0,
+		0,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_SYSTEM | FILE_FLAG_OVERLAPPED,
+		0
+	);
+
+	if ( !device_handle )
+	{
+		std::cout << "Failed to open handle to device" << std::endl;
+		return;
+	}
+}
+
+bool DriverInterface::RunNmiCallbacks()
+{
+	status = DeviceIoControl(
+		device_handle,
+		IOCTL_RUN_NMI_CALLBACKS,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		( LPOVERLAPPED )NULL
+	);
+
+	return status;
+}
+
+bool DriverInterface::ValidateDriverObjects()
+{
+	status = DeviceIoControl(
+		device_handle,
+		IOCTL_VALIDATE_DRIVER_OBJECTS,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		( LPOVERLAPPED )NULL
+	);
+
+	return status;
+}
+
+
+
+```
+
+`app/driver.h`:
+
+```h
+#ifndef IDRIVER_H
+#define IDRIVER_H
+
+#include <windows.h>
+#include <iostream>
+
+#define IOCTL_RUN_NMI_CALLBACKS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x2001, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_VALIDATE_DRIVER_OBJECTS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x2002, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+class DriverInterface
+{
+	HANDLE device_handle;
+	LPCWSTR device_name;
+	BOOLEAN status;
+
+public:
+
+	DriverInterface( LPCWSTR DeviceName );
+
+	bool RunNmiCallbacks();
+	bool ValidateDriverObjects();
+
+};
+
+#endif // !IDRIVER_H
+
+```
+
+`app/main.cpp`:
+
+```cpp
+#include "driver.h"
+
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <iomanip>
+#include <chrono>
+#include <thread>
+#include <iostream>
+
+#define LOG_INFO(fmt, ...) printf("[+] " fmt "\n", ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) printf("[-] " fmt "\n", ##__VA_ARGS__)
+
+int main()
+{
+    LPCWSTR name = L"\\\\.\\nmi_handler";
+
+    DriverInterface driver( name );
+
+    LOG_INFO( "running nmi callbacks" );
+
+    while ( true )
+    {
+        if ( !driver.ValidateDriverObjects() )
+        {
+            LOG_ERROR( "Failed to enable process load callbacks" );
+            return ERROR;
+        }
+
+        LOG_INFO( "Successfully validated driver objects" );
+
+        if ( !driver.RunNmiCallbacks() )
+        {
+            LOG_ERROR("failed to run nmi callbacks");
+            return ERROR;      
+        } 
+
+        LOG_INFO( "Successfully run nmi callbacks" );
+
+        std::this_thread::sleep_for( std::chrono::seconds( 10 ) );
+    }
+
+    return 0;
+}
+```
+
+`nmi-callback-handler.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33502.453
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "nmi-callback-handler", "nmi-callback-handler\nmi-callback-handler.vcxproj", "{EC71772B-C0D7-465D-8463-06591E7D4633}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "app", "app\app.vcxproj", "{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|ARM64.Build.0 = Debug|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x64.ActiveCfg = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x64.Build.0 = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x64.Deploy.0 = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x86.ActiveCfg = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x86.Build.0 = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Debug|x86.Deploy.0 = Debug|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|ARM64.ActiveCfg = Release|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|ARM64.Build.0 = Release|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|ARM64.Deploy.0 = Release|ARM64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x64.ActiveCfg = Release|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x64.Build.0 = Release|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x64.Deploy.0 = Release|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x86.ActiveCfg = Release|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x86.Build.0 = Release|x64
+		{EC71772B-C0D7-465D-8463-06591E7D4633}.Release|x86.Deploy.0 = Release|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|ARM64.ActiveCfg = Debug|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|ARM64.Build.0 = Debug|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|x64.ActiveCfg = Debug|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|x64.Build.0 = Debug|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|x86.ActiveCfg = Debug|Win32
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Debug|x86.Build.0 = Debug|Win32
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|ARM64.ActiveCfg = Release|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|ARM64.Build.0 = Release|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|x64.ActiveCfg = Release|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|x64.Build.0 = Release|x64
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|x86.ActiveCfg = Release|Win32
+		{DAF8BF17-477C-4D0E-BBA0-EEB4689F574C}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {45FA943D-F52F-4556-9A70-CA3C1C67429D}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`nmi-callback-handler/driver.c`:
+
+```c
+#include "driver.h"
+
+#define IOCTL_RUN_NMI_CALLBACKS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x2001, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_VALIDATE_DRIVER_OBJECTS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x2002, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+typedef struct _NMI_CORE_CONTEXT
+{
+	INT nmi_callbacks_run;
+
+}NMI_CORE_CONTEXT, * PNMI_CORE_CONTEXT;
+
+typedef struct _NMI_CONTEXT
+{
+	PVOID thread_data_pool;
+	PVOID stack_frames;
+	PVOID nmi_core_context;
+	INT core_count;
+
+}NMI_CONTEXT, * PNMI_CONTEXT;
+
+VOID InitDriverList(
+	_In_ PINVALID_DRIVERS_HEAD ListHead
+)
+{
+	ListHead->count = 0;
+	ListHead->first_entry = NULL;
+}
+
+VOID AddDriverToList(
+	_In_ PINVALID_DRIVERS_HEAD InvalidDriversHead,
+	_In_ PDRIVER_OBJECT Driver
+)
+{
+	PINVALID_DRIVER new_entry = ExAllocatePool2(
+		POOL_FLAG_NON_PAGED,
+		sizeof( INVALID_DRIVER ),
+		INVALID_DRIVER_LIST_ENTRY_POOL
+	);
+
+	if ( !new_entry )
+		return;
+
+	new_entry->driver = Driver;
+	new_entry->next = InvalidDriversHead->first_entry;
+	InvalidDriversHead->first_entry = new_entry;
+}
+
+VOID RemoveInvalidDriverFromList(
+	_In_ PINVALID_DRIVERS_HEAD InvalidDriversHead
+)
+{
+	if ( InvalidDriversHead->first_entry )
+	{
+		PINVALID_DRIVER entry = InvalidDriversHead->first_entry;
+		InvalidDriversHead->first_entry = InvalidDriversHead->first_entry->next;
+		ExFreePoolWithTag( entry, INVALID_DRIVER_LIST_ENTRY_POOL );
+	}
+}
+
+VOID EnumerateInvalidDrivers(
+	_In_ PINVALID_DRIVERS_HEAD InvalidDriversHead
+)
+{
+	PINVALID_DRIVER entry = InvalidDriversHead->first_entry;
+
+	while ( entry != NULL )
+	{
+		DEBUG_LOG( "Invalid Driver: %wZ", entry->driver->DriverName );
+		entry = entry->next;
+	}
+}
+
+NTSTATUS ValidateDriverObjectHasBackingModule(
+	_In_ PSYSTEM_MODULES ModuleInformation,
+	_In_ PDRIVER_OBJECT DriverObject,
+	_Out_ PBOOLEAN Result
+)
+{
+	if ( !ModuleInformation || !DriverObject || !Result )
+		return STATUS_INVALID_PARAMETER;
+
+	for ( INT i = 0; i < ModuleInformation->module_count; i++ )
+	{
+		PRTL_MODULE_EXTENDED_INFO system_module = ( PRTL_MODULE_EXTENDED_INFO )(
+			( uintptr_t )ModuleInformation->address + i * sizeof( RTL_MODULE_EXTENDED_INFO ) );
+
+		if ( system_module->ImageBase == DriverObject->DriverStart )
+		{
+			*Result = TRUE;
+			return STATUS_SUCCESS;
+		}
+	}
+
+	DEBUG_LOG( "invalid driver found" );
+	*Result = FALSE;
+
+	return STATUS_SUCCESS;
+}
+
+//https://imphash.medium.com/windows-process-internals-a-few-concepts-to-know-before-jumping-on-memory-forensics-part-3-4a0e195d947b
+NTSTATUS GetSystemModuleInformation( 
+	_Out_ PSYSTEM_MODULES ModuleInformation 
+)
+{
+	if ( !ModuleInformation )
+		return STATUS_INVALID_PARAMETER;
+
+	ULONG size = 0;
+
+	/*
+	* query system module information without an output buffer to get
+	* number of bytes required to store all module info structures
+	*/
+	if ( !NT_SUCCESS( RtlQueryModuleInformation(
+		&size,
+		sizeof( RTL_MODULE_EXTENDED_INFO ),
+		NULL
+	) ) )
+	{
+		DEBUG_ERROR( "Failed to query module information" );
+		return STATUS_ABANDONED;
+	}
+
+	/* Allocate a pool equal to the output size of RtlQueryModuleInformation */
+	PRTL_MODULE_EXTENDED_INFO driver_information = ExAllocatePool2(
+		POOL_FLAG_NON_PAGED,
+		size,
+		SYSTEM_MODULES_POOL
+	);
+
+	if ( !driver_information )
+	{
+		DEBUG_ERROR( "Failed to allocate pool LOL" );
+		return STATUS_ABANDONED;
+	}
+
+	/* Query the modules again this time passing a pointer to the allocated buffer */
+	if ( !NT_SUCCESS( RtlQueryModuleInformation(
+		&size,
+		sizeof( RTL_MODULE_EXTENDED_INFO ),
+		driver_information
+	) ) )
+	{
+		DEBUG_ERROR( "Failed lolz" );
+		ExFreePoolWithTag( driver_information, SYSTEM_MODULES_POOL );
+		return STATUS_ABANDONED;
+	}
+
+	ModuleInformation->address = driver_information;
+	ModuleInformation->module_count = size / sizeof( RTL_MODULE_EXTENDED_INFO );
+
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS ValidateDriverObjects(
+	_In_ PSYSTEM_MODULES SystemModules,
+	_In_ PINVALID_DRIVERS_HEAD InvalidDriverListHead
+)
+{
+	if ( !SystemModules || !InvalidDriverListHead )
+		return STATUS_INVALID_PARAMETER;
+
+	HANDLE handle;
+	OBJECT_ATTRIBUTES attributes = { 0 };
+	PVOID directory = { 0 };
+	UNICODE_STRING directory_name;
+
+	RtlInitUnicodeString( &directory_name, L"\\Driver" );
+
+	InitializeObjectAttributes(
+		&attributes,
+		&directory_name,
+		OBJ_CASE_INSENSITIVE,
+		NULL,
+		NULL
+	);
+
+	if ( !NT_SUCCESS( ZwOpenDirectoryObject(
+		&handle,
+		DIRECTORY_ALL_ACCESS,
+		&attributes
+	) ) )
+	{
+		DEBUG_ERROR( "Failed to query directory object" );
+		return STATUS_ABANDONED;
+	}
+
+	if ( !NT_SUCCESS( ObReferenceObjectByHandle(
+		handle,
+		DIRECTORY_ALL_ACCESS,
+		NULL,
+		KernelMode,
+		&directory,
+		NULL
+	) ) )
+	{
+		DEBUG_ERROR( "Failed to reference directory by handle" );
+		ZwClose( handle );
+		return STATUS_ABANDONED;
+	}
+
+	/*
+	* Windows organises its drivers in object directories (not the same as
+	* files directories). For the driver directory, there are 37 entries,
+	* each driver is hashed and indexed. If there is a driver with a duplicate
+	* index, it is inserted into same index in a linked list using the
+	* _OBJECT_DIRECTORY_ENTRY struct. So to enumerate all drivers we visit
+	* each entry in the hashmap, enumerate all objects in the linked list
+	* at entry j then we increment the hashmap index i. The motivation behind
+	* this is that when a driver is accessed, it is brought to the first index
+	* in the linked list, so drivers that are accessed the most can be
+	* accessed quickly
+	*/
+
+	POBJECT_DIRECTORY directory_object = ( POBJECT_DIRECTORY )directory;
+
+	ExAcquirePushLockExclusiveEx( &directory_object->Lock, NULL );
+
+	for ( INT i = 0; i < NUMBER_HASH_BUCKETS; i++ )
+	{
+		POBJECT_DIRECTORY_ENTRY entry = directory_object->HashBuckets[ i ];
+
+		if ( !entry )
+			continue;
+
+		POBJECT_DIRECTORY_ENTRY sub_entry = entry;
+
+		while ( sub_entry )
+		{
+			PDRIVER_OBJECT current_driver = sub_entry->Object;
+			BOOLEAN flag;
+
+			if ( !NT_SUCCESS( ValidateDriverObjectHasBackingModule(
+				SystemModules,
+				current_driver,
+				&flag
+			) ) )
+			{
+				DEBUG_LOG( "Error validating driver object" );
+				ExReleasePushLockExclusiveEx( &directory_object->Lock, 0 );
+				ObDereferenceObject( directory );
+				ZwClose( handle );
+				return STATUS_ABANDONED;
+			}
+
+			if ( !flag )
+			{
+				InvalidDriverListHead->count += 1;
+				AddDriverToList( InvalidDriverListHead, current_driver );
+			}
+
+			sub_entry = sub_entry->ChainLink;
+		}
+	}
+
+	ExReleasePushLockExclusiveEx( &directory_object->Lock, 0 );
+	ObDereferenceObject( directory );
+	ZwClose( handle );
+
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS IsInstructionPointerInInvalidRegion(
+	_In_ UINT64 RIP,
+	_In_ PSYSTEM_MODULES SystemModules,
+	_Out_ PBOOLEAN Result
+)
+{
+	if ( !RIP || !SystemModules || !Result )
+		return STATUS_INVALID_PARAMETER;
+
+	/* Note that this does not check for HAL or PatchGuard Execution */
+	for ( INT i = 0; i < SystemModules->module_count; i++ )
+	{
+		PRTL_MODULE_EXTENDED_INFO system_module = ( PRTL_MODULE_EXTENDED_INFO )(
+			( uintptr_t )SystemModules->address + i * sizeof( RTL_MODULE_EXTENDED_INFO ) );
+
+		UINT64 base = ( UINT64 )system_module->ImageBase;
+		UINT64 end = base + system_module->ImageSize;
+
+		if ( RIP >= base && RIP <= end )
+		{
+			*Result = TRUE;
+			return STATUS_SUCCESS;;
+		}
+	}
+
+	*Result = FALSE;
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS AnalyseNmiData(
+	_In_ PNMI_CONTEXT NmiContext,
+	_In_ PSYSTEM_MODULES SystemModules
+)
+{
+	if ( !NmiContext || !SystemModules )
+		return STATUS_INVALID_PARAMETER;
+
+	for ( INT core = 0; core < NmiContext->core_count; core++ )
+	{
+		PNMI_CORE_CONTEXT context = ( PNMI_CORE_CONTEXT )( ( uintptr_t )NmiContext->nmi_core_context + core * sizeof( NMI_CORE_CONTEXT ) );
+
+		/* Make sure our NMIs were run  */
+		if ( !context->nmi_callbacks_run )
+		{
+			DEBUG_LOG( "no nmi callbacks were run, nmis potentially disabled" );
+			return STATUS_SUCCESS;
+		}
+
+		PNMI_CALLBACK_DATA thread_data = ( PNMI_CALLBACK_DATA )(
+			( uintptr_t )NmiContext->thread_data_pool + core * sizeof( NMI_CALLBACK_DATA ) );
+
+		DEBUG_LOG( "cpu number: %i callback count: %i", core, context->nmi_callbacks_run );
+
+		/* Walk the stack */
+		for ( INT frame = 0; frame < thread_data->num_frames_captured; frame++ )
+		{
+			BOOLEAN flag;
+			DWORD64 stack_frame = *( DWORD64* )( 
+				( ( uintptr_t )NmiContext->stack_frames + thread_data->stack_frames_offset + frame * sizeof( PVOID ) ) );
+
+			if ( !NT_SUCCESS( IsInstructionPointerInInvalidRegion( stack_frame, SystemModules, &flag ) ) )
+			{
+				DEBUG_ERROR( "errro checking RIP for current stack address" );
+				continue;
+			}
+
+			flag == TRUE
+				? DEBUG_LOG( "RIP: %llx was xecuting within valid module", stack_frame )
+				: DEBUG_ERROR( "RIP %llx was executing in INVALID MEMORY", stack_frame );
+		}
+	}
+
+	return STATUS_SUCCESS;
+}
+
+BOOLEAN NmiCallback(
+	_In_ PVOID Context,
+	_In_ BOOLEAN Handled
+)
+{
+	UNREFERENCED_PARAMETER( Handled );
+
+	PVOID current_thread = KeGetCurrentThread();
+	NMI_CALLBACK_DATA thread_data = { 0 };
+	PNMI_CONTEXT nmi_context = ( PNMI_CONTEXT )Context;
+	ULONG proc_num = KeGetCurrentProcessorNumber();
+
+	/* 
+	* Cannot allocate pool in this function as it runs at IRQL >= dispatch level
+	* so ive just allocated a global pool with size equal to 0x200 * num_procs
+	*/
+	INT num_frames_captured = RtlCaptureStackBackTrace(
+		NULL,
+		STACK_FRAME_POOL_SIZE,
+		( uintptr_t )nmi_context->stack_frames + proc_num * STACK_FRAME_POOL_SIZE,
+		NULL
+	);
+
+	/* 
+	* This function is run in the context of the interrupted thread hence we can
+	* gather any and all information regarding the thread that may be useful for analysis
+	*/
+	thread_data.kthread_address = ( UINT64 )current_thread;
+	thread_data.kprocess_address = ( UINT64 )PsGetCurrentProcess();
+	thread_data.stack_base = *( ( UINT64* )( ( uintptr_t )current_thread + KTHREAD_STACK_BASE_OFFSET ) );
+	thread_data.stack_limit = *( ( UINT64* )( ( uintptr_t )current_thread + KTHREAD_STACK_LIMIT_OFFSET ) );
+	thread_data.start_address = *( ( UINT64* )( ( uintptr_t )current_thread + KTHREAD_START_ADDRESS_OFFSET ) );
+	thread_data.cr3 = __readcr3();
+	thread_data.stack_frames_offset = proc_num * STACK_FRAME_POOL_SIZE;
+	thread_data.num_frames_captured = num_frames_captured;
+
+	RtlCopyMemory(
+		( ( uintptr_t )nmi_context->thread_data_pool ) + proc_num * sizeof( thread_data ),
+		&thread_data,
+		sizeof( thread_data )
+	);
+
+	PNMI_CORE_CONTEXT core_context = 
+		( PNMI_CORE_CONTEXT )( ( uintptr_t )nmi_context->nmi_core_context + proc_num * sizeof( NMI_CORE_CONTEXT ) );
+	core_context->nmi_callbacks_run += 1;
+	DEBUG_LOG( "core number: %lx, num nmis run: %i", proc_num, core_context->nmi_callbacks_run );
+
+	return TRUE;
+}
+
+NTSTATUS LaunchNonMaskableInterrupt( 
+	_In_ PNMI_CONTEXT NmiContext
+)
+{
+	if ( !NmiContext )
+		return STATUS_INVALID_PARAMETER;
+
+	PKAFFINITY_EX ProcAffinityPool = 
+		ExAllocatePool2( POOL_FLAG_NON_PAGED, sizeof( KAFFINITY_EX ), PROC_AFFINITY_POOL );
+
+	if ( !ProcAffinityPool )
+		return STATUS_MEMORY_NOT_ALLOCATED;
+
+	NmiContext->stack_frames = 
+		ExAllocatePool2( POOL_FLAG_NON_PAGED, NmiContext->core_count * STACK_FRAME_POOL_SIZE, STACK_FRAMES_POOL );
+
+	if ( !NmiContext->stack_frames )
+	{
+		ExFreePoolWithTag( ProcAffinityPool, PROC_AFFINITY_POOL );
+		return STATUS_MEMORY_NOT_ALLOCATED;
+	}
+
+	NmiContext->thread_data_pool = 
+		ExAllocatePool2( POOL_FLAG_NON_PAGED, NmiContext->core_count * sizeof( NMI_CALLBACK_DATA ), THREAD_DATA_POOL );
+
+	if ( !NmiContext->thread_data_pool )
+	{
+		ExFreePoolWithTag( NmiContext->stack_frames, STACK_FRAMES_POOL );
+		ExFreePoolWithTag( ProcAffinityPool, PROC_AFFINITY_POOL );
+		return STATUS_MEMORY_NOT_ALLOCATED;
+	}
+
+	PVOID registration_handle = KeRegisterNmiCallback( NmiCallback, NmiContext );
+
+	if ( !registration_handle )
+	{
+		ExFreePoolWithTag( NmiContext->thread_data_pool, THREAD_DATA_POOL );
+		ExFreePoolWithTag( NmiContext->stack_frames, STACK_FRAMES_POOL );
+		ExFreePoolWithTag( ProcAffinityPool, PROC_AFFINITY_POOL );
+		return STATUS_MEMORY_NOT_ALLOCATED;
+	}
+
+	LARGE_INTEGER delay = { 0 };
+	delay.QuadPart -= 100 * 10000;
+
+	for ( ULONG core = 0; core < NmiContext->core_count; core++ )
+	{
+		KeInitializeAffinityEx( ProcAffinityPool );
+		KeAddProcessorAffinityEx( ProcAffinityPool, core );
+
+		DEBUG_LOG( "Sending NMI" );
+		HalSendNMI( ProcAffinityPool );
+
+		/*
+		* Only a single NMI can be active at any given time, so arbitrarily
+		* delay execution  to allow time for the NMI to be processed
+		*/
+		KeDelayExecutionThread( KernelMode, FALSE, &delay );
+	}
+
+	KeDeregisterNmiCallback( registration_handle );
+	ExFreePoolWithTag( ProcAffinityPool, PROC_AFFINITY_POOL );
+
+	return STATUS_SUCCESS;
+}
+
+VOID DriverUnload( 
+	_In_ PDRIVER_OBJECT DriverObject 
+)
+{
+	UNREFERENCED_PARAMETER( DriverObject );
+	DEBUG_LOG( "unloading driver" );
+}
+
+NTSTATUS DriverCreate(
+	_In_ PDEVICE_OBJECT DeviceObject,
+	_In_ PIRP Irp
+)
+{
+	UNREFERENCED_PARAMETER( DeviceObject );
+	DEBUG_LOG( "Handle to device opened" );
+	IoCompleteRequest( Irp, IO_NO_INCREMENT );
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS DriverClose(
+	_In_ PDEVICE_OBJECT DeviceObject,
+	_In_ PIRP Irp
+)
+{
+	UNREFERENCED_PARAMETER( DeviceObject );
+	DEBUG_LOG( "Handle to device closed" );
+	IoCompleteRequest( Irp, IO_NO_INCREMENT );
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS HandleNmiIOCTL()
+{
+	NTSTATUS status = STATUS_SUCCESS;
+	SYSTEM_MODULES system_modules = { 0 };
+	NMI_CONTEXT nmi_context = { 0 };
+
+	nmi_context.core_count = KeQueryActiveProcessorCountEx( 0 );
+	nmi_context.nmi_core_context = 
+		ExAllocatePool2( POOL_FLAG_NON_PAGED, nmi_context.core_count * sizeof( NMI_CORE_CONTEXT ), NMI_CONTEXT_POOL );
+
+	if ( !nmi_context.nmi_core_context )
+		return STATUS_MEMORY_NOT_ALLOCATED;
+
+	/*
+	* We query the system modules each time since they can potentially
+	* change at any time
+	*/
+	status = GetSystemModuleInformation( &system_modules );
+
+	if ( !NT_SUCCESS( status ) )
+	{
+		DEBUG_ERROR( "Error retriving system module information" );
+		return status;
+	}
+
+	status = LaunchNonMaskableInterrupt( &nmi_context );
+
+	if ( !NT_SUCCESS( status ) )
+	{
+		DEBUG_ERROR( "Error running NMI callbacks" );
+		ExFreePoolWithTag( system_modules.address, SYSTEM_MODULES_POOL );
+		ExFreePoolWithTag( nmi_context.nmi_core_context, NMI_CONTEXT_POOL );
+		return status;
+	}
+
+	status = AnalyseNmiData( &nmi_context, &system_modules );
+
+	if ( !NT_SUCCESS( status ) )
+		DEBUG_ERROR( "Error analysing nmi data" );
+
+	ExFreePoolWithTag( system_modules.address, SYSTEM_MODULES_POOL );
+	ExFreePoolWithTag( nmi_context.nmi_core_context, NMI_CONTEXT_POOL );
+
+	if (nmi_context.stack_frames )
+		ExFreePoolWithTag( nmi_context.stack_frames, STACK_FRAMES_POOL );
+	if (nmi_context.thread_data_pool )
+		ExFreePoolWithTag( nmi_context.thread_data_pool, THREAD_DATA_POOL );
+
+	return status;
+}
+
+NTSTATUS HandleValidateDriversIOCTL()
+{
+	NTSTATUS status = STATUS_SUCCESS;
+	SYSTEM_MODULES system_modules = { 0 };
+
+	/* Fix annoying visual studio linting error */
+	RtlZeroMemory( &system_modules, sizeof( SYSTEM_MODULES ) );
+
+	status = GetSystemModuleInformation( &system_modules );
+
+	if ( !NT_SUCCESS( status ) )
+	{
+		DEBUG_ERROR( "Error retriving system module information" );
+		return status;
+	}
+
+	PINVALID_DRIVERS_HEAD head =
+		ExAllocatePool2( POOL_FLAG_NON_PAGED, sizeof( INVALID_DRIVERS_HEAD ), INVALID_DRIVER_LIST_HEAD_POOL );
+
+	if ( !head )
+	{
+		ExFreePoolWithTag( system_modules.address, SYSTEM_MODULES_POOL );
+		return STATUS_ABANDONED;
+	}
+
+	/*
+	* Use a linked list here so that so we have easy access to the invalid drivers
+	* which we can then use to copy the drivers logic for further analysis in
+	* identifying drivers specifically used for the purpose of cheating
+	*/
+
+	InitDriverList( head );
+
+	if ( !NT_SUCCESS( ValidateDriverObjects( &system_modules, head ) ) )
+	{
+		DEBUG_ERROR( "Failed to validate driver objects" );
+		ExFreePoolWithTag( system_modules.address, SYSTEM_MODULES_POOL );
+		return STATUS_ABANDONED;
+	}
+
+	if ( head->count > 0 )
+	{
+		DEBUG_LOG( "found INVALID drivers with count: %i", head->count );
+		EnumerateInvalidDrivers( head );
+
+		for ( INT i = 0; i < head->count; i++ )
+		{ 
+			RemoveInvalidDriverFromList( head ); 
+		}
+	}
+	else
+	{
+		DEBUG_LOG( "No INVALID drivers found :)" );
+	}
+
+	ExFreePoolWithTag( head, INVALID_DRIVER_LIST_HEAD_POOL );
+	ExFreePoolWithTag( system_modules.address, SYSTEM_MODULES_POOL );
+	return status;
+}
+
+NTSTATUS MajorControl(
+	_In_ PDRIVER_OBJECT DriverObject,
+	_In_ PIRP Irp
+)
+{
+	UNREFERENCED_PARAMETER( DriverObject );
+
+	NTSTATUS status = STATUS_SUCCESS;
+	PIO_STACK_LOCATION stack_location = IoGetCurrentIrpStackLocation( Irp );
+	HANDLE handle;
+
+	switch ( stack_location->Parameters.DeviceIoControl.IoControlCode )
+	{
+	case IOCTL_RUN_NMI_CALLBACKS:
+		DEBUG_LOG( "IOCTL_RUN_NMI_CALLBACKS Received" );
+
+		status = HandleNmiIOCTL();
+
+		if ( !NT_SUCCESS( status ) )
+			DEBUG_ERROR( "Failed to handle NMI IOCTL" );
+
+		break;
+
+	case IOCTL_VALIDATE_DRIVER_OBJECTS:
+		DEBUG_LOG( "IOCTL_VALIDATE_DRIVER_OBJECTS Received" );
+
+		/*
+		* The reason this function is run in a new thread and not the thread
+		* issuing the IOCTL is because ZwOpenDirectoryObject issues a 
+		* user mode handle if called on the user mode thread calling DeviceIoControl.
+		* This is a problem because when we pass said handle ObReferenceObjectByHandle
+		* it will issue a bug check under windows driver verifier.
+		*/
+
+		status = PsCreateSystemThread(
+			&handle,
+			PROCESS_ALL_ACCESS,
+			NULL,
+			NULL,
+			NULL,
+			HandleValidateDriversIOCTL,
+			NULL
+		);
+
+		if ( !NT_SUCCESS( status ) )
+			DEBUG_ERROR( "Failed to start thread to validate system drivers" );
+
+		break;
+
+	default:
+		DEBUG_ERROR( "Invalid IOCTl code passed" );
+		break;
+	}
+
+	Irp->IoStatus.Status = status;
+	IoCompleteRequest( Irp, IO_NO_INCREMENT );
+	return status;
+}
+
+NTSTATUS DriverEntry(
+	_In_ PDRIVER_OBJECT DriverObject,
+	_In_ PUNICODE_STRING RegistryPath
+)
+{
+	UNREFERENCED_PARAMETER( RegistryPath );
+
+	NTSTATUS status = STATUS_SUCCESS;
+	ULONG num_cores = KeQueryActiveProcessorCountEx( 0 );
+
+	status = IoCreateDevice(
+		DriverObject,
+		0,
+		&DEVICE_NAME,
+		FILE_DEVICE_UNKNOWN,
+		FILE_DEVICE_SECURE_OPEN,
+		FALSE,
+		&DriverObject->DeviceObject
+	);
+
+	if ( !NT_SUCCESS( status ) )
+		return status;
+
+	status = IoCreateSymbolicLink( &DEVICE_SYMBOLIC_LINK, &DEVICE_NAME );
+
+	if ( !NT_SUCCESS( status ) )
+	{
+		IoDeleteDevice( &DriverObject->DeviceObject );
+		return status;
+	}
+
+	DriverObject->MajorFunction[ IRP_MJ_DEVICE_CONTROL ] = MajorControl;
+	DriverObject->MajorFunction[ IRP_MJ_CREATE ] = DriverCreate;
+	DriverObject->MajorFunction[ IRP_MJ_CLOSE ] = DriverClose;
+	DriverObject->DriverUnload = DriverUnload;
+
+	return status;
+}
+```
+
+`nmi-callback-handler/driver.h`:
+
+```h
+#ifndef DRIVER_H
+#define DRIVER_H
+
+#include <ntifs.h>
+#include <intrin.h>
+
+#define NMI_CONTEXT_POOL '7331'
+#define STACK_FRAMES_POOL 'loop'
+#define INVALID_DRIVER_LIST_HEAD_POOL 'rwar'
+#define INVALID_DRIVER_LIST_ENTRY_POOL 'gaah'
+#define SYSTEM_MODULES_POOL 'halb'
+#define THREAD_DATA_POOL 'doof'
+#define PROC_AFFINITY_POOL 'eeee'
+
+#define NUMBER_HASH_BUCKETS 37
+#define ERROR -1
+#define STACK_FRAME_POOL_SIZE 0x200
+
+#define KTHREAD_STACK_BASE_OFFSET 0x030
+#define KTHREAD_STACK_LIMIT_OFFSET 0x038
+#define KTHREAD_START_ADDRESS_OFFSET 0x450
+
+UNICODE_STRING DEVICE_NAME = RTL_CONSTANT_STRING( L"\\Device\\nmi_handler" );
+UNICODE_STRING DEVICE_SYMBOLIC_LINK = RTL_CONSTANT_STRING( L"\\??\\nmi_handler" );
+
+#define DEBUG_LOG(fmt, ...) DbgPrintEx(DPFLTR_IHVDRIVER_ID, 0, "[+] " fmt "\n", ##__VA_ARGS__)
+#define DEBUG_ERROR(fmt, ...) DbgPrintEx(DPFLTR_IHVDRIVER_ID, 0, "[-] " fmt "\n", ##__VA_ARGS__)
+
+/* invalid drivers linked list items */
+
+typedef struct _INVALID_DRIVER
+{
+	struct _INVALID_DRIVER* next;
+	PDRIVER_OBJECT driver;
+
+}INVALID_DRIVER, * PINVALID_DRIVER;
+
+typedef struct _INVALID_DRIVERS_HEAD
+{
+	PINVALID_DRIVER first_entry;
+	INT count;		//keeps track of the number of drivers in the list
+
+}INVALID_DRIVERS_HEAD, * PINVALID_DRIVERS_HEAD;
+
+/* system modules information */
+
+typedef struct _SYSTEM_MODULES
+{
+	PVOID address;
+	INT module_count;
+
+}SYSTEM_MODULES, * PSYSTEM_MODULES;
+
+/* driver objects information */
+
+/*
+*  Driver objects are different from system modules.
+*  A manually mapped driver will call IoCreateDevice, 
+*  passing in a PDEVICE_OBJECT allocated on the stack
+*  and thus will appear in the device objects directory
+*  however these objects will not be in the
+*  PsLoadedModuleList as they are invalid drivers
+*/
+
+
+typedef struct _DRIVER_OBJECTS
+{
+	PVOID address;
+	INT module_count;
+
+}DRIVER_OBJECTS, *PDRIVER_OBJECTS;
+
+/* data gathered during nmi callback */
+
+typedef struct _NMI_CALLBACK_DATA
+{
+	UINT64		kthread_address;
+	UINT64		kprocess_address;
+	UINT64		start_address;
+	UINT64		stack_limit;
+	UINT64		stack_base;
+	uintptr_t	stack_frames_offset;
+	INT			num_frames_captured;
+	UINT64		cr3;
+
+}NMI_CALLBACK_DATA, * PNMI_CALLBACK_DATA;
+
+/* windows types */
+
+typedef struct _KAFFINITY_EX
+{
+	USHORT Count;
+	USHORT Size;
+	ULONG Reserved;
+	ULONGLONG Bitmap[20];
+
+} KAFFINITY_EX, * PKAFFINITY_EX;
+
+typedef struct _OBJECT_DIRECTORY_ENTRY
+{
+	struct _OBJECT_DIRECTORY_ENTRY* ChainLink;
+	PVOID Object;
+	ULONG HashValue;
+
+} OBJECT_DIRECTORY_ENTRY, * POBJECT_DIRECTORY_ENTRY;
+
+typedef struct _OBJECT_DIRECTORY
+{
+	POBJECT_DIRECTORY_ENTRY HashBuckets[NUMBER_HASH_BUCKETS];
+	EX_PUSH_LOCK Lock;
+	struct _DEVICE_MAP* DeviceMap;
+	ULONG SessionId;
+	PVOID NamespaceEntry;
+	ULONG Flags;
+
+} OBJECT_DIRECTORY, * POBJECT_DIRECTORY;
+
+typedef struct _DEVICE_MAP
+{
+	struct _OBJECT_DIRECTORY* DosDevicesDirectory;
+	struct _OBJECT_DIRECTORY* GlobalDosDevicesDirectory;
+	ULONG ReferenceCount;
+	ULONG DriveMap;
+	UCHAR DriveType[32];
+
+} DEVICE_MAP, * PDEVICE_MAP;
+
+typedef struct _RTL_MODULE_EXTENDED_INFO
+{
+	PVOID ImageBase;
+	ULONG ImageSize;
+	USHORT FileNameOffset;
+	CHAR FullPathName[0x100];
+
+} RTL_MODULE_EXTENDED_INFO, * PRTL_MODULE_EXTENDED_INFO;
+
+/* undocumented functions */
+
+EXTERN_C VOID KeInitializeAffinityEx(
+	PKAFFINITY_EX affinity
+);
+
+EXTERN_C VOID KeAddProcessorAffinityEx(
+	PKAFFINITY_EX affinity,
+	INT num
+);
+
+EXTERN_C VOID HalSendNMI(
+	PKAFFINITY_EX affinity
+);
+
+NTSTATUS
+RtlQueryModuleInformation(
+	ULONG* InformationLength,
+	ULONG SizePerModule,
+	PVOID InformationBuffer);
+
+/*
+Thread Information Block: (GS register)
+
+	SEH frame:						0x00
+	Stack Base:						0x08
+	Stack Limit:					0x10
+	SubSystemTib:					0x18
+	Fiber Data:						0x20
+	Arbitrary Data:					0x28
+	TEB:							0x30
+	Environment Pointer:			0x38
+	Process ID:						0x40
+	Current Thread ID:				0x48
+	Active RPC Handle:				0x50
+	Thread Local Storage Array:		0x58
+	PEB:							0x60
+	Last error number:				0x68
+	Count Owned Critical Sections:  0x6C
+	CSR Client Thread:				0x70
+	Win32 Thread Information:		0x78
+	...
+*/
+
+#endif // !DRIVER_H
+
+```
+
+`nmi-callback-handler/nmi-callback-handler.inf`:
+
+```inf
+;
+; nmi-callback-handler.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System ; TODO: specify appropriate Class
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318} ; TODO: specify appropriate ClassGuid
+Provider=%ManufacturerName%
+CatalogFile=nmi-callback-handler.cat
+DriverVer= ; TODO: set DriverVer in stampinf property pages
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 12
+nmi-callback-handler_Device_CoInstaller_CopyFiles = 11
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+nmi-callback-handler.sys  = 1,,
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%nmi-callback-handler.DeviceDesc%=nmi-callback-handler_Device, Root\nmi-callback-handler ; TODO: edit hw-id
+
+[nmi-callback-handler_Device.NT]
+CopyFiles=Drivers_Dir
+
+[Drivers_Dir]
+nmi-callback-handler.sys
+
+;-------------- Service installation
+[nmi-callback-handler_Device.NT.Services]
+AddService = nmi-callback-handler,%SPSVCINST_ASSOCSERVICE%, nmi-callback-handler_Service_Inst
+
+; -------------- nmi-callback-handler driver install sections
+[nmi-callback-handler_Service_Inst]
+DisplayName    = %nmi-callback-handler.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\nmi-callback-handler.sys
+
+;
+;--- nmi-callback-handler_Device Coinstaller installation ------
+;
+
+[nmi-callback-handler_Device.NT.CoInstallers]
+AddReg=nmi-callback-handler_Device_CoInstaller_AddReg
+CopyFiles=nmi-callback-handler_Device_CoInstaller_CopyFiles
+
+[nmi-callback-handler_Device_CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
+
+[nmi-callback-handler_Device_CoInstaller_CopyFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
+
+[nmi-callback-handler_Device.NT.Wdf]
+KmdfService =  nmi-callback-handler, nmi-callback-handler_wdfsect
+[nmi-callback-handler_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="<Your manufacturer name>" ;TODO: Replace with your manufacturer name
+DiskName = "nmi-callback-handler Installation Disk"
+nmi-callback-handler.DeviceDesc = "nmi-callback-handler Device"
+nmi-callback-handler.SVCDESC = "nmi-callback-handler Service"
+
+```
+
+`nmi-callback-handler/nmi-callback-handler.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{EC71772B-C0D7-465D-8463-06591E7D4633}</ProjectGuid>
+    <TemplateGuid>{1bc93793-694f-48fe-9372-81e2b05556fd}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <RootNamespace>nmi_callback_handler</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+    <ClCompile>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+    <ClCompile>
+      <TreatWarningAsError>false</TreatWarningAsError>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Inf Include="nmi-callback-handler.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="driver.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="driver.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>
+```
+
+`nmi-callback-handler/nmi-callback-handler.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Driver Files">
+      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
+      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="nmi-callback-handler.inf">
+      <Filter>Driver Files</Filter>
+    </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="driver.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="driver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
+
+`readme.md`:
+
+```md
+# NMI Callback Handler
+
+simple project to demonstrate how NMIs can be used to stackwalk. will probs expand to include other detection vectors like start address etc.
+
+![image](image.png)
+
+Example above shows a kernal driver that reads/writes directly to physical memory of a game communicating with a usermode app over ioctl, mapped with the default kdmapper, being found via the stackwalk.
+```
