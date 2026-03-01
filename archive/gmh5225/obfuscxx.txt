@@ -1,0 +1,1298 @@
+Project Path: arc_gmh5225_obfuscxx_06dd6564
+
+Source Tree:
+
+```txt
+arc_gmh5225_obfuscxx_06dd6564
+├── CMakeLists.txt
+├── CMakePresets.json
+├── LICENSE
+├── README.md
+├── images
+│   ├── gcc.png
+│   ├── llvm.png
+│   └── msvc.png
+├── obfuscxx
+│   ├── include
+│   │   └── obfuscxx.h
+│   ├── metrics
+│   │   ├── benchmark.h
+│   │   └── unit_test.h
+│   └── quick_test.cpp
+└── vcpkg.json
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.15)
+project(obfuscxx VERSION 1.0.0 LANGUAGES CXX)
+
+## message(STATUS "=========================================")
+## message(STATUS "C Compiler: ${CMAKE_C_COMPILER}")
+## message(STATUS "C++ Compiler: ${CMAKE_CXX_COMPILER}")
+## message(STATUS "Compiler ID: ${CMAKE_CXX_COMPILER_ID}")
+## message(STATUS "Compiler Version: ${CMAKE_CXX_COMPILER_VERSION}")
+## message(STATUS "=========================================")
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+find_package(GTest CONFIG REQUIRED)
+find_package(benchmark CONFIG REQUIRED)
+
+add_executable(obfuscxx_test obfuscxx/quick_test.cpp)
+
+target_link_libraries(obfuscxx_test PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    benchmark::benchmark
+    benchmark::benchmark_main
+    Threads::Threads
+)
+target_include_directories(obfuscxx_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/obfuscxx
+)
+
+enable_testing()
+add_test(NAME obfuscxx_test COMMAND obfuscxx_test)
+
+include(GoogleTest)
+## gtest_discover_tests(obfuscxx_test)
+```
+
+`CMakePresets.json`:
+
+```json
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 15,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "msvc",
+      "displayName": "MSVC Release",
+      "binaryDir": "${sourceDir}/build/msvc",
+	  "toolset": "v143",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "llvm",
+      "displayName": "LLVM Release",
+      "binaryDir": "${sourceDir}/build/llvm",
+      "toolset": "ClangCL",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    },
+    {
+      "name": "gcc",
+      "displayName": "GCC Release",
+      "binaryDir": "${sourceDir}/build/gcc",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc",
+      "configurePreset": "msvc"
+    },
+    {
+      "name": "llvm",
+      "configurePreset": "llvm"
+    },
+    {
+      "name": "gcc",
+      "configurePreset": "gcc"
+    }
+  ]
+}
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2025 Alexander (nevergiveup-c)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# obfuscxx
+
+## Description:
+Header-only compile-time variables obfuscation library for C++20 and later.
+
+## How it works:
+During compilation, data is encrypted via eXtended Tiny Encryption Algorithm (XTEA). Decryption uses SIMD instructions (AVX/SSE/NEON) at runtime, making static analysis considerably more complicated. Key entropy is based on the preprocessor macro `__COUNTER__`, the file name(`__FILE__`), and the line number (`__LINE__`) where the variable is defined, and the build time (`__TIME__`) (note: build time is not included when compiling with WDM).
+
+By selecting different encryption levels (Low, Medium, High), you can control the number of encryption rounds. With Low, there are 2 rounds; Medium uses 6; and High adjusts the number of rounds dynamically based on the key entropy, ranging from 6 to 20. This lets you apply lighter encryption to frequently accessed data, and stronger encryption to data that’s used less often.
+
+## Encryption example:
+The screenshots show only a small portion of the int main() function. In reality, the function can grow to around 250 lines depending on the compiler.
+
+<table align="center">
+<tr>
+<td><img src="images/msvc.png" width="400"/></td>
+<td><img src="images/llvm.png" width="400"/></td>
+<td><img src="images/gcc.png" width="400"/></td>
+</tr>
+</table>
+<p align="center"><em>MSVC, LLVM, GCC compilation (int main()) (Level: Low)</em></p>
+
+## Performance Impact:
+
+### Runtime Performance:
+
+#### Integer Operations:
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 3.62 ns          | 10.7 ns (3.0x)   | 48.3 ns (13.3x)  |
+| **LLVM** | 3.31 ns          | 10.3 ns (3.1x)   | 41.0 ns (12.4x)  |
+| **GCC**  | 4.65 ns          | 17.2 ns (3.7x)   | 56.1 ns (12.1x)  |
+
+#### Float Operations:
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 3.40 ns          | 10.8 ns (3.2x)   | 46.7 ns (13.7x)  |
+| **LLVM** | 3.26 ns          | 10.9 ns (3.3x)   | 42.0 ns (12.9x)  |
+| **GCC**  | 4.22 ns          | 16.5 ns (3.9x)   | 56.9 ns (13.5x)  |
+
+#### String Operations:
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 36.8 ns          | 116 ns (3.2x)    | 495 ns (13.5x)   |
+| **LLVM** | 31.9 ns          | 104 ns (3.3x)    | 429 ns (13.4x)   |
+| **GCC**  | 43.0 ns          | 174 ns (4.0x)    | 538 ns (12.5x)   |
+
+#### Wide String Operations:
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 31.8 ns          | 112 ns (3.5x)    | 503 ns (15.8x)   |
+| **LLVM** | 31.4 ns          | 106 ns (3.4x)    | 417 ns (13.3x)   |
+| **GCC**  | 47.5 ns          | 172 ns (3.6x)    | 547 ns (11.5x)   |
+
+#### Array Operations:
+**Iteration (100 elements):**
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 401 ns           | 1,136 ns (2.8x)  | 5,114 ns (12.8x) |
+| **LLVM** | 344 ns           | 1,079 ns (3.1x)  | 4,284 ns (12.5x) |
+| **GCC**  | 436 ns           | 1,795 ns (4.1x)  | 5,416 ns (12.4x) |
+
+**Element Access:**
+| Compiler | Low              | Medium           | High             |
+|:---------|:-----------------|:-----------------|:-----------------|
+| **MSVC** | 3.32 ns          | 11.3 ns (3.4x)   | 49.8 ns (15.0x)  |
+| **LLVM** | 3.21 ns          | 10.2 ns (3.2x)   | 41.6 ns (13.0x)  |
+| **GCC**  | 4.38 ns          | 17.5 ns (4.0x)   | 56.3 ns (12.9x)  |
+
+### Binary Size Overhead:
+| Compiler | Without obfuscxx | With obfuscxx | Overhead                 |
+|:---------|:-----------------|:--------------|:-------------------------|
+| **MSVC** | 17.0 KB          | 18.0 KB       | +1,024 bytes (**+5.9%**) |
+| **LLVM** | 17.5 KB          | 19.6 KB       | +1,560 bytes (**+8.7%**) |
+| **GCC**  | 47.8 KB          | 52.2 KB       | +4,491 bytes (**+9.2%**) |
+
+## Installation:
+Just add the header file to your project - `#include "include/obfuscxx.h"`
+
+## Usage:
+```cpp
+#include "include/obfuscxx.h"
+
+int main()
+{
+    obfuscxx<int> int_value{ 100 };
+    std::cout << int_value.get() << '\n';
+    int_value = 50;
+    std::cout << int_value.get() << '\n';
+
+    obfuscxx<float> float_value{ 1.5f };
+    std::cout << float_value.get() << '\n';
+
+    obfuscxx<int, 4> array{ 1, 2, 3, 4 };
+    for (auto val : array) {
+        std::cout << val << " ";
+    }
+    std::cout << '\n';
+
+	obfuscxx str("str");
+    std::cout << str.to_string() << '\n';
+
+    obfuscxx<int*> pointer{};
+    pointer = new int{101};
+    std::cout << pointer.get() << " " << *pointer.get() << '\n';
+    delete pointer.get();
+}
+```
+## Building Tests and Benchmarks:
+1. Install `vcpkg` and set `VCPKG_ROOT` environment variable
+2. Fetch baseline: `cd $VCPKG_ROOT && git fetch origin 34823ada10080ddca99b60e85f80f55e18a44eea`
+3. Configure: `cmake --preset <compiler>` (msvc/llvm/gcc)
+4. Build: `cmake --build --preset <compiler>` (--config Release/Debug)
+
+## Requirements:
+- C++20 or later
+- Compiler with SIMD support (AVX/SSE/NEON)
+- CMake 3.15+ (for building tests)
+- vcpkg (for dependencies)
+
+## Compiler Support:
+- `MSVC (+wdm)`
+- `CLANG`
+- `GCC`
+
+## Architecture Support:
+- `x86-64`
+- `ARM`
+
+```
+
+`obfuscxx/include/obfuscxx.h`:
+
+```h
+#pragma once
+
+// MIT License
+// Copyright (c) 2025 Alexander (nevergiveup-c)
+// https://github.com/nevergiveup-c/obfuscxx
+
+#include <cstdint>
+#include <initializer_list>
+
+#if defined(_KERNEL_MODE) || defined(_WIN64_DRIVER)
+using byte = uint8_t;
+using max_align_t = double;
+#endif
+
+#include <type_traits>
+
+#if defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_NEON)
+#include <arm_neon.h>
+#elif defined(__clang__) || defined(__GNUC__)
+#include <immintrin.h>
+#elif defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <immintrin.h>
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#define VOLATILE __attribute__((used))
+#elif defined(_MSC_VER)
+#define VOLATILE volatile
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#define FORCEINLINE __attribute__((always_inline)) inline
+#else
+#define FORCEINLINE __forceinline
+#endif
+
+#if defined(_KERNEL_MODE) || defined(_WIN64_DRIVER)
+#define _mm256_extract_epi32(vec, idx) (((int32_t*)&(vec))[(idx)])
+#endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#define MEM_BARRIER(...) __asm__ volatile("" : "+r"(__VA_ARGS__) :: "memory");
+#elif defined(_MSC_VER)
+#define MEM_BARRIER(...) _ReadWriteBarrier();
+#endif
+
+constexpr uint64_t splitmix64(uint64_t x) {
+	x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+	x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+	return x ^ (x >> 31);
+}
+
+#if defined(_KERNEL_MODE) || defined(_WIN64_DRIVER)
+#define OBFUSCXX_ENTROPY ( \
+    splitmix64( \
+        (HASH(__FILE__) * 0x517cc1b727220a95ULL) + \
+        ((uint64_t)__LINE__ * 0x9e3779b97f4a7c15ULL) + \
+        (rol64((uint64_t)__COUNTER__, 37) ^ ((uint64_t)__LINE__ * 0xff51afd7ed558ccdULL)) \
+    ) \
+)
+#else
+#define OBFUSCXX_ENTROPY ( \
+    splitmix64( \
+        HASH(__FILE__) + \
+        ((uint64_t)__LINE__ * 0x9e3779b97f4a7c15ULL) + \
+        (HASH(__TIME__) ^ ((uint64_t)__COUNTER__ << 32)) \
+    ) \
+)
+#endif
+
+template<size_t N> FORCEINLINE consteval uint64_t hash_compile_time(char const (&data)[N])
+{
+	uint64_t hash = 0;
+
+	for (auto i = 0; i < N - 1; ++i)
+	{
+		hash += data[i] >= 'A' && data[i] <= 'Z' ? data[i] + ('a' - 'A') : data[i];
+		hash += hash << 8;
+		hash ^= hash >> 11;
+	}
+
+	hash += hash << 5;
+	hash ^= hash >> 13;
+	hash += hash << 10;
+
+	return hash;
+}
+
+FORCEINLINE uint64_t hash_runtime(char const* str)
+{
+	size_t length = 0;
+	while (str[length])
+		++length;
+
+	uint64_t hash = 0;
+
+	for (auto i = 0u; i < length; i++)
+	{
+		hash += str[i] >= 'A' && str[i] <= 'Z' ? str[i] + ('a' - 'A') : str[i];
+		hash += hash << 8;
+		hash ^= hash >> 11;
+	}
+
+	hash += hash << 5;
+	hash ^= hash >> 13;
+	hash += hash << 10;
+
+	return hash;
+}
+
+#define HASH( s ) hash_compile_time( s )
+#define HASH_RT( s ) hash_runtime( s )
+
+constexpr uint64_t rol64(uint64_t x, int n)
+{
+	n &= 63;
+	if (n == 0) return x;
+	return (x << n) | (x >> (64 - n));
+}
+
+constexpr uint64_t ror64(uint64_t x, int n)
+{
+	n &= 63;
+	if (n == 0) return x;
+	return (x >> n) | (x << (64 - n));
+}
+
+enum class obf_level : uint8_t { Low, Medium, High };
+template <class Type, size_t Size = 1, obf_level Level = obf_level::Low, uint64_t Entropy = OBFUSCXX_ENTROPY>
+class obfuscxx
+{
+	static constexpr bool is_single = Size == 1;
+	static constexpr bool is_single_pointer = std::is_pointer_v<Type> && Size == 1;
+	static constexpr bool is_char = std::is_same_v<Type, char> || std::is_same_v<Type, const char>;
+	static constexpr bool is_wchar = std::is_same_v<Type, wchar_t> || std::is_same_v<Type, const wchar_t>;
+	static constexpr bool is_array = Size > 1;
+
+	static constexpr uint64_t seed{ Entropy };
+	static constexpr uint64_t iv[8] = {
+		0xcbf43b227a01fe5aULL ^ seed,
+		0x32703be7aaa7c38fULL ^ ror64(seed, 13),
+		0xb589959b3d854bbcULL ^ rol64(seed, 29),
+		0x73b3ef5578a97c8aULL ^ ror64(seed, 41),
+		0x92afafd27c6e16e9ULL ^ rol64(seed, 7),
+		0xee8291ae3070720aULL ^ ror64(seed, 53),
+		0xe2c0d70f73d6c4a0ULL ^ rol64(seed, 19),
+		0x82742897b912855bULL ^ ror64(seed, 37),
+	};
+	static constexpr uint64_t iv_size = (sizeof(iv) / 8) - 1;
+	static constexpr uint64_t unique_index = seed & iv_size;
+	static constexpr uint64_t unique_value = iv[unique_index];
+
+	static constexpr uint32_t xtea_rounds =
+		(Level == obf_level::Low) ? 2 :
+		(Level == obf_level::Medium) ? 6 :
+		(6 + ((unique_index & 0x7) * 2));
+
+	static constexpr uint32_t xtea_delta = (0x9E3779B9 ^ static_cast<uint32_t>(unique_value)) | 1;
+
+	static constexpr uint64_t encrypt(Type value)
+	{
+		uint64_t val = to_uint64(value);
+
+		uint32_t v0 = static_cast<uint32_t>(val);
+		uint32_t v1 = static_cast<uint32_t>(val >> 32);
+		uint32_t sum = 0;
+
+		for (uint32_t i = 0; i < xtea_rounds; ++i) {
+			v0 += (((v1 << 4) ^ (v1 >> 5)) + v1) ^
+				(sum + static_cast<uint32_t>(iv[sum & 3]));
+			sum += xtea_delta;
+			v1 += (((v0 << 4) ^ (v0 >> 5)) + v0) ^
+				(sum + static_cast<uint32_t>(iv[(sum >> 11) & 3]));
+		}
+
+		return (static_cast<uint64_t>(v1) << 32) | v0;
+	}
+
+	static FORCEINLINE Type decrypt(uint64_t value)
+	{
+		MEM_BARRIER(value)
+
+		uint32_t v0 = static_cast<uint32_t>(value);
+		uint32_t v1 = static_cast<uint32_t>(value >> 32);
+		uint32_t sum = xtea_delta * xtea_rounds;
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+		// ARM64 - NEON
+		for (uint32_t i = 0; i < xtea_rounds; ++i) {
+			MEM_BARRIER(v0, v1, sum)
+
+			// v1 -= (((v0 << 4) ^ (v0 >> 5)) + v0) ^ (sum + key)
+			uint32x4_t neon_v0 = vdupq_n_u32(v0);
+			uint32x4_t neon_left = vshlq_n_u32(neon_v0, 4);
+			uint32x4_t neon_right = vshrq_n_u32(neon_v0, 5);
+			uint32x4_t neon_temp = veorq_u32(neon_left, neon_right);
+			neon_temp = vaddq_u32(neon_temp, neon_v0);
+
+			uint32x4_t neon_key = vdupq_n_u32(sum + static_cast<uint32_t>(iv[(sum >> 11) & 3]));
+			neon_temp = veorq_u32(neon_temp, neon_key);
+
+			uint32x4_t neon_v1 = vdupq_n_u32(v1);
+			neon_v1 = vsubq_u32(neon_v1, neon_temp);
+			v1 = vgetq_lane_u32(neon_v1, 0);
+
+			sum -= xtea_delta;
+
+			MEM_BARRIER(v0, v1, sum)
+
+			// v0 -= (((v1 << 4) ^ (v1 >> 5)) + v1) ^ (sum + key)
+			neon_v1 = vdupq_n_u32(v1);
+			neon_left = vshlq_n_u32(neon_v1, 4);
+			neon_right = vshrq_n_u32(neon_v1, 5);
+			neon_temp = veorq_u32(neon_left, neon_right);
+			neon_temp = vaddq_u32(neon_temp, neon_v1);
+
+			neon_key = vdupq_n_u32(sum + static_cast<uint32_t>(iv[sum & 3]));
+			neon_temp = veorq_u32(neon_temp, neon_key);
+
+			neon_v0 = vdupq_n_u32(v0);
+			neon_v0 = vsubq_u32(neon_v0, neon_temp);
+			v0 = vgetq_lane_u32(neon_v0, 0);
+		}
+
+#elif defined(__clang__) || defined(__GNUC__)
+		// x86/x64 GCC/Clang - SSE2
+		for (uint32_t i = 0; i < xtea_rounds; ++i) {
+			MEM_BARRIER(v0, v1, sum)
+
+			// v1 -= (((v0 << 4) ^ (v0 >> 5)) + v0) ^ (sum + key)
+			__m128i xmm_v0 = _mm_cvtsi32_si128(v0);
+			__m128i xmm_left = _mm_slli_epi32(xmm_v0, 4);
+			__m128i xmm_right = _mm_srli_epi32(xmm_v0, 5);
+			__m128i xmm_temp = _mm_xor_si128(xmm_left, xmm_right);
+			xmm_temp = _mm_add_epi32(xmm_temp, xmm_v0);
+
+			__m128i xmm_key = _mm_cvtsi32_si128(sum + static_cast<uint32_t>(iv[(sum >> 11) & 3]));
+			xmm_temp = _mm_xor_si128(xmm_temp, xmm_key);
+
+			__m128i xmm_v1 = _mm_cvtsi32_si128(v1);
+			xmm_v1 = _mm_sub_epi32(xmm_v1, xmm_temp);
+			v1 = _mm_cvtsi128_si32(xmm_v1);
+
+			sum -= xtea_delta;
+
+			MEM_BARRIER(v0, v1, sum)
+
+			// v0 -= (((v1 << 4) ^ (v1 >> 5)) + v1) ^ (sum + key)
+			xmm_v1 = _mm_cvtsi32_si128(v1);
+			xmm_left = _mm_slli_epi32(xmm_v1, 4);
+			xmm_right = _mm_srli_epi32(xmm_v1, 5);
+			xmm_temp = _mm_xor_si128(xmm_left, xmm_right);
+			xmm_temp = _mm_add_epi32(xmm_temp, xmm_v1);
+
+			xmm_key = _mm_cvtsi32_si128(sum + static_cast<uint32_t>(iv[sum & 3]));
+			xmm_temp = _mm_xor_si128(xmm_temp, xmm_key);
+
+			xmm_v0 = _mm_cvtsi32_si128(v0);
+			xmm_v0 = _mm_sub_epi32(xmm_v0, xmm_temp);
+			v0 = _mm_cvtsi128_si32(xmm_v0);
+		}
+
+#else
+		// MSVC x86/x64 - AVX2
+		for (uint32_t i = 0; i < xtea_rounds; ++i) {
+			MEM_BARRIER(v0, v1, sum)
+
+			// v1 -= (((v0 << 4) ^ (v0 >> 5)) + v0) ^ (sum + key)
+			__m256i mm256_v0 = _mm256_set1_epi32(v0);
+			__m256i mm256_left = _mm256_slli_epi32(mm256_v0, 4);
+			__m256i mm256_right = _mm256_srli_epi32(mm256_v0, 5);
+			__m256i mm256_temp = _mm256_xor_si256(mm256_left, mm256_right);
+			mm256_temp = _mm256_add_epi32(mm256_temp, mm256_v0);
+
+			__m256i mm256_key = _mm256_set1_epi32(sum + static_cast<uint32_t>(iv[(sum >> 11) & 3]));
+			mm256_temp = _mm256_xor_si256(mm256_temp, mm256_key);
+
+			__m256i mm256_v1 = _mm256_set1_epi32(v1);
+			mm256_v1 = _mm256_sub_epi32(mm256_v1, mm256_temp);
+			v1 = _mm256_extract_epi32(mm256_v1, 0);
+
+			sum -= xtea_delta;
+
+			MEM_BARRIER(v0, v1, sum)
+
+			// v0 -= (((v1 << 4) ^ (v1 >> 5)) + v1) ^ (sum + key)
+			mm256_v1 = _mm256_set1_epi32(v1);
+			mm256_left = _mm256_slli_epi32(mm256_v1, 4);
+			mm256_right = _mm256_srli_epi32(mm256_v1, 5);
+			mm256_temp = _mm256_xor_si256(mm256_left, mm256_right);
+			mm256_temp = _mm256_add_epi32(mm256_temp, mm256_v1);
+
+			mm256_key = _mm256_set1_epi32(sum + static_cast<uint32_t>(iv[sum & 3]));
+			mm256_temp = _mm256_xor_si256(mm256_temp, mm256_key);
+
+			mm256_v0 = _mm256_set1_epi32(v0);
+			mm256_v0 = _mm256_sub_epi32(mm256_v0, mm256_temp);
+			v0 = _mm256_extract_epi32(mm256_v0, 0);
+		}
+#endif
+
+		return from_uint64((static_cast<uint64_t>(v1) << 32) | v0);
+	}
+
+	static constexpr uint64_t to_uint64(Type value)
+	{
+		if constexpr (std::is_pointer_v<Type>) {
+			return reinterpret_cast<uint64_t>(value);
+		}
+		else if constexpr (std::is_floating_point_v<Type>) {
+			if constexpr (sizeof(Type) == 4) {
+				return __builtin_bit_cast(uint32_t, value);
+			}
+			else {
+				return __builtin_bit_cast(uint64_t, value);
+			}
+		}
+		else {
+			return static_cast<uint64_t>(value);
+		}
+	}
+	static FORCEINLINE Type from_uint64(uint64_t value)
+	{
+		if constexpr (std::is_pointer_v<Type>) {
+			return reinterpret_cast<Type>(value);
+		}
+		else if constexpr (std::is_floating_point_v<Type>) {
+			if constexpr (sizeof(Type) == 4) {
+				return __builtin_bit_cast(Type, static_cast<uint32_t>(value));
+			}
+			else {
+				return __builtin_bit_cast(Type, value);
+			}
+		}
+		else {
+			return static_cast<Type>(value);
+		}
+	}
+
+public:
+	explicit consteval obfuscxx(Type val)
+	{
+		data[0] = encrypt(val);
+	}
+	explicit consteval obfuscxx(const std::initializer_list<Type>& list)
+	{
+		for (size_t i{}; const auto& v : list)
+			data[i++] = encrypt(v);
+	}
+	explicit consteval obfuscxx(Type(&val)[Size])
+	{
+		for (size_t i{}; i < Size; ++i) {
+			data[i] = encrypt(val[i]);
+		}
+	}
+	explicit consteval obfuscxx(const Type(&val)[Size])
+	{
+		for (size_t i{}; i < Size; ++i) {
+			data[i] = encrypt(val[i]);
+		}
+	}
+
+	FORCEINLINE Type get() const requires is_single
+	{
+		volatile const uint64_t* ptr = &data[0];
+		uint64_t val = *ptr;
+		return decrypt(val);
+	}
+	FORCEINLINE Type get(size_t i) const requires is_array
+	{
+		volatile const uint64_t* ptr = &data[i];
+		uint64_t val = *ptr;
+		return decrypt(val);
+	}
+
+	FORCEINLINE void copy_to(Type* out, size_t count) const requires is_array
+	{
+		size_t n = (count < Size) ? count : Size;
+		for (size_t i = 0; i < n; ++i) {
+			volatile const uint64_t* ptr = &data[i];
+			out[i] = decrypt(*ptr);
+		}
+	}
+
+	FORCEINLINE void set(Type val) requires is_single
+	{
+		data[0] = encrypt(val);
+	}
+	FORCEINLINE void set(Type val, size_t i) requires is_array
+	{
+		data[i] = encrypt(val);
+	}
+	FORCEINLINE void set(const std::initializer_list<Type>& list) requires is_array
+	{
+		for (size_t i{}; const auto& val : list) {
+			if (i < Size) {
+				data[i++] = encrypt(val);
+			}
+		}
+	}
+
+	FORCEINLINE Type operator()() const requires is_single
+	{
+		return decrypt(data[0]);
+	}
+	FORCEINLINE Type operator[](size_t i) const requires is_array
+	{
+		return decrypt(data[i]);
+	}
+
+	FORCEINLINE obfuscxx& operator=(Type val) requires is_single
+	{
+		set(val);
+		return *this;
+	}
+	FORCEINLINE obfuscxx& operator=(const std::initializer_list<Type>& list) requires is_array
+	{
+		set(list);
+		return *this;
+	}
+
+	FORCEINLINE bool operator==(const obfuscxx& rhs) const requires is_single
+	{
+		return get() == rhs.get();
+	}
+	FORCEINLINE bool operator==(const obfuscxx& rhs) const requires is_array
+	{
+		for (size_t i = 0; i < Size; ++i) {
+			if (get(i) != rhs.get(i)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	FORCEINLINE bool operator!=(const obfuscxx& rhs) const
+	{
+		return !(*this == rhs);
+	}
+
+	FORCEINLINE operator Type() const requires is_single
+	{
+		return get();
+	}
+
+	FORCEINLINE bool operator<(const obfuscxx& rhs) const
+	{
+		return get() < rhs.get();
+	}
+	FORCEINLINE bool operator>(const obfuscxx& rhs) const
+	{
+		return get() > rhs.get();
+	}
+	FORCEINLINE bool operator<=(const obfuscxx& rhs) const
+	{
+		return get() <= rhs.get();
+	}
+	FORCEINLINE bool operator>=(const obfuscxx& rhs) const
+	{
+		return get() >= rhs.get();
+	}
+
+	FORCEINLINE Type operator+(const obfuscxx& rhs) const
+	{
+		return get() + rhs.get();
+	}
+	FORCEINLINE Type operator-(const obfuscxx& rhs) const
+	{
+		return get() - rhs.get();
+	}
+	FORCEINLINE Type operator*(const obfuscxx& rhs) const requires (!is_single_pointer)
+	{
+		return get() * rhs.get();
+	}
+	FORCEINLINE Type operator/(const obfuscxx& rhs) const requires (!is_single_pointer)
+	{
+		return get() / rhs.get();
+	}
+
+	FORCEINLINE obfuscxx& operator+=(const obfuscxx& rhs) requires (!is_single_pointer)
+	{
+		set(get() + rhs.get());
+		return *this;
+	}
+	FORCEINLINE obfuscxx& operator-=(const obfuscxx& rhs) requires (!is_single_pointer)
+	{
+		set(get() - rhs.get());
+		return *this;
+	}
+
+	FORCEINLINE Type operator->() requires is_single_pointer
+	{
+		return get();
+	}
+	FORCEINLINE Type& operator*() requires is_single_pointer
+	{
+		return *get();
+	}
+
+	struct iterator {
+		const obfuscxx* parent;
+		size_t index;
+
+		Type operator*() const { return parent->get(index); }
+		iterator& operator++() { ++index; return *this; }
+		bool operator!=(const iterator& other) const { return index != other.index; }
+		bool operator==(const iterator& other) const { return index == other.index; }
+	};
+
+	iterator begin() const requires is_array { return { this, 0 }; }
+	iterator end() const requires is_array { return { this, Size }; }
+	static constexpr size_t size() { return Size; }
+
+	template<class CharType, size_t N> struct string_copy {
+		CharType data[N];
+
+		static constexpr bool is_char = std::is_same_v<CharType, char> ||
+			std::is_same_v<CharType, const char>;
+		static constexpr bool is_wchar = std::is_same_v<CharType, wchar_t> ||
+			std::is_same_v<CharType, const wchar_t>;
+
+		operator const char* () const requires is_char { return data; }
+		operator const wchar_t* () const requires is_wchar { return data; }
+		const CharType* c_str() const { return data; }
+	};
+
+	FORCEINLINE string_copy<Type, Size> to_string() const requires (is_char || is_wchar)
+	{
+		string_copy<Type, Size> result{};
+		copy_to(result.data, Size);
+		return result;
+	}
+
+private:
+	VOLATILE uint64_t data[Size]{};
+};
+```
+
+`obfuscxx/metrics/benchmark.h`:
+
+```h
+#pragma once
+#include <benchmark/benchmark.h>
+
+#include "include/obfuscxx.h"
+
+static void BM_IntegerGet_Low(benchmark::State& state) {
+    obfuscxx<int, 1, obf_level::Low> int_value{ 42 };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(int_value.get());
+    }
+}
+BENCHMARK(BM_IntegerGet_Low);
+
+static void BM_IntegerGet_Medium(benchmark::State& state) {
+    obfuscxx<int, 1, obf_level::Medium> int_value{ 42 };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(int_value.get());
+    }
+}
+BENCHMARK(BM_IntegerGet_Medium);
+
+static void BM_IntegerGet_High(benchmark::State& state) {
+    obfuscxx<int, 1, obf_level::High> int_value{ 42 };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(int_value.get());
+    }
+}
+BENCHMARK(BM_IntegerGet_High);
+
+static void BM_FloatGet_Low(benchmark::State& state) {
+    obfuscxx<float, 1, obf_level::Low> float_value{ 42.5f };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(float_value.get());
+    }
+}
+BENCHMARK(BM_FloatGet_Low);
+
+static void BM_FloatGet_Medium(benchmark::State& state) {
+    obfuscxx<float, 1, obf_level::Medium> float_value{ 42.5f };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(float_value.get());
+    }
+}
+BENCHMARK(BM_FloatGet_Medium);
+
+static void BM_FloatGet_High(benchmark::State& state) {
+    obfuscxx<float, 1, obf_level::High> float_value{ 42.5f };
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(float_value.get());
+    }
+}
+BENCHMARK(BM_FloatGet_High);
+
+static void BM_StringGet_Low(benchmark::State& state) {
+    obfuscxx<char, 10, obf_level::Low> str("benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_StringGet_Low);
+
+static void BM_StringGet_Medium(benchmark::State& state) {
+    obfuscxx<char, 10, obf_level::Medium> str("benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_StringGet_Medium);
+
+static void BM_StringGet_High(benchmark::State& state) {
+    obfuscxx<char, 10, obf_level::High> str("benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_StringGet_High);
+
+static void BM_WStringGet_Low(benchmark::State& state) {
+    obfuscxx<wchar_t, 10, obf_level::Low> str(L"benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_WStringGet_Low);
+
+static void BM_WStringGet_Medium(benchmark::State& state) {
+    obfuscxx<wchar_t, 10, obf_level::Medium> str(L"benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_WStringGet_Medium);
+
+static void BM_WStringGet_High(benchmark::State& state) {
+    obfuscxx<wchar_t, 10, obf_level::High> str(L"benchmark");
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(str.to_string().c_str());
+    }
+}
+BENCHMARK(BM_WStringGet_High);
+
+static void BM_ArrayIteration_Low(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::Low> array{};
+    for (auto _ : state) {
+        int sum = 0;
+        for (auto val : array) {
+            sum += val;
+        }
+        benchmark::DoNotOptimize(sum);
+    }
+}
+BENCHMARK(BM_ArrayIteration_Low);
+
+static void BM_ArrayIteration_Medium(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::Medium> array{};
+    for (auto _ : state) {
+        int sum = 0;
+        for (auto val : array) {
+            sum += val;
+        }
+        benchmark::DoNotOptimize(sum);
+    }
+}
+BENCHMARK(BM_ArrayIteration_Medium);
+
+static void BM_ArrayIteration_High(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::High> array{};
+    for (auto _ : state) {
+        int sum = 0;
+        for (auto val : array) {
+            sum += val;
+        }
+        benchmark::DoNotOptimize(sum);
+    }
+}
+BENCHMARK(BM_ArrayIteration_High);
+
+static void BM_ArrayGet_Low(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::Low> array{};
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(array.get(50));
+    }
+}
+BENCHMARK(BM_ArrayGet_Low);
+
+static void BM_ArrayGet_Medium(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::Medium> array{};
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(array.get(50));
+    }
+}
+BENCHMARK(BM_ArrayGet_Medium);
+
+static void BM_ArrayGet_High(benchmark::State& state) {
+    obfuscxx<int, 100, obf_level::High> array{};
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(array.get(50));
+    }
+}
+BENCHMARK(BM_ArrayGet_High);
+```
+
+`obfuscxx/metrics/unit_test.h`:
+
+```h
+#pragma once
+#include <gtest/gtest.h>
+
+#include "include/obfuscxx.h"
+
+TEST(ObfuscxxTest, IntegerValue)
+{
+    obfuscxx<int> int_value{ 100 };
+    EXPECT_EQ(int_value.get(), 100);
+
+    int_value = 50;
+    EXPECT_EQ(int_value.get(), 50);
+}
+
+TEST(ObfuscxxTest, FloatValue) {
+    obfuscxx<float> float_value{ 1.5f };
+    EXPECT_FLOAT_EQ(float_value.get(), 1.5f);
+}
+
+TEST(ObfuscxxTest, ArrayIteration) {
+    obfuscxx<int, 4> array{ 1, 2, 3, 4 };
+    int expected[] = { 1, 2, 3, 4 };
+    int i = 0;
+    for (auto val : array) {
+        EXPECT_EQ(val, expected[i++]);
+    }
+}
+
+TEST(ObfuscxxTest, StringValues) {
+    obfuscxx str("str");
+    EXPECT_STREQ(str.to_string(), "str");
+
+    obfuscxx wstr(L"wstr");
+    EXPECT_STREQ(wstr.to_string(), L"wstr");
+}
+
+TEST(ObfuscxxTest, PointerValue) {
+    obfuscxx<int*> pointer{};
+    pointer = new int{ 101 };
+    EXPECT_NE(pointer.get(), nullptr);
+    EXPECT_EQ(*pointer.get(), 101);
+    delete pointer.get();
+}
+
+TEST(ObfuscxxTest, ComparisonOperators) {
+    obfuscxx<int> a{ 100 };
+    obfuscxx<int> b{ 100 };
+    obfuscxx<int> c{ 50 };
+
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+    EXPECT_FALSE(a != b);
+    EXPECT_TRUE(c < a);
+    EXPECT_TRUE(a > c);
+    EXPECT_TRUE(a >= b);
+    EXPECT_TRUE(c <= a);
+}
+
+TEST(ObfuscxxTest, ArithmeticOperators) {
+    obfuscxx<int> a{ 10 };
+    obfuscxx<int> b{ 5 };
+
+    EXPECT_EQ(a + b, 15);
+    EXPECT_EQ(a - b, 5);
+    EXPECT_EQ(a * b, 50);
+    EXPECT_EQ(a / b, 2);
+
+    a += b;
+    EXPECT_EQ(a.get(), 15);
+
+    a -= b;
+    EXPECT_EQ(a.get(), 10);
+}
+
+TEST(ObfuscxxTest, ObfuscationLevels) {
+    obfuscxx<int, 1, obf_level::Low> low{ 42 };
+    obfuscxx<int, 1, obf_level::Medium> medium{ 42 };
+    obfuscxx<int, 1, obf_level::High> high{ 42 };
+
+    EXPECT_EQ(low.get(), 42);
+    EXPECT_EQ(medium.get(), 42);
+    EXPECT_EQ(high.get(), 42);
+}
+
+TEST(ObfuscxxTest, EdgeCases) {
+    obfuscxx<int> max_int{ INT_MAX };
+    obfuscxx<int> min_int{ INT_MIN };
+    obfuscxx<int> zero{ 0 };
+    obfuscxx<int> negative{ -12345 };
+
+    EXPECT_EQ(max_int.get(), INT_MAX);
+    EXPECT_EQ(min_int.get(), INT_MIN);
+    EXPECT_EQ(zero.get(), 0);
+    EXPECT_EQ(negative.get(), -12345);
+}
+
+TEST(ObfuscxxTest, FloatEdgeCases) {
+    obfuscxx<float> zero{ 0.0f };
+    obfuscxx<float> negative{ -3.14f };
+    obfuscxx<float> small{ 0.0001f };
+    obfuscxx<float> large{ 123456.789f };
+
+    EXPECT_FLOAT_EQ(zero.get(), 0.0f);
+    EXPECT_FLOAT_EQ(negative.get(), -3.14f);
+    EXPECT_FLOAT_EQ(small.get(), 0.0001f);
+    EXPECT_FLOAT_EQ(large.get(), 123456.789f);
+}
+
+TEST(ObfuscxxTest, ArrayOperators) {
+    obfuscxx<int, 5> array{ 10, 20, 30, 40, 50 };
+
+    EXPECT_EQ(array[0], 10);
+    EXPECT_EQ(array[2], 30);
+    EXPECT_EQ(array[4], 50);
+
+    EXPECT_EQ(array.get(1), 20);
+    EXPECT_EQ(array.get(3), 40);
+
+    EXPECT_EQ(array.size(), 5);
+}
+
+TEST(ObfuscxxTest, ArraySet) {
+    obfuscxx<int, 3> array{ 1, 2, 3 };
+
+    array.set(100, 0);
+    array.set(200, 1);
+    array.set(300, 2);
+
+    EXPECT_EQ(array[0], 100);
+    EXPECT_EQ(array[1], 200);
+    EXPECT_EQ(array[2], 300);
+}
+
+TEST(ObfuscxxTest, ArrayCopyTo) {
+    obfuscxx<int, 5> array{ 1, 2, 3, 4, 5 };
+    int output[5] = { 0 };
+
+    array.copy_to(output, 5);
+
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_EQ(output[i], i + 1);
+    }
+}
+
+TEST(ObfuscxxTest, ArrayAssignment) {
+    obfuscxx<int, 3> array{ 1, 2, 3 };
+
+    array = { 10, 20, 30 };
+
+    EXPECT_EQ(array[0], 10);
+    EXPECT_EQ(array[1], 20);
+    EXPECT_EQ(array[2], 30);
+}
+
+TEST(ObfuscxxTest, DataIsEncrypted) {
+    obfuscxx<int> value{ 42 };
+
+    const uint64_t* raw_data = reinterpret_cast<const uint64_t*>(&value);
+    volatile uint64_t encrypted = *raw_data;
+
+    EXPECT_NE(encrypted, 42);
+
+    EXPECT_EQ(value.get(), 42);
+}
+
+TEST(ObfuscxxTest, PointerOperators) {
+    obfuscxx<int*> ptr{};
+    ptr = new int{ 999 };
+
+    EXPECT_NE(ptr.get(), nullptr);
+
+    EXPECT_EQ(*ptr.get(), 999);
+
+    *ptr.get() = 111;
+    EXPECT_EQ(*ptr.get(), 111);
+
+    delete ptr.get();
+}
+
+TEST(ObfuscxxTest, LongString) {
+    obfuscxx<char, 48, obf_level::Low> str("this is a very long test string for obfuscation");
+    auto result = str.to_string();
+    EXPECT_STREQ(result, "this is a very long test string for obfuscation");
+}
+
+TEST(ObfuscxxTest, ConstCorrectness) {
+    const obfuscxx<int> const_value{ 42 };
+
+    EXPECT_EQ(const_value.get(), 42);
+
+    EXPECT_EQ(const_value(), 42);
+}
+
+TEST(ObfuscxxTest, IteratorOperations) {
+    obfuscxx<int, 5> array{ 1, 2, 3, 4, 5 };
+
+    auto it = array.begin();
+    EXPECT_EQ(*it, 1);
+
+    ++it;
+    EXPECT_EQ(*it, 2);
+
+    EXPECT_NE(it, array.end());
+
+    int count = 0;
+    for (auto it = array.begin(); it != array.end(); ++it) {
+        count++;
+    }
+    EXPECT_EQ(count, 5);
+}
+
+TEST(ObfuscxxTest, DifferentTypes) {
+    obfuscxx<uint64_t> u64{ 0xFFFFFFFFFFFFFFFF };
+    obfuscxx<int8_t> i8{ -127 };
+    obfuscxx<double> dbl{ 3.141592653589793 };
+
+    EXPECT_EQ(u64.get(), 0xFFFFFFFFFFFFFFFF);
+    EXPECT_EQ(i8.get(), -127);
+    EXPECT_DOUBLE_EQ(dbl.get(), 3.141592653589793);
+}
+
+TEST(ObfuscxxTest, MultipleAssignments) {
+    obfuscxx<int> value{ 10 };
+
+    value = 20;
+    EXPECT_EQ(value.get(), 20);
+
+    value = 30;
+    EXPECT_EQ(value.get(), 30);
+
+    value = 40;
+    EXPECT_EQ(value.get(), 40);
+}
+
+TEST(ObfuscxxTest, ArrayEquality) {
+    obfuscxx<int, 3> a{ 1, 2, 3 };
+    obfuscxx<int, 3> b{ 1, 2, 3 };
+    obfuscxx<int, 3> c{ 1, 2, 4 };
+
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+}
+
+TEST(ObfuscxxTest, ImplicitConversion) {
+    obfuscxx<int> value{ 42 };
+
+    int x = value;
+    EXPECT_EQ(x, 42);
+
+    int result = value + 10;
+    EXPECT_EQ(result, 52);
+}
+```
+
+`obfuscxx/quick_test.cpp`:
+
+```cpp
+#include "metrics/unit_test.h"
+#include "metrics/benchmark.h"
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    auto const result = RUN_ALL_TESTS();
+
+    std::cout << '\n';
+
+    if (result != 0) {
+        std::cout << "UNIT TEST FAILED: RESULT: " << result << '\n';
+        return result;
+    }
+
+    ::benchmark::Initialize(&argc, argv);
+    ::benchmark::RunSpecifiedBenchmarks();
+    ::benchmark::Shutdown();
+
+    return 0;
+}
+
+```
+
+`vcpkg.json`:
+
+```json
+{
+  "name": "obfuscxx",
+  "version": "1.0.0",
+  "builtin-baseline": "34823ada10080ddca99b60e85f80f55e18a44eea",
+  "dependencies": [
+    "gtest",
+    "benchmark"
+  ]
+}
+```
