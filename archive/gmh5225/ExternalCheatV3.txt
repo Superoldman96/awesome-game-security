@@ -1,0 +1,1173 @@
+Project Path: arc_gmh5225_ExternalCheatV3_3_b8ftbp
+
+Source Tree:
+
+```txt
+arc_gmh5225_ExternalCheatV3_3_b8ftbp
+├── aimbot.cpp
+├── aimbot.h
+├── globals.cpp
+├── globals.h
+├── gui.cpp
+├── gui.h
+├── main.cpp
+├── main.h
+├── memory.h
+├── misc.cpp
+├── misc.h
+├── resource.h
+├── settings.cpp
+├── settings.h
+├── vector.h
+├── visuals.cpp
+└── visuals.h
+
+```
+
+`aimbot.cpp`:
+
+```cpp
+#include <thread>
+#include "aimbot.h" 
+#include "gui.h"
+#include "globals.h"
+#include "settings.h"
+#include "vector.h"
+
+constexpr Vector3 calculateAngle(
+	const Vector3& localPosition,
+	const Vector3& enemyPosition,
+	const Vector3& viewAngles) noexcept
+{
+	return ((enemyPosition - localPosition).toAngle() - viewAngles);
+}
+
+void aimbot::aimbotThread(const Memory& mem) noexcept
+{
+	while (gui::exit)
+	{
+		if (settings::toggle_aimbot)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+			if (!GetAsyncKeyState(VK_LBUTTON))
+				continue;
+
+			const auto& localBase = mem.read<uintptr_t>(globals::bClient + offsets::dwLocalPlayer);
+			const auto& localTeam = mem.read<int32_t>(localBase + offsets::m_iTeamNum);
+
+			const auto localEyePosition = mem.read<Vector3>(localBase + offsets::m_vecOrigin) +
+				mem.read<Vector3>(localBase + offsets::m_vecViewOffset);
+
+			const auto& clientState = mem.read<uintptr_t>(globals::bEngine + offsets::dwClientState);
+
+			const auto& localPlayerId = mem.read<int32_t>(clientState + 0x180);
+
+			const auto& viewAngles = mem.read<Vector3>(clientState + offsets::dwClientState_ViewAngles);
+			const auto& aimPunch = mem.read<Vector3>(localBase + offsets::m_aimPunchAngle) * 2;
+
+			auto bestFov = settings::aimbotFOV;
+			auto bestAngle = Vector3{ };
+
+			for (int i = 1; i <= 32; i++)
+			{
+				const auto& player = mem.read<uintptr_t>(globals::bClient + offsets::dwEntityList + i * 0x10);
+
+				if (mem.read<int32_t>(player + offsets::m_iTeamNum) == localTeam)
+					continue;
+
+				if (mem.read<bool>(player + offsets::m_Dormant))
+					continue;
+
+				if (mem.read<int32_t>(player + offsets::m_iHealth))
+					continue;
+
+				if (mem.read<int32_t>(player + offsets::m_bSpottedByMask) & (1 << localPlayerId))
+					continue;
+
+				const auto boneMatrix = mem.read<uintptr_t>(player + offsets::m_dwBoneMatrix);
+
+				const auto playerHeadPosition = Vector3{
+					mem.read<float>(boneMatrix + 0x30 * 8 + 0xC),
+					mem.read<float>(boneMatrix + 0x30 * 8 + 0x1C),
+					mem.read<float>(boneMatrix + 0x30 * 8 + 0x2C)
+
+				};
+
+				const auto angle = calculateAngle(
+					localEyePosition,
+					playerHeadPosition,
+					viewAngles + aimPunch
+				);
+
+				const auto fov = std::hypot(angle.x, angle.y);
+
+				if (fov < bestFov)
+				{
+					bestFov = fov;
+					bestAngle = angle;
+				}
+			}
+
+			if (!bestAngle.isZero())
+				mem.write<Vector3>(clientState + offsets::dwClientState_ViewAngles, viewAngles + bestAngle / 1.f);// last thing is smoothing
+		}
+	}
+}
+```
+
+`aimbot.h`:
+
+```h
+#pragma once
+#include "memory.h"
+
+namespace aimbot
+{
+	void aimbotThread(const Memory& mem) noexcept;
+}
+
+```
+
+`globals.h`:
+
+```h
+#pragma once
+#include <cstdint>
+#include <cstddef> 
+
+namespace globals
+{
+	inline std::uintptr_t bClient = 0;
+	inline std::uintptr_t bEngine = 0;
+}
+
+namespace offsets
+{
+	constexpr ::std::ptrdiff_t dwLocalPlayer = 0xDE997C;
+	constexpr ::std::ptrdiff_t m_fFlags = 0x104;
+	constexpr ::std::ptrdiff_t dwForceJump = 0x52BAC28;
+	constexpr ::std::ptrdiff_t m_clrRender = 0x70;
+	constexpr ::std::ptrdiff_t m_iGlowIndex = 0x10488;
+	constexpr ::std::ptrdiff_t dwGlowObjectManager = 0x5359980;
+	constexpr ::std::ptrdiff_t m_iTeamNum = 0xF4;
+	constexpr ::std::ptrdiff_t m_Dormant = 0xED;
+	constexpr ::std::ptrdiff_t dwEntityList = 0x4DFEECC;
+	constexpr ::std::ptrdiff_t m_bSpottedByMask = 0x980;
+	constexpr ::std::ptrdiff_t m_iHealth = 0x100;
+	constexpr ::std::ptrdiff_t m_bSpotted = 0x93D;
+	constexpr ::std::ptrdiff_t m_flFlashMaxAlpha = 0x1046C;
+	constexpr ::std::ptrdiff_t m_vecOrigin = 0x138;
+	constexpr ::std::ptrdiff_t m_vecViewOffset = 0x108;
+	constexpr ::std::ptrdiff_t dwClientState = 0x59F19C;
+	constexpr ::std::ptrdiff_t dwClientState_ViewAngles = 0x4D90;
+	constexpr ::std::ptrdiff_t m_aimPunchAngle = 0x303C;
+	constexpr ::std::ptrdiff_t m_dwBoneMatrix = 0x26A8;
+
+}
+
+```
+
+`gui.cpp`:
+
+```cpp
+#include "gui.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_dx9.h"
+#include "imgui/imgui_impl_win32.h"
+#include "settings.h"
+#include <filesystem>
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
+	HWND window,
+	UINT message,
+	WPARAM wideParameter,
+	LPARAM longParameter
+);
+
+long __stdcall WindowProcess(
+	HWND window,
+	UINT message,
+	WPARAM wideParameter,
+	LPARAM longParameter)
+{
+	if (ImGui_ImplWin32_WndProcHandler(window, message, wideParameter, longParameter))
+		return true;
+		
+	switch (message)
+	{
+	case WM_SIZE: {
+		if (gui::device && wideParameter != SIZE_MINIMIZED)
+		{
+			gui::presentParameters.BackBufferWidth = LOWORD(longParameter);
+			gui::presentParameters.BackBufferHeight = HIWORD(longParameter);
+			gui::ResetDevice();
+		}return 0;
+	}
+	case WM_SYSCOMMAND: {
+		if ((wideParameter & 0xfff0) == SC_KEYMENU)// disable alt app menu
+			return 0;
+	}break;
+	case WM_DESTROY: {
+		PostQuitMessage(0);
+	}return 0;
+	case WM_LBUTTONDOWN: {
+		gui::position = MAKEPOINTS(longParameter);
+	}return 0;
+	case WM_MOUSEMOVE: {
+		if (wideParameter == MK_LBUTTON)
+		{
+			const auto points = MAKEPOINTS(longParameter);
+			auto rect = ::RECT{ };
+
+			GetWindowRect(gui::window, &rect);
+
+			rect.left += points.x - gui::position.x;
+			rect.top += points.y - gui::position.y;
+
+			if (gui::position.x >= 0 &&
+				gui::position.x <= gui::WIDTH &&
+				gui::position.y >= 0 && gui::position.y <= 19)
+				SetWindowPos(
+					gui::window,
+					HWND_TOPMOST,
+					rect.left,
+					rect.top,
+					0, 0,
+					SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOZORDER
+				);
+		}
+	}return 0;
+	}
+	return DefWindowProcW(window, message, wideParameter, longParameter);
+}
+
+void gui::CreateHWindow(const char* windowName, const char* className)noexcept
+{
+	windowClass.cbSize = sizeof(WNDCLASSEXA);
+	windowClass.style = CS_CLASSDC;
+	windowClass.lpfnWndProc = WindowProcess;
+	windowClass.cbClsExtra = 0;
+	windowClass.cbWndExtra = 0;
+	windowClass.hInstance = GetModuleHandleA(0);
+	windowClass.hIcon = 0;
+	windowClass.hCursor = 0;
+	windowClass.hbrBackground = 0;
+	windowClass.lpszMenuName = 0;
+	windowClass.lpszClassName = className;
+	windowClass.hIconSm = 0;
+
+	RegisterClassExA(&windowClass);
+
+	window = CreateWindowA(
+		className,
+		windowName,
+		WS_POPUP,
+		100,
+		100,
+		WIDTH,
+		HEIGHT,
+		0,
+		0,
+		windowClass.hInstance,
+		0
+
+	);
+	ShowWindow(window, SW_SHOWDEFAULT);
+	UpdateWindow(window);
+}
+
+void gui::DestroyWindow()noexcept
+{
+	DestroyWindow(window);
+	UnregisterClass(windowClass.lpszClassName, windowClass.hInstance);
+}
+
+bool gui::CreateDevice() noexcept
+{
+	d3d = Direct3DCreate9(D3D_SDK_VERSION);
+
+	if (!d3d)
+		return false;
+
+	ZeroMemory(&presentParameters, sizeof(presentParameters));
+
+	presentParameters.Windowed = TRUE;
+	presentParameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	presentParameters.BackBufferFormat = D3DFMT_UNKNOWN;
+	presentParameters.EnableAutoDepthStencil = TRUE;
+	presentParameters.AutoDepthStencilFormat = D3DFMT_D16;
+	presentParameters.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
+
+	if (d3d->CreateDevice(
+		D3DADAPTER_DEFAULT,
+		D3DDEVTYPE_HAL,
+		window,
+		D3DCREATE_HARDWARE_VERTEXPROCESSING,
+		&presentParameters,
+		&device) < 0)
+		return false;
+
+	return true;
+}
+
+void gui::ResetDevice() noexcept
+{
+	ImGui_ImplDX9_InvalidateDeviceObjects();
+
+	const auto result = device->Reset(&presentParameters);
+
+	if (result == D3DERR_INVALIDCALL)
+		IM_ASSERT(0);
+
+	ImGui_ImplDX9_CreateDeviceObjects();
+}
+
+void gui::DestroyDevice() noexcept
+{
+	if (device)
+	{
+		device->Release();
+		device = nullptr;
+	}
+
+	if (d3d)
+	{
+		d3d->Release();
+		d3d = nullptr;
+	}
+}
+
+void gui::CreateImGui() noexcept
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ::ImGui::GetIO();
+
+	ImVec4* colors = ImGui::GetStyle().Colors;
+
+	colors[ImGuiCol_Text] = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+	colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+	colors[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.06f, 0.06f, 0.94f);
+	colors[ImGuiCol_ChildBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_PopupBg] = ImVec4(0.08f, 0.08f, 0.08f, 0.94f);
+	colors[ImGuiCol_Border] = ImVec4(0.43f, 0.43f, 0.50f, 0.50f);
+	colors[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_FrameBg] = ImVec4(0.11f, 0.11f, 0.11f, 1.00f);
+	colors[ImGuiCol_FrameBgHovered] = ImVec4(0.15f, 0.15f, 0.15f, 0.40f);
+	colors[ImGuiCol_FrameBgActive] = ImVec4(0.16f, 0.16f, 0.16f, 0.67f);
+	colors[ImGuiCol_TitleBg] = ImVec4(0.04f, 0.04f, 0.04f, 1.00f);
+	colors[ImGuiCol_TitleBgActive] = ImVec4(0.10f, 0.10f, 0.10f, 1.00f);
+	colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.00f, 0.00f, 0.00f, 0.51f);
+	colors[ImGuiCol_MenuBarBg] = ImVec4(0.14f, 0.14f, 0.14f, 1.00f);
+	colors[ImGuiCol_ScrollbarBg] = ImVec4(0.13f, 0.13f, 0.13f, 0.53f);
+	colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+	colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
+	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+	colors[ImGuiCol_CheckMark] = ImVec4(0.22f, 0.13f, 0.35f, 0.56f);
+	colors[ImGuiCol_SliderGrab] = ImVec4(0.22f, 0.13f, 0.35f, 0.56f);
+	colors[ImGuiCol_SliderGrabActive] = ImVec4(0.22f, 0.13f, 0.35f, 0.78f);
+	colors[ImGuiCol_Button] = ImVec4(0.22f, 0.13f, 0.35f, 0.56f);
+	colors[ImGuiCol_ButtonHovered] = ImVec4(0.22f, 0.13f, 0.35f, 1.00f);
+	colors[ImGuiCol_ButtonActive] = ImVec4(0.22f, 0.13f, 0.35f, 1.00f);
+	colors[ImGuiCol_Header] = ImVec4(0.22f, 0.13f, 0.35f, 0.56f);
+	colors[ImGuiCol_HeaderHovered] = ImVec4(0.22f, 0.13f, 0.35f, 0.85f);
+	colors[ImGuiCol_HeaderActive] = ImVec4(0.22f, 0.13f, 0.35f, 1.00f);
+	colors[ImGuiCol_Separator] = ImVec4(0.18f, 0.18f, 0.18f, 0.50f);
+	colors[ImGuiCol_SeparatorHovered] = ImVec4(0.22f, 0.13f, 0.35f, 0.76f);
+	colors[ImGuiCol_SeparatorActive] = ImVec4(0.22f, 0.13f, 0.35f, 1.00f);
+	colors[ImGuiCol_ResizeGrip] = ImVec4(0.22f, 0.13f, 0.35f, 0.32f);
+	colors[ImGuiCol_ResizeGripHovered] = ImVec4(0.26f, 0.59f, 0.98f, 0.67f);
+	colors[ImGuiCol_ResizeGripActive] = ImVec4(0.26f, 0.59f, 0.98f, 0.95f);
+	colors[ImGuiCol_Tab] = ImVec4(0.22f, 0.13f, 0.35f, 0.59f);
+	colors[ImGuiCol_TabHovered] = ImVec4(0.22f, 0.13f, 0.35f, 0.72f);
+	colors[ImGuiCol_TabActive] = ImVec4(0.22f, 0.13f, 0.35f, 0.59f);
+	colors[ImGuiCol_TabUnfocused] = ImVec4(0.07f, 0.10f, 0.15f, 0.97f);
+	colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.14f, 0.26f, 0.42f, 1.00f);
+	colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+	colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+	colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+	colors[ImGuiCol_PlotHistogramHovered] = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+	colors[ImGuiCol_TableHeaderBg] = ImVec4(0.19f, 0.19f, 0.20f, 1.00f);
+	colors[ImGuiCol_TableBorderStrong] = ImVec4(0.31f, 0.31f, 0.35f, 1.00f);
+	colors[ImGuiCol_TableBorderLight] = ImVec4(0.23f, 0.23f, 0.25f, 1.00f);
+	colors[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+	colors[ImGuiCol_TableRowBgAlt] = ImVec4(1.00f, 1.00f, 1.00f, 0.06f);
+	colors[ImGuiCol_TextSelectedBg] = ImVec4(0.26f, 0.59f, 0.98f, 0.35f);
+	colors[ImGuiCol_DragDropTarget] = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+	colors[ImGuiCol_NavHighlight] = ImVec4(0.26f, 0.59f, 0.98f, 1.00f);
+	colors[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+	colors[ImGuiCol_NavWindowingDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+	colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
+
+	ImGui::GetStyle().FrameRounding = 2.0f;
+	ImGui::GetStyle().WindowPadding = ImVec2(8 , 3);
+	ImGui::GetStyle().WindowBorderSize = 1.00f;
+	ImGui::GetStyle().WindowRounding = 3.00f;
+	ImGui::GetStyle().ScrollbarRounding = 2.00f;
+	ImGui::GetStyle().TabRounding = 2.00f;
+	ImGui::GetStyle().WindowTitleAlign = ImVec2(0.50f, 0.50f);
+	ImGui::GetStyle().FramePadding = ImVec2(30, 3);
+
+
+	io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 15.f);
+
+	io.IniFilename = NULL;
+
+
+	ImGui_ImplWin32_Init(window);
+	ImGui_ImplDX9_Init(device);
+}
+
+void gui::DestroyImGui() noexcept
+{
+	ImGui_ImplDX9_Shutdown();
+	ImGui_ImplWin32_Shutdown();
+	ImGui::DestroyContext();
+}
+
+void gui::BeginRender() noexcept
+{
+	MSG message;
+	while (PeekMessage(&message, 0, 0, 0, PM_REMOVE))
+	{
+		TranslateMessage(&message);
+		DispatchMessage(&message);
+	}
+
+	ImGui_ImplDX9_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
+}
+
+void gui::EndRender() noexcept
+{
+	ImGui::EndFrame();
+
+	device->SetRenderState(D3DRS_ZENABLE, FALSE);
+	device->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+	device->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+
+	device->Clear(0, 0, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, D3DCOLOR_RGBA(0, 0, 0, 255), 1.0f, 0);
+
+	if (device->BeginScene() >= 0)
+	{
+		ImGui::Render();
+		ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+		device->EndScene();
+	}
+	const auto result = device->Present(0, 0, 0, 0);
+
+	if (result == D3DERR_DEVICELOST && device->TestCooperativeLevel() == D3DERR_DEVICENOTRESET)
+		ResetDevice();
+}
+
+void gui::Render() noexcept
+{
+	ImGui::SetNextWindowPos({ 0, 0});
+	ImGui::SetNextWindowSize({ float {WIDTH}, float{HEIGHT}});
+	ImGui::Begin(
+		"External Cheat",
+		&exit,
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoMove
+	);
+
+	//////////////////////////////////////////////////////////////////////////////////////
+	
+	if (ImGui::BeginTabBar("tabs"))
+	{
+		if (ImGui::BeginTabItem("aimbot"))
+		{
+			ImGui::Checkbox("aimbot", &settings::toggle_aimbot);
+			ImGui::SliderInt("aimbot fov", &settings::aimbotFOV, 0, 180);
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("visuals"))
+		{
+			
+			ImGui::Checkbox("glow", &settings::toggle_glow);
+			ImGui::Checkbox("health glow", &settings::toggle_healthGlow);
+			ImGui::Checkbox("team glow", &settings::toggle_teamGlow);
+			ImGui::Checkbox("chams", &settings::toggle_chams);
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("misc"))
+		{
+			if (ImGui::Checkbox("bunnyhop", &settings::toggle_bhop))
+			{
+
+			}
+			if (ImGui::Checkbox("no flash", &settings::toggle_noFlash))
+			{
+
+			}
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("config"))
+		{
+			if (ImGui::Button("save config"))
+			{
+				saveConfig();
+			}
+			
+			if (ImGui::Button("load config"))
+			{
+				loadConfig();
+			}
+
+			ImGui::ColorEdit4("glow color", settings::glowColor);
+			ImGui::ColorEdit4("team glow color", settings::teamGlowColor);
+			ImGui::ColorEdit3("chams color", settings::chamsColor);
+			const char* glowTypes[] = { "standard", "full bloom", "aura pulse", "outline", "outline pulse"};
+			ImGui::PushItemWidth(200);
+			ImGui::ListBox("glow type", &settings::glowType, glowTypes, IM_ARRAYSIZE(glowTypes), IM_ARRAYSIZE(glowTypes));
+			ImGui::PopItemWidth();
+
+			ImGui::EndTabItem();
+		}
+
+		ImGui::EndTabBar();
+	}
+
+	//ImGui::ShowDemoWindow();
+	//ImGui::ShowStyleEditor();
+	
+	//////////////////////////////////////////////////////////////////////////////////////
+	
+	ImGui::End();
+}
+
+```
+
+`gui.h`:
+
+```h
+#pragma once
+#include <d3d9.h>
+
+namespace gui
+{
+	constexpr int WIDTH = 400;
+	constexpr int HEIGHT = 525;
+
+	inline bool exit = true;
+
+	inline HWND window = nullptr;
+	inline WNDCLASSEXA windowClass = { };
+
+	inline POINTS position = { };
+
+	inline PDIRECT3D9 d3d = nullptr;
+	inline LPDIRECT3DDEVICE9 device = nullptr;
+	inline D3DPRESENT_PARAMETERS presentParameters = { };
+
+	void CreateHWindow(const char* windowName, const char* className)noexcept;
+	void DestroyWindow()noexcept;
+
+	bool CreateDevice() noexcept;
+	void ResetDevice() noexcept;
+	void DestroyDevice() noexcept;
+
+	void CreateImGui() noexcept;
+	void DestroyImGui() noexcept;
+
+	void BeginRender() noexcept;
+	void EndRender() noexcept;
+	void Render() noexcept;
+}
+```
+
+`main.cpp`:
+
+```cpp
+#include "gui.h"
+#include "globals.h"
+#include "misc.h"
+#include <thread>
+#include "visuals.h"
+#include "aimbot.h"
+#include <iostream>
+#include <cstddef> 
+#include <cstdint>
+
+
+int __stdcall wWinMain(
+	HINSTANCE instance,
+	HINSTANCE previousInstance,
+	PWSTR arguments,
+	int commandShow)
+{	
+	BOOL WINAPI AllocConsole();
+	AllocConsole();
+	FILE* fDummy;
+	freopen_s(&fDummy, "CONOUT$", "w", stdout);
+	std::cout << "successful opening" << std::endl;
+	Sleep(1000);
+	fclose(fDummy);
+	BOOL WINAPI FreeConsole();
+	FreeConsole();
+
+	Memory mem{ "csgo.exe" };
+	globals::bClient = mem.GetModuleAddress("client.dll");
+	globals::bEngine = mem.GetModuleAddress("engine.dll");
+
+
+	std::thread(visuals::visualThread, mem).detach();
+	std::thread(misc::miscThread, mem).detach();
+	std::thread(aimbot::aimbotThread, mem).detach();
+	std::thread(visuals::chamsThread, mem).detach();
+
+	gui::CreateHWindow("Cheat Menu", "Cheat Menu Class");
+	gui::CreateDevice();
+	gui::CreateImGui();
+
+	while (gui::exit)
+	{
+		gui::BeginRender();
+		gui::Render();
+		gui::EndRender();
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
+	gui::DestroyImGui();
+	gui::DestroyDevice();
+	gui::DestroyWindow();
+
+	return EXIT_SUCCESS;
+}
+
+int main()
+{
+}
+
+
+```
+
+`main.h`:
+
+```h
+#pragma once
+
+int main();
+```
+
+`memory.h`:
+
+```h
+#pragma once
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include <TlHelp32.h>
+
+#include <cstdint>
+#include <string_view>
+
+class Memory
+{
+private:
+	std::uintptr_t processId = 0;
+	void* processHandle = nullptr;
+
+public:
+	// Constructor that finds the process id
+	// and opens a handle
+	Memory(const std::string_view processName) noexcept
+	{
+		::PROCESSENTRY32 entry = { };
+		entry.dwSize = sizeof(::PROCESSENTRY32);
+
+		const auto snapShot = ::CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+		while (::Process32Next(snapShot, &entry))
+		{
+			if (!processName.compare(entry.szExeFile))
+			{
+				processId = entry.th32ProcessID;
+				processHandle = ::OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
+				break;
+			}
+		}
+
+		// Free handle
+		if (snapShot)
+			::CloseHandle(snapShot);
+	}
+
+	// Destructor that frees the opened handle
+	~Memory()
+	{
+		if (processHandle)
+			::CloseHandle(processHandle);
+	}
+
+	// Returns the base address of a module by name
+	const std::uintptr_t GetModuleAddress(const std::string_view moduleName) const noexcept
+	{
+		::MODULEENTRY32 entry = { };
+		entry.dwSize = sizeof(::MODULEENTRY32);
+
+		const auto snapShot = ::CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, processId);
+
+		std::uintptr_t result = 0;
+
+		while (::Module32Next(snapShot, &entry))
+		{
+			if (!moduleName.compare(entry.szModule))
+			{
+				result = reinterpret_cast<std::uintptr_t>(entry.modBaseAddr);
+				break;
+			}
+		}
+
+		if (snapShot)
+			::CloseHandle(snapShot);
+
+		return result;
+	}
+
+	// Read process memory
+	template <typename T>
+	constexpr const T read(const std::uintptr_t& address) const noexcept
+	{
+		T value = { };
+		::ReadProcessMemory(processHandle, reinterpret_cast<const void*>(address), &value, sizeof(T), NULL);
+		return value;
+	}
+
+	// Write process memory
+	template <typename T>
+	constexpr void write(const std::uintptr_t& address, const T& value) const noexcept
+	{
+		::WriteProcessMemory(processHandle, reinterpret_cast<void*>(address), &value, sizeof(T), NULL);
+	}
+};
+```
+
+`misc.cpp`:
+
+```cpp
+#include "misc.h"
+#include "globals.h"
+#include "gui.h"
+#include <thread>
+#include "settings.h"
+
+void misc::miscThread(const Memory& mem) noexcept
+{
+	while (gui::exit)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		const auto localBase = mem.read<uintptr_t>(globals::bClient + offsets::dwLocalPlayer);
+
+		if (!localBase)
+			continue;
+		
+		noFlash(mem, localBase);
+		bhop(mem, localBase);
+	}
+}
+
+void misc::noFlash(const Memory& mem, const uintptr_t localBase)
+{
+	if (settings::toggle_noFlash)
+	{
+		mem.write<uintptr_t>(localBase + offsets::m_flFlashMaxAlpha, 0);
+	}
+	else
+	{
+		mem.write<uintptr_t>(localBase + offsets::m_flFlashMaxAlpha, 1132396544);
+	}
+}
+
+void misc::bhop(const Memory& mem, const uintptr_t localBase)
+{
+	if (settings::toggle_bhop)
+	{
+		int localFlag = mem.read<uintptr_t>(localBase + offsets::m_fFlags);
+		if (GetAsyncKeyState(VK_SPACE) && (localFlag == 257 || localFlag == 263))
+		{
+			mem.write<uintptr_t>(globals::bClient + offsets::dwForceJump, 5);
+		}
+		else
+		{
+			mem.write<uintptr_t>(globals::bClient + offsets::dwForceJump, 4);
+		}
+	}
+}
+```
+
+`misc.h`:
+
+```h
+#pragma once
+#include "memory.h"
+
+namespace misc
+{
+	void miscThread(const Memory& mem) noexcept;
+	void noFlash(const Memory& mem, const uintptr_t localBase);
+	void bhop(const Memory& mem, const uintptr_t localBase);
+}
+```
+
+`resource.h`:
+
+```h
+//{{NO_DEPENDENCIES}}
+// Microsoft Visual C++ generated include file.
+// Used by ExternalCheatV3.rc
+
+// Next default values for new objects
+// 
+#ifdef APSTUDIO_INVOKED
+#ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_NEXT_RESOURCE_VALUE        101
+#define _APS_NEXT_COMMAND_VALUE         40001
+#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_SYMED_VALUE           101
+#endif
+#endif
+
+```
+
+`settings.cpp`:
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <string>
+#include "settings.h"
+
+void saveConfig()
+{
+	std::ofstream myconfig("example.txt");
+	myconfig << "toggle_bhop = " << settings::toggle_bhop << "\n";
+	myconfig << "toggle_chams = " << settings::toggle_chams << "\n";
+	myconfig << "toggle_glow = " << settings::toggle_glow << "\n";
+	myconfig << "toggle_radar = " << settings::toggle_radar << "\n";
+	myconfig << "toggle_noFlash = " << settings::toggle_noFlash << "\n";
+	myconfig << "toggle_pulseGlow = " << settings::toggle_pulseGlow << "\n";
+	myconfig << "toggle_aimbot = " << settings::toggle_aimbot << "\n";
+	myconfig << "aimbotFOV = " << settings::aimbotFOV << "\n";
+	myconfig << "chamsColor = " << settings::chamsColor << "\n";
+	myconfig << "glowColor[0] = " << settings::glowColor[0] << "\n";
+	myconfig << "glowColor[1] = " << settings::glowColor[1] << "\n";
+	myconfig << "glowColor[2] = " << settings::glowColor[2] << "\n";
+	myconfig << "glowColor[3] = " << settings::glowColor[3] << "\n";
+	myconfig << "glowType = " << settings::glowType << "\n";
+	myconfig << "healthGlow = " << settings::toggle_healthGlow << "\n";
+	myconfig << "teamGlow = " << settings::toggle_teamGlow << "\n";
+	myconfig << "teamGlowColor[0] = " << settings::teamGlowColor[0] << "\n";
+	myconfig << "teamGlowColor[1] = " << settings::teamGlowColor[1] << "\n";
+	myconfig << "teamGlowColor[2] = " << settings::teamGlowColor[2] << "\n";
+	myconfig << "teamGlowColor[3] = " << settings::teamGlowColor[3] << "\n";
+	myconfig.close();
+}
+
+void loadConfig()
+{
+	std::ifstream myconfig("example.txt");
+	ReadNextSetting(settings::toggle_bhop);
+	ReadNextSetting(settings::toggle_chams);
+	ReadNextSetting(settings::toggle_glow);
+	ReadNextSetting(settings::toggle_radar);
+	ReadNextSetting(settings::toggle_noFlash);
+	ReadNextSetting(settings::toggle_pulseGlow);
+	ReadNextSetting(settings::toggle_aimbot);
+	ReadNextSetting(settings::aimbotFOV);
+	//ReadNextSetting(settings::chamsColor);
+	ReadNextSetting(settings::glowColor[0]);
+	ReadNextSetting(settings::glowColor[1]);
+	ReadNextSetting(settings::glowColor[2]);
+	ReadNextSetting(settings::glowColor[3]);
+	ReadNextSetting(settings::glowType);
+	ReadNextSetting(settings::toggle_healthGlow);
+	ReadNextSetting(settings::toggle_teamGlow);
+	ReadNextSetting(settings::teamGlowColor[0]);
+	ReadNextSetting(settings::teamGlowColor[1]);
+	ReadNextSetting(settings::teamGlowColor[2]);
+	ReadNextSetting(settings::teamGlowColor[3]);
+	myconfig.close();
+}
+
+```
+
+`settings.h`:
+
+```h
+#pragma once
+
+void saveConfig();
+void loadConfig();
+
+namespace settings {
+	inline bool toggle_bhop = false;
+	inline bool toggle_chams = false;
+	inline bool toggle_glow = false;
+	inline bool toggle_radar = false;
+	inline bool toggle_noFlash = false;
+	inline bool toggle_pulseGlow = false;
+	inline bool toggle_aimbot = false;
+	inline float chamsColor[] = { 1.f, 0.f, 0.f, 1.f };
+	inline float glowColor[] = { 1.f, 0.f, 0.f, 1.f };
+	inline int aimbotFOV = 0;
+	inline int glowType = 0;
+	inline bool toggle_healthGlow = false;
+	inline bool toggle_teamGlow = false;
+	inline float teamGlowColor[] = { 1.f, 0.f, 0.f, 1.f };
+}
+
+# define ReadNextSetting(s) myconfig.ignore(80, '='); myconfig >> s
+
+```
+
+`vector.h`:
+
+```h
+#pragma once
+#include <numbers>
+#include <cmath>
+
+struct Vector3
+{
+	constexpr Vector3(
+		const float x = 0.f,
+		const float y = 0.f,
+		const float z = 0.f) noexcept :
+		x(x), y(y), z(z) { }
+
+	constexpr const Vector3& operator-(const Vector3& other) const noexcept
+	{
+		return Vector3{ x - other.x, y - other.y, z - other.z };
+	}
+
+	constexpr const Vector3& operator+(const Vector3& other) const noexcept
+	{
+		return Vector3{ x + other.x, y - other.y, z - other.z };
+	}
+
+	constexpr const Vector3& operator/(const float& factor) const noexcept
+	{
+		return Vector3{ x / factor, y / factor, z / factor };
+	}
+
+	constexpr const Vector3& operator*(const float factor) const noexcept
+	{
+		return Vector3{ x * factor, y * factor, z * factor };
+	}
+
+	constexpr const Vector3& toAngle() const noexcept
+	{
+		return Vector3{
+			std::atan2(-z, std::hypot(x, y)) * (180.0f / std::numbers::pi_v<float>),
+			std::atan2(y, x) * (180.0f / std::numbers::pi_v<float>),
+			0.0f };
+		
+	}
+
+	constexpr const bool isZero() const noexcept
+	{
+		return x == 0.f && y == 0.f && z == 0.f;
+	}
+
+	float x, y, z;
+};
+```
+
+`visuals.cpp`:
+
+```cpp
+#include <thread>
+#include "visuals.h" 
+#include "gui.h"
+#include "globals.h"
+#include "settings.h"
+#include <iostream>
+#include <vector>
+
+unsigned int b = 29399u;
+
+struct GlowObject
+{
+	float red = settings::glowColor[0];
+	float green = settings::glowColor[1];
+	float blue = settings::glowColor[2];
+	float alpha = settings::glowColor[3];
+	uint8_t padding[8];
+	float unknown = 1.f;
+	uint8_t padding2[4];
+	BYTE renderOccluded = true;
+	BYTE renderUnoccluded = false;
+	BYTE fullBloom = false;
+}GlowObjectVar;
+
+void visuals::visualThread(const Memory& mem) noexcept
+{
+	while (gui::exit)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		const auto localBase = mem.read<uintptr_t>(globals::bClient + offsets::dwLocalPlayer);
+
+		if (!localBase)
+			continue;
+
+		visuals::glow(mem, localBase);
+
+	}
+}
+
+void visuals::chamsThread(const Memory& mem) noexcept {
+	while (gui::exit) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		const auto localBase = mem.read<uintptr_t>(globals::bClient + offsets::dwLocalPlayer);
+
+		if (!localBase)
+			continue;
+
+		visuals::chams(mem, localBase);
+	}
+}
+
+std::vector<int> gradient(int value) {
+	std::vector<int> rgb(3); // RGB values
+
+	if (value >= 75) {
+		// green to yellow gradient
+		rgb[0] = 0;
+		rgb[1] = 255;
+		rgb[2] = 0;
+	}
+	else if (value >= 50) {
+		// yellow to orange gradient
+		rgb[0] = 255;
+		rgb[1] = 255 - ((value - 50) * 128) / 25;
+		rgb[2] = 0;
+	}
+	else if (value >= 25) {
+		// orange to red gradient
+		rgb[0] = 255;
+		rgb[1] = 155;
+		rgb[2] = 0;
+	}
+	else {
+		// red gradient
+		rgb[0] = 255;
+		rgb[1] = 0;
+		rgb[2] = 0;
+	}
+
+	return rgb;
+}
+
+
+void visuals::glow(const Memory& mem, const uintptr_t localBase)
+{
+	if (settings::toggle_glow || settings::toggle_healthGlow)
+	{
+		int glowObjectManager = mem.read<uintptr_t>(globals::bClient + offsets::dwGlowObjectManager);
+		for (int i = 1; i <= 64; i++)
+		{
+			const auto player = mem.read<uintptr_t>(globals::bClient + offsets::dwEntityList + (i * 0x10));
+			
+			if (!settings::toggle_teamGlow) {
+				if (mem.read<int32_t>(player + offsets::m_iTeamNum) == mem.read<int32_t>(localBase + offsets::m_iTeamNum))
+					continue;
+			}
+			const auto glowIndex = mem.read<uintptr_t>(player + offsets::m_iGlowIndex);
+
+			if (settings::toggle_teamGlow && !settings::toggle_healthGlow) {
+				if (mem.read<int32_t>(player + offsets::m_iTeamNum) != mem.read<int32_t>(localBase + offsets::m_iTeamNum))
+					continue;
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x08, settings::teamGlowColor[0]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x0C, settings::teamGlowColor[1]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x10, settings::teamGlowColor[2]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x14, settings::teamGlowColor[3]);
+			}
+
+			if (!settings::toggle_healthGlow) {
+				if (mem.read<int32_t>(player + offsets::m_iTeamNum) == mem.read<int32_t>(localBase + offsets::m_iTeamNum))
+					continue;
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x08, settings::glowColor[0]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x0C, settings::glowColor[1]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x10, settings::glowColor[2]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x14, settings::glowColor[3]);
+			}
+			else if (settings::toggle_healthGlow) {
+				int playerHealth = mem.read<int>(player + offsets::m_iHealth);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x08, gradient(playerHealth)[0]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x0C, gradient(playerHealth)[1]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x10, gradient(playerHealth)[2]);
+				mem.write<float>(glowObjectManager + (glowIndex * 0x38) + 0x14, settings::glowColor[3]);
+			}
+			//mem.write<GlowObject>(glowObjectManager + (glowIndex * 0x38) + 0x08, GlowObjectVar);
+			mem.write<bool>(glowObjectManager + (glowIndex * 0x38) + 0x28, true);
+			mem.write<bool>(glowObjectManager + (glowIndex * 0x38) + 0x29, false);//idk quite
+
+			if (settings::glowType == 2) {
+				mem.write<int>(glowObjectManager + (glowIndex * 0x38) + 0x30, 1); //aura pulse
+			}
+			else if (settings::glowType == 3){
+				mem.write<int>(glowObjectManager + (glowIndex * 0x38) + 0x30, 2); //outline 1
+			}
+			else if (settings::glowType == 4) {
+				mem.write<int>(glowObjectManager + (glowIndex * 0x38) + 0x30, 3); //outline 2
+			}
+			else {
+				mem.write<int>(glowObjectManager + (glowIndex * 0x38) + 0x30, 0); //nothing
+			}
+			if (settings::glowType == 1) {
+				mem.write<bool>(glowObjectManager + (glowIndex * 0x38) + 0x2A, true); // full bloom glow
+			}
+			else {
+				mem.write<bool>(glowObjectManager + (glowIndex * 0x38) + 0x2A, false);
+			}
+		}
+	}
+}
+
+void visuals::chams(const Memory& mem, const uintptr_t localBase) {
+	while (settings::toggle_chams) {
+		int localTeam = mem.read<int>(localBase + offsets::m_iTeamNum);
+		for (unsigned int i = 0; i <= 64; ++i) {
+			int human = mem.read<int>(globals::bClient + offsets::dwEntityList + (i - 1) * 0x10);
+			int playerTeam = mem.read<int>(human + offsets::m_iTeamNum);
+
+			if (localTeam != playerTeam) {
+				mem.write<int>(human + offsets::m_clrRender, settings::chamsColor[0] * 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x1, settings::chamsColor[1] * 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x2, settings::chamsColor[2] * 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x3, settings::chamsColor[3] * 255);
+			}
+
+			/*if (!settings::toggle_chams) {
+				mem.write<int>(human + offsets::m_clrRender, 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x1, 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x2, 255);
+				mem.write<int>(human + offsets::m_clrRender + 0x3, 0);
+			}*/
+		}
+		Sleep(1000);
+	}
+}
+
+```
+
+`visuals.h`:
+
+```h
+#pragma once
+#include "memory.h"
+
+namespace visuals
+{
+	void visualThread(const Memory& mem) noexcept;
+	void chamsThread(const Memory& mem) noexcept;
+	void glow(const Memory& mem, const uintptr_t localBase);
+	void chams(const Memory& mem, const uintptr_t localBase);
+}
+
+```
