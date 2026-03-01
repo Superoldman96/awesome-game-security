@@ -1,0 +1,3351 @@
+Project Path: arc_gmh5225_kdmp-parser_htrvpq4i
+
+Source Tree:
+
+```txt
+arc_gmh5225_kdmp-parser_htrvpq4i
+├── CMakeLists.txt
+├── CMakeSettings.json
+├── LICENSE
+├── README.md
+├── builder.py
+├── pics
+│   └── parser.jpg
+└── src
+    ├── lib
+    │   ├── CMakeLists.txt
+    │   ├── filemap.h
+    │   ├── kdmp-parser-structs.h
+    │   ├── kdmp-parser.h
+    │   └── platform.h
+    ├── parser
+    │   ├── CMakeLists.txt
+    │   └── parser.cc
+    ├── python
+    │   ├── CMakeLists.txt
+    │   ├── python-kdmp.cc
+    │   └── python-kdmp.h
+    ├── testapp
+    │   ├── CMakeLists.txt
+    │   └── testapp.cc
+    └── tests
+        ├── CMakeLists.txt
+        ├── tests.py
+        └── tests_bindings.py
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+# Axel '0vercl0k' Souchet - April 18 2020
+# CMakeList.txt : CMake project for kdmp-parser, include source and define
+# project specific logic here.
+#
+cmake_minimum_required (VERSION 3.8)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_POSITION_INDEPENDENT_CODE True)
+
+OPTION(BUILD_TESTS "Build and run tests" OFF)
+
+project(kdmp-parser)
+add_compile_options(
+    $<$<CXX_COMPILER_ID:MSVC>:/W4$<SEMICOLON>/WX>
+    $<$<CXX_COMPILER_ID:GNU>:-Wall$<SEMICOLON>-Wextra$<SEMICOLON>-pedantic$<SEMICOLON>-Werror>
+    $<$<CXX_COMPILER_ID:Clang>:-Wall$<SEMICOLON>-Wextra$<SEMICOLON>-pedantic$<SEMICOLON>-Werror>
+)
+
+add_subdirectory(src/lib)
+add_subdirectory(src/parser)
+add_subdirectory(src/testapp)
+add_subdirectory(src/python)
+if(BUILD_TESTS)
+    add_subdirectory(src/tests)
+endif()
+
+```
+
+`CMakeSettings.json`:
+
+```json
+{
+  "configurations": [
+    {
+      "name": "x64-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "buildRoot": "${projectDir}\\build\\x64-Debug",
+      "installRoot": "${projectDir}\\bin\\x64-Debug",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "variables": []
+    },
+    {
+      "name": "x64-Release",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\build\\x64-RelWithDebInfo",
+      "installRoot": "${projectDir}\\bin\\x64-RelWithDebInfo",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x64_x64" ],
+      "variables": []
+    },
+    {
+      "name": "x86-Debug",
+      "generator": "Ninja",
+      "configurationType": "Debug",
+      "buildRoot": "${projectDir}\\build\\x86-Debug",
+      "installRoot": "${projectDir}\\bin\\x86-Debug",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x86" ],
+      "variables": []
+    },
+    {
+      "name": "x86-Release",
+      "generator": "Ninja",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\build\\x86-RelWithDebInfo",
+      "installRoot": "${projectDir}\\bin\\x86-RelWithDebInfo",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "-v",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "msvc_x86" ],
+      "variables": []
+    },
+    {
+      "name": "WSL-Clang-Release",
+      "generator": "Unix Makefiles",
+      "configurationType": "RelWithDebInfo",
+      "buildRoot": "${projectDir}\\build\\wsl-release",
+      "installRoot": "${projectDir}\\bin\\wsl-release",
+      "cmakeExecutable": "/usr/bin/cmake",
+      "cmakeCommandArgs": "",
+      "buildCommandArgs": "",
+      "ctestCommandArgs": "",
+      "inheritEnvironments": [ "linux_clang_x64" ],
+      "wslPath": "${defaultWSLPath}",
+      "addressSanitizerEnabled": true,
+      "addressSanitizerRuntimeFlags": "",
+      "variables": []
+    }
+  ]
+}
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2020 Axel Souchet
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# kdmp-parser
+
+![Build status](https://github.com/0vercl0k/kdmp-parser/workflows/Builds/badge.svg)
+
+This C++ library parses Windows kernel [full](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/complete-memory-dump) dumps (`.dump /f` in WinDbg) as well as [BMP](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/active-memory-dump) dumps (`.dump /ka` in WinDbg).
+
+![parser](pics/parser.jpg)
+
+The library supports loading 64-bit dumps and provides read access to things like:
+
+- The context record,
+- The exception record,
+- The bugcheck parameters,
+- The physical memory.
+
+Compiled binaries are available in the [releases](https://github.com/0vercl0k/kdmp-parser/releases) section.
+
+Special thanks to:
+- [yrp604](https://github.com/yrp604) for being knowledgeable about the format,
+- the [rekall](https://github.com/google/rekall) project and their [Python implementation](https://github.com/google/rekall/blob/master/rekall-core/rekall/plugins/overlays/windows/crashdump.py) (most of the structures in [kdmp-parser-structs.h](https://github.com/0vercl0k/kdmp-parser/blob/master/src/kdmp-parser/kdmp-parser-structs.h) have been adapted from it).
+
+## Python 3 bindings
+
+The bindings allow you to: read the context, read physical memory and to do virtual memory translations:
+
+```py
+from kdmp import Dump, FullDump, BMPDump
+
+dmp = Dump(sys.argv[2])
+assert(dmp.type() == FullDump or dmp.type() == BMPDump)
+
+ctx = dmp.context()
+dtb = ctx['dtb'] & ~0xfff # remove PCID
+
+assert(ctx['rip'] == 0xfffff805108776a0)
+assert(dtb == 0x6d4000)
+
+page = dmp.get_physical_page(0x5000)
+assert(page[0x34:0x38] == b'MSFT')
+
+assert(dmp.virt_translate(0xfffff78000000000) == 0x0000000000c2f000)
+assert(dmp.virt_translate(0xfffff80513370000) == 0x000000003d555000)
+
+assert(dmp.get_virtual_page(0xfffff78000000000) == dmp.get_physical_page(0x0000000000c2f000))
+assert(dmp.get_virtual_page(0xfffff80513370000) == dmp.get_physical_page(0x000000003d555000))
+
+v = 0xfffff80513568000
+assert(dmp.get_virtual_page(v) == dmp.get_physical_page(dmp.virt_translate(v)))
+```
+
+## Parser
+
+The `parser.exe` application is able to dump various information about the dump file: exception record, context record, etc.
+
+```text
+kdmp-parser\src>x64\Debug\parser.exe -c -e -p 0x1000 full.dmp
+--------------------------------------------------------------------------------
+Context Record:
+  rax=0000000000000003 rbx=fffff8050f4e9f70 rcx=0000000000000001
+  rdx=fffff805135684d0 rsi=0000000000000100 rdi=fffff8050f4e9f80
+  rip=fffff805108776a0 rsp=fffff805135684f8 rbp=fffff80513568600
+   r8=0000000000000003  r9=fffff805135684b8 r10=0000000000000000
+  r11=ffffa8848825e000 r12=fffff8050f4e9f80 r13=fffff80510c3c958
+  r14=0000000000000000 r15=0000000000000052
+  cs=0010 ss=0018 ds=002b es=002b fs=0053 gs=002b                 efl=00040202
+  fpcw=0000    fpsw=0000    fptw=0001
+    st0=fffff80510bbf000fffff80510c3c9c0       st1=0005e5a800ab2000fffff805106b3000
+    st2=4000000000200000fffff80510beaea8       st3=000000000a0d656c69666f7250206465
+    st4=0000000a0d656c69666f725000000010       st5=0000000000000000fffff80510b16900
+    st6=0000000000000000fffff805133e9000       st7=fffff47c02899f480000000000000000
+   xmm0=000000000a0d656c69666f7250206465      xmm1=0000000a0d656c69666f725000000010
+   xmm2=0000000000000000fffff80510b16900      xmm3=0000000000000000fffff805133e9000
+   xmm4=fffff47c02899f480000000000000000      xmm5=00000000000000000000000000000000
+   xmm6=00000000000000000000000000000000      xmm7=00000000000000000000000000000000
+   xmm8=00000000000000000000000000000000      xmm9=00000000000000000000000000000000
+  xmm10=00000000000000000000000000000000     xmm11=00000000000000000000000000000000
+  xmm12=00000000000000000000000000000000     xmm13=00000000000000000000000000000000
+  xmm14=00000000000000000000000000000000     xmm15=00000000000000000000000000000000
+--------------------------------------------------------------------------------
+Exception Record:
+  KDMP_PARSER_EXCEPTION_RECORD64
+    +0x0000: ExceptionCode            : 0x80000003.
+    +0x0004: ExceptionFlags           : 0x00000000.
+    +0x0008: ExceptionRecord          : 0x0000000000000000.
+    +0x0010: ExceptionAddress         : 0xfffff805108776a0.
+    +0x0018: NumberParameters         : 0x00000001.
+    +0x0020: ExceptionInformation[0]  : 0x0000000000000000.
+    +0x0028: ExceptionInformation[1]  : 0x0000000000000000.
+    +0x0030: ExceptionInformation[2]  : 0xffffa8848825e000.
+    +0x0038: ExceptionInformation[3]  : 0x00000000000002c0.
+    +0x0040: ExceptionInformation[4]  : 0xfffff80511022203.
+    +0x0048: ExceptionInformation[5]  : 0x0000000000004280.
+    +0x0050: ExceptionInformation[6]  : 0xfffff80510880524.
+    +0x0058: ExceptionInformation[7]  : 0xffffa88488282360.
+    +0x0060: ExceptionInformation[8]  : 0x0000000000000280.
+    +0x0068: ExceptionInformation[9]  : 0xfffff805135683d8.
+    +0x0070: ExceptionInformation[10] : 0xffffa8848d9d6fb0.
+    +0x0078: ExceptionInformation[11] : 0x0000000000004280.
+    +0x0080: ExceptionInformation[12] : 0x00001f8001004280.
+    +0x0088: ExceptionInformation[13] : 0x0000000000000003.
+    +0x0090: ExceptionInformation[14] : 0xfffff80513568578.
+--------------------------------------------------------------------------------
+Physical memory:
+00001000: 00 00 00 00 00 00 00 00 00 00 f9 ff 00 00 00 00  |................|
+00001010: 00 06 01 01 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001020: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001030: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001040: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001050: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001060: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001070: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001080: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00001090: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+000010a0: 00 00 00 00 00 00 00 00 00 a0 87 00 00 00 00 00  |................|
+000010b0: ff ff ff ff ff ff ff ff 00 00 60 11 05 f8 ff ff  |..........`.....|
+000010c0: 00 90 2f 00 00 00 00 00 ff ff ff ff 03 80 ff ff  |../.............|
+000010d0: f8 00 00 c0 c1 f7 ff ff 00 00 00 00 03 00 00 00  |................|
+000010e0: f8 00 00 c0 c1 f7 ff ff 00 00 00 00 03 00 00 00  |................|
+000010f0: 00 00 00 00 00 00 00 00 70 37 01 c0 c1 f7 ff ff  |........p7......|
+...
+```
+
+## Building
+
+You can build it yourself using `builder.py` or [CMake](https://cmake.org/) on either [Windows](#Windows) or [Linux](#Linux). More detailed information are described in the below sections.
+
+### Linux
+
+You can build it via the command line using `builder.py` or by invoking `cmake` yourself:
+
+```text
+over@oof:/kdmp-parser$ python3 builder.py -h
+usage: Build and run test [-h] [--run-tests]
+                          [--configuration {Debug,RelWithDebInfo}]
+                          [--arch {x64,x86}]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --run-tests
+  --configuration {Debug,RelWithDebInfo}
+  --arch {x64,x86}
+
+over@oof:/kdmp-parser$ python3 builder.py --configuration Debug
+...
+[6/6] Linking CXX executable ../../bin/linx64-Debug/testapp
+[6/6] Linking CXX executable ../../bin/linx86-Debug/testapp
+
+over@oof:/kdmp-parser/$ cd build/
+over@oof:/kdmp-parser/build$ mkdir linx64-RelWithDebInfo/
+over@oof:/kdmp-parser/build$ cd linx64-RelWithDebInfo/
+over@oof:/kdmp-parser/build/linx64-RelWithDebInfo$ cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ../../ && cmake --build .
+```
+
+### Windows
+
+You can build it using [Visual Studio 2019](https://visualstudio.microsoft.com/downloads/) by either using the *Open the folder* option or via the command line using `builder.py` /  `cmake` directly:
+
+```text
+kdmp-parser>python builder.py --configuration Debug
+...
+[6/6] Linking CXX executable ..\..\bin\x64-Debug\testapp.exe
+[6/6] Linking CXX executable ..\..\bin\x86-Debug\testapp.exe
+
+kdmp-parser>cd build
+kdmp-parser\build>mkdir x64-RelWithDebInfo
+kdmp-parser\build>cd x64-RelWithDebInfo
+kdmp-parser\build\x64-RelWithDebInfo>cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -GNinja ..\..\
+-- The C compiler identification is MSVC 19.25.28614.0
+-- The CXX compiler identification is MSVC 19.25.28614.0
+-- Check for working C compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.25.28610/bin/Hostx64/x64/cl.exe
+-- Check for working C compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.25.28610/bin/Hostx64/x64/cl.exe -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.25.28610/bin/Hostx64/x64/cl.exe
+-- Check for working CXX compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.25.28610/bin/Hostx64/x64/cl.exe -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring done
+-- Generating done
+-- Build files have been written to: kdmp-parser/build/x64-RelWithDebInfo
+
+kdmp-parser\build\x64-RelWithDebInfo>cmake --build .
+[6/6] Linking CXX executable ..\..\bin\x64-RelWithDebInfo\parser.exe
+```
+
+# Authors
+
+* Axel '[@0vercl0k](https://twitter.com/0vercl0k)' Souchet
+
+With contributions from:
+  - [@masthoon](https://github.com/masthoon).
+
+```
+
+`builder.py`:
+
+```py
+# Axel '0vercl0k' Souchet - February 23 2020
+import urllib.request
+import os
+import sys
+import zipfile
+import subprocess
+import itertools
+import platform
+import argparse
+
+os_prefix = 'win' if 'Windows' in platform.platform(terse = 1) else 'lin'
+is_windows = os_prefix == 'win'
+is_linux = not is_windows
+is_linux64 = is_linux and platform.architecture()[0] == '64bit'
+
+vsdevprompt = r'C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsall.bat'
+
+def source_bat(bat_file, arch):
+    '''https://dmerej.info/blog/post/cmake-visual-studio-and-the-command-line/'''
+    result = {}
+    process = subprocess.Popen(
+        f'"{bat_file}" {arch} & set',
+        stdout = subprocess.PIPE,
+        shell = True
+    )
+
+    (out, _) = process.communicate()
+    for line in out.splitlines():
+        line = line.decode()
+        if '=' not in line:
+            continue
+        line = line.strip()
+        key, value = line.split('=', 1)
+        result[key] = value
+
+    return result
+
+def build(arch, configuration, tests_on):
+    # Grab the environment needed for the appropriate arch on Windows.
+    env = source_bat(vsdevprompt, arch) if is_windows else os.environ
+    dir_name = f'{os_prefix}{arch}-{configuration}'
+    build_dir = os.path.join('build', dir_name)
+    if not os.path.isdir(build_dir):
+        os.mkdir(build_dir)
+
+    # We build an absolute path here because otherwise Ninja ends up creating a 'bin' directory
+    # in build\<target>\bin.
+    output_dir = os.path.abspath(os.path.join('bin', dir_name))
+    if not os.path.isdir(output_dir):
+        os.mkdir(output_dir)
+
+    extra_opts = ()
+    if is_linux64 and arch == 'x86':
+        # To support 32b binary on a 64b host on Linux.
+        extra_opts = (
+            f'-DCMAKE_CXX_FLAGS=-m32',
+            f'-DCMAKE_C_FLAGS=-m32'
+        )
+
+    # Allow the user to override the Python version if `pythonLocation` is found
+    # in the environment. This is particularly useful for the CI as `setup-python`
+    # sets this environment variable:
+    # https://github.com/actions/setup-python/blob/main/src/find-python.ts#L117
+    py_root = os.getenv('pythonLocation')
+    if py_root is not None:
+        extra_opts = extra_opts + (
+            f'-DPython3_FIND_STRATEGY=LOCATION',
+            f'-DPython3_ROOT_DIR={py_root}'
+        )
+
+    cmake_config = (
+        'cmake',
+        f'-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
+        f'-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={output_dir}',
+        f'-DCMAKE_BUILD_TYPE={configuration}',
+        f'-DBUILD_TESTS={tests_on}'
+    )
+    cmake_config += extra_opts
+    cmake_config += (
+        '-GNinja',
+        os.path.join('..', '..')
+    )
+
+    ret = subprocess.call(cmake_config, cwd = build_dir, env = env)
+
+    if ret != 0: return ret
+
+    ret = subprocess.call((
+        'cmake',
+        '--build',
+        '.'
+    ), cwd = build_dir, env = env)
+
+    return ret
+
+def main():
+    parser = argparse.ArgumentParser('Build and run test')
+    parser.add_argument('--run-tests', action = 'store_true', default = False)
+    parser.add_argument('--configuration', action = 'append', choices = ('Debug', 'RelWithDebInfo'))
+    parser.add_argument('--arch', action = 'append', choices = ('x64', 'x86'))
+    args = parser.parse_args()
+
+    if args.configuration is None:
+        args.configuration = ('Debug', 'RelWithDebInfo')
+
+    if args.arch is None:
+        args.arch = ('x64', 'x86')
+
+    matrix = tuple(itertools.product(
+        args.arch,
+        args.configuration
+    ))
+
+    tests_on = 'ON' if args.run_tests else 'OFF'
+    for arch, configuration in matrix:
+        if build(arch, configuration, tests_on) != 0:
+            print(f'{arch}/{configuration} build failed, bailing.')
+            return 1
+
+    print('All good!')
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
+```
+
+`src/lib/CMakeLists.txt`:
+
+```txt
+# Axel '0vercl0k' Souchet - April 18 2020
+add_library(kdmp-parser INTERFACE)
+target_include_directories(kdmp-parser INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+```
+
+`src/lib/filemap.h`:
+
+```h
+// Axel '0vercl0k' Souchet - April 28 2020
+#include "platform.h"
+#include <cstdio>
+
+#if defined(WINDOWS)
+class FileMap_t {
+  //
+  // Handle to the input file.
+  //
+
+  HANDLE File_ = nullptr;
+
+  //
+  // Handle to the file mapping.
+  //
+
+  HANDLE FileMap_ = nullptr;
+
+  //
+  // Base address of the file view.
+  //
+
+  PVOID ViewBase_ = nullptr;
+
+public:
+  ~FileMap_t() {
+    //
+    // Unmap the view of the mapping..
+    //
+
+    if (ViewBase_ != nullptr) {
+      UnmapViewOfFile(ViewBase_);
+      ViewBase_ = nullptr;
+    }
+
+    //
+    // Close the handle to the file mapping..
+    //
+
+    if (FileMap_ != nullptr) {
+      CloseHandle(FileMap_);
+      FileMap_ = nullptr;
+    }
+
+    //
+    // And finally the file itself.
+    //
+
+    if (File_ != nullptr) {
+      CloseHandle(File_);
+      File_ = nullptr;
+    }
+  }
+
+  FileMap_t() = default;
+  FileMap_t(const FileMap_t &) = delete;
+  FileMap_t &operator=(const FileMap_t &) = delete;
+
+  constexpr void *ViewBase() const { return ViewBase_; }
+
+  bool MapFile(const char *PathFile) {
+    bool Success = true;
+    HANDLE File = nullptr;
+    HANDLE FileMap = nullptr;
+    PVOID ViewBase = nullptr;
+
+    //
+    // Open the dump file in read-only.
+    //
+
+    File = CreateFileA(PathFile, GENERIC_READ, FILE_SHARE_READ, nullptr,
+                       OPEN_EXISTING, 0, nullptr);
+
+    if (File == NULL) {
+
+      //
+      // If we fail to open the file, let the user know.
+      //
+
+      const DWORD GLE = GetLastError();
+      printf("CreateFile failed with GLE=%lu.\n", GLE);
+
+      if (GLE == ERROR_FILE_NOT_FOUND) {
+        printf("  The file %s was not found.\n", PathFile);
+      }
+
+      Success = false;
+      goto clean;
+    }
+
+    //
+    // Create the ro file mapping.
+    //
+
+    FileMap = CreateFileMappingA(File, nullptr, PAGE_READONLY, 0, 0, nullptr);
+
+    if (FileMap == nullptr) {
+
+      //
+      // If we fail to create a file mapping, let
+      // the user know.
+      //
+
+      const DWORD GLE = GetLastError();
+      printf("CreateFileMapping failed with GLE=%lu.\n", GLE);
+      Success = false;
+      goto clean;
+    }
+
+    //
+    // Map a view of the file in memory.
+    //
+
+    ViewBase = MapViewOfFile(FileMap, FILE_MAP_READ, 0, 0, 0);
+
+    if (ViewBase == nullptr) {
+
+      //
+      // If we fail to map the view, let the user know.
+      //
+
+      const DWORD GLE = GetLastError();
+      printf("MapViewOfFile failed with GLE=%lu.\n", GLE);
+      Success = false;
+      goto clean;
+    }
+
+    //
+    // Everything went well, so grab a copy of the handles for
+    // our class and null-out the temporary variables.
+    //
+
+    File_ = File;
+    File = nullptr;
+
+    FileMap_ = FileMap;
+    FileMap = nullptr;
+
+    ViewBase_ = ViewBase;
+    ViewBase = nullptr;
+
+  clean:
+
+    //
+    // Close the handle to the file mapping..
+    //
+
+    if (FileMap != nullptr) {
+      CloseHandle(FileMap);
+      FileMap = nullptr;
+    }
+
+    //
+    // And finally the file itself.
+    //
+
+    if (File != nullptr) {
+      CloseHandle(File);
+      File = nullptr;
+    }
+
+    return Success;
+  }
+};
+
+#elif defined(LINUX)
+
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+class FileMap_t {
+  void *ViewBase_ = nullptr;
+  off_t ViewSize_ = 0;
+  int Fd_ = -1;
+
+public:
+  ~FileMap_t() {
+    if (ViewBase_) {
+      munmap(ViewBase_, ViewSize_);
+      ViewBase_ = nullptr;
+      ViewSize_ = 0;
+    }
+
+    if (Fd_ != -1) {
+      close(Fd_);
+      Fd_ = -1;
+    }
+  }
+
+  FileMap_t() = default;
+  FileMap_t(const FileMap_t &) = delete;
+  FileMap_t &operator=(const FileMap_t &) = delete;
+
+  constexpr void *ViewBase() const { return ViewBase_; }
+
+  bool MapFile(const char *PathFile) {
+    Fd_ = open(PathFile, O_RDONLY);
+    if (Fd_ < 0) {
+      perror("Could not open dump file");
+      return false;
+    }
+
+    struct stat Stat;
+    if (fstat(Fd_, &Stat) < 0) {
+      perror("Could not stat dump file");
+      return false;
+    }
+
+    ViewSize_ = Stat.st_size;
+    ViewBase_ = mmap(nullptr, ViewSize_, PROT_READ, MAP_SHARED, Fd_, 0);
+    if (ViewBase_ == MAP_FAILED) {
+      perror("Could not mmap");
+      return false;
+    }
+
+    return true;
+  }
+};
+
+#endif
+```
+
+`src/lib/kdmp-parser-structs.h`:
+
+```h
+// Axel '0vercl0k' Souchet - February 15 2019
+#pragma once
+
+#include "platform.h"
+#include <cinttypes>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <type_traits>
+
+namespace kdmpparser {
+
+//
+// We need a way to represent 128-bits integers so here goes.
+//
+
+struct uint128_t {
+  uint64_t Low;
+  uint64_t High;
+};
+
+static_assert(sizeof(uint128_t) == 16, "uint128_t's size looks wrong.");
+
+enum class DumpType_t : uint32_t { FullDump = 1, KernelDump = 2, BMPDump = 5 };
+
+//
+// Save off the alignement setting and disable
+// alignement.
+//
+
+#pragma pack(push)
+#pragma pack(1)
+
+//
+// Field is a pointer inside the this object and this function
+// returns the offset of Field in the object via pointer arithmetic.
+//
+
+constexpr uint64_t OffsetFromThis(const uintptr_t This, const uintptr_t Field) {
+  return uint64_t(Field) - uint64_t(This);
+}
+
+static void DisplayHeader(const uint32_t Prefix, const char *FieldName,
+                          const void *This, const void *Field) {
+  printf("%*s+0x%04" PRIx64 ": %-25s", Prefix, "",
+         OffsetFromThis(uintptr_t(This), uintptr_t(Field)), FieldName);
+}
+
+//
+// This is the macro we use to get the field name via the preprocessor.
+//
+
+#define DISPLAY_FIELD(FieldName)                                               \
+  DisplayField(Prefix + 2, #FieldName, this, &FieldName)
+
+#define DISPLAY_FIELD_OFFSET(FieldName)                                        \
+  DisplayHeader(Prefix + 2, #FieldName, this, &FieldName);                     \
+  printf("\n")
+
+//
+// This takes care of displaying basic types.
+//
+
+template <typename Field_t>
+static void DisplayField(const uint32_t Prefix, const char *FieldName,
+                         const void *This, const Field_t *Field) {
+  DisplayHeader(Prefix, FieldName, This, Field);
+  if constexpr (std::is_same<Field_t, uint8_t>::value) {
+    printf(": 0x%02x.\n", *Field);
+  } else if constexpr (std::is_same<Field_t, uint16_t>::value) {
+    printf(": 0x%04x.\n", *Field);
+  } else if constexpr (std::is_same<Field_t, uint32_t>::value) {
+    printf(": 0x%08x.\n", *Field);
+  } else if constexpr (std::is_same<Field_t, uint64_t>::value) {
+    printf(": 0x%016" PRIx64 ".\n", *Field);
+  } else if constexpr (std::is_same<Field_t, uint128_t>::value) {
+    printf(": 0x%016" PRIx64 "%016" PRIx64 ".\n", Field->High, Field->Low);
+  } else if constexpr (std::is_same<Field_t, DumpType_t>::value) {
+    switch (*Field) {
+    case DumpType_t::KernelDump: {
+      printf(": Kernel Dump.\n");
+      return;
+    }
+
+    case DumpType_t::FullDump: {
+      printf(": Full Dump.\n");
+      return;
+    }
+    case DumpType_t::BMPDump: {
+      printf(": BMP Dump.\n");
+      return;
+    }
+    }
+    printf(": Unknown.\n");
+  } else {
+
+    //
+    // We use std::is_same<> here because otherwise the static_assert fires
+    // immediately on g++/clang++ without even instantiating FieldType_t.
+    // So we kind of trick the compiler into doing what we want.
+    //
+
+    static_assert(std::is_same<Field_t, uint8_t>::value,
+                  "DisplayField: Unknown type trying to be displayed.");
+  }
+}
+
+//
+// Display the header of a dump section.
+//
+
+#define DISPLAY_HEADER(Name) printf("%*s" Name "\n", Prefix, "")
+
+//
+// All credit goes to the rekall project for the RE of the file format.
+// https://github.com/google/rekall/blob/master/rekall-core/rekall/plugins/overlays/windows/crashdump.py
+//
+
+struct PHYSMEM_RUN {
+  uint64_t BasePage;
+  uint64_t PageCount;
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("PHYSMEM_RUN");
+    DISPLAY_FIELD(BasePage);
+    DISPLAY_FIELD(PageCount);
+  }
+};
+
+static_assert(sizeof(PHYSMEM_RUN) == 0x10, "PHYSMEM_RUN's size looks wrong.");
+
+struct PHYSMEM_DESC {
+  uint32_t NumberOfRuns;
+  uint32_t Padding0;
+  uint64_t NumberOfPages;
+  PHYSMEM_RUN Run[1];
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("PHYSMEM_DESC");
+    DISPLAY_FIELD(NumberOfRuns);
+    DISPLAY_FIELD(NumberOfPages);
+    DISPLAY_FIELD_OFFSET(Run);
+    if (!LooksGood()) {
+      return;
+    }
+
+    for (uint32_t RunIdx = 0; RunIdx < NumberOfRuns; RunIdx++) {
+      Run[RunIdx].Show(Prefix + 2);
+    }
+  }
+
+  constexpr bool LooksGood() const {
+    if (NumberOfRuns == 0x45474150 || NumberOfPages == 0x4547415045474150ULL) {
+      return false;
+    }
+
+    return true;
+  }
+};
+
+static_assert(sizeof(PHYSMEM_DESC) == 0x20,
+              "PHYSICAL_MEMORY_DESCRIPTOR's size looks wrong.");
+
+struct BMP_HEADER64 {
+  static constexpr uint32_t ExpectedSignature = 0x504D4453;  // 'PMDS'
+  static constexpr uint32_t ExpectedSignature2 = 0x504D4446; // 'PMDF'
+  static constexpr uint32_t ExpectedValidDump = 0x504D5544;  // 'PMUD'
+
+  //
+  // Should be FDMP.
+  //
+
+  uint32_t Signature;
+
+  //
+  // Should be DUMP.
+  //
+
+  uint32_t ValidDump;
+
+  //
+  // According to rekall there's a gap there:
+  // 'ValidDump': [0x4, ['String', dict(
+  //    length=4,
+  //    term=None,
+  //    )]],
+  // # The offset of the first page in the file.
+  // 'FirstPage': [0x20, ['unsigned long long']],
+  //
+
+  uint8_t Padding0[0x20 - (0x4 + sizeof(ValidDump))];
+
+  //
+  // The offset of the first page in the file.
+  //
+
+  uint64_t FirstPage;
+
+  //
+  // Total number of pages present in the bitmap.
+  //
+  uint64_t TotalPresentPages;
+
+  //
+  // Total number of pages in image.This dictates the total size of the
+  // bitmap.This is not the same as the TotalPresentPages which is only
+  // the sum of the bits set to 1.
+  //
+
+  uint64_t Pages;
+
+  uint8_t Bitmap[1];
+
+  bool LooksGood() const {
+
+    //
+    // Integrity check the headers.
+    //
+
+    if (Signature != ExpectedSignature && Signature != ExpectedSignature2) {
+      printf("BMP_HEADER64::Signature looks wrong.\n");
+      return false;
+    }
+
+    if (ValidDump != ExpectedValidDump) {
+      printf("BMP_HEADER64::ValidDump looks wrong.\n");
+      return false;
+    }
+
+    return true;
+  }
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("BMP_HEADER64");
+    DISPLAY_FIELD(Signature);
+    DISPLAY_FIELD(ValidDump);
+    DISPLAY_FIELD(FirstPage);
+    DISPLAY_FIELD(TotalPresentPages);
+    DISPLAY_FIELD(Pages);
+    DISPLAY_FIELD_OFFSET(Bitmap);
+  }
+};
+
+static_assert(offsetof(BMP_HEADER64, FirstPage) == 0x20,
+              "First page offset looks wrong.");
+
+struct CONTEXT {
+
+  //
+  // Note that the below definition has been stolen directly from the windows
+  // headers. Why you might ask? Well the structure comes with DECLSPEC_ALIGN
+  // that was preventing me from layoung the Context structure at the offset I
+  // wanted. Maybe there's a cleaner way to do this, if so let me know :)
+  //
+
+  //
+  // Register parameter home addresses.
+  //
+  // N.B. These fields are for convience - they could be used to extend the
+  //      context record in the future.
+  //
+
+  uint64_t P1Home;
+  uint64_t P2Home;
+  uint64_t P3Home;
+  uint64_t P4Home;
+  uint64_t P5Home;
+  uint64_t P6Home;
+
+  //
+  // Control flags.
+  //
+
+  uint32_t ContextFlags;
+  uint32_t MxCsr;
+
+  //
+  // Segment Registers and processor flags.
+  //
+
+  uint16_t SegCs;
+  uint16_t SegDs;
+  uint16_t SegEs;
+  uint16_t SegFs;
+  uint16_t SegGs;
+  uint16_t SegSs;
+  uint32_t EFlags;
+
+  //
+  // Debug registers
+  //
+
+  uint64_t Dr0;
+  uint64_t Dr1;
+  uint64_t Dr2;
+  uint64_t Dr3;
+  uint64_t Dr6;
+  uint64_t Dr7;
+
+  //
+  // Integer registers.
+  //
+
+  uint64_t Rax;
+  uint64_t Rcx;
+  uint64_t Rdx;
+  uint64_t Rbx;
+  uint64_t Rsp;
+  uint64_t Rbp;
+  uint64_t Rsi;
+  uint64_t Rdi;
+  uint64_t R8;
+  uint64_t R9;
+  uint64_t R10;
+  uint64_t R11;
+  uint64_t R12;
+  uint64_t R13;
+  uint64_t R14;
+  uint64_t R15;
+
+  //
+  // Program counter.
+  //
+
+  uint64_t Rip;
+
+  //
+  // Floating point state.
+  //
+
+  uint16_t ControlWord;
+  uint16_t StatusWord;
+  uint8_t TagWord;
+  uint8_t Reserved1;
+  uint16_t ErrorOpcode;
+  uint32_t ErrorOffset;
+  uint16_t ErrorSelector;
+  uint16_t Reserved2;
+  uint32_t DataOffset;
+  uint16_t DataSelector;
+  uint16_t Reserved3;
+  uint32_t MxCsr2;
+  uint32_t MxCsr_Mask;
+  uint128_t FloatRegisters[8];
+  uint128_t Xmm0;
+  uint128_t Xmm1;
+  uint128_t Xmm2;
+  uint128_t Xmm3;
+  uint128_t Xmm4;
+  uint128_t Xmm5;
+  uint128_t Xmm6;
+  uint128_t Xmm7;
+  uint128_t Xmm8;
+  uint128_t Xmm9;
+  uint128_t Xmm10;
+  uint128_t Xmm11;
+  uint128_t Xmm12;
+  uint128_t Xmm13;
+  uint128_t Xmm14;
+  uint128_t Xmm15;
+
+  //
+  // Vector registers.
+  //
+
+  uint128_t VectorRegister[26];
+  uint64_t VectorControl;
+
+  //
+  // Special debug control registers.
+  //
+
+  uint64_t DebugControl;
+  uint64_t LastBranchToRip;
+  uint64_t LastBranchFromRip;
+  uint64_t LastExceptionToRip;
+  uint64_t LastExceptionFromRip;
+
+  bool LooksGood() const {
+
+    //
+    // Integrity check the CONTEXT record.
+    //
+
+    if (MxCsr != MxCsr2) {
+      printf("CONTEXT::MxCsr doesn't match MxCsr2.\n");
+      return false;
+    }
+
+    return true;
+  }
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("CONTEXT");
+    DISPLAY_FIELD(P1Home);
+    DISPLAY_FIELD(P2Home);
+    DISPLAY_FIELD(P3Home);
+    DISPLAY_FIELD(P4Home);
+    DISPLAY_FIELD(P5Home);
+    DISPLAY_FIELD(P6Home);
+
+    //
+    // Control flags.
+    //
+
+    DISPLAY_FIELD(ContextFlags);
+    DISPLAY_FIELD(MxCsr);
+
+    //
+    // Segment Registers and processor flags.
+    //
+
+    DISPLAY_FIELD(SegCs);
+    DISPLAY_FIELD(SegDs);
+    DISPLAY_FIELD(SegEs);
+    DISPLAY_FIELD(SegFs);
+    DISPLAY_FIELD(SegGs);
+    DISPLAY_FIELD(SegSs);
+    DISPLAY_FIELD(EFlags);
+
+    //
+    // Debug registers.
+    // XXX: Figure out what they don't look right.
+    //
+
+    DISPLAY_FIELD(Dr0);
+    DISPLAY_FIELD(Dr1);
+    DISPLAY_FIELD(Dr2);
+    DISPLAY_FIELD(Dr3);
+    DISPLAY_FIELD(Dr6);
+    DISPLAY_FIELD(Dr7);
+
+    //
+    // Integer registers.
+    //
+
+    DISPLAY_FIELD(Rax);
+    DISPLAY_FIELD(Rcx);
+    DISPLAY_FIELD(Rdx);
+    DISPLAY_FIELD(Rbx);
+    DISPLAY_FIELD(Rsp);
+    DISPLAY_FIELD(Rbp);
+    DISPLAY_FIELD(Rsi);
+    DISPLAY_FIELD(Rdi);
+    DISPLAY_FIELD(R8);
+    DISPLAY_FIELD(R9);
+    DISPLAY_FIELD(R10);
+    DISPLAY_FIELD(R11);
+    DISPLAY_FIELD(R12);
+    DISPLAY_FIELD(R13);
+    DISPLAY_FIELD(R14);
+    DISPLAY_FIELD(R15);
+
+    //
+    // Program counter.
+    //
+
+    DISPLAY_FIELD(Rip);
+
+    //
+    // Floating point state.
+    //
+
+    DISPLAY_FIELD(ControlWord);
+    DISPLAY_FIELD(StatusWord);
+    DISPLAY_FIELD(TagWord);
+    DISPLAY_FIELD(ErrorOpcode);
+    DISPLAY_FIELD(ErrorOffset);
+    DISPLAY_FIELD(ErrorSelector);
+    DISPLAY_FIELD(DataOffset);
+    DISPLAY_FIELD(DataSelector);
+    DISPLAY_FIELD(MxCsr2);
+    DISPLAY_FIELD(MxCsr_Mask);
+    DISPLAY_FIELD(FloatRegisters[0]);
+    DISPLAY_FIELD(FloatRegisters[1]);
+    DISPLAY_FIELD(FloatRegisters[2]);
+    DISPLAY_FIELD(FloatRegisters[3]);
+    DISPLAY_FIELD(FloatRegisters[4]);
+    DISPLAY_FIELD(FloatRegisters[5]);
+    DISPLAY_FIELD(FloatRegisters[6]);
+    DISPLAY_FIELD(FloatRegisters[7]);
+    DISPLAY_FIELD(Xmm0);
+    DISPLAY_FIELD(Xmm1);
+    DISPLAY_FIELD(Xmm2);
+    DISPLAY_FIELD(Xmm3);
+    DISPLAY_FIELD(Xmm4);
+    DISPLAY_FIELD(Xmm5);
+    DISPLAY_FIELD(Xmm6);
+    DISPLAY_FIELD(Xmm7);
+    DISPLAY_FIELD(Xmm8);
+    DISPLAY_FIELD(Xmm9);
+    DISPLAY_FIELD(Xmm10);
+    DISPLAY_FIELD(Xmm11);
+    DISPLAY_FIELD(Xmm12);
+    DISPLAY_FIELD(Xmm13);
+    DISPLAY_FIELD(Xmm14);
+    DISPLAY_FIELD(Xmm15);
+
+    //
+    // Vector registers.
+    //
+
+    // M128A VectorRegister[26];
+    DISPLAY_FIELD(VectorControl);
+
+    //
+    // Special debug control registers.
+    //
+
+    DISPLAY_FIELD(DebugControl);
+    DISPLAY_FIELD(LastBranchToRip);
+    DISPLAY_FIELD(LastBranchFromRip);
+    DISPLAY_FIELD(LastExceptionToRip);
+    DISPLAY_FIELD(LastExceptionFromRip);
+  }
+};
+
+static_assert(offsetof(CONTEXT, Xmm0) == 0x1a0,
+              "The offset of Xmm0 looks wrong.");
+
+struct EXCEPTION_RECORD64 {
+  uint32_t ExceptionCode;
+  uint32_t ExceptionFlags;
+  uint64_t ExceptionRecord;
+  uint64_t ExceptionAddress;
+  uint32_t NumberParameters;
+  uint32_t __unusedAlignment;
+  uint64_t ExceptionInformation[15];
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("KDMP_PARSER_EXCEPTION_RECORD64");
+    DISPLAY_FIELD(ExceptionCode);
+    DISPLAY_FIELD(ExceptionFlags);
+    DISPLAY_FIELD(ExceptionRecord);
+    DISPLAY_FIELD(ExceptionAddress);
+    DISPLAY_FIELD(NumberParameters);
+    DISPLAY_FIELD(ExceptionInformation[0]);
+    DISPLAY_FIELD(ExceptionInformation[1]);
+    DISPLAY_FIELD(ExceptionInformation[2]);
+    DISPLAY_FIELD(ExceptionInformation[3]);
+    DISPLAY_FIELD(ExceptionInformation[4]);
+    DISPLAY_FIELD(ExceptionInformation[5]);
+    DISPLAY_FIELD(ExceptionInformation[6]);
+    DISPLAY_FIELD(ExceptionInformation[7]);
+    DISPLAY_FIELD(ExceptionInformation[8]);
+    DISPLAY_FIELD(ExceptionInformation[9]);
+    DISPLAY_FIELD(ExceptionInformation[10]);
+    DISPLAY_FIELD(ExceptionInformation[11]);
+    DISPLAY_FIELD(ExceptionInformation[12]);
+    DISPLAY_FIELD(ExceptionInformation[13]);
+    DISPLAY_FIELD(ExceptionInformation[14]);
+  }
+};
+
+static_assert(sizeof(EXCEPTION_RECORD64) == 0x98,
+              "KDMP_PARSER_EXCEPTION_RECORD64's size looks wrong.");
+
+struct HEADER64 {
+  static const uint32_t ExpectedSignature = 0x45474150; // 'EGAP'
+  static const uint32_t ExpectedValidDump = 0x34365544; // '46UD'
+
+  uint32_t Signature;
+  uint32_t ValidDump;
+  uint32_t MajorVersion;
+  uint32_t MinorVersion;
+  uint64_t DirectoryTableBase;
+  uint64_t PfnDatabase;
+  uint64_t PsLoadedModuleList;
+  uint64_t PsActiveProcessHead;
+  uint32_t MachineImageType;
+  uint32_t NumberProcessors;
+  uint32_t BugCheckCode;
+
+  //
+  // According to rekall there's a gap here:
+  // 'BugCheckCode' : [0x38, ['unsigned long']],
+  // 'BugCheckCodeParameter' : [0x40, ['array', 4, ['unsigned long long']]],
+  //
+
+  uint8_t Padding0[0x40 - (0x38 + sizeof(BugCheckCode))];
+  uint64_t BugCheckCodeParameter[4];
+
+  //
+  // According to rekall there's a gap here:
+  // 'BugCheckCodeParameter' : [0x40, ['array', 4, ['unsigned long long']]],
+  // 'KdDebuggerDataBlock' : [0x80, ['unsigned long long']],
+  //
+
+  uint8_t Padding1[0x80 - (0x40 + sizeof(BugCheckCodeParameter))];
+  uint64_t KdDebuggerDataBlock;
+  PHYSMEM_DESC PhysicalMemoryBlockBuffer;
+
+  //
+  // According to rekall there's a gap here:
+  // 'PhysicalMemoryBlockBuffer' : [0x88, ['_PHYSICAL_MEMORY_DESCRIPTOR']],
+  // 'ContextRecord' : [0x348, ['array', 3000, ['unsigned char']]],
+  //
+
+  uint8_t Padding2[0x348 - (0x88 + sizeof(PhysicalMemoryBlockBuffer))];
+  CONTEXT ContextRecord;
+
+  //
+  // According to rekall there's a gap here:
+  // 'ContextRecord' : [0x348, ['array', 3000, ['unsigned char']]],
+  // 'Exception' : [0xf00, ['_EXCEPTION_RECORD64']],
+  //
+
+  uint8_t Padding3[0xf00 - (0x348 + sizeof(ContextRecord))];
+  EXCEPTION_RECORD64 Exception;
+  DumpType_t DumpType;
+
+  //
+  // According to rekall there's a gap here:
+  // 'DumpType' : [0xf98, ['unsigned long']],
+  // 'RequiredDumpSpace' : [0xfa0, ['unsigned long long']],
+  //
+  uint8_t Padding4[0xfa0 - (0xf98 + sizeof(DumpType))];
+  uint64_t RequiredDumpSpace;
+  uint64_t SystemTime;
+  uint8_t Comment[128];
+  uint64_t SystemUpTime;
+  uint32_t MiniDumpFields;
+  uint32_t SecondaryDataState;
+  uint32_t ProductType;
+  uint32_t SuiteMask;
+  uint32_t WriterStatus;
+  uint8_t Unused1;
+  uint8_t KdSecondaryVersion;
+  uint8_t Unused[2];
+  uint8_t _reserved0[4016];
+  BMP_HEADER64 BmpHeader;
+
+  bool LooksGood() const {
+
+    //
+    // Integrity check the headers.
+    //
+
+    if (Signature != ExpectedSignature) {
+      printf("HEADER64::Signature looks wrong.\n");
+      return false;
+    }
+
+    if (ValidDump != ExpectedValidDump) {
+      printf("HEADER64::ValidDump looks wrong.\n");
+      return false;
+    }
+
+    //
+    // Make sure it's a dump type we know how to handle.
+    //
+
+    if (DumpType == DumpType_t::FullDump) {
+      if (!PhysicalMemoryBlockBuffer.LooksGood()) {
+        printf("The PhysicalMemoryBlockBuffer looks wrong.\n");
+        return false;
+      }
+    } else if (DumpType == DumpType_t::BMPDump) {
+      if (!BmpHeader.LooksGood()) {
+        printf("The BmpHeader looks wrong.\n");
+        return false;
+      }
+    }
+
+    //
+    // Integrity check the CONTEXT record.
+    //
+
+    if (!ContextRecord.LooksGood()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  void Show(const uint32_t Prefix = 0) const {
+    DISPLAY_HEADER("HEADER64");
+    DISPLAY_FIELD(Signature);
+    DISPLAY_FIELD(ValidDump);
+    DISPLAY_FIELD(MajorVersion);
+    DISPLAY_FIELD(MinorVersion);
+    DISPLAY_FIELD(DirectoryTableBase);
+    DISPLAY_FIELD(PfnDatabase);
+    DISPLAY_FIELD(PsLoadedModuleList);
+    DISPLAY_FIELD(PsActiveProcessHead);
+    DISPLAY_FIELD(MachineImageType);
+    DISPLAY_FIELD(NumberProcessors);
+    DISPLAY_FIELD(BugCheckCode);
+    DISPLAY_FIELD_OFFSET(BugCheckCodeParameter);
+    DISPLAY_FIELD(KdDebuggerDataBlock);
+    DISPLAY_FIELD_OFFSET(PhysicalMemoryBlockBuffer);
+    PhysicalMemoryBlockBuffer.Show(Prefix + 2);
+    DISPLAY_FIELD_OFFSET(ContextRecord);
+    ContextRecord.Show(Prefix + 2);
+    DISPLAY_FIELD_OFFSET(Exception);
+    Exception.Show(Prefix + 2);
+    DISPLAY_FIELD(DumpType);
+    DISPLAY_FIELD(RequiredDumpSpace);
+    DISPLAY_FIELD(SystemTime);
+    DISPLAY_FIELD_OFFSET(Comment);
+    DISPLAY_FIELD(SystemUpTime);
+    DISPLAY_FIELD(MiniDumpFields);
+    DISPLAY_FIELD(SecondaryDataState);
+    DISPLAY_FIELD(ProductType);
+    DISPLAY_FIELD(SuiteMask);
+    DISPLAY_FIELD(WriterStatus);
+    DISPLAY_FIELD(KdSecondaryVersion);
+    if (DumpType == DumpType_t::BMPDump) {
+      DISPLAY_FIELD_OFFSET(BmpHeader);
+      BmpHeader.Show();
+    }
+  }
+};
+
+//
+// Restore the default alignement setting.
+//
+
+#pragma pack(pop)
+
+//
+// Prevent the user to play around with those.
+//
+
+#undef DISPLAY_HEADER
+#undef DISPLAY_FIELD
+
+//
+// Those asserts are the results of a lot of frustration getting the right
+// layout, so hopefully they prevent any regressions regarding the layout.
+//
+
+static_assert(offsetof(HEADER64, BugCheckCodeParameter) == 0x40,
+              "The offset of KdDebuggerDataBlock looks wrong.");
+
+static_assert(offsetof(HEADER64, KdDebuggerDataBlock) == 0x80,
+              "The offset of KdDebuggerDataBlock looks wrong.");
+
+static_assert(offsetof(HEADER64, ContextRecord) == 0x348,
+              "The offset of ContextRecord looks wrong.");
+
+static_assert(offsetof(HEADER64, Exception) == 0xf00,
+              "The offset of Exception looks wrong.");
+
+static_assert(offsetof(HEADER64, Comment) == 0xfb0,
+              "The offset of Comment looks wrong.");
+
+static_assert(offsetof(HEADER64, BmpHeader) == 0x2000,
+              "The offset of BmpHeaders looks wrong.");
+
+namespace Page {
+
+//
+// Page size.
+//
+
+constexpr uint64_t Size = 0x1000;
+
+//
+// Page align an address.
+//
+
+constexpr uint64_t Align(const uint64_t Address) { return Address & ~0xfff; }
+
+//
+// Extract the page offset off an address.
+//
+
+constexpr uint64_t Offset(const uint64_t Address) { return Address & 0xfff; }
+} // namespace Page
+
+//
+// Structure for parsing a PTE.
+//
+
+union MMPTE_HARDWARE {
+  struct {
+    uint64_t Present : 1;
+    uint64_t Write : 1;
+    uint64_t UserAccessible : 1;
+    uint64_t WriteThrough : 1;
+    uint64_t CacheDisable : 1;
+    uint64_t Accessed : 1;
+    uint64_t Dirty : 1;
+    uint64_t LargePage : 1;
+    uint64_t Available : 4;
+    uint64_t PageFrameNumber : 36;
+    uint64_t ReservedForHardware : 4;
+    uint64_t ReservedForSoftware : 11;
+    uint64_t NoExecute : 1;
+  } u;
+  uint64_t AsUINT64;
+  constexpr MMPTE_HARDWARE(const uint64_t Value) : AsUINT64(Value) {}
+};
+
+//
+// Structure to parse a virtual address.
+//
+
+union VIRTUAL_ADDRESS {
+  struct {
+    uint64_t Offset : 12;
+    uint64_t PtIndex : 9;
+    uint64_t PdIndex : 9;
+    uint64_t PdPtIndex : 9;
+    uint64_t Pml4Index : 9;
+    uint64_t Reserved : 16;
+  } u;
+  uint64_t AsUINT64;
+  constexpr VIRTUAL_ADDRESS(const uint64_t Value) : AsUINT64(Value) {}
+};
+
+static_assert(sizeof(MMPTE_HARDWARE) == 8);
+static_assert(sizeof(VIRTUAL_ADDRESS) == 8);
+} // namespace kdmpparser
+```
+
+`src/lib/kdmp-parser.h`:
+
+```h
+// Axel '0vercl0k' Souchet - February 15 2019
+#pragma once
+
+#include "filemap.h"
+#include "kdmp-parser-structs.h"
+#include <cstdint>
+#include <cstdio>
+#include <optional>
+#include <unordered_map>
+
+namespace kdmpparser {
+
+using Physmem_t = std::unordered_map<uint64_t, const uint8_t *>;
+
+struct BugCheckParameters_t {
+  uint32_t BugCheckCode;
+  uint64_t BugCheckCodeParameter[4];
+};
+
+class KernelDumpParser {
+
+  //
+  // The mapped file.
+  //
+
+  FileMap_t FileMap_;
+
+  //
+  // Header of the crash-dump.
+  //
+
+  HEADER64 *DmpHdr_ = nullptr;
+
+  //
+  // File path to the crash-dump.
+  //
+
+  const char *PathFile_ = nullptr;
+
+  //
+  // Mapping between physical addresses / page data.
+  //
+
+  Physmem_t Physmem_;
+
+public:
+  //
+  // Actually do the parsing of the file.
+  //
+
+  bool Parse(const char *PathFile) {
+
+    //
+    // Copy the path file.
+    //
+
+    PathFile_ = PathFile;
+
+    //
+    // Map a view of the file.
+    //
+
+    if (!MapFile()) {
+      printf("MapFile failed.\n");
+      return false;
+    }
+
+    //
+    // Parse the DMP_HEADER.
+    //
+
+    if (!ParseDmpHeader()) {
+      printf("ParseDmpHeader failed.\n");
+      return false;
+    }
+
+    //
+    // Retrieve the physical memory according to the type of dump we have.
+    //
+
+    if (DmpHdr_->DumpType == DumpType_t::FullDump) {
+      if (!BuildPhysmemFullDump()) {
+        printf("BuildPhysmemFullDump failed.\n");
+        return false;
+      }
+    } else if (DmpHdr_->DumpType == DumpType_t::BMPDump) {
+      if (!BuildPhysmemBMPDump()) {
+        printf("BuildPhysmemBMPDump failed.\n");
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  //
+  // Give the Context record to the user.
+  //
+
+  constexpr const CONTEXT *GetContext() const {
+
+    //
+    // Give the user a view of the context record.
+    //
+
+    return &DmpHdr_->ContextRecord;
+  }
+
+  //
+  // Give the bugcheck parameters to the user.
+  //
+
+  constexpr BugCheckParameters_t GetBugCheckParameters() const {
+
+    //
+    // Give the user a view of the bugcheck parameters.
+    //
+
+    return {
+        DmpHdr_->BugCheckCode,
+        {DmpHdr_->BugCheckCodeParameter[0], DmpHdr_->BugCheckCodeParameter[1],
+         DmpHdr_->BugCheckCodeParameter[2], DmpHdr_->BugCheckCodeParameter[3]}};
+  }
+
+  //
+  // Get the type of dump.
+  //
+
+  constexpr DumpType_t GetDumpType() const { return DmpHdr_->DumpType; }
+
+  //
+  // Get the physmem.
+  //
+
+  constexpr const Physmem_t &GetPhysmem() const { return Physmem_; }
+
+  //
+  // Show the exception record.
+  //
+
+  void ShowExceptionRecord(const uint32_t Prefix) const {
+    DmpHdr_->Exception.Show(Prefix);
+  }
+
+  //
+  // Show the context record.
+  //
+
+  void ShowContextRecord(const uint32_t Prefix) const {
+    const CONTEXT &Context = DmpHdr_->ContextRecord;
+    printf("%*srax=%016" PRIx64 " rbx=%016" PRIx64 " rcx=%016" PRIx64 "\n",
+           Prefix, "", Context.Rax, Context.Rbx, Context.Rcx);
+    printf("%*srdx=%016" PRIx64 " rsi=%016" PRIx64 " rdi=%016" PRIx64 "\n",
+           Prefix, "", Context.Rdx, Context.Rsi, Context.Rdi);
+    printf("%*srip=%016" PRIx64 " rsp=%016" PRIx64 " rbp=%016" PRIx64 "\n",
+           Prefix, "", Context.Rip, Context.Rsp, Context.Rbp);
+    printf("%*s r8=%016" PRIx64 "  r9=%016" PRIx64 " r10=%016" PRIx64 "\n",
+           Prefix, "", Context.R8, Context.R9, Context.R10);
+    printf("%*sr11=%016" PRIx64 " r12=%016" PRIx64 " r13=%016" PRIx64 "\n",
+           Prefix, "", Context.R11, Context.R12, Context.R13);
+    printf("%*sr14=%016" PRIx64 " r15=%016" PRIx64 "\n", Prefix, "",
+           Context.R14, Context.R15);
+    printf("%*scs=%04x ss=%04x ds=%04x es=%04x fs=%04x gs=%04x    "
+           "             efl=%08x\n",
+           Prefix, "", Context.SegCs, Context.SegSs, Context.SegDs,
+           Context.SegEs, Context.SegFs, Context.SegGs, Context.EFlags);
+    printf("%*sfpcw=%04x    fpsw=%04x    fptw=%04x\n", Prefix, "",
+           Context.ControlWord, Context.StatusWord, 1);
+    printf("%*s  st0=%016" PRIx64 "%016" PRIx64 "       st1=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.FloatRegisters[0].High,
+           Context.FloatRegisters[0].Low, Context.FloatRegisters[1].High,
+           Context.FloatRegisters[1].Low);
+    printf("%*s  st2=%016" PRIx64 "%016" PRIx64 "       st3=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.FloatRegisters[2].High,
+           Context.FloatRegisters[2].Low, Context.FloatRegisters[3].High,
+           Context.FloatRegisters[3].Low);
+    printf("%*s  st4=%016" PRIx64 "%016" PRIx64 "       st5=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.FloatRegisters[4].High,
+           Context.FloatRegisters[4].Low, Context.FloatRegisters[5].High,
+           Context.FloatRegisters[5].Low);
+    printf("%*s  st6=%016" PRIx64 "%016" PRIx64 "       st7=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.FloatRegisters[6].High,
+           Context.FloatRegisters[6].Low, Context.FloatRegisters[7].High,
+           Context.FloatRegisters[7].Low);
+    printf("%*s xmm0=%016" PRIx64 "%016" PRIx64 "      xmm1=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm0.High, Context.Xmm0.Low, Context.Xmm1.High,
+           Context.Xmm1.Low);
+    printf("%*s xmm2=%016" PRIx64 "%016" PRIx64 "      xmm3=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm2.High, Context.Xmm2.Low, Context.Xmm3.High,
+           Context.Xmm3.Low);
+    printf("%*s xmm4=%016" PRIx64 "%016" PRIx64 "      xmm5=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm4.High, Context.Xmm4.Low, Context.Xmm5.High,
+           Context.Xmm5.Low);
+    printf("%*s xmm6=%016" PRIx64 "%016" PRIx64 "      xmm7=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm6.High, Context.Xmm6.Low, Context.Xmm7.High,
+           Context.Xmm7.Low);
+    printf("%*s xmm8=%016" PRIx64 "%016" PRIx64 "      xmm9=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm8.High, Context.Xmm8.Low, Context.Xmm9.High,
+           Context.Xmm9.Low);
+    printf("%*sxmm10=%016" PRIx64 "%016" PRIx64 "     xmm11=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm10.High, Context.Xmm10.Low,
+           Context.Xmm11.High, Context.Xmm11.Low);
+    printf("%*sxmm12=%016" PRIx64 "%016" PRIx64 "     xmm13=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm12.High, Context.Xmm12.Low,
+           Context.Xmm13.High, Context.Xmm13.Low);
+    printf("%*sxmm14=%016" PRIx64 "%016" PRIx64 "     xmm15=%016" PRIx64
+           "%016" PRIx64 "\n",
+           Prefix, "", Context.Xmm14.High, Context.Xmm14.Low,
+           Context.Xmm15.High, Context.Xmm15.Low);
+  }
+
+  //
+  // Show all the structures of the dump.
+  //
+
+  void ShowAllStructures(const uint32_t Prefix) const { DmpHdr_->Show(Prefix); }
+
+  //
+  // Get the content of a physical address.
+  //
+
+  const uint8_t *GetPhysicalPage(const uint64_t PhysicalAddress) const {
+
+    //
+    // Attempt to find the physical address.
+    //
+
+    const auto &Pair = Physmem_.find(PhysicalAddress);
+
+    //
+    // If it doesn't exist then return nullptr.
+    //
+
+    if (Pair == Physmem_.end()) {
+      return nullptr;
+    }
+
+    //
+    // Otherwise we return a pointer to the content of the page.
+    //
+
+    return Pair->second;
+  }
+
+  //
+  // Get the directory table base.
+  //
+
+  constexpr uint64_t GetDirectoryTableBase() const {
+    return DmpHdr_->DirectoryTableBase;
+  }
+
+  //
+  // Translate a virtual address to physical address using a directory table
+  // base.
+  //
+
+  std::optional<uint64_t>
+  VirtTranslate(const uint64_t VirtualAddress,
+                const uint64_t DirectoryTableBase = 0) const {
+
+    //
+    // If DirectoryTableBase is null ; use the one from the dump header and
+    // clear PCID bits (bits 11:0).
+    //
+
+    uint64_t LocalDTB = Page::Align(GetDirectoryTableBase());
+
+    if (DirectoryTableBase) {
+      LocalDTB = Page::Align(DirectoryTableBase);
+    }
+
+    //
+    // Stole code from @yrp604 and @0vercl0k.
+    //
+
+    const VIRTUAL_ADDRESS GuestAddress(VirtualAddress);
+    const MMPTE_HARDWARE Pml4(LocalDTB);
+    const uint64_t Pml4Base = Pml4.u.PageFrameNumber * Page::Size;
+    const uint64_t Pml4eGpa = Pml4Base + GuestAddress.u.Pml4Index * 8;
+    const MMPTE_HARDWARE Pml4e(PhyRead8(Pml4eGpa));
+    if (!Pml4e.u.Present) {
+      printf("Invalid page map level 4, address translation failed!\n");
+      return {};
+    }
+
+    const uint64_t PdptBase = Pml4e.u.PageFrameNumber * Page::Size;
+    const uint64_t PdpteGpa = PdptBase + GuestAddress.u.PdPtIndex * 8;
+    const MMPTE_HARDWARE Pdpte(PhyRead8(PdpteGpa));
+    if (!Pdpte.u.Present) {
+      printf("Invalid page directory pointer table, address translation "
+             "failed!\n");
+      return {};
+    }
+
+    //
+    // huge pages:
+    // 7 (PS) - Page size; must be 1 (otherwise, this entry references a page
+    // directory; see Table 4-1
+    //
+
+    const uint64_t PdBase = Pdpte.u.PageFrameNumber * Page::Size;
+    if (Pdpte.u.LargePage) {
+      return PdBase + (VirtualAddress & 0x3fff'ffff);
+    }
+
+    const uint64_t PdeGpa = PdBase + GuestAddress.u.PdIndex * 8;
+    const MMPTE_HARDWARE Pde(PhyRead8(PdeGpa));
+    if (!Pde.u.Present) {
+      printf("Invalid page directory entry, address translation failed!\n");
+      return {};
+    }
+
+    //
+    // large pages:
+    // 7 (PS) - Page size; must be 1 (otherwise, this entry references a page
+    // table; see Table 4-18
+    //
+
+    const uint64_t PtBase = Pde.u.PageFrameNumber * Page::Size;
+    if (Pde.u.LargePage) {
+      return PtBase + (VirtualAddress & 0x1f'ffff);
+    }
+
+    const uint64_t PteGpa = PtBase + GuestAddress.u.PtIndex * 8;
+    const MMPTE_HARDWARE Pte(PhyRead8(PteGpa));
+    if (!Pte.u.Present) {
+      printf("Invalid page table entry, address translation failed!\n");
+      return {};
+    }
+
+    const uint64_t PageBase = Pte.u.PageFrameNumber * Page::Size;
+    return PageBase + GuestAddress.u.Offset;
+  }
+
+  //
+  // Get the content of a virtual address.
+  //
+
+  const uint8_t *GetVirtualPage(const uint64_t VirtualAddress,
+                                const uint64_t DirectoryTableBase = 0) const {
+
+    //
+    // First remove offset and translate the virtual address.
+    //
+
+    const auto &PhysicalAddress =
+        VirtTranslate(Page::Align(VirtualAddress), DirectoryTableBase);
+
+    if (!PhysicalAddress) {
+      return nullptr;
+    }
+
+    //
+    // Then get the physical page.
+    //
+
+    return GetPhysicalPage(*PhysicalAddress);
+  }
+
+private:
+  //
+  // Utility function to read an uint64_t from a physical address.
+  //
+
+  uint64_t PhyRead8(const uint64_t PhysicalAddress) const {
+
+    //
+    // Get the physical page and read from the offset.
+    //
+
+    const uint8_t *PhysicalPage = GetPhysicalPage(Page::Align(PhysicalAddress));
+
+    if (!PhysicalPage) {
+      printf("Internal page table parsing failed!\n");
+      return 0;
+    }
+
+    const uint64_t *Ptr =
+        (uint64_t *)(PhysicalPage + Page::Offset(PhysicalAddress));
+    return *Ptr;
+  }
+
+  //
+  // Build a map of physical addresses / page data pointers for full dump.
+  //
+
+  bool BuildPhysmemFullDump() {
+
+    //
+    // Walk through the runs.
+    //
+
+    uint8_t *RunBase = (uint8_t *)&DmpHdr_->BmpHeader;
+    const uint32_t NumberOfRuns =
+        DmpHdr_->PhysicalMemoryBlockBuffer.NumberOfRuns;
+
+    //
+    // Back at it, this time building the index!
+    //
+
+    for (uint32_t RunIdx = 0; RunIdx < NumberOfRuns; RunIdx++) {
+
+      //
+      // Grab the current run as well as its base page and page count.
+      //
+
+      const PHYSMEM_RUN *Run = DmpHdr_->PhysicalMemoryBlockBuffer.Run + RunIdx;
+
+      const uint64_t BasePage = Run->BasePage;
+      const uint64_t PageCount = Run->PageCount;
+
+      //
+      // Walk the pages from the run.
+      //
+
+      for (uint64_t PageIdx = 0; PageIdx < PageCount; PageIdx++) {
+
+        //
+        // Compute the current PFN as well as the actual physical address of the
+        // page.
+        //
+
+        const uint64_t Pfn = BasePage + PageIdx;
+        const uint64_t Pa = Pfn * Page::Size;
+
+        //
+        // Now one thing to understand is that the Runs structure allows to skip
+        // for holes in memory. Instead of, padding them with empty spaces to
+        // conserve a 1:1 mapping between physical address and file offset, the
+        // Run gives you the base Pfn. This means that we don't have a 1:1
+        // mapping between file offset and physical addresses so we need to keep
+        // track of where the Run starts in memory and then we can simply access
+        // our pages one after the other.
+        //
+        // If this is not clear enough, here is a small example:
+        //  Run[0]
+        //    BasePage = 1337, PageCount = 2
+        //  Run[1]
+        //    BasePage = 1400, PageCount = 1
+        //
+        // In the above we clearly see that there is a hole between the two
+        // runs; the dump file has 2+1 memory pages. Their Pfns are: 1337+0,
+        // 1337+1, 1400+0.
+        //
+        // Now if we want to get the file offset of those pages we start at
+        // Run0:
+        //   Run0 starts at file offset 0x2000 so Page0 is at file offset
+        //   0x2000, Page1 is at file offset 0x3000. Run1 starts at file offset
+        //   0x2000+(2*0x1000) so Page3 is at file offset
+        //   0x2000+(2*0x1000)+0x1000.
+        //
+        // That is the reason why the computation below is RunBase + (PageIdx *
+        // 0x1000) instead of RunBase + (Pfn * 0x1000).
+
+        const uint8_t *PageBase = RunBase + (PageIdx * Page::Size);
+
+        //
+        // Map the Pfn to a page.
+        //
+
+        Physmem_.try_emplace(Pa, PageBase);
+      }
+
+      //
+      // Move the run base past all the pages in the current run.
+      //
+
+      RunBase += PageCount * Page::Size;
+    }
+
+    return true;
+  }
+
+  //
+  // Build a map of physical addresses / page data pointers for BMP dump.
+  //
+
+  bool BuildPhysmemBMPDump() {
+    const uint8_t *Page = (uint8_t *)DmpHdr_ + DmpHdr_->BmpHeader.FirstPage;
+    const uint64_t BitmapSize = DmpHdr_->BmpHeader.Pages / 8;
+    const uint8_t *Bitmap = DmpHdr_->BmpHeader.Bitmap;
+
+    //
+    // Walk the bitmap byte per byte.
+    //
+
+    for (uint64_t BitmapIdx = 0; BitmapIdx < BitmapSize; BitmapIdx++) {
+
+      //
+      // Now walk the bits of the current byte.
+      //
+
+      const uint8_t Byte = Bitmap[BitmapIdx];
+      for (uint8_t BitIdx = 0; BitIdx < 8; BitIdx++) {
+
+        //
+        // If the bit is not set we just skip to the next.
+        //
+
+        const bool BitSet = ((Byte >> BitIdx) & 1) == 1;
+        if (!BitSet) {
+          continue;
+        }
+
+        //
+        // If the bit is one we add the page to the physmem.
+        //
+
+        const uint64_t Pfn = (BitmapIdx * 8) + BitIdx;
+        const uint64_t Pa = Pfn * Page::Size;
+        Physmem_.try_emplace(Pa, Page);
+        Page += Page::Size;
+      }
+    }
+
+    return true;
+  }
+
+  //
+  // Parse the DMP_HEADER.
+  //
+
+  bool ParseDmpHeader() {
+
+    //
+    // The base of the view points on the HEADER64.
+    //
+
+    DmpHdr_ = (HEADER64 *)FileMap_.ViewBase();
+
+    //
+    // Now let's make sure the structures look right.
+    //
+
+    if (!DmpHdr_->LooksGood()) {
+      printf("The header looks wrong.\n");
+      return false;
+    }
+
+    return true;
+  }
+
+  //
+  // Map a view of the file in memory.
+  //
+
+  bool MapFile() { return FileMap_.MapFile(PathFile_); }
+};
+} // namespace kdmpparser
+
+```
+
+`src/lib/platform.h`:
+
+```h
+// Axel '0vercl0k' Souchet - April 18 2020
+#pragma once
+
+#if defined(__i386__) || defined(_M_IX86)
+#define ARCH_X86
+#elif defined(__amd64__) || defined(_M_X64)
+#define ARCH_X64
+#else
+#error Platform not supported.
+#endif
+
+#if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN64)
+#define WINDOWS
+#define SYSTEM_PLATFORM "Windows"
+
+#include <windows.h>
+#if defined ARCH_X86
+#define WINDOWS_X86
+#elif defined ARCH_X64
+#define WINDOWS_X64
+#endif
+#elif defined(linux) || defined(__linux) || defined(__FreeBSD__) ||            \
+    defined(__FreeBSD_kernel__) || defined(__MACH__)
+#define LINUX
+
+#if defined(linux) || defined(__linux)
+#define SYSTEM_PLATFORM "Linux"
+#else
+#error An error occured
+#endif
+
+#define EXIT_FAILURE 1
+#define EXIT_SUCCESS 0
+
+#if defined ARCH_X86
+#define LINUX_X86
+#elif defined ARCH_X64
+#define LINUX_X64
+#endif
+
+#else
+#error Platform not supported.
+#endif
+
+```
+
+`src/parser/CMakeLists.txt`:
+
+```txt
+# Axel '0vercl0k' Souchet - April 18 2020
+link_libraries(kdmp-parser)
+add_executable(parser parser.cc)
+
+```
+
+`src/parser/parser.cc`:
+
+```cc
+// Axel '0vercl0k' Souchet - February 15 2019
+#include "kdmp-parser.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstring>
+#include <string_view>
+#include <vector>
+
+//
+// Delimiter.
+//
+
+#define DELIMITER                                                              \
+  "----------------------------------------------------------------------"     \
+  "----------"
+
+//
+// The options available for the parser.
+//
+
+struct Options_t {
+
+  //
+  // This is enabled if -h is used.
+  //
+
+  bool ShowHelp = false;
+
+  //
+  // This is enabled if -c is used.
+  //
+
+  bool ShowContextRecord = false;
+
+  //
+  // This is enabled if -a is used.
+  //
+
+  bool ShowAllStructures = false;
+
+  //
+  // This is enabled if -e is used.
+  //
+
+  bool ShowExceptionRecord = false;
+
+  //
+  // This is enable if -p is used.
+  //
+
+  bool ShowPhysicalMem = false;
+
+  //
+  // This is on if the user specified a physical address.
+  //
+
+  bool HasPhysicalAddress = false;
+
+  //
+  // If an optional physical address has been passed to -p then this is the
+  // physical address.
+
+  uint64_t PhysicalAddress = 0;
+
+  //
+  // The path to the dump file.
+  //
+
+  std::string_view DumpPath;
+};
+
+//
+// Display usage
+//
+
+void Help() {
+  printf("parser.exe [-p [<physical address>]] [-c] [-e] [-h] <kdump path>\n");
+  printf("\n");
+  printf("Examples:\n");
+  printf("  Show every structures of the dump:\n");
+  printf("    parser.exe -a full.dmp\n");
+  printf("\n");
+  printf("  Show the context record:\n");
+  printf("    parser.exe -c full.dmp\n");
+  printf("\n");
+  printf("  Show the exception record:\n");
+  printf("    parser.exe -e full.dmp\n");
+  printf("\n");
+  printf("  Show all the physical memory (first 16 bytes of every "
+         "pages):\n");
+  printf("    parser.exe -p full.dmp\n");
+  printf("\n");
+  printf("  Show the context record as well as the page at physical "
+         "address 0x1000:\n");
+  printf("    parser.exe -c -p 0x1000 full.dmp\n");
+}
+
+//
+// Copied from https://github.com/pvachon/tsl/blob/master/tsl/hexdump.c.
+// Phil is the man.
+//
+
+void Hexdump(const uint64_t Address, const void *Buffer, size_t Len) {
+  const uint8_t *ptr = (uint8_t *)Buffer;
+
+  for (size_t i = 0; i < Len; i += 16) {
+    printf("%08" PRIx64 ": ", Address + i);
+    for (int j = 0; j < 16; j++) {
+      if (i + j < Len) {
+        printf("%02x ", ptr[i + j]);
+      } else {
+        printf("   ");
+      }
+    }
+    printf(" |");
+    for (int j = 0; j < 16; j++) {
+      if (i + j < Len) {
+        printf("%c", isprint(ptr[i + j]) ? (char)ptr[i + j] : '.');
+      } else {
+        printf(" ");
+      }
+    }
+    printf("|\n");
+  }
+}
+
+//
+// Let's do some work!
+//
+
+int main(int argc, const char *argv[]) {
+
+  //
+  // This holds the options passed to the program.
+  //
+
+  Options_t Opts;
+
+  //
+  // Parse the arguments passed to the program.
+  //
+
+  for (int ArgIdx = 1; ArgIdx < argc; ArgIdx++) {
+    const std::string_view Arg(argv[ArgIdx]);
+    const int IsLastArg = (ArgIdx + 1) >= argc;
+
+    if (Arg == "-c") {
+
+      //
+      // Show the context record.
+      //
+
+      Opts.ShowContextRecord = 1;
+    } else if (Arg == "-p") {
+
+      //
+      // Show the physical memory.
+      //
+
+      Opts.ShowPhysicalMem = 1;
+
+      //
+      // If the next argument is not the last one, we assume that it is followed
+      // by a physical address.
+      //
+
+      const int NextArgIdx = ArgIdx + 1;
+      const bool IsNextArgLast = (NextArgIdx + 1) >= argc;
+
+      if (!IsNextArgLast) {
+
+        //
+        // In which case we convert it to an actual integer.
+        //
+
+        Opts.HasPhysicalAddress = true;
+        Opts.PhysicalAddress = strtoull(argv[NextArgIdx], nullptr, 0);
+
+        //
+        // Skip the next argument.
+        //
+
+        ArgIdx++;
+      }
+    } else if (Arg == "-e") {
+
+      //
+      // Show the exception record.
+      //
+
+      Opts.ShowExceptionRecord = 1;
+    } else if (Arg == "-a") {
+
+      //
+      // Show all the structures.
+      //
+
+      Opts.ShowAllStructures = true;
+    } else if (Arg == "-h") {
+
+      //
+      // Show the help.
+      //
+
+      Opts.ShowHelp = true;
+    } else if (IsLastArg) {
+
+      //
+      // If this is the last argument then this must be the dump path.
+      //
+
+      Opts.DumpPath = Arg;
+    } else {
+
+      //
+      // Otherwise it seems that the user passed something wrong?
+      //
+
+      printf("The argument %s is not recognized.\n\n", Arg.data());
+      Help();
+      return EXIT_FAILURE;
+    }
+  }
+
+  //
+  // Show the help.
+  //
+
+  if (Opts.ShowHelp) {
+    Help();
+    return EXIT_SUCCESS;
+  }
+
+  //
+  // The only thing we actually need is a file path. So let's make sure we
+  // have one.
+  //
+
+  if (Opts.DumpPath.empty()) {
+    printf("You didn't provide the path to the dump file.\n\n");
+    Help();
+    return EXIT_FAILURE;
+  }
+
+  //
+  // If we only have a path, at least force to dump the context
+  // structure.
+  //
+
+  if (!Opts.ShowContextRecord && !Opts.ShowPhysicalMem &&
+      !Opts.ShowAllStructures && !Opts.ShowExceptionRecord) {
+    printf("Forcing to show the context record as no option as been "
+           "passed.\n\n");
+    Opts.ShowContextRecord = 1;
+  }
+
+  //
+  // Create the parser instance.
+  //
+
+  kdmpparser::KernelDumpParser Dmp;
+
+  //
+  // Parse the dump file.
+  //
+
+  if (!Dmp.Parse(Opts.DumpPath.data())) {
+    printf("Parsing of the dump failed, exiting.\n");
+    return EXIT_FAILURE;
+  }
+
+  //
+  // If the user wants all the structures, then show them.
+  //
+
+  if (Opts.ShowAllStructures) {
+    printf(DELIMITER "\nDump structures:\n");
+    Dmp.ShowAllStructures(2);
+  }
+
+  //
+  // If the user wants the context, then show it.
+  //
+
+  if (Opts.ShowContextRecord) {
+    printf(DELIMITER "\nContext Record:\n");
+    Dmp.ShowContextRecord(2);
+  }
+
+  //
+  // If the user wants the exception record, then show it.
+  //
+
+  if (Opts.ShowExceptionRecord) {
+    printf(DELIMITER "\nException Record:\n");
+    Dmp.ShowExceptionRecord(2);
+  }
+
+  //
+  // If the user wants some physical memory, then show it.
+  //
+
+  if (Opts.ShowPhysicalMem) {
+    printf(DELIMITER "\nPhysical memory:\n");
+
+    //
+    // If the user specified a physical address this is the one we
+    // will dump.
+    //
+
+    if (Opts.PhysicalAddress) {
+
+      //
+      // Retrieve the page for the specified PhysicalAddress.
+      // If it doesn't exist then display a message, else dump it on stdout.
+      //
+
+      const uint8_t *Page = Dmp.GetPhysicalPage(Opts.PhysicalAddress);
+      if (Page == nullptr) {
+        printf("0x%" PRIx64 " is not a valid physical address.\n",
+               Opts.PhysicalAddress);
+      } else {
+        Hexdump(Opts.PhysicalAddress, Page, 0x1000);
+      }
+    } else {
+
+      //
+      // If the user didn't specify a physical address then dump the first
+      // 16 bytes of every physical pages.
+      //
+      // Note that as the physmem is unordered, so we order the addresses here
+      // so that it is nicer for the user as they probably don't expect unorder.
+      //
+
+      const auto &Physmem = Dmp.GetPhysmem();
+      std::vector<kdmpparser::Physmem_t::key_type> OrderedPhysicalAddresses;
+      OrderedPhysicalAddresses.reserve(Physmem.size());
+
+      //
+      // Stuff the physical addresses in a vector.
+      //
+
+      for (const auto &[PhysicalAddress, _] : Dmp.GetPhysmem()) {
+        OrderedPhysicalAddresses.emplace_back(PhysicalAddress);
+      }
+
+      //
+      // Sort them.
+      //
+
+      std::sort(OrderedPhysicalAddresses.begin(),
+                OrderedPhysicalAddresses.end());
+
+      //
+      // And now we can iterate through them and get the page content.
+      //
+
+      for (const auto PhysicalAddress : OrderedPhysicalAddresses) {
+        const uint8_t *Page = Dmp.GetPhysicalPage(PhysicalAddress);
+        Hexdump(PhysicalAddress, Page, 16);
+      }
+    }
+  }
+
+  return EXIT_SUCCESS;
+}
+```
+
+`src/python/CMakeLists.txt`:
+
+```txt
+# Mastho - 2020
+find_package(Python3 COMPONENTS Interpreter Development)
+
+message("Python3_Interpreter_FOUND:${Python3_Interpreter_FOUND}")
+message("Python3_Development_FOUND:${Python3_Development_FOUND}")
+message("Python3_LIBRARY_DIRS:${Python3_LIBRARY_DIRS}")
+
+# Python on Windows Debug build only load $_d.pyd and require python_d.exe
+if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND WIN32)
+    set(PYMODULE kdmp_d CACHE INTERNAL "")
+else()
+    set(PYMODULE kdmp CACHE INTERNAL "")
+endif()
+
+# Require Python3 interpreter and development libs
+if(NOT Python3_Interpreter_FOUND OR (NOT Python3_Development_FOUND) OR (CMAKE_BUILD_TYPE STREQUAL "Debug" AND WIN32 AND NOT Python3_LIBRARY_DEBUG))
+    message(WARNING "Python3 development library not found")
+    set(PYMODULE "" CACHE INTERNAL "")
+    return()
+endif()
+
+add_library(${PYMODULE} SHARED python-kdmp.cc)
+target_include_directories(${PYMODULE} PRIVATE ${Python3_INCLUDE_DIRS})
+target_link_directories(${PYMODULE} PRIVATE ${Python3_LIBRARY_DIRS} kdmp-parser)
+target_link_libraries(${PYMODULE} PRIVATE kdmp-parser)
+
+# On Windows Python load $.pyd :: On Linux remove lib$ prefix
+if(WIN32)
+    set_target_properties(${PYMODULE} PROPERTIES SUFFIX ".pyd")
+else()
+    set_target_properties(${PYMODULE} PROPERTIES PREFIX "")
+endif()
+
+
+```
+
+`src/python/python-kdmp.cc`:
+
+```cc
+// Mastho - 2020
+// Axel '0vercl0k' Souchet - December 27 2020
+#include "python-kdmp.h"
+
+//
+// Python Dump instance creation (allocate and initialize kernel dump object).
+//   >>> Dump(filepath)
+//
+
+PyObject *NewDumpParser(PyTypeObject *Type, PyObject *Args, PyObject *) {
+
+  //
+  // Allocate and zero PythonDumpParser.
+  //
+
+  auto *Self = PyObject_New(PythonDumpParser, Type);
+  Self->DumpParser = nullptr;
+
+  //
+  // Parse Python argument (expect a string i.e. the file path of the dump).
+  //    *PyErr_Format returns nullptr to raise the exception*
+  //
+
+  char *DumpPath = nullptr;
+  if (!PyArg_ParseTuple(Args, "s", &DumpPath)) {
+    DeleteDumpParser((PyObject *)Self);
+    return PyErr_Format(PyExc_TypeError, "Dump() expected a string");
+  }
+
+  //
+  // Initialize the internal KernelDumpParser and validate the dump file.
+  //
+
+  Self->DumpParser = new kdmpparser::KernelDumpParser();
+  if (!Self->DumpParser->Parse(DumpPath)) {
+    DeleteDumpParser((PyObject *)Self);
+    return PyErr_Format(PyExc_ValueError, "Dump() invalid path");
+  }
+
+  //
+  // Return the new instance of PythonDumpParser to Python.
+  //
+
+  return (PyObject *)Self;
+}
+
+//
+// Python Dump instance destruction.
+//   >>> del dump_instance
+//
+
+void DeleteDumpParser(PyObject *Object) {
+
+  //
+  // Release internal KernelDumpParser object.
+  //
+
+  auto *Self = (PythonDumpParser *)Object;
+
+  if (Self->DumpParser) {
+    delete Self->DumpParser;
+    Self->DumpParser = nullptr;
+  }
+
+  //
+  // Free type reference and self.
+  //
+
+  PyObject_Del(Object);
+}
+
+//
+// Python Dump instance method to retrieve the DumpType.
+//  >>> dump_instance.type() # return int
+//
+
+PyObject *DumpParserGetType(PyObject *Object, PyObject *) {
+
+  //
+  // Get the dump type (FullDump, KernelDump or BMPDump).
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+  const auto DumpType = Self->DumpParser->GetDumpType();
+  return PyLong_FromUnsignedLong(static_cast<unsigned long>(DumpType));
+}
+
+//
+//  Python Dump instance method to retrieve the register context.
+//  >>> dump_instance.context() # return dict(str -> int)
+//
+
+PyObject *DumpParserGetContext(PyObject *Object, PyObject *) {
+
+  //
+  // Get the dump context (commons registers).
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+  const auto *C = Self->DumpParser->GetContext();
+
+  //
+  // Create a Python dict object with lowercase register name and value.
+  //
+
+  PyObject *Context = PyDict_New();
+
+  PyDict_SetItemString(Context, "rax", PyLong_FromUnsignedLongLong(C->Rax));
+  PyDict_SetItemString(Context, "rbx", PyLong_FromUnsignedLongLong(C->Rbx));
+  PyDict_SetItemString(Context, "rcx", PyLong_FromUnsignedLongLong(C->Rcx));
+  PyDict_SetItemString(Context, "rdx", PyLong_FromUnsignedLongLong(C->Rdx));
+  PyDict_SetItemString(Context, "rsi", PyLong_FromUnsignedLongLong(C->Rsi));
+  PyDict_SetItemString(Context, "rdi", PyLong_FromUnsignedLongLong(C->Rdi));
+  PyDict_SetItemString(Context, "rip", PyLong_FromUnsignedLongLong(C->Rip));
+  PyDict_SetItemString(Context, "rsp", PyLong_FromUnsignedLongLong(C->Rsp));
+  PyDict_SetItemString(Context, "rbp", PyLong_FromUnsignedLongLong(C->Rbp));
+  PyDict_SetItemString(Context, "r8", PyLong_FromUnsignedLongLong(C->R8));
+  PyDict_SetItemString(Context, "r9", PyLong_FromUnsignedLongLong(C->R9));
+  PyDict_SetItemString(Context, "r10", PyLong_FromUnsignedLongLong(C->R10));
+  PyDict_SetItemString(Context, "r11", PyLong_FromUnsignedLongLong(C->R11));
+  PyDict_SetItemString(Context, "r12", PyLong_FromUnsignedLongLong(C->R12));
+  PyDict_SetItemString(Context, "r13", PyLong_FromUnsignedLongLong(C->R13));
+  PyDict_SetItemString(Context, "r14", PyLong_FromUnsignedLongLong(C->R14));
+  PyDict_SetItemString(Context, "r15", PyLong_FromUnsignedLongLong(C->R15));
+
+  //
+  //  Get the DirectoryTableBase from the dump and return the created dict to
+  //  Python.
+  //
+  PyDict_SetItemString(
+      Context, "dtb",
+      PyLong_FromUnsignedLongLong(Self->DumpParser->GetDirectoryTableBase()));
+
+  return Context;
+}
+
+//
+//  Python Dump instance method to retrieve the bugcheck parameters.
+//  >>> dump_instance.bugcheck() # return dict
+//
+
+PyObject *DumpParserGetBugCheckParameters(PyObject *Object, PyObject *) {
+
+  //
+  // Retrieve the bugcheck parameters.
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+  const auto Parameters = Self->DumpParser->GetBugCheckParameters();
+
+  const uint64_t NumberParams = sizeof(Parameters.BugCheckCodeParameter) /
+                                sizeof(Parameters.BugCheckCodeParameter[0]);
+  PyObject *PythonParamsList = PyList_New(NumberParams);
+
+  for (uint64_t Idx = 0; Idx < NumberParams; Idx++) {
+    PyList_SetItem(
+        PythonParamsList, Idx,
+        PyLong_FromUnsignedLongLong(Parameters.BugCheckCodeParameter[Idx]));
+  }
+
+  //
+  // Create a Python dict object with code and parameters.
+  //
+
+  PyObject *PythonParams = PyDict_New();
+
+  PyDict_SetItemString(PythonParams, "code",
+                       PyLong_FromUnsignedLong(Parameters.BugCheckCode));
+  PyDict_SetItemString(PythonParams, "parameters", PythonParamsList);
+
+  return PythonParams;
+}
+
+//
+//  Python Dump instance method to get a physical page from a physical address.
+//  >>> dump_instance.get_physical_page(addr) # return bytes
+//
+
+PyObject *DumpParserGetPhysicalPage(PyObject *Object, PyObject *Args) {
+
+  //
+  // Parse Python argument (expect one unsigned long long integer).
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+
+  uint64_t PhysicalAddress = 0;
+  if (!PyArg_ParseTuple(Args, "K", &PhysicalAddress)) {
+    return PyErr_Format(PyExc_TypeError,
+                        "get_physical_page() expected an integer");
+  }
+
+  //
+  // Get the physical page and return it as bytes.
+  //
+
+  const uint8_t *Page = Self->DumpParser->GetPhysicalPage(PhysicalAddress);
+  if (Page == nullptr) {
+    return PyErr_Format(PyExc_ValueError,
+                        "get_physical_page() invalid address");
+  }
+
+  return PyBytes_FromStringAndSize((char *)Page, kdmpparser::Page::Size);
+}
+
+//
+//  Python Dump instance method to perform address translation (physical to
+//  virtual).
+//  >>> dump_instance.virt_translate(addr, [dtb]) # return int
+//
+
+PyObject *DumpParserVirtTranslate(PyObject *Object, PyObject *Args) {
+
+  //
+  // Parse Python argument (expect one or two unsigned long long integer).
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+
+  uint64_t VirtualAddress = 0;
+  uint64_t DirectoryTableBase = 0;
+  if (!PyArg_ParseTuple(Args, "K|K", &VirtualAddress, &DirectoryTableBase)) {
+    return PyErr_Format(PyExc_TypeError,
+                        "virt_translate() expected one or two integers");
+  }
+
+  //
+  // Retrieve the physical address (parse pages tables in the dump).
+  //
+
+  const auto &PhysicalAddress =
+      Self->DumpParser->VirtTranslate(VirtualAddress, DirectoryTableBase);
+
+  if (!PhysicalAddress) {
+    return PyErr_Format(PyExc_ValueError, "virt_translate() invalid address");
+  }
+
+  return PyLong_FromUnsignedLongLong(*PhysicalAddress);
+}
+
+//
+//  Python Dump instance method to get a page from a virtual address.
+//  >>> dump_instance.get_virtual_page(addr, [dtb]) # return bytes
+//
+
+PyObject *DumpParserGetVirtualPage(PyObject *Object, PyObject *Args) {
+
+  //
+  // Parse Python argument (expect one or two unsigned long long integer).
+  //
+
+  const auto *Self = (PythonDumpParser *)Object;
+
+  uint64_t VirtualAddress = 0;
+  uint64_t DirectoryTableBase = 0;
+  if (!PyArg_ParseTuple(Args, "K|K", &VirtualAddress, &DirectoryTableBase)) {
+    return PyErr_Format(PyExc_TypeError,
+                        "get_virtual_page() expected one or two integer");
+  }
+
+  const uint8_t *Page =
+      Self->DumpParser->GetVirtualPage(VirtualAddress, DirectoryTableBase);
+  if (Page == nullptr) {
+    return PyErr_Format(PyExc_ValueError, "get_virtual_page() invalid address");
+  }
+
+  return PyBytes_FromStringAndSize((char *)Page, kdmpparser::Page::Size);
+}
+
+//
+// KDMP Module initialization function.
+//
+
+PyMODINIT_FUNC PyInit_kdmp() {
+
+  //
+  // Initialize python.
+  //
+
+  Py_Initialize();
+
+  //
+  // Expose the kdmp module.
+  //
+
+  PyObject *M = PyModule_Create(&KDMPModule);
+  if (M == nullptr) {
+    return nullptr;
+  }
+
+  //
+  // Register PythonDumpParserType.
+  //
+
+  PyObject *Ty = PyType_FromSpec(&TySpec);
+  if (Ty == nullptr) {
+    return nullptr;
+  }
+
+  KDMPState(M)->PythonDumpParserType = (PyTypeObject *)Ty;
+
+  //
+  // Expose the PythonDumpParserType to Python in kdmp module.
+  //  >>> kdmp.Dump class
+  //
+
+  Py_INCREF(Ty);
+  if (PyModule_AddObject(M, "Dump", Ty) < 0) {
+    Py_DECREF(Ty);
+    Py_DECREF(M);
+    return nullptr;
+  }
+
+  //
+  // Expose DumpType constants to Python.
+  //  >>> kdmp.FullDump ...
+  //
+
+  PyModule_AddIntConstant(M, "FullDump",
+                          long(kdmpparser::DumpType_t::FullDump));
+  PyModule_AddIntConstant(M, "KernelDump",
+                          long(kdmpparser::DumpType_t::KernelDump));
+  PyModule_AddIntConstant(M, "BMPDump", long(kdmpparser::DumpType_t::BMPDump));
+  return M;
+}
+
+```
+
+`src/python/python-kdmp.h`:
+
+```h
+// Mastho - 2020
+// Axel '0vercl0k' Souchet - December 27 2020
+#pragma once
+
+//
+// PEP-384
+// """
+// Applications shall only include the header file Python.h (before including
+// any system headers).
+//
+
+#define Py_LIMITED_API
+#include <Python.h>
+
+#include "kdmp-parser.h"
+
+//
+// Python object handling all interactions with the library.
+//
+
+struct PythonDumpParser {
+  PyObject_HEAD kdmpparser::KernelDumpParser *DumpParser = nullptr;
+};
+
+//
+// Python Dump type functions declarations (class instance creation and instance
+// destruction).
+//
+
+PyObject *NewDumpParser(PyTypeObject *Type, PyObject *Args, PyObject *Kwds);
+void DeleteDumpParser(PyObject *Object);
+
+//
+// Python Dump object methods functions declarations.
+//
+
+PyObject *DumpParserGetType(PyObject *Object, PyObject *);
+PyObject *DumpParserGetContext(PyObject *Object, PyObject *);
+PyObject *DumpParserGetPhysicalPage(PyObject *Object, PyObject *Args);
+PyObject *DumpParserVirtTranslate(PyObject *Object, PyObject *Args);
+PyObject *DumpParserGetVirtualPage(PyObject *Object, PyObject *Args);
+PyObject *DumpParserGetBugCheckParameters(PyObject *Object, PyObject *);
+
+//
+// Object methods of Python Dump type.
+//
+
+PyMethodDef DumpObjectMethod[] = {
+    {"type", DumpParserGetType, METH_NOARGS,
+     "Show Dump Type (FullDump, KernelDump, BMPDump)"},
+    {"context", DumpParserGetContext, METH_NOARGS, "Get Register Context"},
+    {"get_physical_page", DumpParserGetPhysicalPage, METH_VARARGS,
+     "Get Physical Page Content"},
+    {"virt_translate", DumpParserVirtTranslate, METH_VARARGS,
+     "Translate Virtual to Physical Address"},
+    {"get_virtual_page", DumpParserGetVirtualPage, METH_VARARGS,
+     "Get Virtual Page Content"},
+    {"bugcheck", DumpParserGetBugCheckParameters, METH_NOARGS,
+     "Get BugCheck Parameters"},
+    {nullptr, nullptr, 0, nullptr}};
+
+//
+// Define Slots/Spec (name, initialization & destruction
+// functions and object methods).
+//
+
+PyType_Slot TySlots[] = {
+    {Py_tp_doc, (void *)"Dump object"},
+    {Py_tp_new, (void *)NewDumpParser},
+    {Py_tp_dealloc, (void *)DeleteDumpParser},
+    {Py_tp_methods, DumpObjectMethod},
+    {0, 0},
+};
+
+PyType_Spec TySpec = {"kdmp.Dump", sizeof(PythonDumpParser), 0,
+                      Py_TPFLAGS_DEFAULT, TySlots};
+
+//
+// KDMP Module definition.
+//
+
+struct KDMPState {
+  PyTypeObject *PythonDumpParserType = nullptr;
+};
+
+struct PyModuleDef KDMPModule = {
+    PyModuleDef_HEAD_INIT, /* m_base */
+    "kdmp",                /* m_name */
+    "KDMP module",         /* m_doc */
+    sizeof(KDMPState),     /* m_size */
+    nullptr,               /* m_methods */
+    nullptr,               /* m_slots */
+    nullptr,               /* m_traverse */
+    nullptr,               /* m_clear */
+    nullptr,               /* m_free */
+};
+
+//
+// KDMP Module initialization function.
+//
+
+PyMODINIT_FUNC PyInit_kdmp();
+
+#define KDMPState(o) ((KDMPState *)PyModule_GetState(o))
+
+```
+
+`src/testapp/CMakeLists.txt`:
+
+```txt
+# Axel '0vercl0k' Souchet - April 18 2020
+link_libraries(kdmp-parser)
+add_executable(testapp testapp.cc)
+
+```
+
+`src/testapp/testapp.cc`:
+
+```cc
+// Axel '0vercl0k' Souchet - February 15 2019
+#include "kdmp-parser.h"
+#include <cstring>
+
+int main(int argc, const char *argv[]) {
+  if (argc != 2) {
+    printf("test.exe <kdump path>\n");
+    return EXIT_FAILURE;
+  }
+
+  kdmpparser::KernelDumpParser Dmp;
+  if (!Dmp.Parse(argv[1])) {
+    return EXIT_FAILURE;
+  }
+
+  //
+  // kd> r
+  // rax=0000000000000003 rbx=fffff8050f4e9f70 rcx=0000000000000001
+  // rdx=fffff805135684d0 rsi=0000000000000100 rdi=fffff8050f4e9f80
+  // rip=fffff805108776a0 rsp=fffff805135684f8 rbp=fffff80513568600
+  // r8=0000000000000003  r9=fffff805135684b8 r10=0000000000000000
+  // r11=ffffa8848825e000 r12=fffff8050f4e9f80 r13=fffff80510c3c958
+  // r14=0000000000000000 r15=0000000000000052
+  // iopl=0         nv up ei pl nz na pe nc
+  // cs=0010  ss=0018  ds=002b  es=002b  fs=0053  gs=002b efl=00040202
+  //
+
+  const kdmpparser::CONTEXT *C = Dmp.GetContext();
+  if (C->Rax != 0x0000000000000003ULL) {
+    printf("Rax(0x%016" PRIx64 ") does not match with 0x0000000000000003.",
+           C->Rax);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rbx != 0xfffff8050f4e9f70ULL) {
+    printf("Rbx(0x%016" PRIx64 ") does not match with 0xfffff8050f4e9f70.",
+           C->Rbx);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rcx != 0x0000000000000001ULL) {
+    printf("Rcx(0x%016" PRIx64 ") does not match with 0x0000000000000001.",
+           C->Rcx);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rdx != 0xfffff805135684d0ULL) {
+    printf("Rdx(0x%016" PRIx64 ") does not match with 0xfffff805135684d0.",
+           C->Rdx);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rsi != 0x0000000000000100ULL) {
+    printf("Rsi(0x%016" PRIx64 ") does not match with 0x0000000000000100.",
+           C->Rsi);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rdi != 0xfffff8050f4e9f80ULL) {
+    printf("Rdi(0x%016" PRIx64 ") does not match with 0xfffff8050f4e9f80.",
+           C->Rdi);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rip != 0xfffff805108776a0ULL) {
+    printf("Rip(0x%016" PRIx64 ") does not match with 0xfffff805108776a0.",
+           C->Rip);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rsp != 0xfffff805135684f8ULL) {
+    printf("Rsp(0x%016" PRIx64 ") does not match with 0xfffff805135684f8.",
+           C->Rsp);
+    return EXIT_FAILURE;
+  }
+
+  if (C->Rbp != 0xfffff80513568600ULL) {
+    printf("Rbp(0x%016" PRIx64 ") does not match with 0xfffff80513568600.",
+           C->Rbp);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R8 != 0x0000000000000003ULL) {
+    printf("R8(0x%016" PRIx64 ") does not match with 0x0000000000000003.",
+           C->R8);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R9 != 0xfffff805135684b8ULL) {
+    printf("R9(0x%016" PRIx64 ") does not match with 0xfffff805135684b8.",
+           C->R9);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R10 != 0x0000000000000000ULL) {
+    printf("R10(0x%016" PRIx64 ") does not match with 0x0000000000000000.",
+           C->R10);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R11 != 0xffffa8848825e000ULL) {
+    printf("R11(0x%016" PRIx64 ") does not match with 0xffffa8848825e000.",
+           C->R11);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R12 != 0xfffff8050f4e9f80ULL) {
+    printf("R12(0x%016" PRIx64 ") does not match with 0xfffff8050f4e9f80.",
+           C->R12);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R13 != 0xfffff80510c3c958ULL) {
+    printf("R13(0x%016" PRIx64 ") does not match with 0xfffff80510c3c958.",
+           C->R13);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R14 != 0x0000000000000000ULL) {
+    printf("R14(0x%016" PRIx64 ") does not match with 0x0000000000000000.",
+           C->R14);
+    return EXIT_FAILURE;
+  }
+
+  if (C->R15 != 0x0000000000000052ULL) {
+    printf("R15(0x%016" PRIx64 ") does not match with 0x0000000000000052.",
+           C->R15);
+    return EXIT_FAILURE;
+  }
+
+  printf("GPRs matches the testdatas.\n");
+
+  const kdmpparser::DumpType_t Type = Dmp.GetDumpType();
+  const auto &Physmem = Dmp.GetPhysmem();
+  if (Type == kdmpparser::DumpType_t::BMPDump) {
+    if (Physmem.size() != 0x544b) {
+      printf("0x544b pages are expected but found %zd.\n", Physmem.size());
+      return EXIT_FAILURE;
+    }
+  } else if (Type == kdmpparser::DumpType_t::FullDump) {
+    if (Physmem.size() != 0x3fbe6) {
+      printf("0x3fbe6 pages are expected but found %zd.\n", Physmem.size());
+      return EXIT_FAILURE;
+    }
+  } else {
+    printf("Unknown dump.\n");
+    return EXIT_FAILURE;
+  }
+
+  const uint64_t Address = 0x6d4d22;
+  const uint64_t AddressAligned = Address & 0xfffffffffffff000;
+  const uint64_t AddressOffset = Address & 0xfff;
+  const uint8_t ExpectedContent[] = {0x6d, 0x00, 0x00, 0x00, 0x00, 0x0a,
+                                     0x63, 0x88, 0x75, 0x00, 0x00, 0x00,
+                                     0x00, 0x0a, 0x63, 0x98};
+  const uint8_t *Page = Dmp.GetPhysicalPage(AddressAligned);
+  if (Page == nullptr) {
+    printf("GetPhysicalPage failed for %p\n", (void *)Page);
+    return EXIT_FAILURE;
+  }
+
+  if (memcmp(Page + AddressOffset, ExpectedContent, sizeof(ExpectedContent)) !=
+      0) {
+    printf("Physical memory is broken.\n");
+    return EXIT_FAILURE;
+  }
+
+  printf("Physical memory page matches the testdatas.\n");
+  return EXIT_SUCCESS;
+}
+```
+
+`src/tests/CMakeLists.txt`:
+
+```txt
+# Axel '0vercl0k' Souchet - July 25 2020
+find_package(Python3 COMPONENTS Interpreter)
+if(NOT Python3_Interpreter_FOUND)
+    message(FATAL_ERROR "Python3 interpreter could not be located")
+endif()
+
+add_custom_target(
+    NativeTests ALL
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests.py --bindir ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} --pymodule ${PYMODULE}
+    DEPENDS testapp ${PYMODULE}
+)
+```
+
+`src/tests/tests.py`:
+
+```py
+# Axel '0vercl0k' Souchet - July 25 2020
+import urllib.request
+import os
+import sys
+import zipfile
+import subprocess
+import itertools
+import platform
+import argparse
+
+testdatas_url = 'https://github.com/0vercl0k/kdmp-parser/releases/download/v0.1/testdatas.zip'
+
+def test(bin_dir, dmp_path):
+    cmd = (
+        os.path.join(bin_dir, 'testapp'),
+        dmp_path
+    )
+
+    print('Launching "{0}"..'.format(' '.join(cmd)))
+    return subprocess.call(cmd)
+
+def test_python(script_dir, bin_dir, dmp_path, pymodule):
+    py_exe = sys.executable
+    if pymodule == 'kdmp_d':
+        if py_exe.endswith('3.exe'):
+            py_exe = py_exe.replace('3.exe', '_d.exe')
+        else:
+            py_exe = py_exe.replace('.exe', '_d.exe')
+    cmd = (
+        py_exe,
+        os.path.join(script_dir, 'tests_bindings.py'),
+        os.path.abspath(bin_dir),
+        dmp_path
+    )
+
+    print('Launching "{0}"..'.format(' '.join(cmd)))
+    return subprocess.call(cmd)
+
+def main():
+    parser = argparse.ArgumentParser('Run test')
+    parser.add_argument('--bindir', required = True)
+    parser.add_argument('--pymodule', required = True, nargs = '?')
+    args = parser.parse_args()
+
+    script_dir = os.path.dirname(__file__)
+    if not os.path.isfile(os.path.join(script_dir, 'full.dmp')):
+        # Download the test datas off github.
+        print(f'Downloading {testdatas_url}..')
+        archive_path, _ = urllib.request.urlretrieve(testdatas_url)
+        print(f'Successfully downloaded the test datas in {archive_path}, extracting..')
+
+        # Unzip its content in the source directory so that we don't download the files
+        # for every targets we are building.
+        zipfile.ZipFile(archive_path).extractall(script_dir)
+
+        # Once we have extracted the archive content, we can delete it.
+        os.remove(archive_path)
+
+    # Build full path for both the full / bitmap dumps.
+    full = os.path.join(script_dir, 'full.dmp')
+    bmp = os.path.join(script_dir, 'bmp.dmp')
+    dmp_paths = (full, bmp)
+
+    # Now iterate through all the configurations and run every flavor of test.exe against
+    # both dumps.
+    for dmp_path in dmp_paths:
+        if test(args.bindir, dmp_path) != 0:
+            print(f'{args.bindir}/{dmp_path} test failed, bailing.')
+            return 1
+    
+        # Run python bindings tests
+        if args.pymodule:
+            if test_python(script_dir, args.bindir, dmp_path, args.pymodule) != 0:
+                print(f'{args.bindir}/{dmp_path} python test failed, bailing.')
+                return 1
+
+    print('All good!')
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
+```
+
+`src/tests/tests_bindings.py`:
+
+```py
+import sys
+sys.path.append(sys.argv[1])
+
+from kdmp import Dump, FullDump, BMPDump
+
+dmp = Dump(sys.argv[2])
+assert(dmp.type() == FullDump or dmp.type() == BMPDump)
+
+ctx = dmp.context()
+dtb = ctx['dtb'] & ~0xfff # remove PCID
+
+assert(ctx['rip'] == 0xfffff805108776a0)
+assert(dtb == 0x6d4000)
+
+page = dmp.get_physical_page(0x5000)
+assert(page[0x34:0x38] == b'MSFT')
+
+assert(dmp.virt_translate(0xfffff78000000000) == 0x0000000000c2f000)
+assert(dmp.virt_translate(0xfffff80513370000) == 0x000000003d555000)
+
+assert(dmp.get_virtual_page(0xfffff78000000000) == dmp.get_physical_page(0x0000000000c2f000))
+assert(dmp.get_virtual_page(0xfffff80513370000) == dmp.get_physical_page(0x000000003d555000))
+
+v = 0xfffff80513568000
+assert(dmp.get_virtual_page(v) == dmp.get_physical_page(dmp.virt_translate(v)))
+
+print("Python tests: All good!")
+sys.exit(0)
+```

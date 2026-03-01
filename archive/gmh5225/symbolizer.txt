@@ -1,0 +1,1207 @@
+Project Path: arc_gmh5225_symbolizer_8zbsdtqf
+
+Source Tree:
+
+```txt
+arc_gmh5225_symbolizer_8zbsdtqf
+├── LICENSE
+├── README.md
+├── libs
+│   └── CLI11
+├── pics
+│   ├── batch.gif
+│   ├── grep.gif
+│   └── single.gif
+└── src
+    ├── dbgeng_t.h
+    ├── symbolizer.cc
+    ├── symbolizer.sln
+    ├── symbolizer.vcxproj
+    └── symbolizer.vcxproj.filters
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2020 Axel Souchet
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# Symbolizer - A fast execution trace symbolizer for Windows
+![Builds](https://github.com/0vercl0k/symbolizer/workflows/Builds/badge.svg)
+
+![Symbolizer](pics/grep.gif)
+
+## Overview
+
+This is utility that symbolizes an execution trace via the [dbgeng](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/debugger-engine-api-overview) APIs and a crash-dump. The dbgeng APIs are used to load the crash-dump and symbolizes RIP values by querying the available symbols.
+
+Transform the below raw execution trace:
+
+```
+0xfffff8053b9ca5c0
+0xfffff8053b9ca5c1
+0xfffff8053b9ca5c8
+0xfffff8053b9ca5d0
+0xfffff8053b9ca5d4
+0xfffff8053b9ca5d8
+0xfffff8053b9ca5dc
+0xfffff8053b9ca5e0
+```
+
+Into a full symbolized trace:
+
+```
+nt!KiPageFault+0x0
+nt!KiPageFault+0x1
+nt!KiPageFault+0x8
+nt!KiPageFault+0x10
+nt!KiPageFault+0x14
+nt!KiPageFault+0x18
+nt!KiPageFault+0x1c
+nt!KiPageFault+0x20
+```
+
+Or a `mod+offset` trace to load it into [Lighthouse](https://github.com/gaasedelen/lighthouse) for code-coverage exploration:
+
+```
+nt+0x1ca5c0
+nt+0x1ca5c1
+nt+0x1ca5c8
+nt+0x1ca5d0
+nt+0x1ca5d4
+nt+0x1ca5d8
+nt+0x1ca5dc
+nt+0x1ca5e0
+nt+0x1ca5e4
+nt+0x1ca5e8
+```
+
+## Usage
+
+In order for symbolizer to work you need to place `dbghelp.dll` as well as `symsrv.dll` in the directory of the symbolizer executable. Symbolizer will copy the two files if they are found in the default Windows SDK's Debuggers install location: `c:\Program Files (x86)\Windows Kits\10\Debuggers\<arch>`.
+
+```
+Symbolizer - A fast execution trace symbolizer for Windows
+Usage: src\x64\Release\symbolizer.exe [OPTIONS]
+
+Options:
+  -h,--help                   Print this help message and exit
+  --help-all                  Expand all help
+  -i,--input TEXT:PATH(existing) REQUIRED
+                              Input trace file or directory
+  -c,--crash-dump TEXT:FILE REQUIRED
+                              Crash-dump path
+  -o,--output TEXT            Output trace (default: stdout)
+  -s,--skip UINT=0            Skip a number of lines
+  -m,--max UINT=20000000      Stop after a number of lines
+  --style ENUM:value in {modoff->0,fullsym->1} OR {0,1}=fullsym
+                              Trace style
+  --overwrite=0               Overwrite the output file if necessary
+  --line-numbers=0            Include line numbers
+```
+
+### Batch mode
+
+The batch mode is designed to symbolize an entire directory filled with execution traces. You can turn on batch mode by simply specifying a directory for the `--input` command line option and an output directory for the `--output` option.
+
+![Batch mode](pics/batch.gif)
+
+### Single file mode
+
+As opposed to batch mode, you might be interested in just symbolizing a single trace file which in this case you can specify a file path via the `--input` command line option.
+
+![Single mode](pics/single.gif)
+
+## Build
+
+Clone the repository with:
+
+```
+(base) > git clone --recurse-submodules https://github.com/0vercl0k/symbolizer.git
+```
+
+You can open the Visual Studio solution `symbolizer.sln` or build it via the command line with:
+
+```
+(base) symbolizer>msbuild /p:Configuration=Release src\symbolizer.sln
+Microsoft (R) Build Engine version 16.7.0+b89cb5fde for .NET Framework
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+[...]
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:00.42
+```
+
+```
+
+`src/dbgeng_t.h`:
+
+```h
+// Axel '0vercl0k' Souchet - September 12 2020
+#pragma once
+#include <cinttypes>
+#include <cstdint>
+#include <cstdio>
+#include <dbgeng.h>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <windows.h>
+
+namespace fs = std::filesystem;
+
+#pragma comment(lib, "dbgeng")
+
+#if defined(__i386__) || defined(_M_IX86)
+#define SYMBOLIZER_ARCH "x86"
+#elif defined(__amd64__) || defined(_M_X64)
+#define SYMBOLIZER_ARCH "x64"
+#else
+#error Platform not supported.
+#endif
+
+//
+// The trace style supported.
+//
+
+enum class TraceStyle_t { Modoff, FullSymbol };
+
+//
+// The below class is the abstraction we use to interact with the DbgEng APIs.
+//
+
+class DbgEng_t {
+  //
+  // Highly inspired from:
+  // C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\sdk\samples\dumpstk
+  // The below is only used for debugging purposes; it allows to see the
+  // messages outputed by the DbgEng APIs like you would see them in a WinDbg
+  // output window.
+  //
+
+  class StdioOutputCallbacks_t final : public IDebugOutputCallbacks {
+  public:
+    // IUnknown
+    STDMETHODIMP
+    QueryInterface(REFIID InterfaceId, PVOID *Interface) noexcept override {
+      *Interface = NULL;
+
+      if (IsEqualIID(InterfaceId, __uuidof(IUnknown)) ||
+          IsEqualIID(InterfaceId, __uuidof(IDebugOutputCallbacks))) {
+        *Interface = (IDebugOutputCallbacks *)this;
+        AddRef();
+        return S_OK;
+      }
+      return E_NOINTERFACE;
+    }
+
+    STDMETHODIMP_(ULONG) AddRef() noexcept override {
+      // This class is designed to be static so
+      // there's no true refcount.
+      return 1;
+    }
+
+    STDMETHODIMP_(ULONG) Release() noexcept override {
+      // This class is designed to be static so
+      // there's no true refcount.
+      return 0;
+    }
+
+    STDMETHODIMP Output(ULONG, PCSTR Text) noexcept override {
+      printf("%s", Text);
+      return S_OK;
+    }
+  };
+
+  //
+  // This is the internal cache. Granted that resolving symbols is a pretty slow
+  // process and the fact that traces usually contain a smaller number of
+  // *unique* addresses executed, this gets us a really nice boost.
+  //
+
+  std::unordered_map<uint64_t, std::string> Cache_;
+
+  //
+  // The below are the various interfaces we need to do symbol resolution as
+  // well as loading the crash-dump.
+  //
+
+  IDebugClient *Client_ = nullptr;
+  IDebugControl *Control_ = nullptr;
+  IDebugSymbols3 *Symbols_ = nullptr;
+
+#ifdef SYMBOLIZER_DEBUG
+  StdioOutputCallbacks_t StdioOutputCallbacks_;
+#endif
+
+public:
+  DbgEng_t() = default;
+  ~DbgEng_t() {
+    if (Client_) {
+      Client_->EndSession(DEBUG_END_ACTIVE_DETACH);
+      Client_->Release();
+    }
+
+    if (Control_) {
+      Control_->Release();
+    }
+
+    if (Symbols_) {
+      Symbols_->Release();
+    }
+  }
+
+  //
+  // Rule of three.
+  //
+
+  DbgEng_t(const DbgEng_t &) = delete;
+  DbgEng_t &operator=(DbgEng_t &) = delete;
+
+  //
+  // Initialize the COM interfaces and load the crash-dump.
+  //
+
+  bool Init(const fs::path &DumpPath) {
+    //
+    // Ensure that we have dbghelp.dll / dbgcore.dll / dbgeng.dll /
+    // symsrv.dll in the current directory otherwise things don't work. cf
+    // https://docs.microsoft.com/en-us/windows/win32/debug/using-symsrv
+    // "Installation"
+    //
+
+    char ExePathBuffer[MAX_PATH];
+    if (!GetModuleFileNameA(nullptr, &ExePathBuffer[0],
+                            sizeof(ExePathBuffer))) {
+      printf("GetModuleFileNameA failed.\n");
+      return false;
+    }
+
+    //
+    // Let's check if the dlls exist in the same path as the application.
+    //
+
+    const fs::path ExePath(ExePathBuffer);
+    const fs::path ParentDir(ExePath.parent_path());
+    const std::vector<std::string_view> Dlls = {"dbghelp.dll", "symsrv.dll",
+                                                "dbgeng.dll", "dbgcore.dll"};
+    const fs::path DefaultDbgDllLocation(
+        R"(c:\program Files (x86)\windows kits\10\debuggers\)" SYMBOLIZER_ARCH);
+
+    for (const auto &Dll : Dlls) {
+      if (fs::exists(ParentDir / Dll)) {
+        continue;
+      }
+
+      //
+      // Apparently it doesn't. Be nice and try to find them by ourselves.
+      //
+
+      const fs::path DbgDllLocation(DefaultDbgDllLocation / Dll);
+      if (!fs::exists(DbgDllLocation)) {
+
+        //
+        // If it doesn't exist we have to exit.
+        //
+
+        printf("The debugger class expects debug dlls in the "
+               "directory "
+               "where the application is running from.\n");
+        return false;
+      }
+
+      //
+      // Sounds like we are able to fix the problem ourselves. Copy the files
+      // in the directory where the application is running from and move on!
+      //
+
+      fs::copy(DbgDllLocation, ParentDir);
+      printf("Copied %s into the "
+             "executable directory..\n",
+             DbgDllLocation.generic_string().c_str());
+    }
+
+    //
+    // Initialize the various COM interfaces that we need.
+    //
+
+    printf("Initializing the debugger instance..\n");
+    HRESULT Status = DebugCreate(__uuidof(IDebugClient), (void **)&Client_);
+    if (FAILED(Status)) {
+      printf("DebugCreate failed with hr=%lx\n", Status);
+      return false;
+    }
+
+    Status =
+        Client_->QueryInterface(__uuidof(IDebugControl), (void **)&Control_);
+    if (FAILED(Status)) {
+      printf("QueryInterface/IDebugControl failed with hr=%lx\n", Status);
+      return false;
+    }
+
+    Status =
+        Client_->QueryInterface(__uuidof(IDebugSymbols3), (void **)&Symbols_);
+    if (FAILED(Status)) {
+      printf("QueryInterface/IDebugSymbols failed with hr=%lx\n", Status);
+      return false;
+    }
+
+    //
+    // Turn the below on to debug issues related to dbghelp.
+    //
+
+#ifdef SYMBOLIZER_DEBUG
+    const uint32_t SYMOPT_DEBUG = 0x80000000;
+    Status = Symbols_->SetSymbolOptions(SYMOPT_DEBUG);
+    if (FAILED(Status)) {
+      printf("IDebugSymbols::SetSymbolOptions failed with hr=%lx\n", Status);
+      return false;
+    }
+
+    Client_->SetOutputCallbacks(&StdioOutputCallbacks_);
+#endif
+
+    //
+    // We can now open the crash-dump using the dbghelp APIs.
+    //
+
+    printf("Opening the dump file..\n");
+    const std::string &DumpFileString = DumpPath.string();
+    const char *DumpFileA = DumpFileString.c_str();
+    Status = Client_->OpenDumpFile(DumpFileA);
+    if (FAILED(Status)) {
+      printf("OpenDumpFile(h%s) failed with hr=%lx\n", DumpFileA, Status);
+      return false;
+    }
+
+    //
+    // Note that the engine doesn't completely attach to the dump file until the
+    // WaitForEvent method has been called. When a dump file is created from a
+    // process or kernel, information about the last event is stored in the
+    // dump file. After the dump file is opened, the next time execution is
+    // attempted, the engine will generate this event for the event callbacks.
+    // Only then does the dump file become available in the debugging session.
+    // https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/dbgeng/nf-dbgeng-idebugclient-opendumpfile
+    //
+
+    Status = WaitForEvent();
+    if (FAILED(Status)) {
+      printf("WaitForEvent for OpenDumpFile failed with hr=%lx\n", Status);
+      return false;
+    }
+
+    return true;
+  }
+
+  //
+  // This returns the symbolized version of |SymbolAddress| according to a
+  // |Style|.
+  //
+
+  std::optional<std::string> Symbolize(const uint64_t SymbolAddress,
+                                       const TraceStyle_t Style) {
+    //
+    // Fast path for the addresses we have symbolized already.
+    //
+
+    if (Cache_.contains(SymbolAddress)) {
+      return Cache_.at(SymbolAddress);
+    }
+
+    //
+    // Slow path, we need to ask dbgeng..
+    //
+
+    const auto Res = Style == TraceStyle_t::Modoff
+                         ? SymbolizeModoff(SymbolAddress)
+                         : SymbolizeFull(SymbolAddress);
+
+    //
+    // If there has been an issue during symbolization, bail as it is not
+    // expected.
+    //
+
+    if (!Res) {
+      return std::nullopt;
+    }
+
+    //
+    // Feed the result into the cache.
+    //
+
+    Cache_.emplace(SymbolAddress, Res.value());
+
+    //
+    // Return the entry directly from the cache.
+    //
+
+    return Cache_.at(SymbolAddress);
+  }
+
+private:
+  //
+  // This returns a module+offset symbolization of |SymbolAddress|.
+  //
+
+  std::optional<std::string> SymbolizeModoff(const uint64_t SymbolAddress) {
+    constexpr size_t NameSizeMax = MAX_PATH;
+    char Buffer[NameSizeMax] = {};
+
+    //
+    // module+offset style.
+    //
+
+    ULONG Index;
+    ULONG64 Base;
+    HRESULT Status =
+        Symbols_->GetModuleByOffset(SymbolAddress, 0, &Index, &Base);
+    if (FAILED(Status)) {
+      printf("GetModuleByOffset failed with hr=%lx\n", Status);
+      return std::nullopt;
+    }
+
+    ULONG NameSize;
+    Status = Symbols_->GetModuleNameString(DEBUG_MODNAME_MODULE, Index, Base,
+                                           &Buffer[0], NameSizeMax, &NameSize);
+    if (FAILED(Status)) {
+      printf("GetModuleNameString failed with hr=%lx\n", Status);
+      return std::nullopt;
+    }
+
+    const uint64_t Offset = SymbolAddress - Base;
+    std::snprintf(&Buffer[0], NameSizeMax, "%s+0x%" PRIx64, &Buffer[0], Offset);
+    return std::string(Buffer);
+  }
+
+  //
+  // Symbolizes |SymbolAddress| with module+offset style.
+  //
+
+  std::optional<std::string> SymbolizeFull(const uint64_t SymbolAddress) {
+    //
+    // Full symbol style!
+    //
+
+    constexpr size_t NameSizeMax = MAX_PATH;
+    char Buffer[NameSizeMax] = {};
+
+    uint64_t Displacement = 0;
+    const HRESULT Status = Symbols_->GetNameByOffset(
+        SymbolAddress, &Buffer[0], NameSizeMax, nullptr, &Displacement);
+    if (FAILED(Status)) {
+      printf("GetNameByOffset failed with hr=%lx\n", Status);
+      return std::nullopt;
+    }
+
+    std::snprintf(&Buffer[0], NameSizeMax, "%s+0x%" PRIx64, &Buffer[0],
+                  Displacement);
+    return std::string(Buffer);
+  }
+
+  //
+  // Waits for the dbghelp machinery to signal that they are done.
+  //
+
+  HRESULT WaitForEvent() const noexcept {
+    const HRESULT Status = Control_->WaitForEvent(DEBUG_WAIT_DEFAULT, INFINITE);
+    if (FAILED(Status)) {
+      printf("Execute::WaitForEvent failed with %lx\n", Status);
+    }
+    return Status;
+  }
+};
+
+```
+
+`src/symbolizer.cc`:
+
+```cc
+// Axel '0vercl0k' Souchet - September 11 2020
+//#define SYMBOLIZER_DEBUG
+#define _CRT_SECURE_NO_WARNINGS
+
+#include "dbgeng_t.h"
+#include <CLI/CLI.hpp>
+#include <chrono>
+#include <cinttypes>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <windows.h>
+
+namespace fs = std::filesystem;
+namespace chrono = std::chrono;
+
+//
+// The various commad line options that Symbolizer supports.
+//
+
+struct Opts_t {
+
+  //
+  // The input path can be:
+  //   - A path to a directory full of traces to symbolize,
+  //   - A path to an input trace to symbolize.
+  //
+
+  fs::path Input;
+
+  //
+  // The output path can be:
+  //   - A path to a directory where the output trace(s) are going to be written
+  //   into,
+  //   - A path to an output file where the output trace is going to be written
+  //   into,
+  //   - Empty if the output is to be dumped on stdout.
+  //
+
+  fs::path Output;
+
+  //
+  // This is the path to the crash-dump to load.
+  //
+
+  fs::path CrashdumpPath;
+
+  //
+  // Skip a number of lines.
+  //
+
+  uint64_t Skip = 0;
+
+  //
+  // The maximum amount of lines to process per file.
+  //
+
+  uint64_t Max = 0;
+
+  //
+  // This is the style used to output traces.
+  //
+
+  TraceStyle_t Style = TraceStyle_t::FullSymbol;
+
+  //
+  // Allow symbolizer to overwrite output traces.
+  //
+
+  bool Overwrite = false;
+
+  //
+  // Include line numbers in the output traces.
+  //
+
+  bool LineNumbers = false;
+};
+
+//
+// Various stats we keep track of.
+//
+
+struct Stats_t {
+  uint64_t NumberSymbolizedLines = 0;
+  uint64_t NumberFailedSymbolization = 0;
+  uint64_t NumberFiles = 0;
+};
+
+//
+// The globals.
+//
+
+Opts_t Opts;
+Stats_t Stats;
+
+//
+// Symbolize the |Input| into |Output|.
+//
+
+bool SymbolizeFile(DbgEng_t &Dbg, const fs::path &Input,
+                   const fs::path &Output) {
+  //
+  // Open the input trace file.
+  //
+
+  std::ifstream TraceFile(Input);
+  if (!TraceFile.good()) {
+    printf("Could not open input %s\n", Input.string().c_str());
+    return false;
+  }
+
+  //
+  // Open the output trace file.
+  //
+
+  const bool OutputIsStdout = Output.empty();
+  std::ofstream OutFile;
+
+  //
+  // If we are not dumping data on stdout, then let's actually open an output
+  // file.
+  //
+
+  if (!OutputIsStdout) {
+    OutFile.open(Output);
+    if (!OutFile.good()) {
+      printf("Could not open output file %s\n", Output.string().c_str());
+      return false;
+    }
+  }
+
+  //
+  // We use this stream to be able to manipulate std::cout and the file the same
+  // way.
+  //
+
+  std::basic_ostream<char> &OutStream = OutputIsStdout ? std::cout : OutFile;
+
+  //
+  // Read the trace file line by line.
+  //
+
+  uint64_t NumberSymbolizedLines = 0;
+  uint64_t NumberFailedSymbolization = 0;
+  std::string Line;
+  for (uint64_t LineNumber = 0; std::getline(TraceFile, Line); LineNumber++) {
+
+    //
+    // Do we have a max value, and if so have we hit it yet?
+    //
+
+    if (Opts.Max > 0 && NumberSymbolizedLines >= Opts.Max) {
+      printf("Hit the maximum number %" PRIu64 ", breaking out\n", Opts.Max);
+      break;
+    }
+
+    //
+    // Skipping a number of line.
+    //
+
+    if (LineNumber < Opts.Skip) {
+      continue;
+    }
+
+    //
+    // Convert the line into an address.
+    //
+
+    const uint64_t Address = std::strtoull(Line.c_str(), nullptr, 16);
+
+    //
+    // Symbolize the address.
+    //
+
+    auto AddressSymbolized = Dbg.Symbolize(Address, Opts.Style);
+    if (!AddressSymbolized.has_value()) {
+      printf("%s:%" PRIu64 ": Symbolization of %" PRIx64
+             " failed ('%s'), skipping\n",
+             Input.filename().string().c_str(), LineNumber, Address,
+             Line.c_str());
+      NumberFailedSymbolization++;
+      continue;
+    }
+
+    //
+    // Include the line numbers.
+    //
+
+    if (Opts.LineNumbers) {
+      OutStream << 'l' << LineNumber << ": ";
+    }
+
+    //
+    // Write the symbolized address into the output trace.
+    //
+
+    OutStream << AddressSymbolized->c_str() << '\n';
+    NumberSymbolizedLines++;
+  }
+
+  Stats.NumberSymbolizedLines += NumberSymbolizedLines;
+  Stats.NumberFailedSymbolization += NumberFailedSymbolization;
+  return true;
+}
+
+int main(int argc, char *argv[]) {
+  //
+  // Set up the argument parsing.
+  //
+
+  CLI::App Symbolizer(
+      "Symbolizer - A fast execution trace symbolizer for Windows");
+
+  Symbolizer.allow_windows_style_options();
+  Symbolizer.set_help_all_flag("--help-all", "Expand all help");
+
+  Symbolizer
+      .add_option("-i,--input", Opts.Input, "Input trace file or directory")
+      ->check(CLI::ExistingPath)
+      ->required();
+  Symbolizer
+      .add_option("-c,--crash-dump", Opts.CrashdumpPath, "Crash-dump path")
+      ->check(CLI::ExistingFile)
+      ->required();
+  Symbolizer.add_option("-o,--output", Opts.Output,
+                        "Output trace (default: stdout)");
+  Symbolizer.add_option("-s,--skip", Opts.Skip, "Skip a number of lines")
+      ->default_val(0);
+  Symbolizer.add_option("-m,--max", Opts.Max, "Stop after a number of lines")
+      ->default_val(20'000'000);
+
+  const std::unordered_map<std::string, TraceStyle_t> TraceStypeMap = {
+      {"modoff", TraceStyle_t::Modoff}, {"fullsym", TraceStyle_t::FullSymbol}};
+
+  Symbolizer.add_option("--style", Opts.Style, "Trace style")
+      ->transform(CLI::CheckedTransformer(TraceStypeMap, CLI::ignore_case))
+      ->default_val("fullsym");
+  Symbolizer
+      .add_flag("--overwrite", Opts.Overwrite,
+                "Overwrite the output file if necessary")
+      ->default_val(false);
+  Symbolizer
+      .add_flag("--line-numbers", Opts.LineNumbers, "Include line numbers")
+      ->default_val(false);
+
+  CLI11_PARSE(Symbolizer, argc, argv);
+
+  //
+  // Calculate a bunch of useful variables to take decisions later.
+  //
+
+  const bool InputIsDirectory = fs::is_directory(Opts.Input);
+  const bool OutputIsDirectory = fs::is_directory(Opts.Output);
+  const bool OutputDoesntExist = !fs::exists(Opts.Output);
+  const bool OutputIsFile = fs::is_regular_file(Opts.Output);
+  const bool OutputIsStdout = Opts.Output.empty();
+
+  //
+  // Initialize the debug engine APIs.
+  //
+
+  DbgEng_t DbgEng;
+  if (!DbgEng.Init(Opts.CrashdumpPath)) {
+    printf("Failed to initialize the debugger api.\n");
+    return EXIT_FAILURE;
+  }
+
+  //
+  // If the input flag is a folder, then we enumerate the files inside it.
+  //
+
+  std::vector<fs::path> Inputs;
+  if (InputIsDirectory) {
+    //
+    // If the output is not a directory nor stdout, then it doesn't make any
+    // sense, so bail.
+    //
+
+    if (!OutputIsDirectory && !OutputIsStdout) {
+      printf("When the input is a directory, the output can only be either "
+             "empty (for stdout) or a directory as well.\n");
+    }
+
+    const fs::directory_iterator DirIt(Opts.Input);
+    for (const auto &DirEntry : DirIt) {
+      Inputs.emplace_back(DirEntry);
+    }
+  } else {
+    Inputs.emplace_back(Opts.Input);
+  }
+
+  //
+  // Symbolize each files.
+  //
+
+  printf("Starting to process files..\n");
+  const auto Before = chrono::high_resolution_clock::now();
+  for (const auto &Input : Inputs) {
+
+    //
+    // If we run Symbolizer from the same directory for both inputs and outputs,
+    // we are going to see '.symbolizer' files into the input directory, so
+    // let's just keep them instead of bailing.
+    //
+
+    if (Input.filename().string().ends_with(".symbolizer")) {
+      printf("Skipping %s..\n", Input.string().c_str());
+      continue;
+    }
+
+    //
+    // Calculate the output path.
+    //
+
+    fs::path Output;
+    if (OutputIsDirectory) {
+      //
+      // If the output is a directory then generate an output file path.
+      //
+
+      const std::string InputFilename(Input.filename().string());
+      const std::string OutputFilename(InputFilename + ".symbolizer");
+      Output = Opts.Output / OutputFilename;
+    } else if (OutputDoesntExist || OutputIsFile) {
+      //
+      // There are two cases to consider here:
+      //   - Either it is a path to a file that doesn't exist yet as we'll
+      //   create it,
+      //   - Or it points to an already existing file and the user might want to
+      //   overwrite it.
+      //
+
+      Output = Opts.Output;
+    } else {
+      //
+      // It is empty, data will be dumped on stdout.
+      //
+    }
+
+    //
+    // Verify that we are not about to overwrite an already generated trace
+    // file. If the user specify specify --overwrite we will overwrite the files
+    // that already exist.
+    //
+
+    if (!OutputIsStdout && fs::exists(Output)) {
+      if (!Opts.Overwrite) {
+        printf("The output file %s already exists, exiting.\n",
+               Output.string().c_str());
+        return EXIT_SUCCESS;
+      }
+
+      printf("The output file %s will be overwritten..\n",
+             Output.string().c_str());
+    }
+
+    //
+    // Process the file.
+    //
+
+    if (!SymbolizeFile(DbgEng, Input, Output)) {
+      printf("Parsing %s failed, exiting\n", Input.string().c_str());
+      break;
+    }
+
+    Stats.NumberFiles++;
+    printf("[%" PRIu64 " / %zd] %s done\r", Stats.NumberFiles, Inputs.size(),
+           Input.string().c_str());
+  }
+
+  printf("\n");
+
+  //
+  // Calculate the duration.
+  //
+
+  const auto After = chrono::high_resolution_clock::now();
+  auto Duration = chrono::duration_cast<chrono::seconds>(After - Before);
+
+  const char *Unit = "";
+  if (Stats.NumberSymbolizedLines >= 1'000'000) {
+    Stats.NumberSymbolizedLines /= 1'000'000;
+    Unit = "m";
+  } else if (Stats.NumberSymbolizedLines >= 1'000) {
+    Stats.NumberSymbolizedLines /= 1'000;
+    Unit = "k";
+  }
+
+  //
+  // Yay we made it to the end! Let's dump a few stats out.
+  //
+
+  printf("Completed symbolization of %" PRIu64 "%s addresses (%" PRIu64
+         " failed) in %" PRId64 "s across %" PRIu64 " files.\n",
+         Stats.NumberSymbolizedLines, Unit, Stats.NumberFailedSymbolization,
+         Duration.count(), Stats.NumberFiles);
+
+  return EXIT_SUCCESS;
+}
+```
+
+`src/symbolizer.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30413.136
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "symbolizer", "symbolizer.vcxproj", "{D300F61C-87E4-4E54-97D4-83F7DF6A8158}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Debug|x64.ActiveCfg = Debug|x64
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Debug|x64.Build.0 = Debug|x64
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Debug|x86.ActiveCfg = Debug|Win32
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Debug|x86.Build.0 = Debug|Win32
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Release|x64.ActiveCfg = Release|x64
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Release|x64.Build.0 = Release|x64
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Release|x86.ActiveCfg = Release|Win32
+		{D300F61C-87E4-4E54-97D4-83F7DF6A8158}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A6490331-6D26-4C2C-AE30-30EFFF9EB05A}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`src/symbolizer.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{d300f61c-87e4-4e54-97d4-83f7df6a8158}</ProjectGuid>
+    <RootNamespace>symbolizer</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>false</EnableASAN>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>false</EnableASAN>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <RunCodeAnalysis>false</RunCodeAnalysis>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalIncludeDirectories>..\libs\CLI11\include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <DelayLoadDLLs>dbgeng.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>..\libs\CLI11\include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <DelayLoadDLLs>dbgeng.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <AdditionalIncludeDirectories>..\libs\CLI11\include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <DelayLoadDLLs>dbgeng.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>..\libs\CLI11\include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <DelayLoadDLLs>dbgeng.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="symbolizer.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="dbgeng_t.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`src/symbolizer.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="symbolizer.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="dbgeng_t.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
