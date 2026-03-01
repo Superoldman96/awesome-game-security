@@ -1,0 +1,3536 @@
+Project Path: arc_gmh5225_GhidraScripts_liou30no
+
+Source Tree:
+
+```txt
+arc_gmh5225_GhidraScripts_liou30no
+├── GolangDynamicStringRecovery.java
+├── GolangFunctionRecovery.java
+├── GolangRecovery.java
+├── GolangStaticStringRecovery.java
+├── GolangTypeRecovery.java
+├── LICENSE
+├── README.md
+├── Sharem.java
+└── images
+    ├── bundleManager.png
+    ├── displayScriptManager.png
+    └── scriptManager.png
+
+```
+
+`GolangDynamicStringRecovery.java`:
+
+```java
+//Finds and creates dynamically allocated strings based on the Golang stringStruct 
+//@author Max 'Libra' Kersten of Trellix' Advanced Research Center, based on the work by padorka@cujoai (https://github.com/getCUJO/ThreatIntel/blob/master/Scripts/Ghidra/find_dynamic_strings.py)
+//@category Golang
+//@keybinding
+//@menupath
+//@toolbar
+
+import java.util.ArrayList;
+import java.util.List;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.lang.OperandType;
+import ghidra.program.model.lang.Register;
+import ghidra.program.model.listing.Data;
+import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.util.CodeUnitInsertionException;
+import ghidra.util.exception.CancelledException;
+
+public class GolangDynamicStringRecovery extends GhidraScript {
+
+	/**
+	 * A boolean which defines if logging should be enabled. When prioritising
+	 * speed, one might not be interested in getting all messages, but rather only
+	 * the concluding message, along with potential error messages. As such, this
+	 * boolean specifies if more logging should be enabled or disabled.</br>
+	 * </br>
+	 * The default value of this field is <code>true</code>.
+	 */
+	private static final boolean ENABLE_LOGGING = true;
+
+	/**
+	 * The size of a pointer on X86
+	 */
+	private static final int POINTER_SIZE_X86 = 4;
+
+	/**
+	 * The size of a pointer on X64
+	 */
+	private static final int POINTER_SIZE_X64 = 8;
+
+	/**
+	 * The number of recovered dynamic strings
+	 */
+	private static int stringCount = 0;
+
+	@Override
+	protected void run() throws Exception {
+		/*
+		 * Get the language ID and the program's pointer size and store those locally,
+		 * as they are re-used multiple times
+		 */
+		String languageId = currentProgram.getLanguageID().toString();
+		int pointerSize = currentProgram.getDefaultPointerSize();
+
+		/*
+		 * Based on the language ID, the dynamic strings need to be recovered
+		 * differently
+		 */
+		if (languageId.startsWith("ARM")) { // 32-bit ARM
+			resolve32BitArm();
+		} else if (languageId.startsWith("AARCH64")) { // 64-bit ARM
+			resolve64BitArm();
+		} else if (languageId.startsWith("x86") && pointerSize == POINTER_SIZE_X86) { // x86
+			resolveIntel(false);
+		} else if (languageId.startsWith("x86") && pointerSize == POINTER_SIZE_X64) { // x86_64
+			resolveIntel(true);
+		} else { // Print an error message if the architecture is not supported
+			printerr("Unsupported architecture: " + languageId);
+			return;
+		}
+
+		// Print the total number of recovered strings
+		println("Total number of recovered dynamic strings: " + stringCount);
+	}
+
+	/**
+	 * A wrapper function for the
+	 * {@link ghidra.app.script.GhidraScript#println(String)} which is only called
+	 * if the {@link #ENABLE_LOGGING} is <code>true</code>. The logging that is
+	 * (potentially) passing through this function, is meant as optional logging.
+	 * The final conclusion, as well as the logging of any error messages, should be
+	 * printed via direct calls. The easy-to-omit nature of optional messages speeds
+	 * up automated analysis by limiting the number of print calls.
+	 * 
+	 * @param message
+	 */
+	private void log(String message) {
+		if (ENABLE_LOGGING) {
+			println(message);
+		}
+	}
+
+	/**
+	 * Creates an ASCII string at the given address with the given length, and
+	 * returns the instruction after the given instruction
+	 * 
+	 * @param instruction the current instruction within the program
+	 * @param address     the address of the ASCII string
+	 * @param length      the length of the ASCII string
+	 * @return the instruction after the instruction variable, or null if there is
+	 *         no such instruction
+	 */
+	private Instruction createString(Instruction instruction, Address address, Integer length) {
+		try {
+			//Get the data' starting point
+			Data checkData = getDataContaining(address);
+			if (checkData != null) {
+				clearListing(address);
+				
+			}
+			// Create the ASCII string at the given address with the given length
+			Data data = createAsciiString(address, length);
+			// Gets the newly created string as a String object
+			String ascii = (String) data.getValue();
+			// Optionally print the address (clickable in Ghidra's console) along with the
+			// value
+			log("0x" + Long.toHexString(address.getOffset()) + " : \"" + ascii + "\"");
+			// Increment the number of recovered dynamic strings
+			stringCount++;
+		} catch (Exception ex) {
+			// Ignore exceptions
+		}
+		// Return the next instruction
+		return getInstructionAfter(instruction);
+	}
+
+	/**
+	 * This helper function returns the integer value of a scalar object. The
+	 * purpose of this function is to avoid repeated casting in numerous places
+	 * within the script.
+	 * 
+	 * @param scalar the object to get the integer value from
+	 * @return the integer value of the given scalar object
+	 */
+	private Integer getInteger(Scalar scalar) {
+		return ((Long) scalar.getValue()).intValue();
+	}
+
+	/**
+	 * Gets all memory blocks which have a name equal to .text or __text (used in PE
+	 * and ELF, and Mach-O files respectively), disregarding the used casing. The
+	 * list can be empty, but never null.
+	 * 
+	 * @return all .text or __text named memory blocks (used in PE and ELF, and
+	 *         Mach-O files respectively), disregarding the used casing
+	 */
+	private List<MemoryBlock> getTextMemoryBlocks() {
+		// Declare and initialise the list
+		List<MemoryBlock> blocks = new ArrayList<>();
+
+		// Iterate over all blocks
+		for (MemoryBlock block : getMemoryBlocks()) {
+			// Check if the name is equal, disregarding the case
+			if (block.getName().equalsIgnoreCase(".text") || block.getName().equalsIgnoreCase("__text")) {
+				// If it is equal, add it to the list
+				blocks.add(block);
+			}
+		}
+		// Return the list, which might be empty
+		return blocks;
+	}
+
+	/**
+	 * Resolves the dynamic strings for Intel architecture based binaries. This
+	 * works for both x86 and x86_64 architectures
+	 * 
+	 * @param is64Bit true if the given binary is 64-bit, false if not
+	 */
+	private void resolveIntel(boolean is64Bit) {
+		// Iterate over all memory blocks
+		for (MemoryBlock block : getTextMemoryBlocks()) {
+			// Get the first instruction from this block
+			Instruction instruction = getInstructionAt(block.getStart());
+
+			// Loop as long as an instruction is present and valid
+			while (instruction != null) {
+				// Check if the script's execution is cancelled
+				if (monitor.isCancelled()) {
+					// Return from the recovery function, thus exiting the script's execution early
+					return;
+				}
+
+				try {
+					// Get the operand type at index 1, which should be an address
+					int operandType = instruction.getOperandType(1);
+					// Get the register at index zero
+					Register register = instruction.getRegister(0);
+
+					/*
+					 * Check the first instruction of a dynamically allocated string:
+					 * 
+					 * LEA REG, [STRING_ADDRESS]
+					 * 
+					 * This is the same for x86 and x86_64, hence no bitness check
+					 */
+					if (instruction.getMnemonicString().equalsIgnoreCase("LEA") == false || register == null
+							|| OperandType.isAddress(operandType) == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					// Get the next instruction
+					Instruction instructionTwo = getInstructionAfter(instruction);
+
+					/*
+					 * Check the second instruction:
+					 * 
+					 * MOV [SP + ..], REG
+					 * 
+					 * Note that the stack pointer is either ESP or RSP, depending on the
+					 * architecture (x86 or x86_64 respectively)
+					 * 
+					 * Also note that REG refers to the same register as the first instruction used
+					 * 
+					 * The is64Bit boolean is true if the used architecture is x86_64, false if it
+					 * is x86
+					 */
+					if (instructionTwo.getMnemonicString().equalsIgnoreCase("MOV") == false
+							|| instructionTwo.getRegister(1) != register) {
+						if ((is64Bit == false
+								&& instructionTwo.getOpObjects(0)[0].toString().equalsIgnoreCase("ESP") == false)
+								|| (is64Bit == true && instructionTwo.getOpObjects(0)[0].toString()
+										.equalsIgnoreCase("RSP") == false)) {
+							// Get the next instruction
+							instruction = getInstructionAfter(instruction);
+							// Skip this item in the loop
+							continue;
+						}
+					}
+
+					// Get the third instruction
+					Instruction instructionThree = getInstructionAfter(instructionTwo);
+
+					/*
+					 * Get the operand type (should be a scalar) at index one of the third
+					 * instruction
+					 */
+					operandType = instructionThree.getOperandType(1);
+
+					/*
+					 * Look for the third instruction, which follows either of the following
+					 * patterns, depending on the architecture:
+					 * 
+					 * MOV [ESP + ..], STRING_SIZE
+					 * 
+					 * MOV [RSP + ..], STRING_SIZE
+					 * 
+					 * Note that the operand type should be of the scalar type
+					 * 
+					 * The is64Bit boolean is true if the used architecture is x86_64, false if it
+					 * is x86
+					 */
+					if (instructionThree.getMnemonicString().equalsIgnoreCase("MOV") == false
+							|| OperandType.isScalar(operandType) == false) {
+						if ((is64Bit == false
+								&& instructionThree.getOpObjects(0)[0].toString().equalsIgnoreCase("ESP") == false)
+								|| (is64Bit == true && instructionThree.getOpObjects(0)[0].toString()
+										.equalsIgnoreCase("RSP") == false)) {
+							// Get the next instruction
+							instruction = getInstructionAfter(instruction);
+							// Skip this item in the loop
+							continue;
+						}
+					}
+
+					// Get the address
+					Address address = instruction.getPrimaryReference(1).getToAddress();
+					/*
+					 * Get the instruction's first indexed object, of which the first element (index
+					 * 0) is used
+					 */
+					Object object = instructionThree.getOpObjects(1)[0];
+
+					// Check if the object is of the scalar type
+					if (object instanceof Scalar == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					/*
+					 * This code can only be reached if the object's type is scalar, so it can
+					 * safely be cast
+					 */
+					Scalar scalar = (Scalar) object;
+					// Get the integer value of the scalar object
+					Integer lengthValue = getInteger(scalar);
+					/*
+					 * Create a string at the given address with the given length, and increment to
+					 * the next instruction
+					 */
+					instruction = createString(instruction, address, lengthValue);
+				} catch (Exception ex) {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Resolves the dynamic strings for 32-bit ARM architecture based binaries
+	 */
+	private void resolve32BitArm() {
+		/*
+		 * #ARM, 32-bit
+		 * 
+		 * #LDR REG, [STRING_ADDRESS_POINTER]
+		 * 
+		 * #STR REG, [SP, ..]
+		 * 
+		 * #MOV REG, STRING_SIZE
+		 * 
+		 * #STR REG, [SP, ..]
+		 */
+		// Iterate over all memory blocks
+		for (MemoryBlock block : getTextMemoryBlocks()) {
+			// Get the first instruction
+			Instruction instruction = getInstructionAt(block.getStart());
+
+			// Loop as long as an instruction is present and valid
+			while (instruction != null) {
+				// Check if the script's execution is cancelled
+				if (monitor.isCancelled()) {
+					// Return from the recovery function, thus exiting the script's execution early
+					return;
+				}
+
+				try {
+					// Get the operand type, which should be an address or a scalar
+					int operandType = instruction.getOperandType(1);
+
+					// Check first instruction: LDR REG, [STRING_ADDRESS_POINTER]
+					if (instruction.getMnemonicString().equalsIgnoreCase("ldr") == false
+							|| instruction.getRegister(0) == null || OperandType.isAddress(operandType) == false
+							|| OperandType.isScalar(operandType) == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					// Get the register at index 0
+					Register register = instruction.getRegister(0);
+					// Get the second instruction
+					Instruction instructionTwo = getInstructionAfter(instruction);
+
+					/*
+					 * Check second instruction:
+					 * 
+					 * STR REG, [SP + ..]
+					 * 
+					 * Note that the register REG should be the same as the register that was used
+					 * in the first instruction
+					 */
+					if (instructionTwo.getMnemonicString().equalsIgnoreCase("str") == false
+							|| instructionTwo.getRegister(0) != register
+							|| instructionTwo.getOpObjects(1)[0].toString().equalsIgnoreCase("sp") == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					// Get the third instruction
+					Instruction instructionThree = getInstructionAfter(instructionTwo);
+					// Get the operand type, which should be a scalar
+					operandType = instructionThree.getOperandType(1);
+
+					// Check third instruction: MOV REG, STRING_SIZE
+					if (instructionThree.getMnemonicString().equalsIgnoreCase("mov") == false
+							|| instructionThree.getRegister(0) == null || OperandType.isScalar(operandType) == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					// Get the first register from the third instruction
+					register = instructionThree.getRegister(0);
+					// Get the first instruction
+					Instruction instructionFour = getInstructionAfter(instructionThree);
+
+					/*
+					 * Check fourth instruction:
+					 * 
+					 * STR REG, [SP + ..]
+					 * 
+					 * Note that the register REG should be the same register that was used in the
+					 * third instruction
+					 */
+					if (instructionFour.getMnemonicString().equalsIgnoreCase("str") == false
+							|| instructionFour.getRegister(0) != register
+							|| instructionFour.getOpObjects(1)[0].toString().equalsIgnoreCase("sp") == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+
+					// Get the address pointer
+					int addressPointer = getInt(instruction.getPrimaryReference(1).getToAddress());
+					// Get the address, essentially dereferencing the pointer
+					Address address = currentProgram.getAddressFactory().getAddress(Long.toHexString(addressPointer));
+
+					// Get the second object (index 1) from the third instruction
+					Object object = instructionThree.getOpObjects(1)[0];
+					// Check if the object is of the scalar type
+					if (object instanceof Scalar == false) {
+						// Get the next instruction
+						instruction = getInstructionAfter(instruction);
+						// Skip this item in the loop
+						continue;
+					}
+					/*
+					 * This code is only reachable if the object is of the scalar type, so it can be
+					 * cast
+					 */
+					Scalar scalar = (Scalar) object;
+					// Get the scalar's value as an integer
+					Integer length = getInteger(scalar);
+					/*
+					 * Create the ASCII string at the given address for the given length, along with
+					 * the next instruction
+					 */
+					instruction = createString(instruction, address, length);
+				} catch (Exception ex) {
+					// Ignore exceptions
+				}
+			}
+		}
+	}
+
+	/*
+	 * Resolves the dynamic strings for 64-bit ARM architecture based binaries
+	 */
+	private void resolve64BitArm() {
+		/*
+		 * #ARM, 64-bit - version 1
+		 * 
+		 * #ADRP REG, [STRING_ADDRESS_START]
+		 * 
+		 * #ADD REG, REG, INT
+		 * 
+		 * #STR REG, [SP, ..]
+		 * 
+		 * #ORR REG, REG, STRING_SIZE
+		 * 
+		 * #STR REG, [SP, ..]
+		 * 
+		 * #ARM, 64-bit - version 2
+		 *
+		 * #ADRP REG, [STRING_ADDRESS_START]
+		 *
+		 * #ADD REG, REG, INT
+		 *
+		 * #STR REG, [SP, ..]
+		 *
+		 * #MOV REG, STRING_SIZE
+		 *
+		 * #STR REG, [SP, ..]
+		 */
+
+		// Iterate over all memory blocks
+		for (MemoryBlock block : getTextMemoryBlocks()) {
+			// Get the first instruction from this block
+			Instruction instruction = getInstructionAt(block.getStart());
+
+			// Loop as long as an instruction is present and valid
+			while (instruction != null) {
+				// Check if the script's execution is cancelled
+				if (monitor.isCancelled()) {
+					// Return from the recovery function, thus exiting the script's execution early
+					return;
+				}
+
+				// Get the operand type at index 1, which should be a scalar
+				int operandType = instruction.getOperandType(1);
+				// Get the register at index zero
+				Register register = instruction.getRegister(0);
+
+				/*
+				 * Check first instruction of a dynamically allocated string
+				 * 
+				 * ADRP REG, [STRING_ADDRESS_START]
+				 */
+				if (instruction.getMnemonicString().equalsIgnoreCase("adrp") == false
+						|| instruction.getRegister(0) == null || OperandType.isAddress(operandType) == false
+						|| OperandType.isScalar(operandType) == false) {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+
+				// Get the second instruction
+				Instruction instructionTwo = getInstructionAfter(instruction);
+				/*
+				 * Get the operand type of the second instruction at index 2, which should be of
+				 * the scalar type
+				 */
+				operandType = instructionTwo.getOperandType(2);
+
+				/*
+				 * Check second instruction:
+				 * 
+				 * ADD REG, REG, INT
+				 * 
+				 * Note that REG refers to the same register as the first instruction used
+				 * 
+				 * Also note that the operand type needs to be of the scalar type
+				 */
+				if (instructionTwo.getMnemonicString().equalsIgnoreCase("add") == false
+						|| instructionTwo.getRegister(0) != register || OperandType.isScalar(operandType) == false) {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+
+				// Get the third instruction
+				Instruction instructionThree = getInstructionAfter(instructionTwo);
+
+				/*
+				 * Check the third instruction:
+				 * 
+				 * STR REG, [SP + ..]
+				 * 
+				 * Note that REG refers to the same register as the first instruction used
+				 */
+				if (instructionThree.getMnemonicString().equalsIgnoreCase("str") == false
+						|| instructionThree.getRegister(0) != register
+						|| instructionThree.getOpObjects(1)[0].toString().equalsIgnoreCase("sp") == false) {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+
+				// Get the fourth instruction
+				Instruction instructionFour = getInstructionAfter(instructionThree);
+				// Get the register from the fourth instruction, at index 0
+				register = instructionFour.getRegister(0);
+
+				/*
+				 * Declare several variables, which are to be initialised at a later stage,
+				 * depending on the way it is loaded (version 1 or version 2)
+				 */
+				int length;
+				Object object;
+				Scalar scalar;
+
+				/*
+				 * Check fourth instruction:
+				 * 
+				 * Version 1: ORR REG, REG, STRING_SIZE
+				 * 
+				 * Version 2: MOV REG, STRING_SIZE
+				 * 
+				 * Note that the operand type needs to be a scalar
+				 * 
+				 * Also note that the register from the fourth instruction should not be null
+				 */
+				if (instructionFour.getMnemonicString().equalsIgnoreCase("orr") == false && register != null
+						&& OperandType.isScalar(instructionFour.getOperandType(2)) == true) {
+					// Get the relevant object
+					object = instructionFour.getOpObjects(2)[0];
+					/*
+					 * The relevant object is of the scalar type, as defined within the if-statement
+					 */
+					scalar = (Scalar) object;
+					// Get the scalar's value as an integer
+					length = getInteger(scalar);
+				} else if (instructionFour.getMnemonicString().equalsIgnoreCase("mov") && register != null
+						&& OperandType.isScalar(instructionFour.getOperandType(1)) == true) {
+					// Get the relevant object
+					object = instructionFour.getOpObjects(1)[0];
+					/*
+					 * The relevant object is of the scalar type, as defined within the if-statement
+					 */
+					scalar = (Scalar) object;
+					// Get the scalar's value as an integer
+					length = getInteger(scalar);
+				} else {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+
+				// Gets the fifth instruction
+				Instruction instructionFive = getInstructionAfter(instructionFour);
+
+				/*
+				 * Check fifth instruction:
+				 * 
+				 * STR REG, [SP + ..]
+				 * 
+				 * Note that REG refers to the same register as the fourth instruction used
+				 */
+				if (instructionFive.getMnemonicString().equalsIgnoreCase("str") == false
+						|| instructionFive.getRegister(0) != register
+						|| instructionFive.getOpObjects(1)[0].toString().equalsIgnoreCase("sp") == false) {
+					// Get the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+				// Get two objects
+				Object objA = instruction.getOpObjects(1)[0];
+				Object objB = instructionTwo.getOpObjects(2)[0];
+
+				// Ensure that both objects are of the scalar type
+				if (objA instanceof Scalar == false || objB instanceof Scalar == false) {
+					// Gets the next instruction
+					instruction = getInstructionAfter(instruction);
+					// Skip this item in the loop
+					continue;
+				}
+
+				// Cast the object to the correct type if this code is reached
+				scalar = (Scalar) objA;
+				// Get the scalar's value as an integer
+				Integer addressPointer = getInteger(scalar);
+
+				// Cast the object to the correct type if this code is reached
+				scalar = (Scalar) objB;
+
+				/*
+				 * Get the scalar's value as an integer. Note the "+=" instead of "="
+				 */
+				addressPointer += getInteger(scalar);
+
+				// Dereference the pointer
+				Address address = currentProgram.getAddressFactory().getAddress(Long.toHexString(addressPointer));
+
+				/*
+				 * Create the ASCII string at the given address for the given length, along with
+				 * the next instruction
+				 */
+				instruction = createString(instruction, address, length);
+			}
+		}
+	}
+}
+
+```
+
+`GolangFunctionRecovery.java`:
+
+```java
+//Finds and creates functions with their original names, in Golang based PE and ELF files. Functions which have already been found by Ghidra will be renamed if a suitable name is found.  
+//@author Max 'Libra' Kersten of Trellix' Advanced Research Center, based on the work by padorka@cujoai (https://github.com/getCUJO/ThreatIntel/blob/master/Scripts/Ghidra/go_func.py) 
+//@category Golang
+//@keybinding
+//@menupath
+//@toolbar
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressOutOfBoundsException;
+import ghidra.program.model.listing.Data;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.util.exception.DuplicateNameException;
+import ghidra.util.exception.InvalidInputException;
+
+public class GolangFunctionRecovery extends GhidraScript {
+
+	/**
+	 * A boolean which defines if logging should be enabled. When prioritising
+	 * speed, one might not be interested in getting all messages, but rather only
+	 * the concluding message, along with potential error messages. As such, this
+	 * boolean specifies if more logging should be enabled or disabled.</br>
+	 * </br>
+	 * The default value of this field is <code>true</code>.
+	 */
+	private static final boolean ENABLE_LOGGING = true;
+
+	/**
+	 * The mask to perform the logical AND with on the magic value
+	 */
+	private static final int MAGIC_MASK = 0xffffffff;
+
+	/**
+	 * The magic value for Golang 1.20 and above
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/go/blob/master/src/debug/gosym/pclntab.go">Golang
+	 *      pclntab source code</a>
+	 */
+	private static final int GO_120 = 0xfffffff1;
+
+	/**
+	 * The magic value for Golang 1.18
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/go/blob/master/src/debug/gosym/pclntab.go">Golang
+	 *      pclntab source code</a>
+	 */
+	private static final int GO_118 = 0xfffffff0;
+
+	/**
+	 * The magic value for Golang 1.16 through version 1.17
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/go/blob/master/src/debug/gosym/pclntab.go">Golang
+	 *      pclntab source code</a>
+	 */
+	private static final int GO_116 = 0xfffffffa;
+
+	/**
+	 * The magic value for Golang 1.2 through version 1.15
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/go/blob/master/src/debug/gosym/pclntab.go">Golang
+	 *      pclntab source code</a>
+	 */
+	private static final int GO_12 = 0xfffffffb;
+
+	/**
+	 * The default PC Quantum size (minimal instruction size), used in x86, x86_64,
+	 * and WASM
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_ONE = 1;
+
+	/**
+	 * The PC Quantum size (minimal instruction size), used in RISCV, RISCV x64,
+	 * S390, S390X, SH, and SHbe
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_TWO = 2;
+
+	/**
+	 * The PC Quantum size (minimal instruction size), used in ALPHA, ARM, ARMbe,
+	 * M68K, MIPS, MIPSle, MIPS64p32, MIPS64p32le, MIPS64, MIPS64le, NIOS2, PPC,
+	 * PPC64, PPC64le, SPARC, and SPARC64
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_FOUR = 4;
+
+	/**
+	 * The size of a pointer on X86
+	 */
+	private static final int POINTER_SIZE_X86 = 4;
+
+	/**
+	 * The size of a pointer on X64
+	 */
+	private static final int POINTER_SIZE_X64 = 8;
+
+	/**
+	 * The amount of functions which were recovered
+	 */
+	private static int functionCount = 0;
+
+	@Override
+	protected void run() throws Exception {
+		// Get the executable format of the sample
+		String executableFormat = currentProgram.getExecutableFormat();
+		// Declare the pclntab variable
+		Address pclntab;
+
+		// Check if the executable format is a PE file
+		if (executableFormat.equalsIgnoreCase("Portable Executable (PE)")) {
+			// Optionally print a message to state the file type which has been detected
+			log("PE file found");
+			// The declaration and initialisation of potential pclntab magic values
+			String[] pclntabMagicValues = { "\\xfb\\xff\\xff\\xff\\x00\\x00", "\\xfa\\xff\\xff\\xff\\x00\\x00",
+					"\\xf0\\xff\\xff\\xff\\x00\\x00", "\\xf1\\xff\\xff\\xff\\x00\\x00" };
+			// Get the gopclntab address by magic value
+			pclntab = getGopclntabByMagicValue(pclntabMagicValues);
+		} else if (executableFormat.equalsIgnoreCase("Executable and Linking Format (ELF)")) { // Check if the
+																								// executable format is
+																								// an ELF file
+			// Optionally print a message to state the file type which has been detected
+			log("ELF file found");
+			// Get the gopclntab address by section name
+			pclntab = getGopclntabBySectionName(".gopclntab");
+		} else if (executableFormat.equalsIgnoreCase("Mac OS X Mach-O")) {
+			// Optionally print a message to state the file type which has been detected
+			log("Mach-O file found");
+			// Get the gopclntab address by section name
+			pclntab = getGopclntabBySectionName("__gopclntab");
+		} else {
+			/*
+			 * Print an error message informing the user of the failure to find a suitable
+			 * executable format
+			 */
+			printerr("Unspported file format: " + executableFormat);
+			// Return, thus ending the script's execution
+			return;
+		}
+
+		// If the pclntab could not be found, the script ends
+		if (pclntab == null) {
+			// Print an error message with the reason of the failure
+			printerr("Cannot find the pclntab!");
+			// End the script's execution
+			return;
+		}
+
+		/*
+		 * If execution continues, the pclntab was found. Optionally print a message to
+		 * inform the user of the progress
+		 */
+		log(String.format("pclntab found at 0x%x!", pclntab.getOffset()));
+
+		// Declare and initialise the pclntab magic value
+		int magic = getInt(pclntab) & MAGIC_MASK;
+
+		// Recover function names for functions in Golang version 1.20 and above
+		if (magic == GO_120) {
+			println("Golang 1.20 found, note that this script is experimental for this Golang version!");
+			recoverFunctionNamesGo118Plus(pclntab);
+		} else if (magic == GO_118) {
+			// Recover function names for functions in Golang version 1.18 and above
+			recoverFunctionNamesGo118Plus(pclntab);
+		} else if (magic == GO_116) { // Determine if the magic value matches Golang version 1.16 and 1.17
+			// Recover function names for functions in Golang versions 1.16 and 1.17
+			renameFunc116(pclntab);
+		} else if (magic == GO_12) {// Determine if the magic value matches Golang 1.15 through version 1.2
+			/*
+			 * Recover function names for functions in Golang version 1.15 through version
+			 * 1.2
+			 */
+			recoverFunctionNamesGo12(pclntab);
+		} else {
+			// No matching magic value was found, of which the user is informed
+			println("Unable to determine the .gopclntab magic value, so the assumption is made that it is Go 1.2 compatible");
+			/*
+			 * Recover function names for functions in Golang version 1.15 through version
+			 * 1.2
+			 */
+			recoverFunctionNamesGo12(pclntab);
+		}
+
+		/*
+		 * Inform the analyst of the total number of functions which has been renamed
+		 * and/or created
+		 */
+		println("Total number of functions renamed and/or created: " + functionCount);
+	}
+
+	/**
+	 * A wrapper function for the
+	 * {@link ghidra.app.script.GhidraScript#println(String)} which is only called
+	 * if the {@link #ENABLE_LOGGING} is <code>true</code>. The logging that is
+	 * (potentially) passing through this function, is meant as optional logging.
+	 * The final conclusion, as well as the logging of any error messages, should be
+	 * printed via direct calls. The easy-to-omit nature of optional messages speeds
+	 * up automated analysis by limiting the number of print calls.
+	 * 
+	 * @param message
+	 */
+	private void log(String message) {
+		if (ENABLE_LOGGING) {
+			println(message);
+		}
+	}
+
+	/**
+	 * Gets the gopclntab starting address based on a found magic value, if any
+	 * 
+	 * @param pclntabMagicValues possible magic values as byte strings written as
+	 *                           strings (i.e. "\xab\xbc")
+	 * @return the starting address of the gopclntab if it is found, null if it is
+	 *         not found
+	 * @throws MemoryAccessException
+	 * @throws AddressOutOfBoundsException
+	 */
+	private Address getGopclntabByMagicValue(String[] pclntabMagicValues)
+			throws MemoryAccessException, AddressOutOfBoundsException {
+		// Iterate over all magic values
+		for (String magic : pclntabMagicValues) {
+			/*
+			 * Look for the magic bytes within the current program, starting at the minimum
+			 * address, with a maximum of 100 results
+			 */
+			Address[] pclntabs = findBytes(null, magic, 100);
+
+			// Iterate over all results
+			for (Address pclntab : pclntabs) {
+				/*
+				 * Bytes have been found based on the given magic value
+				 */
+
+				// Get the instruction's size quantum
+				byte instructionSizeQuantum = getByte(pclntab.add(6));
+				// Get the pointer size
+				byte pointerSize = getByte(pclntab.add(7));
+
+				/*
+				 * Verify if both the instruction's quantum size and pointer size match the
+				 * conditions, meaning the pclntab has been found
+				 */
+				if ((instructionSizeQuantum != INSTRUCTION_SIZE_ONE && instructionSizeQuantum != INSTRUCTION_SIZE_TWO
+						&& instructionSizeQuantum != INSTRUCTION_SIZE_FOUR) == false
+						|| (pointerSize != POINTER_SIZE_X86 && pointerSize != POINTER_SIZE_X64) == false) {
+					return pclntab;
+				}
+			}
+		}
+		// If no results match the criteria, null is returned
+		return null;
+	}
+
+	/**
+	 * Gets the gopclntab by its section name (being ".gopclntab")
+	 * 
+	 * @return the starting address of the ".gopclntab" section
+	 */
+	private Address getGopclntabBySectionName(String sectionName) {
+		// Iterate over all memory blocks within the program
+		for (MemoryBlock memoryBlock : getMemoryBlocks()) {
+			// Check if the block's name equals (ignoring the casing) the gopclntab section
+			if (memoryBlock.getName().equalsIgnoreCase(sectionName)) {
+				// Return the starting address of this section if it is found
+				return memoryBlock.getStart();
+			}
+		}
+		// Return null if the section is not found
+		return null;
+	}
+
+	/**
+	 * Creates a new function, or renames the function if it already exists, based
+	 * on the newly found name, which is obtained via the name address variable
+	 * 
+	 * @param functionAddress the address of the function
+	 * @param nameAddress     the address of the function's new name
+	 * @throws DuplicateNameException
+	 * @throws InvalidInputException
+	 */
+	private void createOrRenameFunction(Address functionAddress, Address nameAddress)
+			throws DuplicateNameException, InvalidInputException {
+		// Check if the variable is instantiated
+		if (nameAddress == null) {
+			// Return from the function if this is the case
+			return;
+		}
+
+		// Get the data at the given address
+		Data functionNameData = getDataAt(nameAddress);
+		// If no data resides at this address
+		if (functionNameData == null) {
+			try {
+				// Create an ASCII string within Ghidra
+				functionNameData = createAsciiString(nameAddress);
+			} catch (Exception e) {
+				// Print an error if the ASCII string creation fails
+				printerr(String.format("Unable to create an ASCII string at 0x%x!", nameAddress.getOffset()));
+				// Return from the function if this fails
+				return;
+			}
+		}
+
+		/*
+		 * Get the function name by getting the data's value, which in this case is a
+		 * String but needs to be cast as the getValue function returns an Object
+		 */
+		String functionName = (String) functionNameData.getValue();
+
+		// If the function name is null, blank, or empty
+		if (functionName == null || functionName.isBlank()) {
+			// Print an error
+			printerr(String.format("No function name found at 0x%x!", Long.toHexString(nameAddress.getOffset())));
+			// Return from the function
+			return;
+		}
+
+		// Gets the function at the given address
+		Function func = getFunctionAt(functionAddress);
+
+		// If there is a function at the given address
+		if (func != null) {
+			// Get the old name
+			String functionNameOld = func.getName();
+			// Rename the function with the new name, without spaces
+			func.setName(functionName.replace(" ", ""), SourceType.USER_DEFINED);
+			// Optionally print the function name change, along with the location
+			log("Function renamed from \"" + functionNameOld + "\" to \"" + functionName + "\", located at 0x"
+					+ Long.toHexString(functionAddress.getOffset()));
+		} else {
+			// If no function exists at the given address, create one
+			func = createFunction(functionAddress, functionName);
+			// Optionally print the function name and address
+			log("Function \"" + functionName + "\" created at 0x" + Long.toHexString(functionAddress.getOffset()));
+		}
+
+		// Increment the function count
+		functionCount++;
+	}
+
+	/**
+	 * Recovers function names for functions in Golang version 1.15 through version
+	 * 1.2
+	 * 
+	 * @param pclntab the start address of the pclntab
+	 * @throws MemoryAccessException
+	 * @throws AddressOutOfBoundsException
+	 * @throws DuplicateNameException
+	 * @throws InvalidInputException
+	 */
+	private void recoverFunctionNamesGo12(Address pclntab)
+			throws MemoryAccessException, AddressOutOfBoundsException, DuplicateNameException, InvalidInputException {
+		// Get the pointer size
+		byte pointerSize = getByte(pclntab.add(7));
+		// Declare the number of functions tab variable
+		long nFunctionTab;
+
+		// If the pointer size fits a x64 system
+		if (pointerSize == POINTER_SIZE_X64) {
+			// Get a long value from the given address
+			nFunctionTab = getLong(pclntab.add(8));
+		} else { // Assume x86, meaning 4 bytes in size
+			// Get an integer value from the given address
+			nFunctionTab = getInt(pclntab.add(8));
+		}
+
+		// Get the function tab address
+		Address functionTab = pclntab.add(8 + pointerSize);
+
+		// Declare a copy of the function tab, named p
+		Address p = functionTab;
+		// Declare the function address variable
+		Address functionAddress;
+		// Declare the name offset variable
+		long nameOffset;
+
+		// Iterate over the number of functions
+		for (int i = 0; i < nFunctionTab; i++) {
+			// Check if the script's execution is cancelled
+			if (monitor.isCancelled()) {
+				// Break this loop, thus exiting the script's execution early
+				break;
+			}
+
+			// If the pointer size fits a x64 system
+			if (pointerSize == POINTER_SIZE_X64) {
+				// Get the function address
+				functionAddress = currentProgram.getAddressFactory().getAddress(Long.toHexString(getLong(p)).trim());
+				// Increment p with the pointer size to move it to the next usable address
+				p = p.add(pointerSize);
+				// Get the name offset as a long, since the architecture is x64
+				nameOffset = getLong(p);
+			} else { // Assume x86, meaning 4 bytes in size
+				// Get the function address
+				functionAddress = currentProgram.getAddressFactory().getAddress(Long.toHexString(getInt(p)));
+				// Increment p with the pointer size to move it to the next usable address
+				p = p.add(pointerSize);
+				// Get the name offset as an integer, since the architecture is x86
+				nameOffset = getInt(p);
+			}
+
+			// Increment p with the pointer size to move it to the next usable address
+			p = p.add(pointerSize);
+
+			/*
+			 * Gets the name pointer, which is located directly after the function name,
+			 * hence the addition of the name offset and the pointer size to move to the
+			 * next usable address
+			 */
+			Address namePointer = pclntab.add(nameOffset + pointerSize);
+			// Get the address of the name, based on the pointer, which is always 32 bits in
+			// size
+			Address nameAddress = pclntab.add(getInt(namePointer));
+			// Address nameAddress = pclntab.add(namePointer.getOffset());
+
+			/*
+			 * Create or rename the function at the address, with the name at the given
+			 * address
+			 */
+			createOrRenameFunction(functionAddress, nameAddress);
+		}
+	}
+
+	/**
+	 * Recovers function names for functions in Golang version 1.16 and version 1.17
+	 * 
+	 * @param pclntab the start address of the pclntab
+	 * @throws MemoryAccessException
+	 * @throws AddressOutOfBoundsException
+	 * @throws DuplicateNameException
+	 * @throws InvalidInputException
+	 */
+	private void renameFunc116(Address pclntab)
+			throws MemoryAccessException, AddressOutOfBoundsException, DuplicateNameException, InvalidInputException {
+		// Get the size of the pointer
+		byte pointerSize = getByte(pclntab.add(7));
+
+		// Declare variables, whose value will depend on the architecture
+		long nFunctionTab;
+		long offset;
+		Address functionNameTab;
+
+		// If the pointer's size is equal to the size of a pointer on a x64 system
+		if (pointerSize == POINTER_SIZE_X64) {
+			// Get the corresponding long value
+			nFunctionTab = getLong(pclntab.add(8));
+			// Calculate the next offset
+			offset = getLong(pclntab.add(8 + 2 * pointerSize));
+			// Get the function name tab's address
+			functionNameTab = pclntab.add(offset);
+			// Calculate the next offset
+			offset = getLong(pclntab.add(8 + 6 * pointerSize));
+		} else { // Assume x86, meaning 4 bytes in size
+			// Get the corresponding integer value
+			nFunctionTab = getInt(pclntab.add(8));
+			// Calculate the next offset
+			offset = getInt(pclntab.add(8 + 2 * pointerSize));
+			// Get the function name tab's address
+			functionNameTab = pclntab.add(offset);
+			// Calculate the next offset
+			offset = getInt(pclntab.add(8 + 6 * pointerSize));
+		}
+
+		// Get the address of the function tab
+		Address functionTab = pclntab.add(offset);
+		// Declare and initiate a copy of the function tab
+		Address p = functionTab;
+
+		// Declare several variables for later use
+		Address functionAddress;
+		long functionDataOffset;
+		Address namePointer;
+		Address nameAddress;
+
+		// Iterate over the number of functions in the tab
+		for (int i = 0; i < nFunctionTab; i++) {
+			// Check if the script's execution is cancelled
+			if (monitor.isCancelled()) {
+				// Break this loop, thus exiting the script's execution early
+				break;
+			}
+
+			// If the pointer size is one of a x64 system
+			if (pointerSize == POINTER_SIZE_X64) {
+				// Get the function's address
+				functionAddress = currentProgram.getAddressFactory().getAddress(Long.toHexString(getLong(p)).trim());
+				// Adjust the offset
+				p = p.add(pointerSize);
+				// Get the function data's offset
+				functionDataOffset = getLong(p);
+			} else { // Assume x86, meaning 4 bytes in size
+				// Get the function's address
+				functionAddress = currentProgram.getAddressFactory().getAddress(Long.toHexString(getInt(p)).trim());
+				// Adjust the offset
+				p = p.add(pointerSize);
+				// Get the function data's offset
+				functionDataOffset = getInt(p);
+			}
+			// Move p to the next address
+			p = p.add(pointerSize);
+			// Get the function name pointer
+			namePointer = functionTab.add(functionDataOffset + pointerSize);
+			// Get the address of the function name, which is always 32 bits in size
+			nameAddress = functionNameTab.add(getInt(namePointer));
+
+			/*
+			 * Create or rename the function at the address, with the name at the given
+			 * address
+			 */
+			createOrRenameFunction(functionAddress, nameAddress);
+		}
+	}
+
+	/**
+	 * Recovers function names for functions in Golang version 1.18 and above
+	 * 
+	 * @param pclntab the start address of the pclntab
+	 * @throws MemoryAccessException
+	 * @throws AddressOutOfBoundsException
+	 * @throws DuplicateNameException
+	 * @throws InvalidInputException
+	 */
+	private void recoverFunctionNamesGo118Plus(Address pclntab)
+			throws MemoryAccessException, AddressOutOfBoundsException, DuplicateNameException, InvalidInputException {
+		// Get the pointer size
+		byte pointerSize = getByte(pclntab.add(7));
+
+		// Declare several variables
+		long nFunctionTab;
+		long textStart;
+		long offset;
+		Address functionNameTab;
+
+		// Check if the pointer size matches a x64 system's pointer size
+		if (pointerSize == POINTER_SIZE_X64) {
+			// Get the number of functions tab address
+			nFunctionTab = getLong(pclntab.add(8));
+			// Get the start of the text
+			textStart = getLong(pclntab.add(8 + 2 * pointerSize));
+			// Calculate the next offset
+			offset = getLong(pclntab.add(8 + 3 * pointerSize));
+			// Get the address of the function name tab
+			functionNameTab = pclntab.add(offset);
+			// Calculate the next offset
+			offset = getLong(pclntab.add(8 + 7 * pointerSize));
+		} else { // Assume x86, meaning 4 bytes in size
+			// Get the number of functions tab address
+			nFunctionTab = getInt(pclntab.add(8));
+			// Get the start of the text
+			textStart = getInt(pclntab.add(8 + 2 * pointerSize));
+			// Calculate the next offset
+			offset = getInt(pclntab.add(8 + 3 * pointerSize));
+			// Get the address of the function name tab
+			functionNameTab = pclntab.add(offset);
+			// Calculate the next offset
+			offset = getInt(pclntab.add(8 + 7 * pointerSize));
+		}
+
+		// Get the address of the function tab
+		Address functionTab = pclntab.add(offset);
+
+		// Instantiate a copy of the function tab for later use
+		Address p = functionTab;
+
+		// Define the field size within the function tab, which is always 4
+		int functabFieldSize = 4;
+
+		// Declare several variables for later use
+		Address functionAddress;
+		int functionDataOffset;
+		Address namePointer;
+		Address nameAddress;
+
+		// Iterate over all functions
+		for (int i = 0; i < nFunctionTab; i++) {
+			// Check if the script's execution is cancelled
+			if (monitor.isCancelled()) {
+				// Break this loop, thus exiting the script's execution early
+				break;
+			}
+
+			// Get the address for the current function, which is always 32 bits in size
+			functionAddress = currentProgram.getAddressFactory()
+					.getAddress(Long.toHexString(getInt(p) + textStart).trim());
+			// Adjust p
+			p = p.add(functabFieldSize);
+
+			// Get the function data offset
+			functionDataOffset = getInt(p);
+			// Adjust p
+			p = p.add(functabFieldSize);
+			// Get the pointer to the name
+			namePointer = functionTab.add(functionDataOffset + functabFieldSize);
+			// Get the pointer to the address, which is always 32 bits
+			nameAddress = functionNameTab.add(getInt(namePointer));
+
+			/*
+			 * Create or rename the function at the address, with the name at the given
+			 * address
+			 */
+			createOrRenameFunction(functionAddress, nameAddress);
+		}
+	}
+}
+```
+
+`GolangRecovery.java`:
+
+```java
+//Runs all four Golang analysis scripts, based on their names. If no such script is found, an error is printed and the next script is executed.
+//@author Max 'Libra' Kersten of Trellix' Advanced Research Center
+//@category Golang
+//@keybinding
+//@menupath
+//@toolbar
+
+import ghidra.app.script.GhidraScript;
+
+public class GolangRecovery extends GhidraScript {
+
+	@Override
+	protected void run() throws Exception {
+		runScript("GolangFunctionRecovery");
+		runScript("GolangStaticStringRecovery");
+		runScript("GolangDynamicStringRecovery");
+		runScript("GolangTypeRecovery");
+	}
+}
+
+```
+
+`GolangStaticStringRecovery.java`:
+
+```java
+//Finds and creates statically allocated strings based on the Golang stringStruct 
+//@author Max 'Libra' Kersten of Trellix' Advanced Research Center, based on the work by padorka@cujoai (https://github.com/getCUJO/ThreatIntel/blob/master/Scripts/Ghidra/find_static_strings.py)
+//@category Golang
+//@keybinding
+//@menupath
+//@toolbar
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.IntegerDataType;
+import ghidra.program.model.data.PointerDataType;
+import ghidra.program.model.listing.Data;
+import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.mem.MemoryBlock;
+
+public class GolangStaticStringRecovery extends GhidraScript {
+
+	/**
+	 * A boolean which defines if logging should be enabled. When prioritising
+	 * speed, one might not be interested in getting all messages, but rather only
+	 * the concluding message, along with potential error messages. As such, this
+	 * boolean specifies if more logging should be enabled or disabled.</br>
+	 * </br>
+	 * The default value of this field is <code>true</code>.
+	 */
+	private static final boolean ENABLE_LOGGING = true;
+
+	/**
+	 * The size of a pointer on X64
+	 */
+	private static final int POINTER_SIZE_X64 = 8;
+
+	/*
+	 * #x86
+	 * 
+	 * #LEA REG, [STRING_ADDRESS]
+	 * 
+	 * #MOV [ESP + ..], REG
+	 * 
+	 * #MOV [ESP + ..], STRING_SIZE
+	 */
+
+	@Override
+	protected void run() throws Exception {
+		// Declare and initialise the number of recovered static strings
+		int stringCount = 0;
+
+		/*
+		 * Store the imagebase's offset and the pointer size as they are reused multiple
+		 * times
+		 */
+		long imageBaseOffset = currentProgram.getImageBase().getOffset();
+		int pointerSize = currentProgram.getDefaultPointerSize();
+
+		// Iterate over all memory blocks
+		for (MemoryBlock block : getMemoryBlocks()) {
+			/*
+			 * If the block name is not .data or .rodata, it can be skipped, as static
+			 * strings are only present in the data sections.
+			 * 
+			 * The __data and __rodata section names are used in Macho-O binaries.
+			 */
+			if (block.getName().equalsIgnoreCase(".data") == false
+					&& block.getName().equalsIgnoreCase(".rodata") == false
+					&& block.getName().equalsIgnoreCase("__data") == false
+					&& block.getName().equalsIgnoreCase("__rodata") == false) {
+				continue;
+			}
+
+			// Get the start of the block
+			Address blockStart = block.getStart();
+			// Get the end of the block
+			Address blockEnd = block.getEnd();
+
+			/*
+			 * Run as long as the start is less than, or equal to the end address, thus
+			 * ensuring the whole block is iterated over
+			 */
+			while (blockStart.compareTo(blockEnd) <= 0) {
+				// Check if the script's execution is cancelled
+				if (monitor.isCancelled()) {
+					// Return from the run function, thus exiting the script's execution early
+					return;
+				}
+
+				// Declare the string address variable
+				Address stringAddress;
+
+				// Declare and initialises the variable
+				Address stringAddressPointer = blockStart;
+
+				// Get the length address
+				Address lengthAddress = blockStart.add(pointerSize);
+
+				// Increment the start of the block
+				blockStart = blockStart.add(pointerSize);
+
+				/*
+				 * The next segment of the code is within a try-catch structure. The reason for
+				 * this is simple: the static string recovery strategy does not work in all
+				 * cases. An exception is simply ignored, as the catch segment simply continues
+				 * to the next step. Since the start of the block is compared to the end of the
+				 * block, the whole section is iterated over, meaning that any error just moves
+				 * over to the next piece of memory within the block.
+				 */
+				try {
+					// Declare the length variable
+					long length;
+
+					// Check if the pointer size matches a x64 pointer's size
+					if (pointerSize == POINTER_SIZE_X64) {
+						// Get the long value at the given address
+						length = getLong(lengthAddress);
+					} else { // Assume the binary is x86
+						// Get the integer value at the given address
+						length = getInt(lengthAddress);
+					}
+
+					/*
+					 * To avoid false positives, strings which have no length, or are longer than
+					 * 100 characters, are considered incorrect and thus skipped
+					 */
+					if (length <= 0 || length > 100) {
+						continue;
+					}
+
+					// Check if the pointer size matches a x64 pointer's size
+					if (pointerSize == POINTER_SIZE_X64) {
+						// Get the long at the given string address pointer
+						stringAddress = currentProgram.getAddressFactory()
+								.getAddress(Long.toHexString(getLong(stringAddressPointer)));
+					} else {// Assume the binary is x86
+						// Get the integer at the given string address pointer
+						stringAddress = currentProgram.getAddressFactory()
+								.getAddress(Long.toHexString(getInt(stringAddressPointer)));
+					}
+
+					/*
+					 * If the address offset is less than the image base offset, the current attempt
+					 * is faulty and needs to be skipped
+					 */
+					if (stringAddress.getOffset() < imageBaseOffset) {
+						continue;
+					}
+
+					/*
+					 * Check if the string is printable. If it is not, the current address needs to
+					 * be skipped
+					 */
+					if (isPrintable(stringAddress, length) == false) {
+						continue;
+					}
+
+					// Create a pointer to the string
+					createData(stringAddressPointer, PointerDataType.dataType);
+
+					// Get the length
+					Data data = getDataAt(lengthAddress);
+
+					/*
+					 * If there is no data type defined at the given address, it needs to be created
+					 */
+					if (data == null) {
+						data = createData(lengthAddress, IntegerDataType.dataType);
+					}
+
+					// Get the type of the data
+					DataType dataType = data.getDataType();
+					// Get the name of the data type
+					String dataTypeName = dataType.getName();
+
+					/*
+					 * If the data type is an undefined type of 4 or 8 bytes in size, it is to be
+					 * removed, as a new type is to be set
+					 */
+					if (dataTypeName.equalsIgnoreCase("undefined4") || dataTypeName.equalsIgnoreCase("undefined8")) {
+						removeData(getDataAt(lengthAddress));
+					}
+
+					// Create an integer at the given address
+					createData(lengthAddress, IntegerDataType.dataType);
+
+					/*
+					 * Create the ASCII string at the given address with the given length (cast to a
+					 * boxed long to use the intValue function)
+					 */
+					Data stringData = createAsciiString(stringAddress, ((Long) length).intValue());
+
+					// Get the string value as a string
+					String string = (String) stringData.getValue();
+
+					// Optionally pPrint the location and the string value for the user
+					log("0x" + Long.toHexString(stringAddress.getOffset()) + " : \"" + string + "\"");
+
+					// Increment the number of recovered strings
+					stringCount++;
+				} catch (Exception e) {
+					/*
+					 * Exceptions are bound to happen due to some of the what more crude approaches,
+					 * but they can simply be skipped
+					 */
+					continue;
+				}
+			}
+		}
+
+		// Inform the analyst of the number of recovered strings
+		println("Total number of recovered static strings: " + stringCount);
+	}
+
+	/**
+	 * Checks if a string, starting at the given address with the given length, is
+	 * printable. Printable in this context means that the value of each byte of the
+	 * string is between 32 and 126
+	 * 
+	 * @param start  the address of the start of the string
+	 * @param length the length of the string
+	 * @return true if the complete string is printable, false if not
+	 * @throws MemoryAccessException
+	 */
+	private boolean isPrintable(Address start, long length) throws MemoryAccessException {
+		// Iterate over the complete string
+		for (int i = 0; i < length; i++) {
+			// Get the current byte
+			byte b = getByte(start);
+			// Check the byte's value
+			if (b < 32 || b > 126) {
+				// If any of the bytes has the wrong value, return false early
+				return false;
+			}
+			// Increment the string's address by one
+			start = start.add(1);
+		}
+		/*
+		 * If the early return isn't hit and the complete string has been iterated over,
+		 * it means the complete string is printable, thus true needs to be returned
+		 */
+		return true;
+	}
+
+	/**
+	 * A wrapper function for the
+	 * {@link ghidra.app.script.GhidraScript#println(String)} which is only called
+	 * if the {@link #ENABLE_LOGGING} is <code>true</code>. The logging that is
+	 * (potentially) passing through this function, is meant as optional logging.
+	 * The final conclusion, as well as the logging of any error messages, should be
+	 * printed via direct calls. The easy-to-omit nature of optional messages speeds
+	 * up automated analysis by limiting the number of print calls.
+	 * 
+	 * @param message
+	 */
+	private void log(String message) {
+		if (ENABLE_LOGGING) {
+			println(message);
+		}
+	}
+}
+```
+
+`GolangTypeRecovery.java`:
+
+```java
+//Recovers Golang types within the given binary
+//@author Max 'Libra' Kersten of Trellix' Advanced Research Center, based on the work by padorka@cujoai (https://github.com/getCUJO/ThreatIntel/blob/master/Scripts/Ghidra/type_extract.py)
+//@category Golang
+//@keybinding
+//@menupath
+//@toolbar
+
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Data;
+import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.symbol.Reference;
+
+public class GolangTypeRecovery extends GhidraScript {
+
+	/**
+	 * A boolean which defines if logging should be enabled. When prioritising
+	 * speed, one might not be interested in getting all messages, but rather only
+	 * the concluding message, along with potential error messages. As such, this
+	 * boolean specifies if more logging should be enabled or disabled.</br>
+	 * </br>
+	 * The default value of this field is <code>true</code>.
+	 */
+	private static final boolean ENABLE_LOGGING = true;
+
+	/**
+	 * The numeric value for the function kind, as defined in the Golang language
+	 * specification
+	 * 
+	 * @see <a href="https://go.dev/src/reflect/type.go">The Golang source code for
+	 *      the Type class, see the constant list under <code>type Kind uint</code>
+	 *      for the complete list</a>
+	 */
+	private static final int KIND_FUNCTION = 0x13;
+
+	/**
+	 * The numeric value for the interface kind, as defined in the Golang language
+	 * specification
+	 * 
+	 * @see <a href="https://go.dev/src/reflect/type.go">The Golang source code for
+	 *      the Type class, see the constant list under <code>type Kind uint</code>
+	 *      for the complete list</a>
+	 */
+	private static final int KIND_INTERFACE = 0x14;
+
+	/**
+	 * The numeric value for the pointer kind, as defined in the Golang language
+	 * specification
+	 * 
+	 * @see <a href="https://go.dev/src/reflect/type.go">The Golang source code for
+	 *      the Type class, see the constant list under <code>type Kind uint</code>
+	 *      for the complete list</a>
+	 */
+	private static final int KIND_POINTER = 0x16;
+
+	/**
+	 * The numeric value for the struct kind, as defined in the Golang language
+	 * specification
+	 * 
+	 * @see <a href="https://go.dev/src/reflect/type.go">The Golang source code for
+	 *      the Type class, see the constant list under <code>type Kind uint</code>
+	 *      for the complete list</a>
+	 */
+	private static final int KIND_STRUCT = 0x19;
+
+	/**
+	 * The default PC Quantum size (minimal instruction size), used in x86, x86_64,
+	 * and WASM
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_ONE = 1;
+
+	/**
+	 * The PC Quantum size (minimal instruction size), used in RISCV, RISCV x64,
+	 * S390, S390X, SH, and SHbe
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_TWO = 2;
+
+	/**
+	 * The PC Quantum size (minimal instruction size), used in ALPHA, ARM, ARMbe,
+	 * M68K, MIPS, MIPSle, MIPS64p32, MIPS64p32le, MIPS64, MIPS64le, NIOS2, PPC,
+	 * PPC64, PPC64le, SPARC, and SPARC64
+	 * 
+	 * @see <a href=
+	 *      "https://github.com/golang/gofrontend/blob/master/libgo/goarch.sh">Golang
+	 *      architecture documentation</a>
+	 */
+	private static final int INSTRUCTION_SIZE_FOUR = 4;
+
+	/**
+	 * The size of a pointer on X86
+	 */
+	private static final int POINTER_SIZE_X86 = 4;
+
+	/**
+	 * The size of a pointer on X64
+	 */
+	private static final int POINTER_SIZE_X64 = 8;
+
+	/**
+	 * The human readable version strings that are to be used to determine the
+	 * version of a Golang binary. These will be converted to byte strings during
+	 * the script's runtime, and then stored in the {@link #versions} variable. The
+	 * sole purpose of this additional step is to more easily update this script
+	 * when fixing bugs and/or adding support for later Golang versions.
+	 */
+	private static final String[] HUMAN_READABLE_VERSIONS = { "go1.20", "go1.19", "go1.18", "go1.17", "go1.16",
+			"go1.15", "go1.14", "go1.13", "go1.12", "go1.11", "go1.10", "go1.9", "go1.8", "go1.7", "go1.6", "go1.5",
+			"go1.4", "go1.3", "go1.2" };
+
+	/**
+	 * Byte strings of the versions in the {@link #HUMAN_READABLE_VERSIONS}
+	 * variable. This variable is to be initialised during runtime.
+	 */
+	private String[] versions;
+
+	/**
+	 * The Golang version of the analysed binary, stored globally for later use to
+	 * avoid looking for the version multiple times. This value is one of the
+	 * {@link #versions}, which is more easily read in its human readable format as
+	 * defined within the {@link #HUMAN_READABLE_VERSIONS}.
+	 */
+	private String currentVersion;
+
+	/**
+	 * The magic values for the pclntab, as found in the Golang source code. Note
+	 * that version <code>1.2</code> is less than <code>1.16</code>, since the value
+	 * after the dot is to be seen as an incrementing value number, not as the usual
+	 * mathematical way of writing. The values in the array are for the following
+	 * Golang versions, in order:
+	 * 
+	 * <ol>
+	 * <li>Version 1.2</li>
+	 * <li>Version 1.16</li>
+	 * <li>Version 1.18</li>
+	 * <li>Version 1.20</li>
+	 * </ol>
+	 * 
+	 * @see <a href="https://go.dev/src/debug/gosym/pclntab.go">Golang pclntab
+	 *      source code</a>
+	 */
+	private static String[] pclntab_magic = { "\\xfb\\xff\\xff\\xff\\x00\\x00", "\\xfa\\xff\\xff\\xff\\x00\\x00",
+			"\\xf0\\xff\\xff\\xff\\x00\\x00", "\\xf1\\xff\\xff\\xff\\x00\\x00" };
+
+	/**
+	 * The size of a pointer, in bytes, within the currently loaded binary
+	 */
+	private int binaryPointerSize;
+
+	/**
+	 * A hash set of addresses with recovered types, used to avoid recovering the
+	 * same type twice.<br>
+	 * <br>
+	 * The hash set is used, instead of an {@link java.util.ArrayList}, as its more
+	 * efficient. Both the {@link java.util.HashSet#contains(Object)} and
+	 * {@link java.util.HashSet#add(Object)} methods function in <code>O(1)</code>,
+	 * in contrast to the inner workings of other types, which often work in
+	 * <code>O(n)</code>.<br>
+	 * <br>
+	 * Testing locally shows that the time to complete the script, on a test sample
+	 * which contains 3047 to-be recovered types, is nearly three times as much when
+	 * using an {@link java.util.ArrayList}, compared to the
+	 * {@link java.util.HashSet}. The specifics obviously depend on the used
+	 * hardware, but it shows that the hash set implementation is more efficient.
+	 */
+	private static HashSet<Address> recoveredTypes = new HashSet<>();
+
+	/**
+	 * The script's main function. This script can be executed normally and
+	 * headless.
+	 */
+	@Override
+	protected void run() throws Exception {
+		// Initialise the byte string versions, based on the human readable ones
+		versions = createVersionByteStrings();
+
+		// Declares and initialises the executable format of the current program
+		String executableFormat = currentProgram.getExecutableFormat();
+
+		/*
+		 * Initialises the global variable to store the pointer size of the currently
+		 * analysed binary in
+		 */
+		binaryPointerSize = currentProgram.getDefaultPointerSize();
+
+		// Optionally print the executable format
+		log("Executable format: " + executableFormat);
+
+		/*
+		 * Defines the address array which is to be initialised differently, depending
+		 * on the file's type
+		 */
+		Address[] objects;
+
+		// If the file is of the PE format
+		if (executableFormat.equalsIgnoreCase("Portable Executable (PE)")) {
+			// Initialise the objects array
+			objects = scanPeFile();
+		} else if (executableFormat.equalsIgnoreCase("Executable and Linking Format (ELF)")) { // If the file is of the
+																								// ELF format
+			// Initialise the objects array
+			objects = scanElfFile();
+		} else if (executableFormat.equalsIgnoreCase("Mac OS X Mach-O")) {
+			objects = scanMachoFile();
+		} else {
+			// Inform the analyst of the error
+			printerr("Incorrect file format: \"" + executableFormat + "\"");
+			// Exit the script
+			return;
+		}
+
+		/*
+		 * If the objects array is null, an error occurred earlier on, of which the
+		 * analyst is already informed via an earlier printerr statement. As such, this
+		 * function simply needs to return early to end the script's execution.
+		 */
+		if (objects == null) {
+			return;
+		}
+
+		// Find the Golang version within the given binary
+		currentVersion = findVersion();
+
+		// Check if a version was found
+		if (currentVersion == null) {
+			// Inform the analyst of the failure to find a version
+			printerr("No Golang version could be found in the binary!");
+			// Return early as the version is required later on
+			return;
+		}
+
+		/*
+		 * Regardless if the file is of the PE or ELF format, the returned addresses are
+		 * the same. As such, the array can be used in the same way. To easier read the
+		 * function call, read it as:
+		 * 
+		 * getAllTypes(typelinks, endOfTypelinks, type);
+		 */
+		recoverAllTypes(objects[0], objects[1], objects[2]);
+
+		// Print the number of recovered types for the analyst
+		println("Types recovered: " + recoveredTypes.size());
+	}
+
+	/**
+	 * A wrapper function for the
+	 * {@link ghidra.app.script.GhidraScript#println(String)} which is only called
+	 * if the {@link #ENABLE_LOGGING} is <code>true</code>. The logging that is
+	 * (potentially) passing through this function, is meant as optional logging.
+	 * The final conclusion, as well as the logging of any error messages, should be
+	 * printed via direct calls. The easy-to-omit nature of optional messages speeds
+	 * up automated analysis by limiting the number of print calls.
+	 * 
+	 * @param message
+	 */
+	private void log(String message) {
+		if (ENABLE_LOGGING) {
+			println(message);
+		}
+	}
+
+	/**
+	 * Gets the value of the bytes as a little endian short
+	 * 
+	 * @param bytes the value to read
+	 * @return the value of the bytes as a little endian short
+	 */
+	private short getShort(byte[] bytes) {
+		// Allocate a buffer of two bytes
+		ByteBuffer buffer = ByteBuffer.allocate(2);
+		// Set the order
+		buffer.order(ByteOrder.LITTLE_ENDIAN);
+		// Place the first byte
+		buffer.put(bytes[0]);
+		// Place the second byte
+		buffer.put(bytes[1]);
+		// Get the value as a short, in little endian format
+		return buffer.getShort(0);
+	}
+
+	/**
+	 * Ingests the human readable versions and converts them into byte strings. The
+	 * byte strings can be used to searched for using
+	 * {@link #findBytes(Address, String)} and overloads thereof.<br>
+	 * <br>
+	 * An example of a byte string is <code>\xfb\xff\xff\xff\x00\x00</code>.
+	 * 
+	 * @return the byte strings of the given versions
+	 */
+	private String[] createVersionByteStrings() {
+		// Declare and initialise the output variable
+		String[] byteStrings = new String[HUMAN_READABLE_VERSIONS.length];
+
+		// Loop over all human readable strings
+		for (int i = 0; i < HUMAN_READABLE_VERSIONS.length; i++) {
+			/*
+			 * Convert each human readable string into a byte string, and store it in the
+			 * output variable
+			 */
+			byteStrings[i] = createByteString(HUMAN_READABLE_VERSIONS[i]);
+		}
+
+		// Return the newly created byte strings
+		return byteStrings;
+	}
+
+	/**
+	 * Returns a byte string of the given string, assuming the given input is UTF-8
+	 * encoded
+	 * 
+	 * @param input the UTF-8 encoded string
+	 * @return a byte string of the given input
+	 */
+	private String createByteString(String input) {
+		// Get the bytes from the given input
+		byte[] bytes = input.getBytes(Charset.forName("UTF-8"));
+		// Declare the byte string and initialise it as an empty string
+		String byteString = "";
+
+		// Iterate over all bytes
+		for (byte currentByte : bytes) {
+			// Get the current byte in string form
+			String byteStringByte = Integer.toHexString(currentByte);
+
+			/*
+			 * If the length of the current string is only a single character, prepend a
+			 * zero to ensure two digits are present for the given byte in string form
+			 */
+			if (byteStringByte.length() == 1) {
+				byteStringByte = "0" + byteStringByte;
+			}
+
+			/*
+			 * Prepend "\x" to byte string's current byte, which is then added to the
+			 * complete byte string
+			 */
+			byteString += "\\x" + byteStringByte;
+		}
+		// Return the complete byte string
+		return byteString;
+	}
+
+	/**
+	 * Gets the address at the given address, essentially dereferencing the given
+	 * pointer
+	 * 
+	 * @param address the address to dereference
+	 * @return the dereferenced address
+	 * @throws MemoryAccessException if the given address cannot be dereferenced
+	 */
+	private Address getAddressAt(Address address) throws MemoryAccessException {
+		return toAddr(Long.toHexString(getInt(address)));
+	}
+
+	/**
+	 * Removes data at the given location, which is required to retype certain
+	 * variables
+	 * 
+	 * @param address the address to remove the type from
+	 * @param length  the length of the data to remove the typing from
+	 * @throws Exception if the address is invalid or null
+	 */
+	private void removeData(Address address, int length) throws Exception {
+		// Iterate for the given length
+		for (int i = 0; i < length; i++) {
+			/*
+			 * Remove the data at the given address plus the offset of the length, starting
+			 * at 0
+			 */
+			removeDataAt(address.add(i));
+		}
+		// Return if no exception is thrown
+	}
+
+	/**
+	 * Gets the sections that match (case insensitive) the given section name
+	 * 
+	 * @param sectionName the section name to match, matching is case insensitive
+	 * @return the starting addresses of all sections which match the given section
+	 *         name
+	 */
+	private Address[] getSection(String sectionName) {
+		// Iterate over all memory blocks
+		for (MemoryBlock block : getMemoryBlocks()) {
+			// If the block's name matches the given section name, case insensitive
+			if (block.getName().equalsIgnoreCase(sectionName)) {
+				// Get the start of the block
+				Address start = block.getStart();
+				// Get the end of the block
+				Address end = block.getEnd();
+				/*
+				 * Optionally print a message for the analyst with the block's name, start
+				 * address, and end address
+				 */
+				log(String.format("%s [start: 0x%x, end: 0x%x]", block.getName(), start.getOffset(), end.getOffset()));
+				// Return the start and end addresses
+				return new Address[] { start, end };
+			}
+		}
+		// Print a message for the analyst indicating the section couldn't be found
+		printerr("Section \"" + sectionName + "\" not found!");
+		// Return null in the case of an error
+		return null;
+	}
+
+	/**
+	 * Returns the current version from any of the given versions, based on its
+	 * presence in the binary. The first version that is found is used.
+	 * 
+	 * @return the byte string version that is found
+	 */
+	private String findVersion() {
+		// Iterate over all versions in the global variable
+		for (int i = 0; i < versions.length; i++) {
+			// Declare a local variable for the currently iterated version
+			String version = versions[i];
+
+			// Find the address of the first occurrence of the current version
+			Address[] addresses = findBytes(null, version, 1000);
+
+			// Check if any results were found
+			if (addresses == null || addresses.length == 0) {
+				// If not, continue to the next attempt to find the version
+				continue;
+			}
+			/*
+			 * If the address is not null, inform the analyst with the human readable
+			 * version, for all results
+			 */
+			for (Address address : addresses) {
+				// Optionally print the Golang version
+				log("Golang version found at 0x" + Long.toHexString(address.getOffset()) + " : "
+						+ HUMAN_READABLE_VERSIONS[i]);
+			}
+
+			/*
+			 * Return the current version based on the first match. This can be wrong, which
+			 * is why all matches are printed to the analyst
+			 */
+			return version;
+		}
+
+		// Return null in the case of a failure to find the version
+		return null;
+	}
+
+	/**
+	 * Until and including Golang 1.16, the length offset was two bytes in size.
+	 * From Golang 1.17 onwards, the length offset uses a variable length.<br>
+	 * <br>
+	 * For versions until and including 1.16, the second byte is used, which causes
+	 * the script to potentially miss long strings.<br>
+	 * <br>
+	 * For versions 1.17 or later, the first byte is used, which causes the script
+	 * to potentially miss long strings.
+	 * 
+	 * @return the length offset
+	 */
+	private int getLengthOffset() {
+		/*
+		 * Store the length of the current version byte string locally, which avoids
+		 * calling the <code>length()<code> function several times
+		 */
+		int currentVersionLength = currentVersion.length();
+		/*
+		 * Get the first digit of the version (which is the one but last byte in the
+		 * byte string), where the "1." part is omitted as its not required
+		 */
+		String firstDigit = currentVersion.substring(currentVersionLength - 6, currentVersionLength - 4);
+		// Convert the value into a hexadecimal integer
+		int integer = Integer.parseInt(firstDigit, 16);
+		// Convert the value into a character
+		char c = (char) integer;
+
+		/*
+		 * Declare and initialise the variable to store the version number in, in string
+		 * format
+		 */
+		String versionNumberString = "" + c;
+
+		/*
+		 * Get the last digit of the version (which is the one but last byte in the byte
+		 * string), where the "1." part is omitted as its not required
+		 */
+		String lastDigit = currentVersion.substring(currentVersionLength - 2, currentVersionLength);
+		// Convert the value into a hexadecimal integer
+		integer = Integer.parseInt(lastDigit, 16);
+		// Convert the value into a character
+		c = (char) integer;
+		// Append the number
+		versionNumberString = versionNumberString + c;
+
+		// Convert the version number into an integer
+		int versionNumber = Integer.parseInt(versionNumberString);
+
+		// Compare the version to the versions of 1.17 or later
+		if (versionNumber >= 17) {
+			// Return one, as only one byte will be used
+			return 1;
+		}
+
+		/*
+		 * If none of the >= 1.17 versions matches, assume the version is lower than
+		 * that, and thus the second byte is used
+		 */
+		return 2;
+	}
+
+	/**
+	 * Looks for the pclntab within the binary, without looking for a section with
+	 * the same name, but rather for a magic value within the binary
+	 * 
+	 * @param pclntab_magic the byte strings of pclntab magic strings to look for
+	 * @return Returns an object array where the pclntab address is at index 0, and
+	 *         the matching magic byte string is at index 1. The magic value can be
+	 *         null!
+	 * @throws MemoryAccessException if the pclntab memory cannot be accessed
+	 */
+	private Object[] findPclntabPE() throws MemoryAccessException {
+		// Iterate over all plcntab magic byte strings
+		for (String magic : pclntab_magic) {
+			// Search through the program for the given byte string
+			Address[] results = findBytes(null, magic, 1000);
+
+			// Ensure the results are not null nor empty
+			if (results == null || results.length == 0) {
+				// If no matches are found, continue
+				continue;
+			}
+
+			// Iterate over all results
+			for (int i = 0; i < results.length; i++) {
+				// Get the currently iterated address
+				Address tempAddress = results[i];
+
+				// If the returned value is not found
+				if (tempAddress == null) {
+					// Move to the next result in the address array
+					continue;
+				}
+				// Check if the match is aligned with the pclntab structure
+				if (isPclntab(tempAddress)) {
+					// Optionally inform the analyst of the finding
+					log("pclntab found!");
+					// Return the pclntab's address and the respective magic value
+					return new Object[] { tempAddress, magic };
+				}
+			}
+		}
+		// If nothing can be found, inform the analyst and then return null
+		printerr("The pclntab could not be found!");
+		return null;
+	}
+
+	/**
+	 * Checks if the given address matches the pclntab structure pattern
+	 * 
+	 * @param address the address to check
+	 * @return true if the structure matches, false if not
+	 * @throws MemoryAccessException if the memory at the given address (and a few
+	 *                               bytes more) cannot be accessed
+	 */
+	private boolean isPclntab(Address address) throws MemoryAccessException {
+		// Get the PC Quantum Size value
+		byte pcQuantum = getByte(address.add(6));
+		// Get the pointer size from the binary
+		byte pclntabPointerSize = getByte(address.add(7));
+		// Verify the validity of the values
+		if ((pcQuantum != INSTRUCTION_SIZE_ONE && pcQuantum != INSTRUCTION_SIZE_TWO
+				&& pcQuantum != INSTRUCTION_SIZE_FOUR)
+				|| (pclntabPointerSize != POINTER_SIZE_X86 && pclntabPointerSize != POINTER_SIZE_X64)) {
+			// Return false if the conditions aren't met
+			return false;
+		}
+		// Return true if the conditions are met
+		return true;
+	}
+
+	/**
+	 * Checks if the given address is the start of the module data
+	 * 
+	 * @param address the address to check
+	 * @param magic   the magic value of the module data from the pclntab
+	 * @return true if the given address is the address of the module data, false if
+	 *         not
+	 * @throws MemoryAccessException if the memory at the given address, and offsets
+	 *                               thereof, aren't accessible for any reason
+	 */
+	private boolean isModuleData(Address address, String magic) throws MemoryAccessException {
+		// Declare the offset
+		int offset;
+
+		/*
+		 * Check if the magic value of Golang version 1.2 is in-use, as the offset
+		 * differs in this case
+		 */
+		if (magic.equalsIgnoreCase("\\xfb\\xff\\xff\\xff\\x00\\x00")) { // Golang version 1.2 magic value
+			offset = 12;
+		} else {
+			offset = 22;
+		}
+
+		// Get the text address based on the given address and the offset
+		Address text = getAddressAt(address.add(offset * binaryPointerSize));
+
+		// Get the memory block that corresponds with the .text section
+		MemoryBlock textBlock = currentProgram.getMemory().getBlock(".text");
+
+		/*
+		 * Verify the module data by ensuring the offset from the module data matches
+		 * the offset of the .text block
+		 */
+		if (text != null && textBlock != null && text.getOffset() == textBlock.getStart().getOffset()) {
+			log("Module data found!");
+			return true;
+		}
+
+		// Return false if the offset does not match, or if there is no .text section
+		return false;
+	}
+
+	/**
+	 * Finds the address of the module data, based on the given pclntab address and
+	 * the pclntab magic value
+	 * 
+	 * @param pclntab the address of the pclntab
+	 * @param magic   the magic value of the pclntab
+	 * @return the address of the module data
+	 * @throws MemoryAccessException if the pclntab, or offsets thereof, aren't
+	 *                               accessible for any reason
+	 */
+	private Address findModuleData(Address pclntab, String magic) throws MemoryAccessException {
+		// Declare the module data address
+		Address moduleData;
+		// Get all references to the pclntab
+		Reference[] pclntabReferences = getReferencesTo(pclntab);
+
+		// Iterate over all references
+		for (Reference reference : pclntabReferences) {
+			// Get the reference-making address
+			moduleData = reference.getFromAddress();
+			// Check if the address matches the module data structure
+			if (isModuleData(moduleData, magic)) {
+				// Optionally print the module data's address
+				log("Module data address: " + moduleData.toString(false, true));
+				// Return the address once a match is found
+				return moduleData;
+			}
+		}
+
+		/*
+		 * If no such reference was found, a search through the whole program is to be
+		 * started for the usage of the pclntab address, which is referenced in the
+		 * module data. Searching only through specific sections is possible, but since
+		 * this function is only called once in the beginning, and the improved accuracy
+		 * outweighs the marginally extra time that is required
+		 */
+
+		/*
+		 * Create a string of the inverted and hexadecimal representation of the pclntab
+		 * address
+		 */
+		String invertedHexPclntab = Long.toHexString(Long.reverseBytes(pclntab.getOffset()));
+
+		/*
+		 * If the binary size is four, the string needs to be 8 characters long (four
+		 * times two characters, meaning four time two bytes).
+		 */
+		if (binaryPointerSize == 4) {
+			invertedHexPclntab = invertedHexPclntab.substring(0, 8);
+		}
+		/*
+		 * If the pointer size is not four, its assumed to be eight, which is the
+		 * default value of the long representation already, meaning no change has to be
+		 * made
+		 */
+		String byteStringPclntab = "";
+
+		// Iterate over all characters, in sets of two per iteration
+		for (int i = 0; i < invertedHexPclntab.length(); i = i + 2) {
+			// Create the byte in string form, which is appended to the byte string variable
+			byteStringPclntab += "\\x" + invertedHexPclntab.charAt(i) + invertedHexPclntab.charAt(i + 1);
+		}
+
+		/*
+		 * Get all results for the given byte string, starting at the program's
+		 * beginning
+		 */
+		Address[] results = findBytes(null, byteStringPclntab, 1000);
+
+		// If the results are null or empty, return early
+		if (results != null && results.length > 0) {
+			// Iterate over all results
+			for (int i = 0; i < results.length; i++) {
+				// Temporarily store the current result in the module data variable
+				moduleData = results[i];
+
+				// Check if the current address is the start of the module data structure
+				if (isModuleData(moduleData, magic)) {
+					// Return the value if that is the case
+					return moduleData;
+				}
+			}
+		}
+		// Inform the analyst of the missing value
+		printerr("The module data cannot be found!");
+		// Return null if no match is found
+		return null;
+	}
+
+	/**
+	 * Gets the typeStart, typeEnd, typeLinks, and numberOfTypes variables based on
+	 * the given module data address and the plcntab magic value.<br>
+	 * <br>
+	 * Returns an array of objects which contains the following types and values, in
+	 * order:<br>
+	 * <ol>
+	 * <li>Address typeStart</li>
+	 * <li>Address typeEnd</li>
+	 * <li>Address typeLinks</li>
+	 * <li>int numberOfTypes</li>
+	 * </ol>
+	 * 
+	 * @param moduleData  the address of the module data
+	 * @param magic       the plcntab magic value
+	 * @param pointerSize the size of the pointer in bytes
+	 * @return in order Address type, Address etype, Address typelinks, int ntypes
+	 * @throws MemoryAccessException if the value at the module data address, or
+	 *                               offsets thereof, cannot be accessed for any
+	 *                               reason
+	 */
+	private Object[] getTypeLinks(Address moduleData, String magic) throws MemoryAccessException {
+		// Declaration of the two offsets
+		int offset;
+		int offset2;
+
+		// The offsets differ in Golang 1.2
+		if (magic.equalsIgnoreCase("\\xfb\\xff\\xff\\xff\\x00\\x00")) { // Golang 1.2 magic value
+			offset = 25;
+			offset2 = 30;
+		} else if (magic.equalsIgnoreCase("\\xfa\\xff\\xff\\xff\\x00\\x00")
+				|| magic.equalsIgnoreCase("\\xf0\\xff\\xff\\xff\\x00\\x00")) { // Golang 1.16 and Golang 1.18
+																				// respectively
+			offset = 35;
+			offset2 = 42;
+		} else if (magic.equalsIgnoreCase("\\xf1\\xff\\xff\\xff\\x00\\x00")) { // Golang 1.20
+			offset = 37;
+			offset2 = 44;
+		} else {
+			printerr("No pclntab magic value matched, thus making the offsets unknown!");
+			return null;
+		}
+
+		// Get the required values
+		Address typeStart = getAddressAt(moduleData.add(offset * binaryPointerSize));
+		Address typeEnd = getAddressAt(moduleData.add((offset + 1) * binaryPointerSize));
+		Address typeLinks = getAddressAt(moduleData.add(offset2 * binaryPointerSize));
+		int numberOfTypes = getInt(moduleData.add((offset2 + 1) * binaryPointerSize));
+
+		// Return the values in an object array
+		return new Object[] { typeStart, typeEnd, typeLinks, numberOfTypes };
+	}
+
+	/**
+	 * Recover the types, based on the type's address and the type's location
+	 * 
+	 * @param typeAddress
+	 * @param type
+	 * @return
+	 * @throws Exception
+	 */
+	private Address recoverTypes(Address typeAddress, Address type) throws Exception {
+		try {
+			// Check if the type is already recovered
+			if (recoveredTypes.contains(typeAddress)) {
+				// If the type is already recovered, optionally notify the analyst
+				log(String.format("Type already recovered at  0x%x", typeAddress.getOffset()));
+				// Return the type's address
+				return typeAddress;
+			}
+
+			// Gets the length offset
+			int lengthOffset = getLengthOffset();
+
+			// Add the current type to the list of recovered types
+			recoveredTypes.add(typeAddress);
+
+			// Declare and initialise the temporary offset variable
+			int tempOffset = 2 * binaryPointerSize + 4;
+			// Declare and initialise the temporary address
+			Address tempAddress = typeAddress.add(tempOffset);
+
+			// Get the byte at the given address
+			byte b = getByte(tempAddress);
+
+			// Declare and initialise the uncommon flag
+			byte tflagUncommon = (byte) (b & 0x01);
+
+			// Get the byte for the extra star flag
+			b = getByte(typeAddress.add(2 * binaryPointerSize + 4));
+
+			// Declare and initialise the extra star far
+			byte tflagExtraStar = (byte) (b & 0x02);
+
+			// Get the byte for the kind
+			b = getByte(typeAddress.add(2 * binaryPointerSize + 7));
+
+			// Declare and initialise the kind
+			byte kind = (byte) (b & 0x1F);
+
+			// Get the type name offset
+			int nameOffset = getInt(typeAddress.add(4 * binaryPointerSize + 8));
+
+			// Get the type name length
+			byte nameLength = getByte(type.add(nameOffset + lengthOffset));
+
+			// Get the name's address
+			Address nameAddress = type.add(nameOffset + lengthOffset + 1);
+
+			// Remove the data type(s) from the given addresses
+			removeData(nameAddress, nameLength);
+
+			// Create an ASCII string at the given address with the given length
+			Data name = createAsciiString(nameAddress, nameLength);
+
+			// Declare the variable
+			String nameType;
+
+			// Get the type's name
+			if (tflagExtraStar == 1) {
+				nameType = ((String) name.getValue()).substring(1);
+			} else {
+				nameType = ((String) name.getValue());
+			}
+
+			// Optionally print the name of the type
+			log("Recovered: \"" + nameType + "\"");
+
+			// Create a label at the given address for the given name, excluding spaces
+			createLabel(typeAddress, nameType.replace(" ", "_"), true);
+
+			/*
+			 * The function type (funcType) is structured as shown below. More information
+			 * can be found here: https://go.dev/src/reflect/type.go
+			 *
+			 * struct {
+			 * 
+			 * funcType uncommonType
+			 * 
+			 * [2]*rtype // [0] is in, [1] is out
+			 * 
+			 * }
+			 * 
+			 * type funcType struct {
+			 * 
+			 * rtype
+			 * 
+			 * inCount uint16
+			 * 
+			 * outCount uint16 //the top bit is set if it is the last input parameter
+			 * 
+			 * }
+			 */
+			if (kind == KIND_FUNCTION) {
+				byte[] bytes = getBytes(typeAddress.add(4 * binaryPointerSize + 8 + 8), 2);
+				short inCount = getShort(bytes);
+
+				byte[] outBytes = getBytes(typeAddress.add(4 * binaryPointerSize + 8 + 8 + 2), 2);
+				// the top bit is set if it is the last input parameter
+				int lastInput = outBytes[1] & 0x80;
+				outBytes[1] = (byte) (outBytes[1] & 0x7F);
+				int outCount = getShort(outBytes);
+
+				List<String> inputs = new ArrayList<>();
+				List<String> outputs = new ArrayList<>();
+
+				for (int i = 0; i < inCount; i++) {
+					Address input = getAddressAt(typeAddress.add(4 * binaryPointerSize + 8 + 8 + binaryPointerSize
+							+ tflagUncommon * 16 + i * binaryPointerSize));
+					recoverTypes(input, type);
+					inputs.add(getSymbolAt(input).getName());
+				}
+
+				for (int i = 0; i < outCount; i++) {
+					Address output = getAddressAt(typeAddress.add(4 * binaryPointerSize + 8 + 8 + binaryPointerSize
+							+ tflagUncommon * 16 + inCount * binaryPointerSize + i * binaryPointerSize));
+					recoverTypes(output, type);
+					outputs.add(getSymbolAt(output).getName());
+				}
+
+				if (lastInput == 0x80 && inputs.size() > 0) {
+					String comment = "func(";
+					for (String string : inputs) {
+						comment += string + ", ";
+					}
+					comment = comment.substring(0, comment.length() - 2);
+					comment += ") (";
+
+					for (String string : outputs) {
+						comment += string + ", ";
+					}
+					comment = comment.substring(0, comment.length() - 2) + ")";
+					setPreComment(typeAddress, comment);
+				}
+			}
+
+			/*
+			 * Interface type interfaceType represents an interface type.
+			 * 
+			 * type interfaceType struct {
+			 * 
+			 * rtype pkgPath name // import path methods
+			 * 
+			 * []imethod // sorted by hash
+			 * 
+			 * }
+			 * 
+			 * method represents a method on an interface type
+			 * 
+			 * type imethod struct {
+			 * 
+			 * name nameOff // name of method
+			 * 
+			 * typ typeOff // .(*FuncType) underneath
+			 * 
+			 * }
+			 */
+			if (kind == KIND_INTERFACE) {
+				Address imethodField = getAddressAt(typeAddress.add(5 * binaryPointerSize + 8 + 8));
+				List<String> methods = new ArrayList<>();
+				int methodLength = getInt(typeAddress.add(6 * binaryPointerSize + 8 + 8));
+
+				for (int i = 0; i < methodLength; i++) {
+					int imethodNameOffset = getInt(imethodField);
+					nameLength = getByte(type.add(imethodNameOffset + lengthOffset));
+					nameAddress = type.add(imethodNameOffset + lengthOffset + 1);
+					removeData(nameAddress, nameLength);
+					name = createAsciiString(nameAddress, nameLength);
+					String temp = (String) name.getValue();
+					setEOLComment(imethodField, temp);
+					createLabel(imethodField, temp.replace(" ", "_"), true);
+					int newTypeOffset = getInt(imethodField.add(4));
+					Address newType = type.add(newTypeOffset);
+					recoverTypes(newType, type);
+					imethodField = imethodField.add(8);
+					methods.add(name.getValue() + " " + getSymbolAt(newType).getName());
+					String comment = "type " + nameType + " interface{" + "\n\t" + "\n\t";
+					for (int j = 0; j < methods.size(); j++) {
+						comment += methods.get(j) + "\n\t";
+					}
+					comment += "\n" + "}";
+					setPreComment(typeAddress, comment);
+				}
+			}
+
+			/*
+			 * Pointer type is used to represent a pointer type
+			 * 
+			 * type ptrType struct {
+			 * 
+			 * rtype
+			 * 
+			 * elem *rtype // pointer element (pointed at) type
+			 * 
+			 * 
+			 * }
+			 */
+			if (kind == KIND_POINTER) {
+				Address newAddress = toAddr(
+						Integer.toHexString(getInt(typeAddress.add(4 * binaryPointerSize + 8 + 8))));
+				recoverTypes(newAddress, type);
+			}
+
+			/*
+			 * Struct type structType represents a struct type.
+			 * 
+			 * type structType struct {
+			 * 
+			 * rtype
+			 * 
+			 * pkgPath name
+			 * 
+			 * fields []structField // sorted by offset
+			 * 
+			 * }
+			 * 
+			 * Struct field
+			 * 
+			 * type structField struct {
+			 * 
+			 * name name // name is always non-empty
+			 * 
+			 * typ *rtype // type of field
+			 * 
+			 * offsetEmbed uintptr // byte offset of field<<1 | isEmbedded
+			 * 
+			 * }
+			 */
+			if (kind == KIND_STRUCT) {
+				Address structField = getAddressAt(typeAddress.add(5 * binaryPointerSize + 8 + 8));
+				List<String> fields = new ArrayList<>();
+				int fieldLength = getInt(typeAddress.add(6 * binaryPointerSize + 8 + 8));
+				for (int i = 0; i < fieldLength; i++) {
+					Address structFieldName = getAddressAt(structField);
+					Address nameLengthAddress = structFieldName.add(lengthOffset);
+					nameLength = getByte(nameLengthAddress);
+					nameAddress = getAddressAt(structField).add(lengthOffset + 1);
+					removeData(nameAddress, nameLength);
+					name = createAsciiString(nameAddress, nameLength);
+					String temp = (String) name.getValue();
+					setEOLComment(structField, temp);
+					createLabel(structFieldName, temp.replace(" ", "_"), true);
+					Address newType = getAddressAt(structField.add(binaryPointerSize));
+					structField = structField.add(3 * binaryPointerSize);
+					fields.add(name.getValue() + " " + getSymbolAt(newType).getName());
+
+					String comment = "type " + nameType + " struct{" + "\n\t" + "\n\t";
+					for (int j = 0; j < fields.size(); j++) {
+						comment += fields.get(j) + "\n\t";
+					}
+					comment += "\n" + "}";
+
+					setPreComment(typeAddress, comment);
+				}
+			}
+		} catch (Exception ex) {
+			// Ignore errors
+		}
+		return null;
+	}
+
+	/**
+	 * Fetches the typeLinksStart, typeLinksEnd, and typeStart addresses from the
+	 * binary if it is a PE file.<br>
+	 * <br>
+	 * Returns an array of Address objects which contains the following values, in
+	 * order:<br>
+	 * <ol>
+	 * <li>typeLinksStart</li>
+	 * <li>typeLinksEnd</li>
+	 * <li>typeStart</li>
+	 * </ol>
+	 * 
+	 * @param pclntab_magic the potential magic values for the pclntab
+	 * @return the typeLinksStart, typeLinksEnd, and typeStart addresses
+	 * @throws MemoryAccessException if memory within the binary, or offsets
+	 *                               thereof, cannot be properly accessed
+	 */
+	private Address[] scanPeFile() throws MemoryAccessException {
+		// Searches for the pclntab in a PE file
+		Object[] pclntabArray = findPclntabPE();
+
+		/*
+		 * If the pclntab cannot be found, the analyst is informed in the called
+		 * function. Simply return null in order for the script to return back to the
+		 * main function, which will return early if null is encountered.
+		 */
+		if (pclntabArray == null) {
+			return null;
+		}
+
+		// Saves the results in two variables
+		Address pclntab = (Address) pclntabArray[0];
+		String magic = (String) pclntabArray[1];
+
+		// Searches for the module data
+		Address moduleData = findModuleData(pclntab, magic);
+
+		/**
+		 * Similar to the missing pclntab, if the module data cannot be found, the
+		 * analyst is informed in the called function, and null is to be handed to the
+		 * caller which ensures execution ends early.
+		 */
+		if (moduleData == null) {
+			return null;
+		}
+
+		// Save the results in four variables
+		Object[] typeLinksArray = getTypeLinks(moduleData, magic);
+		// If an error occurred earlier on, return early
+		if (typeLinksArray == null) {
+			return null;
+		}
+		Address typeStart = (Address) typeLinksArray[0];
+		// Address typeEnd = (Address) typeLinksArray[1];
+		Address typeLinksStart = (Address) typeLinksArray[2];
+		int numberOfTypes = (int) typeLinksArray[3];
+
+		// Calculate the end of the type links section
+		Address typeLinksEnd = typeLinksStart.add(numberOfTypes * 4);
+
+		// Return all addresses in an array
+		return new Address[] { typeLinksStart, typeLinksEnd, typeStart };
+	}
+
+	/**
+	 * Fetches the typeLinksStart, typeLinksEnd, and typeStart addresses from the
+	 * binary if it is an ELF file.<br>
+	 * <br>
+	 * Returns an array of Address objects which contains the following values, in
+	 * order:<br>
+	 * <ol>
+	 * <li>typeLinksStart</li>
+	 * <li>typeLinksEnd</li>
+	 * <li>typeStart</li>
+	 * </ol>
+	 * 
+	 * @param pclntab_magic the potential magic values for the pclntab
+	 * @return the typelinks start, the typelinks end (plus one byte), and type
+	 *         start address
+	 */
+	private Address[] scanElfFile() {
+		// Get the type link array
+		Address[] typeLinkArray = getSection(".typelink");
+		// Get the read-only data section
+		Address typeStart = getSection(".rodata")[0];
+
+		/*
+		 * If either the type link or read-only sections cannot be found, the analyst is
+		 * informed and null is returned by the respective function. To cut the
+		 * execution short, this function simply returns null to its caller.
+		 */
+		if (typeLinkArray == null || typeStart == null) {
+			return null;
+		}
+
+		// Store the start and end in two variables
+		Address typelinksStart = typeLinkArray[0];
+		Address typeLinksEnd = typeLinkArray[1];
+		typeLinksEnd = typeLinksEnd.add(1);
+
+		// Return the values in an array
+		return new Address[] { typelinksStart, typeLinksEnd, typeStart };
+	}
+
+	/**
+	 * Fetches the typeLinksStart, typeLinksEnd, and typeStart addresses from the
+	 * binary if it is a MACH-O file.<br>
+	 * <br>
+	 * Returns an array of Address objects which contains the following values, in
+	 * order:<br>
+	 * <ol>
+	 * <li>typeLinksStart</li>
+	 * <li>typeLinksEnd</li>
+	 * <li>typeStart</li>
+	 * </ol>
+	 * 
+	 * @param pclntab_magic the potential magic values for the pclntab
+	 * @return the typelinks start, the typelinks end (plus one byte), and type
+	 *         start address
+	 */
+	private Address[] scanMachoFile() {
+		// Get the type link array
+		Address[] typeLinkArray = getSection("__typelink");
+		// Get the read-only data section
+		Address typeStart = getSection("__rodata")[0];
+
+		/*
+		 * If either the type link or read-only sections cannot be found, the analyst is
+		 * informed and null is returned by the respective function. To cut the
+		 * execution short, this function simply returns null to its caller.
+		 */
+		if (typeLinkArray == null || typeStart == null) {
+			return null;
+		}
+
+		// Store the start and end in two variables
+		Address typelinksStart = typeLinkArray[0];
+		Address typeLinksEnd = typeLinkArray[1];
+		typeLinksEnd = typeLinksEnd.add(1);
+
+		// Return the values in an array
+		return new Address[] { typelinksStart, typeLinksEnd, typeStart };
+	}
+
+	/**
+	 * Recovers all types present within the program
+	 * 
+	 * @param typeLinksStart the start of the typelinks
+	 * @param typeLinksEnd   the end of the typelinks plus one byte
+	 * @param type           the start of the types
+	 * @throws Exception if something goes wrong
+	 */
+	private void recoverAllTypes(Address typeLinksStart, Address typeLinksEnd, Address type) {
+		// Ensure the type link is not null
+		if (typeLinksStart != null) {
+			// Declare and initialise a copy of the start address
+			Address p = typeLinksStart;
+			// Iterate until the end of the type links section is reached
+			while (p.compareTo(typeLinksEnd) <= 0) {
+				// Check if the script's execution is cancelled
+				if (monitor.isCancelled()) {
+					// Break this loop, thus exiting the script's execution early
+					break;
+				}
+
+				try {
+					// Get the type offset by dereferencing the address pointer
+					int typeOffset = getInt(p);
+					// Get the type address based on the offset
+					Address typeAddress = type.add(typeOffset);
+					// Recover the types for the given address
+					recoverTypes(typeAddress, type);
+				} catch (Exception ex) {
+					// Ignore exceptions
+				}
+				// Increment the address, which is always 32 bits
+				p = p.add(4);
+			}
+		}
+	}
+}
+
+```
+
+`LICENSE`:
+
+```
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright 2023 Musarubra US LLC
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+```
+
+`README.md`:
+
+```md
+# GhidraScripts
+Scripts to run within Ghidra, maintained by the Trellix ARC team.
+
+## How to use Ghidra scripts
+When Ghidra’s CodeBrowser is open, the green play button in the icon row opens the Script Manager, as can be seen in the screenshot below. Alternatively, one can open the Window tool strip menu item, and select Script Manager.
+
+![The green play button opens the Script Manager](images/displayScriptManager.png)
+
+Once open, one can manage the script directories with the hamburger menu in the top right corner of the Script Manager.
+
+![The script manager, and the Manage Script Directories hamburger button](images/scriptManager.png)
+
+Within that menu, one can click on the green plus to add a folder to the list of locations where scripts are fetched from. Once added, press the two green arrows to refresh the list.
+
+![The bundle manager to add and/or remove folders from the places where Ghidra scripts are loaded from](images/bundleManager.png)
+
+Once the refresh action has completed, the script should be in the list, and can be searched for using the textbox next to the filter label. To execute a script, simply double click it, or press the green play button within the Script Manager.
+
+### Golang related scripts
+Simply run the scripts and observe the output in the Console Log. Error messages are indicative of what went wrong (i.e. a non supported file format, or an issue finding a specific data structure). Non-error messages are indicative of what the script has changed and updated.
+
+### Sharem.java
+Configure [SHAREM](https://github.com/Bw3ll/sharem/) to run [headless](https://github.com/Bw3ll/sharem/wiki/2.-Quick-Start-Analysis#configuration-file), and edit the script to contain the correct path to both Python and SHAREM's main Python file. Additionally, ensure the correct parameter for the shellcode's bitness is used, along with the correct path to the shellcode sample. Once all is configured, simply run the Ghidra script and wait until SHAREM finishes its execution. There is no progress bar for SHAREM's execution. Once it is done, the code will load the JSON file and start annotating the given offsets in Ghidra, which will be visible in the Console Log.
+
+## Questions and/or feedback
+Please open an issue in this repository with any questions and/or feedback you have, as long as it is related to the scripts within the repository.
+
+```
+
+`Sharem.java`:
+
+```java
+//Runs SHAREM and gets the resulting output, which is then annotated within Ghidra. This fixes dissassembly mistakes, adds context and arguments to function calls, and creates data points.
+//@author Trellix (by Max ' Libra' Kersten)
+//@category shellcode analysis
+//@keybinding
+//@menupath
+//@toolbar
+
+import java.io.File;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.util.Arrays;
+
+import com.google.gson.Gson;
+
+import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.data.ByteDataType;
+import ghidra.program.model.data.DWordDataType;
+import ghidra.program.model.data.PointerDataType;
+import ghidra.program.model.data.QWordDataType;
+import ghidra.program.model.data.StringDataType;
+import ghidra.program.model.data.WordDataType;
+import ghidra.program.model.listing.Data;
+
+public class Sharem extends GhidraScript {
+
+	@Override
+	protected void run() throws Exception {
+		// The directory in which the command is executed, to be edited prior to using the script
+		File workingDirectory = new File("C:\\path\\to\\sharem");
+		// The command to execute within said working directory, to be edited prior to using the script
+		String command = "C:\\path\\to\\python.exe main.py [architecture as in -r32 or -r64] C:\\path\\to\\shellcode.bin";
+
+		try {
+			/*
+			 * Executes the given command from within the given working directory. This
+			 * function only returns once the command has been executed.
+			 */
+			execute(workingDirectory, command);
+		} catch (Exception ex) {
+			// Print the error message
+			printerr(ex.getMessage());
+			// Return early
+			return;
+		}
+
+		// Instantiate a new Gson object for later use
+		Gson gson = new Gson();
+
+		// Declare the JSON file variable, based on the working directory
+		File jsonFile = new File(
+				workingDirectory.getAbsolutePath() + "\\sharem\\sharem\\sharem\\logs\\default\\jsondefaultdisasm.json");
+
+		// Read the file and store the result in a string
+		String json = Files.readString(jsonFile.toPath());
+
+		// Convert the raw JSON into a Java object
+		SharemObject result = gson.fromJson(json, SharemObject.class);
+
+		// Iterate over the objects
+		for (SharemSubObject object : result.getObjects()) {
+			// If a given object's comment is not null, empty, nor white space
+			if (object.getComment().isBlank() == false) {
+				// Get the offset in hexadecimal format
+				long offset = Long.parseLong(object.getAddress().substring(2), 16);
+				// Set a comment at the given offset, with the given comment
+				setPreComment(toAddr(offset), object.getComment());
+				// Create a string to print debug information
+				String message = "Commented \"" + object.getComment() + "\" at " + object.getAddress();
+				// Print the message
+				println(message);
+			}
+
+			// If the type is CODE
+			if (object.getBytes().equalsIgnoreCase("CODE")) {
+				// Get the value of the bytes
+				byte[] sharemValues = getBytesFromSharemObject(object);
+				if (sharemValues == null) {
+					continue;
+				}
+				// Get the bytes from Ghidra's listing
+				byte[] ghidraValues = getBytes(toAddr(object.getAddress()), object.getSize());
+				// If the values aren't equal
+				if (Arrays.compare(sharemValues, ghidraValues) > 0) {
+					// Clear the listing
+					clearListing(toAddr(object.getAddress()));
+					// Set the bytes as provided by SHAREM
+					setBytes(toAddr(object.getAddress()), sharemValues);
+					// Disassemble the bytes
+					disassemble(toAddr(object.getAddress()));
+				}
+			} else if (object.getBytes().equalsIgnoreCase("DATA")) { // If the type is DATA
+				if (object.getDataType().equalsIgnoreCase("String")) { // if the type is a string
+					// Get the data at the given address
+					Data data = getDataAt(toAddr(object.getAddress()));
+					// If the data is not null
+					if (data != null) {
+						// Compare the length of the data and the size mentioned in the SHAREM object
+						if (data.getLength() != object.getSize()) {
+							// Get the end address
+							Address end = toAddr(object.getAddress()).add(toAddr(object.getSize()).getOffset() - 1);
+							// Get the start address
+							Address start = toAddr(object.getAddress());
+							// Clear the listing
+							clearListing(start, end);
+							// Create a string at the given address
+							createAsciiString(toAddr(object.getAddress()));
+						}
+					} else {
+						// Get the end address
+						Address end = toAddr(object.getAddress()).add(toAddr(object.getSize()).getOffset() - 1);
+						// Get the start address
+						Address start = toAddr(object.getAddress());
+						// Clear the listing
+						clearListing(start, end);
+						// If no data is present, simply create a string at the address
+						createData(toAddr(object.getAddress()), StringDataType.dataType);
+					}
+				} else if (object.getDataType().equalsIgnoreCase("API Pointer")) { // If the type is a pointer
+					// Get the data at the address
+					Data data = getDataAt(toAddr(object.getAddress()));
+					// If the data is not present
+					if (data == null) {
+						// Create the pointer
+						createData(toAddr(object.getAddress()), PointerDataType.dataType);
+					}
+					// Set a comment with the instruction to provide context
+					setPreComment(toAddr(object.getAddress()), object.getInstruction());
+				} else if (object.getDataType().equalsIgnoreCase("DATA")) {
+					// Get the data at the address
+					Data data = getDataAt(toAddr(object.getAddress()));
+					
+					/*
+					 * If the data is not null, it exists, and can thus be removed, since it will be
+					 * overwritten
+					 */
+					if (data != null) {
+						// Get the end address
+						Address end = toAddr(object.getAddress()).add(toAddr(object.getSize()).getOffset() - 1);
+						// Get the start address
+						Address start = toAddr(object.getAddress());
+						// Clear the listing
+						clearListing(start, end);
+					}
+
+					// Handle different sizes with regards to data creation
+					switch (object.getSize()) {
+					case 1:
+						createData(toAddr(object.getAddress()), ByteDataType.dataType);
+						break;
+					case 2:
+						createData(toAddr(object.getAddress()), WordDataType.dataType);
+						break;
+					case 4:
+						createData(toAddr(object.getAddress()), DWordDataType.dataType);
+						break;
+					case 8:
+						createData(toAddr(object.getAddress()), QWordDataType.dataType);
+						break;
+					}
+
+				}
+			}
+		}
+	}
+
+	/**
+	 * A helper function to get the bytes from the given disassembly object's hex
+	 * value field which contains the instruction in hexadecimal format
+	 * 
+	 * @param object the disassembly object
+	 * @return the raw bytes of the given instruction, if any
+	 */
+	private byte[] getBytesFromSharemObject(SharemSubObject object) {
+		byte[] bytes = new byte[object.getSize()];
+		String[] values = object.getHex().split(" ");
+
+		for (int i = 0; i < values.length; i++) {
+			try {
+				bytes[i] = (byte) Integer.parseInt(values[i], 16);
+			} catch (Exception ex) {
+				/*
+				 * Ignore entries where the value ends with dots, as those aren't hex values.
+				 * Returning null ensures the caller to omit these bytes
+				 */
+				return null;
+			}
+
+		}
+		return bytes;
+	}
+
+	/**
+	 * Determines if the current operating system is Windows.
+	 *
+	 * @return true if the operating system is Windows, false if it is not.
+	 */
+	public static boolean isWindows() {
+		/*
+		 * If the os.name property of the Java VM contains "windows", the system is
+		 * Windows based
+		 */
+		if (System.getProperty("os.name").toLowerCase().contains("windows")) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * A helper function to launch a new process via the system's shell
+	 * 
+	 * @param workingDirectory the working directory of the process
+	 * @param command          the command to execute
+	 * @throws Exception if anything goes wrong
+	 */
+	public void execute(File workingDirectory, String command) throws Exception {
+		try {
+			String[] processName = new String[1];
+			// Check if the OS is windows
+			if (isWindows()) {
+				processName[0] = "cmd";
+			} else { // Use the shell if the OS is not Windows
+				processName[0] = "sh";
+			}
+			// Start a new shell
+			Process p = Runtime.getRuntime().exec(processName, null, workingDirectory);
+			// Get the standard input
+			PrintWriter stdin = new PrintWriter(p.getOutputStream());
+			// Start the command via the shell
+			stdin.println(command);
+			// Close the stream
+			stdin.close();
+			// Wait until the process terminates
+			p.waitFor();
+		} catch (Exception ex) {
+			/*
+			 * Throw an exception if anything goes wrong, which is used to notify the
+			 * analyst
+			 */
+			throw new Exception("Error while launching SHAREM! Error:\n\n" + ex.getMessage());
+		}
+	}
+
+	class SharemSubObject {
+
+		/**
+		 * The starting address within the binary where the reference to is made
+		 */
+		private String address;
+
+		/**
+		 * The instruction, as extracted by SHAREM
+		 */
+		private String instruction;
+
+		/**
+		 * The hex value of the instruction
+		 */
+		private String hex;
+
+		/**
+		 * The size of the object (i.e. the length of a string, or the size of an
+		 * instruction)
+		 */
+		private String size;
+
+		/**
+		 * Is either <code>CODE</code> or <code>DATA</code>, indicating what the type of
+		 * the object is
+		 */
+		private String bytes;
+
+		/**
+		 * Provides further information about the data type, if this object references
+		 * DATA. The optional values are <code>String</code> or <code>API Pointer</code>
+		 */
+		private String dataType;
+
+		/**
+		 * Defines how data is accessed
+		 */
+		private String dataAccessed;
+
+		/**
+		 * Gets the string representation of the data (at the given address with the
+		 * given length). This can be garbage when not dealing with strings (i.e.
+		 * instructions)
+		 */
+		private String string;
+
+		/**
+		 * Gets a SHAREM made comment for this object
+		 */
+		private String comment;
+
+		/**
+		 * A label which contains an address, if present. Redundant field.
+		 */
+		private String label;
+
+		/**
+		 * Creates an instance of a single instruction/piece of data that is emitted by
+		 * SHAREM.
+		 * 
+		 * @param address      the starting address within the binary where the
+		 *                     reference to is made
+		 * @param instruction  the instruction, as extracted by SHAREM
+		 * @param hex          the hex value of the instruction
+		 * @param size         the size of the object (i.e. the length of a string, or
+		 *                     the size of an instruction)
+		 * @param bytes        is either <code>CODE</code> or <code>DATA</code>,
+		 *                     indicating what the type of the object is
+		 * @param dataType     provides further information about the data type, if this
+		 *                     object references DATA. The optional values are
+		 *                     <code>String</code> or <code>API Pointer</code>
+		 * @param dataAccessed defines how data is accessed
+		 * @param string       gets the string representation of the data (at the given
+		 *                     address with the given length). This can be garbage when
+		 *                     not dealing with strings (i.e. instructions)
+		 * @param comment      gets a SHAREM made comment for this object
+		 * @param label        a label which contains an address, if present. Redundant
+		 *                     field.
+		 */
+		public SharemSubObject(String address, String instruction, String hex, String size, String bytes,
+				String dataType, String dataAccessed, String string, String comment, String label) {
+			this.address = address;
+			this.instruction = instruction;
+			this.hex = hex;
+			this.size = size;
+			this.bytes = bytes;
+			this.dataType = dataType;
+			this.dataAccessed = dataAccessed;
+			this.string = string;
+			this.comment = comment;
+			this.label = label;
+		}
+
+		/**
+		 * The starting address within the binary where the reference to is made
+		 * 
+		 * @return the address as a string
+		 */
+		public String getAddress() {
+			return address;
+		}
+
+		/**
+		 * The instruction, as extracted by SHAREM
+		 * 
+		 * @return the instruction as a string
+		 */
+		public String getInstruction() {
+			return instruction;
+		}
+
+		/**
+		 * The hex value of the instruction
+		 * 
+		 * @return the hex value as a string (split by spaces, not denoted by "0x")
+		 */
+		public String getHex() {
+			return hex;
+		}
+
+		/**
+		 * The size of the object (i.e. the length of a string, or the size of an
+		 * instruction)
+		 * 
+		 * @return the size as a string
+		 */
+		public int getSize() {
+			return Integer.parseInt(size);
+		}
+
+		/**
+		 * Is either <code>CODE</code> or <code>DATA</code>, indicating what the type of
+		 * the object is
+		 * 
+		 * @return the type, as a string
+		 */
+		public String getBytes() {
+			return bytes;
+		}
+
+		/**
+		 * Provides further information about the data type, if this object references
+		 * DATA. The optional values are <code>String</code> or <code>API Pointer</code>
+		 * 
+		 * @return the more granular type, as a string
+		 */
+		public String getDataType() {
+			return dataType;
+		}
+
+		/**
+		 * Defines how data is accessed
+		 * 
+		 * @return the way the data is accessed, as a string
+		 */
+		public String getDataAccessed() {
+			return dataAccessed;
+		}
+
+		/**
+		 * Gets the string representation of the data (at the given address with the
+		 * given length). This can be garbage when not dealing with strings (i.e.
+		 * instructions)
+		 * 
+		 * @return the value of the object
+		 */
+		public String getString() {
+			return string;
+		}
+
+		/**
+		 * Gets a SHAREM made comment for this object
+		 * 
+		 * @return the comment
+		 */
+		public String getComment() {
+			return comment;
+		}
+
+		/**
+		 * A label which contains an address, if present. Redundant field.
+		 * 
+		 * @return the label as a string
+		 */
+		public String getLabel() {
+			return label;
+		}
+	}
+
+	/**
+	 * The JSON output from SHAREM is an array of items. For ease-of-access and
+	 * ease-of-handling, a Java class is used as a wrapper around the array
+	 * 
+	 * @author Max 'Libra' Kersten for Trellix
+	 *
+	 */
+	class SharemObject {
+
+		/**
+		 * The array of entries from SHAREM
+		 */
+		private SharemSubObject[] disassembly;
+
+		/**
+		 * Creates an instance of this wrapper object
+		 * 
+		 * @param disassembly the array of objects which contain the disassembly of the
+		 *                    analysed shellcode
+		 */
+		public SharemObject(SharemSubObject[] disassembly) {
+			this.disassembly = disassembly;
+		}
+
+		/**
+		 * Gets the SHAREM objects
+		 * 
+		 * @return the SHAREM objects
+		 */
+		public SharemSubObject[] getObjects() {
+			return disassembly;
+		}
+	}
+}
+
+```
