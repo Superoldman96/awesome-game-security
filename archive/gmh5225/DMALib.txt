@@ -1,0 +1,2640 @@
+Project Path: arc_gmh5225_DMALib_kzyha12b
+
+Source Tree:
+
+```txt
+arc_gmh5225_DMALib_kzyha12b
+├── DMALib
+│   ├── DMAHandler.cpp
+│   ├── DMAHandler.h
+│   ├── DMALib.vcxproj
+│   ├── DMALib.vcxproj.filters
+│   ├── entry.cpp
+│   └── libs
+│       ├── leechcore.h
+│       └── vmmdll.h
+├── DMALib.sln
+├── LICENSE.txt
+└── README.md
+
+```
+
+`DMALib.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DMALib", "DMALib\DMALib.vcxproj", "{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Debug|x64.ActiveCfg = Debug|x64
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Debug|x64.Build.0 = Debug|x64
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Debug|x86.ActiveCfg = Debug|Win32
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Debug|x86.Build.0 = Debug|Win32
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Release|x64.ActiveCfg = Release|x64
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Release|x64.Build.0 = Release|x64
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Release|x86.ActiveCfg = Release|Win32
+		{18CE400D-6F33-4A0C-A24A-CF9ED14237FF}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {38A03358-E98C-4BBE-BCF6-4FB51CDFD602}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`DMALib/DMAHandler.cpp`:
+
+```cpp
+#include "DMAHandler.h"
+
+#include <chrono>
+#include <iostream>
+#include <leechcore.h>
+#include <unordered_map>
+#include <vmmdll.h>
+
+void DMAHandler::log(const char* fmt, ...)
+{
+	//small check before processing
+	if (strlen(fmt) > 2000) return;
+	char logBuffer[2001] = { 0 };
+
+	//time related
+	const auto now_time_t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	std::tm time_info;
+	localtime_s(&time_info, &now_time_t);
+	// Format time as a string
+	std::ostringstream oss;
+	oss << std::put_time(&time_info, "%H:%M:%S");
+	va_list args;
+	va_start(args, fmt);
+	vsprintf_s(logBuffer, 2000, fmt, args);
+	printf("[DMA @ %s]: %s\n", oss.str().c_str(), logBuffer);
+}
+
+void DMAHandler::assertNoInit() const
+{
+	if (!DMA_INITIALIZED || PROCESS_INITIALIZED)
+	{
+		log("DMA or process not inizialized!");
+		throw new std::string("DMA not inizialized!");
+	}
+
+}
+
+DMAHandler::DMAHandler(const wchar_t* wname)
+{
+	if (!DMA_INITIALIZED)
+	{
+		log("loading libraries...");
+		modules.VMM = LoadLibraryA("vmm.dll");
+		modules.FTD3XX = LoadLibraryA("FTD3XX.dll");
+		modules.LEECHCORE = LoadLibraryA("leechcore.dll");
+
+		if (!modules.VMM || !modules.FTD3XX || !modules.LEECHCORE)
+		{
+			log("ERROR: could not load a library:");
+			log("vmm: %p\n", modules.VMM);
+			log("ftd: %p\n", modules.FTD3XX);
+			log("leech: %p\n", modules.LEECHCORE);
+		}
+
+
+		log("inizializing...");
+
+		char arg1[] = "-v";
+		char arg2[] = "-device";
+		char arg3[] = "fpga";
+
+		LPSTR argv[] = { arg1, arg2, arg3 };
+		DWORD argc = sizeof(argv) / sizeof(LPSTR);
+
+		if (!VMMDLL_Initialize(argc, argv))
+		{
+			log("ERROR: Initialization failed! Is the DMA in use or disconnected?");
+			return;
+		}
+
+		ULONG64 FPGA_ID, DEVICE_ID;
+
+		VMMDLL_ConfigGet(LEECHCORE_OPT_FPGA_FPGA_ID, &FPGA_ID);
+		VMMDLL_ConfigGet(LEECHCORE_OPT_FPGA_DEVICE_ID, &DEVICE_ID);
+
+		log("FPGA ID: %llu", FPGA_ID);
+		log("DEVICE ID: %llu", DEVICE_ID);
+		log("success!");
+
+		DMA_INITIALIZED = TRUE;
+	}
+
+	// Convert the wide string to a standard string because VMMDLL_PidGetFromName expects LPSTR.
+	std::wstring ws(wname);
+	const std::string str(ws.begin(), ws.end());
+
+	processInfo.name = str;
+	processInfo.wname = wname;
+	if (!VMMDLL_PidGetFromName(const_cast<char*>(processInfo.name.c_str()), &processInfo.pid))
+	{
+		log("WARN: Process with name %s not found!", processInfo.name.c_str());
+	}
+	else
+		PROCESS_INITIALIZED = TRUE;
+
+}
+
+bool DMAHandler::isInitialized() const
+{
+	return DMA_INITIALIZED && PROCESS_INITIALIZED;
+}
+
+DWORD DMAHandler::getPID() const
+{
+	assertNoInit();
+	return processInfo.pid;
+}
+
+ULONG64 DMAHandler::getBaseAddress()
+{
+	if (!processInfo.base)
+		processInfo.base = VMMDLL_ProcessGetModuleBase(processInfo.pid, const_cast<LPWSTR>(processInfo.wname));
+
+	return processInfo.base;
+}
+
+void DMAHandler::read(const ULONG64 address, const ULONG64 buffer, const SIZE_T size) const
+{
+	assertNoInit();
+	DWORD dwBytesRead = 0;
+
+#if COUNT_TOTAL_READSIZE
+	readSize += size;
+#endif
+
+	VMMDLL_MemReadEx(processInfo.pid, address, reinterpret_cast<PBYTE>(buffer), size, &dwBytesRead, VMMDLL_FLAG_NOCACHE | VMMDLL_FLAG_NOPAGING | VMMDLL_FLAG_ZEROPAD_ON_FAIL | VMMDLL_FLAG_NOPAGING_IO);
+
+	if (dwBytesRead != size)
+		log("Didnt read all bytes requested! Only read %llu/%llu bytes!", dwBytesRead, size);
+}
+
+bool DMAHandler::write(const ULONG64 address, const ULONG64 buffer, const SIZE_T size) const
+{
+	assertNoInit();
+	return VMMDLL_MemWrite(processInfo.pid, address, reinterpret_cast<PBYTE>(buffer), size);
+}
+
+
+ULONG64 DMAHandler::patternScan(const char* pattern, const std::string& mask, bool returnCSOffset)
+{
+	assertNoInit();
+	//technically not write if you use the same pattern but once with RVA flag and once without
+	//but i dont see any case where both results are needed so i cba
+	static std::unordered_map<const char*, uint64_t> patternMap{};
+
+	static std::vector<IMAGE_SECTION_HEADER> sectionHeaders;
+	static char* textBuff = nullptr;
+	static bool init = false;
+	static DWORD virtualSize = 0;
+	static uint64_t vaStart = 0;
+
+	auto CheckMask = [](const char* Base, const char* Pattern, const char* Mask) {
+		for (; *Mask; ++Base, ++Pattern, ++Mask) {
+			if (*Mask == 'x' && *Base != *Pattern) {
+				return false;
+			}
+		}
+		return true;
+	};
+
+	if (patternMap.contains(pattern))
+		return patternMap[pattern];
+
+	if (!init)
+	{
+		init = true;
+
+		static IMAGE_DOS_HEADER dosHeader;
+		static IMAGE_NT_HEADERS ntHeaders;
+
+		dosHeader = read<IMAGE_DOS_HEADER>(getBaseAddress());
+
+
+		if (dosHeader.e_magic != IMAGE_DOS_SIGNATURE)
+			throw std::runtime_error("dosHeader.e_magic invalid!");
+
+		ntHeaders = read<IMAGE_NT_HEADERS>(getBaseAddress() + dosHeader.e_lfanew);
+
+		if (ntHeaders.Signature != IMAGE_NT_SIGNATURE)
+			throw std::runtime_error("ntHeaders.Signature invalid!");
+
+		const DWORD sectionHeadersSize = ntHeaders.FileHeader.NumberOfSections * sizeof(IMAGE_SECTION_HEADER);
+		sectionHeaders.resize(ntHeaders.FileHeader.NumberOfSections);
+
+		read(getBaseAddress() + dosHeader.e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER), reinterpret_cast<DWORD64>(sectionHeaders.data()), sectionHeadersSize);
+
+
+		for (const auto& section : sectionHeaders) {
+			std::string sectionName(reinterpret_cast<const char*>(section.Name));
+			if (sectionName == ".text") {
+				textBuff = static_cast<char*>(calloc(section.Misc.VirtualSize, 1));
+				read(getBaseAddress() + section.VirtualAddress, reinterpret_cast<DWORD64>(textBuff), section.Misc.VirtualSize);
+				virtualSize = section.Misc.VirtualSize;
+				vaStart = getBaseAddress() + section.VirtualAddress;
+			}
+		}
+	}
+
+
+	const int length = virtualSize - mask.length();
+
+	for (int i = 0; i <= length; ++i)
+	{
+		char* addr = &textBuff[i];
+
+		if (!CheckMask(addr, pattern, mask.c_str()))
+			continue;
+
+		const uint64_t uAddr = reinterpret_cast<uint64_t>(addr);
+
+		if (returnCSOffset)
+		{
+			const auto res = vaStart + i + *reinterpret_cast<int*>(uAddr + 3) + 7;
+			patternMap.insert(std::pair(pattern, res));
+			return res;
+		}
+
+		const auto res = vaStart + i;
+		patternMap.insert(std::pair(pattern, res));
+		return res;
+	}
+	return 0;
+}
+
+void DMAHandler::closeDMA()
+{
+	log("DMA closed!");
+	DMA_INITIALIZED = FALSE;
+	VMMDLL_Close();
+}
+
+#if COUNT_TOTAL_READSIZE
+
+DWORD64 DMAHandler::getTotalReadSize()
+{
+	return readSize;
+}
+
+void DMAHandler::resetReadSize()
+{
+	log("Bytes read since last reset: %llu B, %llu KB, %llu MB", readSize, readSize / 1024, readSize / 1024 / 1024);
+	readSize = 0;
+}
+
+#endif
+```
+
+`DMALib/DMAHandler.h`:
+
+```h
+#pragma once
+#include <string>
+#include <Windows.h>
+
+// set to FALSE if you dont want to track the total read size of the DMA
+#define COUNT_TOTAL_READSIZE TRUE
+
+class DMAHandler
+{
+	// Static variables, shared over all instances
+
+	struct LibModules
+	{
+		HMODULE VMM = nullptr;
+		HMODULE FTD3XX = nullptr;
+		HMODULE LEECHCORE = nullptr;
+	};
+
+	static inline LibModules modules{};
+
+	static inline BOOLEAN DMA_INITIALIZED = FALSE;
+
+	// Counts the size of the reads in total. Reset every frame preferrably for memory tracking
+	static inline DWORD64 readSize = 0;
+
+	// Nonstatic variables, different for each class object on purpose, in case the user tries to access
+	// multiple processes
+	struct BaseProcessInfo
+	{
+		DWORD pid = 0;
+		std::string name;
+		const wchar_t* wname;
+		ULONG64 base = 0;
+	};
+
+	BaseProcessInfo processInfo{};
+
+	BOOLEAN PROCESS_INITIALIZED = FALSE;
+
+	// Private log function used by the DMAHandler class
+	static void log(const char* fmt, ...);
+
+	// Will always throw a runtime error if PROCESS_INITIALIZED or DMA_INITIALIZED is false
+	void assertNoInit() const;
+
+
+public:
+	/**
+	 * \brief Constructor takes a wide string of the process.
+	 * Expects that all the libraries are in the root dir
+	 * \param wname process name
+	 */
+	DMAHandler(const wchar_t* wname);
+
+	// Whether the DMA and Process are initialized
+	bool isInitialized() const;
+
+	// Gets the PID of the process
+	DWORD getPID() const;
+
+	// Gets the Base address of the process
+	ULONG64 getBaseAddress();
+
+	void read(ULONG64 address, ULONG64 buffer, SIZE_T size) const;
+
+	template <typename T>
+	T read(void* address)
+	{
+		T buffer{};
+		memset(&buffer, 0, sizeof(T));
+		read(reinterpret_cast<ULONG64>(address), reinterpret_cast<ULONG64>(&buffer), sizeof(T));
+
+		return buffer;
+	}
+
+	template <typename T>
+	T read(ULONG64 address)
+	{
+		return read<T>(reinterpret_cast<void*>(address));
+	}
+
+	bool write(ULONG64 address, ULONG64 buffer, SIZE_T size) const;
+
+	template <typename T>
+	bool write(ULONG64 address, T* buffer)
+	{
+		return write(address, reinterpret_cast<ULONG64>(buffer), sizeof(T));
+	}
+
+	template <typename T>
+	bool write(void* address, T* buffer)
+	{
+		return write(reinterpret_cast<ULONG64>(address), reinterpret_cast<ULONG64>(buffer), sizeof(T));
+	}
+
+	template <typename T>
+	bool write(ULONG64 address, T value)
+	{
+		return write(address, reinterpret_cast<ULONG64>(&value), sizeof(T));
+	}
+
+	template <typename T>
+	bool write(void* address, T value)
+	{
+		return write(reinterpret_cast<ULONG64>(address), reinterpret_cast<ULONG64>(&value), sizeof(T));
+	}
+
+	/**
+	 * \brief pattern scans the text section and returns 0 if unsuccessful
+	 * \param pattern the pattern
+	 * \param mask the mask
+	 * \param returnCSOffset in case your pattern leads to a xxx, cs:offset, it will return the address of the global variable instead
+	 * \return the address
+	 */
+	ULONG64 patternScan(const char* pattern, const std::string& mask, bool returnCSOffset = true);
+
+	/**
+	 * \brief closes the DMA and sets DMA_INITIALIZED to FALSE
+	 */
+	static void closeDMA();
+
+#if COUNT_TOTAL_READSIZE
+
+	static DWORD64 getTotalReadSize();
+
+	static void resetReadSize();
+
+#endif
+};
+
+```
+
+`DMALib/DMALib.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{18ce400d-6f33-4a0c-a24a-cf9ed14237ff}</ProjectGuid>
+    <RootNamespace>DMALib</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>libs/;$(IncludePath)</IncludePath>
+    <LibraryPath>libs/;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>libs/;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <LibraryPath>libs/;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vmm.lib;leechcore.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>TurnOffAllWarnings</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>false</ConformanceMode>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>vmm.lib;leechcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="DMAHandler.cpp" />
+    <ClCompile Include="entry.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="DMAHandler.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="libs\leechcore.lib" />
+    <Library Include="libs\vmm.lib" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`DMALib/DMALib.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DMAHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="entry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="DMAHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="libs\leechcore.lib">
+      <Filter>Header Files</Filter>
+    </Library>
+    <Library Include="libs\vmm.lib">
+      <Filter>Header Files</Filter>
+    </Library>
+  </ItemGroup>
+</Project>
+```
+
+`DMALib/entry.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <iostream>
+
+#include "DMAHandler.h"
+
+
+int main()
+{
+	auto target = DMAHandler(L"target.exe");
+
+	//not initialized?
+	if(!target.isInitialized())
+		DebugBreak();
+
+	//is the PID valid?
+	if (!target.getPID())
+		DebugBreak();
+
+	//get the process ID, should not be 0
+	printf("PID: 0x%X\n", target.getPID());
+
+	//get the base address
+	printf("base: 0x%llX\n", target.getBaseAddress());
+
+	//read some random address
+	auto res = target.read<uint64_t>(target.getBaseAddress() + 0x3038);
+
+	//print the result
+	printf("result: %llu\n", res);
+
+	//write to the same address
+	target.write(target.getBaseAddress() + 0x3038, 1337ull);
+
+	//read again
+	res = target.read<uint64_t>(target.getBaseAddress() + 0x3038);
+
+	//print the result
+	printf("result: %llu\n", res);
+
+	getchar();
+	DMAHandler::closeDMA();
+	return 0;
+}
+```
+
+`DMALib/libs/leechcore.h`:
+
+```h
+// leechcore.h : header file for the leechcore module - which purpose is to
+// expose low-level device physical memory functionality.
+//
+// This library is thread-safe in all functions with the notable exceptions  of
+// the LeechCore_Open() and LeechCore_Close() functions. Some devices may allow
+// multi-threaded access while in reality most devices are single-threaded  and
+// will control synchronization where necessary with locks.
+//
+// The library is initialized by calling LeechCore_Open with a LEECHCORE_CONFIG
+// struct containing the correct configuration paramters. Note that the version
+// and magic values must be set in addition to the szDevice configuration value
+// Also, it may be possible to optionally connect to a remote leechcore service
+// or instance over RPC by specifying a szRemote configuration value.
+//
+// ----------------------------------------------------------------------------
+//
+// Remote instance: szRemote configuration value. Connect to a remote leechcore
+// instance by specifying a configuration value in the szRemote parameter. If a
+// loaded already valid instance exists remotely this will be prioritized above
+// the value in szDevice.    If the acquisition device is not yet loaded by the
+// remote instance the value in szDevice will be used. Normally, the connection
+// will take place as a mutually authenticated encrypted connection secured  by
+// kerberos. If not possible or desirable the 'insecure' value may be specified
+// to disable authentication and security.
+// Syntax:
+//    rpc://<remote_spn>:<host>[:<options>] (remote_spn = kerberos SPN of     )
+//                                          (remote service or 'insecure'     )
+//
+// Valid options:                           (optional comma-separated list    )
+//    port=<port>                           (RPC TCP port of the remote system)
+//    nocompress                            (disable transport compression    )
+//    
+// Examples:
+//    rpc://insecure:remotehost.example.com (connect insecure to remote host  )
+//    rpc://user@ad.domain.com:192.0.0.5    (connect   secure to remote host  )
+//    rpc://insecure:127.0.0.0:6666         (connect insecure non-default port)
+//
+// The remote connector may also connect to pipe handles provided in the config
+// string. This is only used internally by the LeechAgent for communication for
+// parent/child process and may not be used by external applications. Syntax is
+// pipe://<handle_id_input>:<handle_id_output>.
+//
+// ----------------------------------------------------------------------------
+//
+// Device to connect to: szDevice contains the device to capture memory from.
+// Supported memory acquisition devices are:
+// USB3380 : hardware, read/write, 32-bit (4GB) addressing only. Requires a
+//           PCILeech flashed USB3380 device connected over USB and Google
+//           Android WinUSB drivers to be installed. Download and install from:
+//           http://developer.android.com/sdk/win-usb.html#download
+//           Syntax:
+//             USB3380
+//             USB3380://USB2                     (force USB2 connection speed)
+//
+// FPGA :    hardware, read/write - requires a PCILeech FPGA flashed hardware
+//           device as shown at: https://github.com/ufrisk/pcileech-fpga
+//           Also requires the FTD3XX.DLL from ftdichip to be placed in the
+//           same directory as the executable. Download from ftdichip at:
+//           https://www.ftdichip.com/Drivers/D3XX/FTD3XXLibrary_v1.3.0.2.zip
+//           Syntax:
+//             FGPA
+//             FPGA://<comma_separated_options_list>
+//           Example: FPGA://pciegen=1,deviceindex=1
+//           Options:
+//             pciegen=     PCIe generation to use, 1 or 2
+//             tmread=      Read delay in uS
+//             tmwrite=     Write delay in uS
+//             tmprobe=     Probe delay in uS
+//             algo=        1 (normal) or 2 (tiny)
+//             readsize=    max chunk read size in bytes
+//             readretry=   number of retries on fail
+//             deviceindex= device index to open
+//
+// RAWUDP :  hardware, read/write - connect to a remote FPGA over the network
+//           using a rudimentary UDP implmentation of the FPGA USB protocol.
+//           Supported devices: NeTV2 - https://github.com/ufrisk/pcileech-fpga
+//           Syntax:
+//             RAWUDP://<comma_separated_options_list>
+//           Example: RAWUDP://ip=192.168.0.222
+//           Options:
+//             ip= ip address or host name to connect to.
+//           (options for fpga device type also applies).
+//
+// SP605TCP : hardware, read/write - connect to a remote SP605 FPGA over the
+//           network using the implementation created by @d_olex.
+//           https://github.com/Cr4sh/s6_pcie_microblaze
+//           Syntax:
+//             SP605TCP://<target_ip>[:<target_port>]        (port is optional)
+//
+// RAWTCP :  read/write - connect to a remote raw tcp device - such as HPE iLO
+//           that have been patched to support DMA as per blog entry below:
+//           https://www.synacktiv.com/posts/exploit/using-your-bmc-as-a-dma-device-plugging-pcileech-to-hpe-ilo-4.html
+//           Syntax:
+//             RAWTCP://<target_ip>[:<target_port>]          (port is optional)
+//
+// HvSavedState : read-only - connect to a Hyper-V saved state file. In order
+//           to do so the .dll file 'vmsavedstatedumpprovider.dll' must be
+//           placed in same directory as the executable file.
+//
+// PMEM :    load the rekall winpmem driver into the kernel and connect to it
+//           to acquire memory. The signed driver `.sys` file may be found at:
+//           https://github.com/Velocidex/c-aff4/tree/master/tools/pmem/resources/winpmem
+//           Download the driver file `att_winpmem_64.sys` and copy it to the
+//           directory of leechcore.dll and run executable as elevated admin
+//           using syntax below:
+//           Syntax:
+//             PMEM              (use att_winpmem_64.sys in directory of executable)
+//             PMEM://<non_default_path_to_file_winpmem_64.sys>
+//
+// TOTALMELTDOWN : read/write - requires a Windows 7 system vulnerable to the
+//           "Total Meltdown" vulnerability - CVE-2018-1038.
+//           Syntax:
+//             TOTALMELTDOWN
+//
+// FILE :    use dump file of any of the below listed formats:
+//             - raw linear memory dump.
+//             - full microsoft crash dump (DumpIt).
+//             - full elf core dump (VirtualBox).
+//             - VMware save/dump file (.vmem + .vmss/.vmsn).
+//           The format to use is auto-detected.
+//           Syntax:
+//             <filename>        (no device-type prefix - just use the file name)
+//             FILE://<filename>
+//
+// DumpIt :  DumpIt is a "virtual" device. It's only possible to use the DumpIt
+//           device if the main process containing LeechCore has been started
+//           with DumpIt in LiveKD mode.
+//           Example 1:
+//             DumpIt.exe /LIVEKD /A MemProcFS.exe
+//           Example 2:
+//             DumpIt.exe /LIVEKD /A LeechSvc.exe /C "interactive insecure"
+//             and then connect to remote service by:
+//             MemProcFS.exe -remote rpc://insecure:192.168.x.x -device DumpIt
+//
+// EXISTING : Attach to existing already loaded configuration. This is done
+//           instead of the default behaviour of closing any existing devices
+//           and initializing the new requested device. If no existing device
+//           exists the call to LeechCore_Open will fail.
+//           Syntax:
+//             EXISTING
+//
+// EXISTINGREMOTE : Same as EXISTING but applying the EXISTING device on the
+//           remote system. Use only in conjunction with a remote system.
+//           Syntax:
+//             EXISTINGREMOTE
+//
+//
+// (c) Ulf Frisk, 2018-2020
+// Author: Ulf Frisk, pcileech@frizk.net
+//
+// Header Version: 1.7
+//
+#ifndef __LEECHCORE_H__
+#define __LEECHCORE_H__
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+//-----------------------------------------------------------------------------
+// WINDOWS / LINUX COMPATIBILITY BELOW:
+//-----------------------------------------------------------------------------
+
+#ifdef _WIN32
+#include <Windows.h>
+typedef unsigned __int64                    QWORD, *PQWORD;
+#define DLLEXPORT                           __declspec(dllexport)
+#ifdef _WIN64
+#define ARCH_64
+#endif /* _WIN64 */
+#endif /* _WIN32 */
+#ifdef LINUX
+#define ARCH_X64
+#include <stdint.h>
+#include <stddef.h>
+typedef void                                VOID, *PVOID, *LPVOID;
+typedef void                                *HANDLE, **PHANDLE;
+typedef uint32_t                            BOOL, *PBOOL;
+typedef uint8_t                             BYTE, *PBYTE;
+typedef char                                CHAR, *PCHAR, *PSTR, *LPSTR;
+typedef const CHAR                          *LPCSTR;
+typedef uint16_t                            WORD, *PWORD, USHORT, *PUSHORT;
+typedef uint32_t                            DWORD, *PDWORD;
+typedef long long unsigned int              QWORD, *PQWORD, ULONG64, *PULONG64;
+#define MAX_PATH                            260
+#define DLLEXPORT                           __attribute__((visibility("default")))
+#define _In_
+#define _Out_
+#define _In_z_
+#define _Inout_
+#define _In_opt_
+#define _Out_opt_
+#define _Out_writes_(x)
+#define _Check_return_opt_
+#define _Printf_format_string_
+#define _Inout_updates_bytes_(x)
+#define _In_reads_(cbDataIn)
+#define _Out_writes_opt_(x)
+#define _Success_(return)
+#define _Frees_ptr_opt_
+#endif /* LINUX */
+
+//-----------------------------------------------------------------------------
+// GENERAL HEADER DEFINES BELOW:
+//-----------------------------------------------------------------------------
+
+#define MEM_IO_SCATTER_HEADER_MAGIC                     0xffff6548
+#define MEM_IO_SCATTER_HEADER_VERSION                   0x0003
+
+#ifdef ARCH_64
+typedef struct tdMEM_IO_SCATTER_HEADER {
+    DWORD magic;            // magic
+    WORD version;           // version
+    WORD Future1;
+    ULONG64 qwA;            // base address.
+    DWORD cbMax;            // bytes to read (DWORD boundry, max 0x1000); pb must have room for this.
+    DWORD cb;               // bytes read into result buffer.
+    PBYTE pb;               // ptr to 0x1000 sized buffer to receive read bytes.
+    PVOID pvReserved1;      // reserved for use by caller.
+    PVOID pvReserved2;      // reserved for use by caller.
+    PVOID Future2[8];
+} MEM_IO_SCATTER_HEADER, *PMEM_IO_SCATTER_HEADER, **PPMEM_IO_SCATTER_HEADER;
+#endif /* ARCH_64 */
+
+#ifndef ARCH_64
+typedef struct tdMEM_IO_SCATTER_HEADER {
+    DWORD magic;            // magic
+    WORD version;           // version
+    WORD Future1;
+    ULONG64 qwA;            // base address.
+    DWORD cbMax;            // bytes to read (DWORD boundry, max 0x1000); pb must have room for this.
+    DWORD cb;               // bytes read into result buffer.
+    PBYTE pb;               // ptr to 0x1000 sized buffer to receive read bytes.
+    DWORD dwFiller64_1;
+    PVOID pvReserved1;      // reserved for use by caller.
+    DWORD dwFiller64_2;
+    PVOID pvReserved2;      // reserved for use by caller.
+    DWORD dwFiller64_3;
+    PVOID Future2[8];
+    DWORD dwFiller64_4[8];
+} MEM_IO_SCATTER_HEADER, *PMEM_IO_SCATTER_HEADER, **PPMEM_IO_SCATTER_HEADER;
+#endif /* ARCH_64 */
+
+//-----------------------------------------------------------------------------
+// LEECHCORE INITIALIZATION / CLOSE FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+typedef enum tdLEECHCORE_DEVICE {
+    LEECHCORE_DEVICE_NA = 0,
+    LEECHCORE_DEVICE_FILE = 1,
+    LEECHCORE_DEVICE_PMEM = 2,
+    LEECHCORE_DEVICE_FPGA = 3,
+    LEECHCORE_DEVICE_SP605_TCP = 4,
+    LEECHCORE_DEVICE_USB3380 = 5,
+    LEECHCORE_DEVICE_TOTALMELTDOWN = 6,
+    LEECHCORE_DEVICE_HVSAVEDSTATE = 7,
+    LEECHCORE_DEVICE_RAWTCP = 8,
+} LEECHCORE_DEVICE;
+
+#define LEECHCORE_CONFIG_MAGIC                          0xffff6549
+#define LEECHCORE_CONFIG_VERSION                        0x0001
+
+#define LEECHCORE_CONFIG_FLAG_PRINTF                    0x0001
+#define LEECHCORE_CONFIG_FLAG_PRINTF_VERBOSE_1          0x0002
+#define LEECHCORE_CONFIG_FLAG_PRINTF_VERBOSE_2          0x0004
+#define LEECHCORE_CONFIG_FLAG_PRINTF_VERBOSE_3          0x0008
+#define LEECHCORE_CONFIG_FLAG_REMOTE_NO_COMPRESS        0x0010
+
+typedef struct tdLEECHCORE_CONFIG {
+    DWORD magic;                // set by caller.
+    WORD version;               // set by caller.
+    WORD flags;                 // set by caller, updated by device.
+    ULONG64 paMax;              // set by caller, updated by device.
+    ULONG64 cbMaxValueDummy;    // set by device. (dummy - set to MAX_VALUE [deprecated cbMaxSizeMemIo])
+    ULONG64 paMaxNative;        // set by device.
+    LEECHCORE_DEVICE tpDevice;  // set by device.
+    BOOL fWritable;             // set by device. (is device writable?)
+    BOOL fVolatile;             // set by device. (is device volatile / memory may change?)
+    BOOL fVolatileMaxAddress;   // set by device. (is max address volatile? - poll changes with LEECHCORE_OPT_MEMORYINFO_ADDR_MAX)
+    BOOL fRemote;               // set by device.
+    WORD VersionMajor;          // set by device.
+    WORD VersionMinor;          // set by device.
+    WORD VersionRevision;       // set by device.
+    CHAR szDevice[MAX_PATH];    // set by caller.
+    CHAR szRemote[MAX_PATH];    // set by caller.
+    // optional 'printf' function pointer. if set to non null value 'printf'
+    // calls will be redirected. useful when logging to files.
+    _Check_return_opt_ int(*pfn_printf_opt)(_In_z_ _Printf_format_string_ char const* const _Format, ...);  // set by caller.
+#ifndef ARCH_64
+    DWORD dwFiller64_1;
+#endif /* ARCH_64 */
+} LEECHCORE_CONFIG, *PLEECHCORE_CONFIG;
+
+#ifdef ARCH_64
+typedef struct tdLEECHCORE_PAGESTAT_MINIMAL {
+    HANDLE h;
+    VOID(*pfnPageStatUpdate)(HANDLE h, ULONG64 pa, ULONG64 cPageSuccessAdd, ULONG64 cPageFailAdd);
+} LEECHCORE_PAGESTAT_MINIMAL, *PLEECHCORE_PAGESTAT_MINIMAL;
+#endif /* ARCH_64 */
+
+#ifndef ARCH_64
+typedef struct tdLEECHCORE_PAGESTAT_MINIMAL {
+    HANDLE h;
+    DWORD dwFiller64_1;
+    VOID(*pfnPageStatUpdate)(HANDLE h, ULONG64 pa, ULONG64 cPageSuccessAdd, ULONG64 cPageFailAdd);
+    DWORD dwFiller64_2;
+} LEECHCORE_PAGESTAT_MINIMAL, *PLEECHCORE_PAGESTAT_MINIMAL;
+#endif /* ARCH_64 */
+
+/*
+* Open a connection to the target device. The LeechCore initialization may fail
+* if the underlying device cannot be opened or if the LeechCore is already
+* initialized. If already initialized please connect with device EXISTING or
+* call LeechCore_Close() before opening a new device.
+* -- pInformation
+* -- result
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_Open(_Inout_ PLEECHCORE_CONFIG pConfig);
+
+/*
+* Clean up various device related stuff and deallocate memory buffers.
+*/
+DLLEXPORT VOID LeechCore_Close();
+
+
+
+//-----------------------------------------------------------------------------
+// LEECHCORE CORE READ AND WRITE FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+#define LEECHCORE_FLAG_READ_RETRY           0x01
+#define LEECHCORE_FLAG_WRITE_RETRY          0x01
+#define LEECHCORE_FLAG_WRITE_VERIFY         0x02
+
+/*
+* Free memory allocated by the LeechCore.
+* -- pvMem
+* -- return
+*/
+DLLEXPORT VOID LeechCore_MemFree(_Frees_ptr_opt_ PVOID pvMem);
+
+/*
+* Allocate a scatter buffer containing empty 0x1000-sized ppMEMs with address
+* set to zero. Caller is responsible for calling LeechCore_MemFree(ppMEMs).
+* CALLER FREE: LeechCore_MemFree(ppMEMs)
+* -- cMEMs
+* -- pppMEMs = pointer to receive ppMEMs on success.
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_AllocScatterEmpty(_In_ DWORD cMEMs, _Out_ PPMEM_IO_SCATTER_HEADER *pppMEMs);
+
+/*
+* Read memory in various non-contigious locations specified by the items in the
+* phDMAs array. Result for each unit of work will be given individually. No upper
+* limit of number of items to read, but no performance boost will be given if
+* above hardware limit. Max size of each unit of work is one 4k page (4096 bytes).
+* -- ppMEMs = array of scatter read headers.
+* -- cpMEMs = count of ppDMAs.
+*/
+DLLEXPORT VOID LeechCore_ReadScatter(_Inout_ PPMEM_IO_SCATTER_HEADER ppMEMs, _In_ DWORD cpMEMs);
+
+/*
+* Try read memory in a fairly optimal way considering device limits. The number
+* of total successfully read bytes is returned. Failed reads will be zeroed out
+* in the returned memory.
+* -- pa
+* -- pb
+* -- cb
+* -- return = the number of bytes successfully read.
+*/
+DLLEXPORT DWORD LeechCore_Read(_In_ ULONG64 pa, _Out_writes_(cb) PBYTE pb, _In_ DWORD cb);
+
+/*
+* Try read memory in a fairly optimal way considering device limits. The number
+* of total successfully read bytes is returned. Failed reads will be zeroed out
+* in the returned memory.
+* -- pa
+* -- pb
+* -- cb
+* -- flags = 0 or LEECHCORE_FLAG_READ_RETRY
+* -- pPageStat = optional minimal statistic struct to update.
+* -- return = the number of bytes successfully read.
+*/
+DLLEXPORT DWORD LeechCore_ReadEx(_In_ ULONG64 pa, _Out_writes_(cb) PBYTE pb, _In_ DWORD cb, _In_ DWORD flags, _In_opt_ PLEECHCORE_PAGESTAT_MINIMAL pPageStat);
+
+/*
+* Write data to the target system if supported by the device.
+* -- pa
+* -- pb
+* -- cb
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_Write(_In_ ULONG64 pa, _In_reads_(cb) PBYTE pb, _In_ DWORD cb);
+
+/*
+* Write data to the target system if supported by the device.
+* -- pa
+* -- pb
+* -- cb
+* -- flags = 0 or LEECHCORE_FLAG_WRITE_*
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_WriteEx(_In_ ULONG64 pa, _In_reads_(cb) PBYTE pb, _In_ DWORD cb, _In_ DWORD flags);
+
+/*
+* Probe the memory of the target system to check whether it's readable or not.
+* Please note that not all devices support this natively.
+* -- pa = address to start probe from.
+* -- cPages = number of 4kB pages to probe.
+* -- pbResultMap = result map, 1 byte represents 1 page, 0 = fail, 1 = success.
+*       (individual page elements in pbResultMap must be set to 0 [fail] on call
+*       for probe to take place on individual page).
+* -- return = FALSE if not supported by underlying hardware, TRUE if supported.
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_Probe(_In_ QWORD pa, _In_ DWORD cPages, _Inout_updates_bytes_(cPages) PBYTE pbResultMap);
+
+
+
+//-----------------------------------------------------------------------------
+// GET/SET DEVICE OPTIONS BELOW. SOME OPTIONS ARE GENERAL LEECHCORE OPTIONS
+// WHILE OTHER ARE DEVICE SPECIFIC. USE FUNCTIONS:
+// LeechCore_GetOption() AND LeechCore_GetOption() TO GET/SET OPTIONS.
+// FOR DEVICE-SPECIFIC OPTIONS PLEASE SEE INDIVIDUAL DEVICE FILES FOR MORE
+// DETAILED INFORMATION.
+//-----------------------------------------------------------------------------
+
+#define LEECHCORE_OPT_CORE_PRINTF_ENABLE                0x80000001  // RW
+#define LEECHCORE_OPT_CORE_VERBOSE                      0x80000002  // RW
+#define LEECHCORE_OPT_CORE_VERBOSE_EXTRA                0x80000003  // RW
+#define LEECHCORE_OPT_CORE_VERBOSE_EXTRA_TLP            0x80000004  // RW
+
+#define LEECHCORE_OPT_CORE_VERSION_MAJOR                0x01000001  // R
+#define LEECHCORE_OPT_CORE_VERSION_MINOR                0x01000002  // R
+#define LEECHCORE_OPT_CORE_VERSION_REVISION             0x01000003  // R
+#define LEECHCORE_OPT_CORE_FLAG_BACKEND_FUNCTIONS       0x01000004  // R
+
+#define LEECHCORE_OPT_MEMORYINFO_VALID                  0x02000001  // R
+#define LEECHCORE_OPT_MEMORYINFO_ADDR_MAX               0x02000002  // R
+#define LEECHCORE_OPT_MEMORYINFO_FLAG_32BIT             0x02000003  // R
+#define LEECHCORE_OPT_MEMORYINFO_FLAG_PAE               0x02000004  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_VERSION_MINOR       0x02000005  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_VERSION_MAJOR       0x02000006  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_DTB                 0x02000007  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_PFN                 0x02000008  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_PsLoadedModuleList  0x02000009  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_PsActiveProcessHead 0x0200000a  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_MACHINE_IMAGE_TP    0x0200000b  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_NUM_PROCESSORS      0x0200000c  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_SYSTEMTIME          0x0200000d  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_UPTIME              0x0200000e  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_KERNELBASE          0x0200000f  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_KERNELHINT          0x02000010  // R
+#define LEECHCORE_OPT_MEMORYINFO_OS_KdDebuggerDataBlock 0x02000011  // R
+
+#define LEECHCORE_OPT_FPGA_PROBE_MAXPAGES               0x03000001  // RW
+#define LEECHCORE_OPT_FPGA_RX_FLUSH_LIMIT               0x03000002  // RW
+#define LEECHCORE_OPT_FPGA_MAX_SIZE_RX                  0x03000003  // RW
+#define LEECHCORE_OPT_FPGA_MAX_SIZE_TX                  0x03000004  // RW
+#define LEECHCORE_OPT_FPGA_DELAY_PROBE_READ             0x03000005  // RW - uS
+#define LEECHCORE_OPT_FPGA_DELAY_PROBE_WRITE            0x03000006  // RW - uS
+#define LEECHCORE_OPT_FPGA_DELAY_WRITE                  0x03000007  // RW - uS
+#define LEECHCORE_OPT_FPGA_DELAY_READ                   0x03000008  // RW - uS
+#define LEECHCORE_OPT_FPGA_RETRY_ON_ERROR               0x03000009  // RW
+#define LEECHCORE_OPT_FPGA_DEVICE_ID                    0x03000080  // R
+#define LEECHCORE_OPT_FPGA_FPGA_ID                      0x03000081  // R
+#define LEECHCORE_OPT_FPGA_VERSION_MAJOR                0x03000082  // R
+#define LEECHCORE_OPT_FPGA_VERSION_MINOR                0x03000083  // R
+
+/*
+* Set a device specific option value.
+* -- fOption
+* -- pqwValue = pointer to QWORD to receive option value.
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_GetOption(_In_ ULONG64 fOption, _Out_ PULONG64 pqwValue);
+
+/*
+* Set a device specific option value.
+* -- fOption
+* -- qwValue
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_SetOption(_In_ ULONG64 fOption, _In_ ULONG64 qwValue);
+
+
+
+//-----------------------------------------------------------------------------
+// TRANSFER DEVICE DEPENDANT COMMANDS OR DATA TO/FROM UNDERLYING DEVICES AND
+// PERFORM ACTIONS USING THE LeechCore_CommandData() FUNCTION.
+//-----------------------------------------------------------------------------
+
+#define LEECHCORE_COMMANDDATA_FPGA_WRITE_TLP            0x00000101  // R
+#define LEECHCORE_COMMANDDATA_FPGA_LISTEN_TLP           0x00000102  // R
+#define LEECHCORE_COMMANDDATA_FPGA_PCIECFGSPACE         0x00000103  // R
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREGPCIE           0x00000104  // RW - [high-part fOption = address]
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREGCFG            0x00000105  // RW - [high-part fOption = address]
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREGDRP            0x00000106  // RW - [high-part fOption = address]
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREGCFG_MARKWR     0x00000107  // W  - write with mask [bytes: 0-1: data, 2-3: mask] [high-part fOption = address]
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREGPCIE_MARKWR    0x00000108  // W  - write with mask [bytes: 0-1: data, 2-3: mask] [high-part fOption = address]
+#define LEECHCORE_COMMANDDATA_FPGA_PCIECFGSPACE_WR      0x00000109  // W
+#define LEECHCORE_COMMANDDATA_FPGA_CFGREG_DEBUGPRINT    0x0000010a  //
+#define LEECHCORE_COMMANDDATA_FILE_DUMPHEADER_GET       0x00000201  // R
+#define LEECHCORE_COMMANDDATA_STATISTICS_GET            0x80000100  // R
+
+#define LEECHCORE_STATISTICS_MAGIC                      0xffff6550
+#define LEECHCORE_STATISTICS_VERSION                        0x0001
+#define LEECHCORE_STATISTICS_ID_OPEN                          0x00
+#define LEECHCORE_STATISTICS_ID_READSCATTER                   0x01
+#define LEECHCORE_STATISTICS_ID_WRITE                         0x02
+#define LEECHCORE_STATISTICS_ID_PROBE                         0x03
+#define LEECHCORE_STATISTICS_ID_GETOPTION                     0x04
+#define LEECHCORE_STATISTICS_ID_SETOPTION                     0x05
+#define LEECHCORE_STATISTICS_ID_COMMANDDATA                   0x06
+#define LEECHCORE_STATISTICS_ID_COMMANDSVC                    0x07
+#define LEECHCORE_STATISTICS_ID_MAX                           0x07
+
+static LPCSTR LEECHCORE_STATISTICS_NAME[] = {
+    "LeechCore_Open",
+    "LeechCore_ReadScatter",
+    "LeechCore_Write",
+    "LeechCore_Probe",
+    "LeechCore_GetOption",
+    "LeechCore_SetOption",
+    "LeechCore_CommandData",
+    "LeechCore_CommandSvc"
+};
+
+typedef struct tdLEECHCORE_STATISTICS {
+    DWORD magic;
+    WORD version;
+    WORD Reserved0;
+    DWORD Reserved1;
+    QWORD qwFreq;
+    struct {
+        QWORD c;
+        QWORD tm;   // total time in qwFreq ticks
+    } Call[0x10];
+} LEECHCORE_STATISTICS, *PLEECHCORE_STATISTICS;
+
+/*
+* Transfer device dependant commands/data to/from the underlying device and
+* perform device dependant actions.
+* -- fOption
+* -- cbDataIn
+* -- pbDataIn
+* -- pbDataOut
+* -- cbDataOut
+* -- pcbDataOut
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_CommandData(
+    _In_ ULONG64 fOption,
+    _In_reads_(cbDataIn) PBYTE pbDataIn,
+    _In_ DWORD cbDataIn,
+    _Out_writes_opt_(cbDataOut) PBYTE pbDataOut,
+    _In_ DWORD cbDataOut,
+    _Out_opt_ PDWORD pcbDataOut
+);
+
+#define LEECHCORE_AGENTCOMMAND_EXEC_PYTHON_INMEM    0x1166000000000001
+#define LEECHCORE_AGENTCOMMAND_EXITPROCESS          0x1166000000000010
+
+/*
+* Transfer commands/data to/from the remote agent (if it exists).
+* NB! USER-FREE: ppbDataOut (LocalFree)
+* -- fCommand = the option / command to the remote service as defined in LEECHCORE_AGENTCOMMAND_*
+* -- fDataIn = optional 64-bit tiny input value
+* -- cbDataIn
+* -- pbDataIn
+* -- ppbDataOut =  ptr to receive function allocated output - must be LocalFree'd by caller!
+* -- pcbDataOut = ptr to receive length of *pbDataOut.
+* -- return
+*/
+_Success_(return)
+DLLEXPORT BOOL LeechCore_AgentCommand(
+    _In_ ULONG64 fCommand,
+    _In_ ULONG64 fDataIn,
+    _In_reads_(cbDataIn) PBYTE pbDataIn,
+    _In_ DWORD cbDataIn,
+    _Out_writes_opt_(*pcbDataOut) PBYTE *ppbDataOut,
+    _Out_opt_ PDWORD pcbDataOut
+);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+#endif /* __LEECHCORE_H__ */
+
+```
+
+`DMALib/libs/vmmdll.h`:
+
+```h
+// vmmdll.h : header file to include in projects that use vmm.dll either as
+// stand anlone projects or as native plugins to vmm.dll.
+//
+// (c) Ulf Frisk, 2018-2020
+// Author: Ulf Frisk, pcileech@frizk.net
+//
+// Header Version: 3.2
+//
+
+#include <windows.h>
+#include "leechcore.h"
+
+#ifndef __VMMDLL_H__
+#define __VMMDLL_H__
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
+
+//-----------------------------------------------------------------------------
+// INITIALIZATION FUNCTIONALITY BELOW:
+// Choose one way of initialzing the VMM / Memory Process File System.
+//-----------------------------------------------------------------------------
+
+/*
+* Initialize VMM.DLL with command line parameters. For a more detailed info
+* about the parameters please see github wiki for MemProcFS and LeechCore.
+* NB! LeechCore initialization parameters are _also_ valid to this function.
+* Important parameters are:
+*    -printf = show printf style outputs.
+*    -v -vv -vvv = extra verbosity levels.
+*    -device = device as on format for LeechCore - please see leechcore.h or
+*              Github documentation for additional information. Some values
+*              are: <file>, fpga, usb3380, hvsavedstate, totalmeltdown, pmem
+*    -remote = remote LeechCore instance - please see leechcore.h or Github
+*              documentation for additional information.
+*    -norefresh = disable background refreshes (even if backing memory is
+*              volatile memory).
+*    -symbolserverdisable = disable symbol server until user change.
+*              This parameter will take precedence over registry settings.
+*    -pagefile[0-9] = page file(s) to use in addition to physical memory.
+*              Normally pagefile.sys have index 0 and swapfile.sys index 1.
+*              Page files are in constant flux - do not use if time diff
+*              between memory dump and page files are more than few minutes.
+*              Example: 'pagefile0 swapfile.sys'
+*    -waitinitialize = Wait for initialization to complete before returning.
+*              Normal use is that some initialization is done asynchronously
+*              and may not be completed when initialization call is completed.
+*              This includes virtual memory compression, registry and more.
+*              Example: '-waitinitialize'
+*
+* -- argc
+* -- argv
+* -- return = success/fail
+*/
+_Success_(return)
+BOOL VMMDLL_Initialize(_In_ DWORD argc, _In_ LPSTR argv[]);
+
+/*
+* Close an initialized instance of VMM.DLL and clean up all allocated resources
+* including plugins, linked PCILeech.DLL and other memory resources.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_Close();
+
+/*
+* Perform a force refresh of all internal caches including:
+* - process listings
+* - memory cache
+* - page table cache
+* WARNING: function may take some time to execute!
+* -- dwReserved = reserved future use - must be zero
+* -- return = sucess/fail
+*/
+_Success_(return)
+BOOL VMMDLL_Refresh(_In_ DWORD dwReserved);
+
+/*
+* Free memory allocated by the VMMDLL.
+* -- pvMem
+*/
+VOID VMMDLL_MemFree(_Frees_ptr_opt_ PVOID pvMem);
+
+
+//-----------------------------------------------------------------------------
+// CONFIGURATION SETTINGS BELOW:
+// Configure the memory process file system or the underlying memory
+// acquisition devices.
+//-----------------------------------------------------------------------------
+
+/*
+* Options used together with the functions: VMMDLL_ConfigGet & VMMDLL_ConfigSet
+* Options are defined with either: VMMDLL_OPT_* in this header file or as
+* LEECHCORE_OPT_* in leechcore.h
+* For more detailed information check the sources for individual device types.
+*/
+#define VMMDLL_OPT_CORE_PRINTF_ENABLE                   0x80000001  // RW
+#define VMMDLL_OPT_CORE_VERBOSE                         0x80000002  // RW
+#define VMMDLL_OPT_CORE_VERBOSE_EXTRA                   0x80000003  // RW
+#define VMMDLL_OPT_CORE_VERBOSE_EXTRA_TLP               0x80000004  // RW
+#define VMMDLL_OPT_CORE_MAX_NATIVE_ADDRESS              0x80000005  // R
+#define VMMDLL_OPT_CORE_SYSTEM                          0x80000007  // R
+#define VMMDLL_OPT_CORE_MEMORYMODEL                     0x80000008  // R
+
+#define VMMDLL_OPT_CONFIG_IS_REFRESH_ENABLED            0x40000001  // R - 1/0
+#define VMMDLL_OPT_CONFIG_TICK_PERIOD                   0x40000002  // RW - base tick period in ms
+#define VMMDLL_OPT_CONFIG_READCACHE_TICKS               0x40000003  // RW - memory cache validity period (in ticks)
+#define VMMDLL_OPT_CONFIG_TLBCACHE_TICKS                0x40000004  // RW - page table (tlb) cache validity period (in ticks)
+#define VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_PARTIAL       0x40000005  // RW - process refresh (partial) period (in ticks)
+#define VMMDLL_OPT_CONFIG_PROCCACHE_TICKS_TOTAL         0x40000006  // RW - process refresh (full) period (in ticks)
+#define VMMDLL_OPT_CONFIG_VMM_VERSION_MAJOR             0x40000007  // R
+#define VMMDLL_OPT_CONFIG_VMM_VERSION_MINOR             0x40000008  // R
+#define VMMDLL_OPT_CONFIG_VMM_VERSION_REVISION          0x40000009  // R
+#define VMMDLL_OPT_CONFIG_STATISTICS_FUNCTIONCALL       0x4000000A  // RW - enable function call statistics (.status/statistics_fncall file)
+#define VMMDLL_OPT_CONFIG_IS_PAGING_ENABLED             0x4000000B  // RW - 1/0
+
+#define VMMDLL_OPT_WIN_VERSION_MAJOR                    0x40000101  // R
+#define VMMDLL_OPT_WIN_VERSION_MINOR                    0x40000102  // R
+#define VMMDLL_OPT_WIN_VERSION_BUILD                    0x40000103  // R
+
+static const LPSTR VMMDLL_MEMORYMODEL_TOSTRING[4] = { "N/A", "X86", "X86PAE", "X64" };
+
+typedef enum tdVMMDLL_MEMORYMODEL_TP {
+    VMMDLL_MEMORYMODEL_NA       = 0,
+    VMMDLL_MEMORYMODEL_X86      = 1,
+    VMMDLL_MEMORYMODEL_X86PAE   = 2,
+    VMMDLL_MEMORYMODEL_X64      = 3
+} VMMDLL_MEMORYMODEL_TP;
+
+typedef enum tdVMMDLL_SYSTEM_TP {
+    VMMDLL_SYSTEM_UNKNOWN_X64   = 1,
+    VMMDLL_SYSTEM_WINDOWS_X64   = 2,
+    VMMDLL_SYSTEM_UNKNOWN_X86   = 3,
+    VMMDLL_SYSTEM_WINDOWS_X86   = 4
+} VMMDLL_SYSTEM_TP;
+
+/*
+* Set a device specific option value. Please see defines VMMDLL_OPT_* for infor-
+* mation about valid option values. Please note that option values may overlap
+* between different device types with different meanings.
+* -- fOption
+* -- pqwValue = pointer to ULONG64 to receive option value.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ConfigGet(_In_ ULONG64 fOption, _Out_ PULONG64 pqwValue);
+
+/*
+* Set a device specific option value. Please see defines VMMDLL_OPT_* for infor-
+* mation about valid option values. Please note that option values may overlap
+* between different device types with different meanings.
+* -- fOption
+* -- qwValue
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ConfigSet(_In_ ULONG64 fOption, _In_ ULONG64 qwValue);
+
+
+
+//-----------------------------------------------------------------------------
+// VFS - VIRTUAL FILE SYSTEM FUNCTIONALITY BELOW:
+// This is the core of the memory process file system. All implementation and
+// analysis towards the file system is possible by using functionality below. 
+//-----------------------------------------------------------------------------
+
+#define VMMDLL_STATUS_SUCCESS                       ((NTSTATUS)0x00000000L)
+#define VMMDLL_STATUS_UNSUCCESSFUL                  ((NTSTATUS)0xC0000001L)
+#define VMMDLL_STATUS_END_OF_FILE                   ((NTSTATUS)0xC0000011L)
+#define VMMDLL_STATUS_FILE_INVALID                  ((NTSTATUS)0xC0000098L)
+#define VMMDLL_STATUS_FILE_SYSTEM_LIMITATION        ((NTSTATUS)0xC0000427L)
+
+#define VMMDLL_VFS_FILELIST_EXINFO_VERSION          1
+#define VMMDLL_VFS_FILELIST_VERSION                 2
+
+typedef struct tdVMMDLL_VFS_FILELIST_EXINFO {
+    DWORD dwVersion;
+    BOOL fCompressed;                   // set flag FILE_ATTRIBUTE_COMPRESSED - (no meaning but shows gui artifact in explorer.exe)
+    union {
+        FILETIME ftCreationTime;        // 0 = default time
+        QWORD qwCreationTime;
+    };
+    union {
+        FILETIME ftLastAccessTime;      // 0 = default time
+        QWORD qwLastAccessTime;
+    };
+    union {
+        FILETIME ftLastWriteTime;       // 0 = default time
+        QWORD qwLastWriteTime;
+    };
+} VMMDLL_VFS_FILELIST_EXINFO, *PVMMDLL_VFS_FILELIST_EXINFO;
+
+typedef struct tdVMMDLL_VFS_FILELIST {
+    DWORD dwVersion;
+    VOID(*pfnAddFile)     (_Inout_ HANDLE h, _In_ LPWSTR wszName, _In_ ULONG64 cb, _In_opt_ PVMMDLL_VFS_FILELIST_EXINFO pExInfo);
+    VOID(*pfnAddDirectory)(_Inout_ HANDLE h, _In_ LPWSTR wszName, _In_opt_ PVMMDLL_VFS_FILELIST_EXINFO pExInfo);
+    HANDLE h;
+} VMMDLL_VFS_FILELIST, *PVMMDLL_VFS_FILELIST;
+
+/*
+* Helper inline functions for callbacks into the VMM_VFS_FILELIST structure.
+*/
+
+inline VOID VMMDLL_VfsList_AddFile(_In_ HANDLE pFileList, _In_ LPWSTR wszName, _In_ ULONG64 cb, _In_opt_ PVMMDLL_VFS_FILELIST_EXINFO pExInfo)
+{
+    ((PVMMDLL_VFS_FILELIST)pFileList)->pfnAddFile(((PVMMDLL_VFS_FILELIST)pFileList)->h, wszName, cb, pExInfo);
+}
+
+inline VOID VMMDLL_VfsList_AddDirectory(_In_ HANDLE pFileList, _In_ LPWSTR wszName, _In_opt_ PVMMDLL_VFS_FILELIST_EXINFO pExInfo)
+{
+    ((PVMMDLL_VFS_FILELIST)pFileList)->pfnAddDirectory(((PVMMDLL_VFS_FILELIST)pFileList)->h, wszName, pExInfo);
+}
+
+inline BOOL VMMDLL_VfsList_IsHandleValid(_In_ HANDLE pFileList)
+{
+    return ((PVMMDLL_VFS_FILELIST)pFileList)->dwVersion == VMMDLL_VFS_FILELIST_VERSION;
+}
+
+/*
+* List a directory of files in the memory process file system. Directories and
+* files will be listed by callbacks into functions supplied in the pFileList
+* parameter. If information of an individual file is needed it's neccessary
+* to list all files in its directory.
+* -- wcsPath
+* -- pFileList
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_VfsList(_In_ LPCWSTR wcsPath, _Inout_ PVMMDLL_VFS_FILELIST pFileList);
+
+/*
+* Read select parts of a file in the memory process file system.
+* -- wcsFileName
+* -- pb
+* -- cb
+* -- pcbRead
+* -- cbOffset
+* -- return
+*
+*/
+NTSTATUS VMMDLL_VfsRead(_In_ LPCWSTR wcsFileName, _Out_ LPVOID pb, _In_ DWORD cb, _Out_ PDWORD pcbRead, _In_ ULONG64 cbOffset);
+
+/*
+* Write select parts to a file in the memory process file system.
+* -- wcsFileName
+* -- pb
+* -- cb
+* -- pcbWrite
+* -- cbOffset
+* -- return
+*/
+NTSTATUS VMMDLL_VfsWrite(_In_ LPCWSTR wcsFileName, _In_ LPVOID pb, _In_ DWORD cb, _Out_ PDWORD pcbWrite, _In_ ULONG64 cbOffset);
+
+/*
+* Utility functions for memory process file system read/write towards different
+* underlying data representations.
+*/
+NTSTATUS VMMDLL_UtilVfsReadFile_FromPBYTE(_In_ PBYTE pbFile, _In_ ULONG64 cbFile, _Out_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbRead, _In_ ULONG64 cbOffset);
+NTSTATUS VMMDLL_UtilVfsReadFile_FromQWORD(_In_ ULONG64 qwValue, _Out_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbRead, _In_ ULONG64 cbOffset, _In_ BOOL fPrefix);
+NTSTATUS VMMDLL_UtilVfsReadFile_FromDWORD(_In_ DWORD dwValue, _Out_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbRead, _In_ ULONG64 cbOffset, _In_ BOOL fPrefix);
+NTSTATUS VMMDLL_UtilVfsReadFile_FromBOOL(_In_ BOOL fValue, _Out_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbRead, _In_ ULONG64 cbOffset);
+NTSTATUS VMMDLL_UtilVfsWriteFile_BOOL(_Inout_ PBOOL pfTarget, _In_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbWrite, _In_ ULONG64 cbOffset);
+NTSTATUS VMMDLL_UtilVfsWriteFile_DWORD(_Inout_ PDWORD pdwTarget, _In_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbWrite, _In_ ULONG64 cbOffset, _In_ DWORD dwMinAllow);
+
+
+//-----------------------------------------------------------------------------
+// PLUGIN MANAGER FUNCTIONALITY BELOW:
+// Function and structures to initialize and use the memory process file system
+// plugin functionality. The plugin manager is started by a call to function:
+// VMM_VfsInitializePlugins. Each built-in plugin and external plugin of which
+// the DLL name matches m_*.dll will receive a call to its InitializeVmmPlugin
+// function. The plugin/module may decide to call pfnPluginManager_Register to
+// register plugins in the form of different names one or more times.
+// Example of registration function in a plugin DLL below: 
+// 'VOID InitializeVmmPlugin(_In_ PVMM_PLUGIN_REGINFO pRegInfo)'
+//-----------------------------------------------------------------------------
+
+/*
+* Initialize all potential plugins, both built-in and external, that maps into
+* the memory process file system. Please note that plugins are not loaded by
+* default - they have to be explicitly loaded by calling this function. They
+* will be unloaded on a general close of the vmm dll.
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_VfsInitializePlugins();
+
+#define VMMDLL_PLUGIN_CONTEXT_MAGIC                 0xc0ffee663df9301c
+#define VMMDLL_PLUGIN_CONTEXT_VERSION               3
+#define VMMDLL_PLUGIN_REGINFO_MAGIC                 0xc0ffee663df9301d
+#define VMMDLL_PLUGIN_REGINFO_VERSION               5
+
+#define VMMDLL_PLUGIN_EVENT_VERBOSITYCHANGE         0x01
+#define VMMDLL_PLUGIN_EVENT_REFRESH_PROCESS_TOTAL   0x02
+#define VMMDLL_PLUGIN_EVENT_REFRESH_REGISTRY        0x04
+
+typedef struct tdVMMDLL_PLUGIN_CONTEXT {
+    ULONG64 magic;
+    WORD wVersion;
+    WORD wSize;
+    DWORD dwPID;
+    PVOID pProcess;
+    LPWSTR wszModule;
+    LPWSTR wszPath;
+    PVOID pvReserved1;
+    PVOID pvReserved2;
+} VMMDLL_PLUGIN_CONTEXT, *PVMMDLL_PLUGIN_CONTEXT;
+
+typedef struct tdVMMDLL_PLUGIN_REGINFO {
+    ULONG64 magic;
+    WORD wVersion;
+    WORD wSize;
+    VMMDLL_MEMORYMODEL_TP tpMemoryModel;
+    VMMDLL_SYSTEM_TP tpSystem;
+    HMODULE hDLL;
+    HMODULE hReservedDllPython3X;   // not for general use (only used for python).
+    BOOL(*pfnPluginManager_Register)(struct tdVMMDLL_PLUGIN_REGINFO *pPluginRegInfo);
+    HMODULE hReservedDllPython3;    // not for general use (only used for python).
+    PVOID pvReserved2;
+    // general plugin registration info to be filled out by the plugin below:
+    struct {
+        WCHAR wszPathName[128];
+        BOOL fRootModule;
+        BOOL fProcessModule;
+        PVOID pvReserved[2];
+    } reg_info;
+    // function plugin registration info to be filled out by the plugin below:
+    struct {
+        BOOL(*pfnList)(_In_ PVMMDLL_PLUGIN_CONTEXT ctx, _Inout_ PHANDLE pFileList);
+        NTSTATUS(*pfnRead)(_In_ PVMMDLL_PLUGIN_CONTEXT ctx, _Out_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbRead,  _In_ ULONG64 cbOffset);
+        NTSTATUS(*pfnWrite)(_In_ PVMMDLL_PLUGIN_CONTEXT ctx, _In_ PBYTE pb, _In_ DWORD cb, _Out_ PDWORD pcbWrite, _In_ ULONG64 cbOffset);
+        VOID(*pfnNotify)(_In_ DWORD fEvent, _In_opt_ PVOID pvEvent, _In_opt_ DWORD cbEvent);
+        VOID(*pfnClose)();
+        PVOID pvReserved[16];
+    } reg_fn;
+} VMMDLL_PLUGIN_REGINFO, *PVMMDLL_PLUGIN_REGINFO;
+
+//-----------------------------------------------------------------------------
+// VMM CORE FUNCTIONALITY BELOW:
+// Vmm core functaionlity such as read (and write) to both virtual and physical
+// memory. NB! writing will only work if the target is supported - i.e. not a
+// memory dump file...
+// To read physical memory specify dwPID as (DWORD)-1
+//-----------------------------------------------------------------------------
+
+// FLAG used to supress the default read cache in calls to VMM_MemReadEx()
+// which will lead to the read being fetched from the target system always.
+// Cached page tables (used for translating virtual2physical) are still used.
+#define VMMDLL_FLAG_NOCACHE                        0x0001  // do not use the data cache (force reading from memory acquisition device)
+#define VMMDLL_FLAG_ZEROPAD_ON_FAIL                0x0002  // zero pad failed physical memory reads and report success if read within range of physical memory.
+#define VMMDLL_FLAG_FORCECACHE_READ                0x0008  // force use of cache - fail non-cached pages - only valid for reads, invalid with VMM_FLAG_NOCACHE/VMM_FLAG_ZEROPAD_ON_FAIL.
+#define VMMDLL_FLAG_NOPAGING                       0x0010  // do not try to retrieve memory from paged out memory from pagefile/compressed (even if possible)
+#define VMMDLL_FLAG_NOPAGING_IO                    0x0020  // do not try to retrieve memory from paged out memory if read would incur additional I/O (even if possible).
+
+/*
+* Read memory in various non-contigious locations specified by the pointers to
+* the items in the ppMEMs array. Result for each unit of work will be given
+* individually. No upper limit of number of items to read, but no performance
+* boost will be given if above hardware limit. Max size of each unit of work is
+* one 4k page (4096 bytes). Reads must not cross 4k page boundaries. Reads must
+* start at even DWORDs (4-bytes).
+* -- dwPID - PID of target process, (DWORD)-1 to read physical memory.
+* -- ppMEMs = array of scatter read headers.
+* -- cpMEMs = count of ppMEMs.
+* -- flags = optional flags as given by VMMDLL_FLAG_*
+* -- return = the number of successfully read items.
+*/
+DWORD VMMDLL_MemReadScatter(_In_ DWORD dwPID, _Inout_ PPMEM_IO_SCATTER_HEADER ppMEMs, _In_ DWORD cpMEMs, _In_ DWORD flags);
+
+/*
+* Read a single 4096-byte page of memory.
+* -- dwPID - PID of target process, (DWORD)-1 to read physical memory.
+* -- qwA
+* -- pbPage
+* -- return = success/fail (depending if all requested bytes are read or not).
+*/
+_Success_(return)
+BOOL VMMDLL_MemReadPage(_In_ DWORD dwPID, _In_ ULONG64 qwA, _Inout_bytecount_(4096) PBYTE pbPage);
+
+/*
+* Read a contigious arbitrary amount of memory.
+* -- dwPID - PID of target process, (DWORD)-1 to read physical memory.
+* -- qwA
+* -- pb
+* -- cb
+* -- return = success/fail (depending if all requested bytes are read or not).
+*/
+_Success_(return)
+BOOL VMMDLL_MemRead(_In_ DWORD dwPID, _In_ ULONG64 qwA, _Out_writes_(cb) PBYTE pb, _In_ DWORD cb);
+
+/*
+* Read a contigious amount of memory and report the number of bytes read in pcbRead.
+* -- dwPID - PID of target process, (DWORD)-1 to read physical memory.
+* -- qwA
+* -- pb
+* -- cb
+* -- pcbRead
+* -- flags = flags as in VMMDLL_FLAG_*
+* -- return = success/fail. NB! reads may report as success even if 0 bytes are
+*        read - it's recommended to verify pcbReadOpt parameter.
+*/
+_Success_(return)
+BOOL VMMDLL_MemReadEx(_In_ DWORD dwPID, _In_ ULONG64 qwA, _Out_writes_(cb) PBYTE pb, _In_ DWORD cb, _Out_opt_ PDWORD pcbReadOpt, _In_ ULONG64 flags);
+
+/*
+* Prefetch a number of addresses (specified in the pA array) into the memory
+* cache. This function is to be used to batch larger known reads into local
+* cache before making multiple smaller reads - which will then happen from
+* the cache. Function exists for performance reasons.
+* -- dwPID = PID of target process, (DWORD)-1 for physical memory.
+* -- pPrefetchAddresses = array of addresses to read into cache.
+* -- cPrefetchAddresses
+*/
+_Success_(return)
+BOOL VMMDLL_MemPrefetchPages(_In_ DWORD dwPID, _In_reads_(cPrefetchAddresses) PULONG64 pPrefetchAddresses, _In_ DWORD cPrefetchAddresses);
+
+/*
+* Write a contigious arbitrary amount of memory. Please note some virtual memory
+* such as pages of executables (such as DLLs) may be shared between different
+* virtual memory over different processes. As an example a write to kernel32.dll
+* in one process is likely to affect kernel32 in the whole system - in all
+* processes. Heaps and Stacks and other memory are usually safe to write to.
+* Please take care when writing to memory!
+* -- dwPID = PID of target process, (DWORD)-1 to read physical memory.
+* -- qwA
+* -- pb
+* -- cb
+* -- return = TRUE on success, FALSE on partial or zero write.
+*/
+_Success_(return)
+BOOL VMMDLL_MemWrite(_In_ DWORD dwPID, _In_ ULONG64 qwA, _In_reads_(cb) PBYTE pb, _In_ DWORD cb);
+
+/*
+* Translate a virtual address to a physical address by walking the page tables
+* of the specified process.
+* -- dwPID
+* -- qwVA
+* -- pqwPA
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_MemVirt2Phys(_In_ DWORD dwPID, _In_ ULONG64 qwVA, _Out_ PULONG64 pqwPA);
+
+
+
+//-----------------------------------------------------------------------------
+// VMM PROCESS MAP FUNCTIONALITY BELOW:
+// Functionality for retrieving process related collections of items such as
+// page table map (PTE), virtual address descriptor map (VAD), loaded modules,
+// heaps and threads.
+//-----------------------------------------------------------------------------
+
+#define VMMDLL_MAP_PTE_VERSION              1
+#define VMMDLL_MAP_VAD_VERSION              3
+#define VMMDLL_MAP_MODULE_VERSION           1
+#define VMMDLL_MAP_HEAP_VERSION             1
+#define VMMDLL_MAP_THREAD_VERSION           1
+#define VMMDLL_MAP_HANDLE_VERSION           1
+#define VMMDLL_MAP_PHYSMEM_VERSION          1
+#define VMMDLL_MAP_USER_VERSION             1
+
+// flags to check for existence in the fPage field of VMMDLL_MAP_PTEENTRY
+#define VMMDLL_MEMMAP_FLAG_PAGE_W          0x0000000000000002
+#define VMMDLL_MEMMAP_FLAG_PAGE_NS         0x0000000000000004
+#define VMMDLL_MEMMAP_FLAG_PAGE_NX         0x8000000000000000
+#define VMMDLL_MEMMAP_FLAG_PAGE_MASK       0x8000000000000006
+
+typedef struct tdVMMDLL_MAP_PTEENTRY {
+    QWORD vaBase;
+    QWORD cPages;
+    QWORD fPage;
+    BOOL  fWoW64;
+    DWORD cwszText;
+    LPWSTR wszText;
+    DWORD _Reserved1[2];
+} VMMDLL_MAP_PTEENTRY, *PVMMDLL_MAP_PTEENTRY;
+
+typedef struct tdVMMDLL_MAP_VADENTRY {
+    QWORD vaStart;
+    QWORD vaEnd;
+    QWORD vaVad;
+    // DWORD 0
+    DWORD VadType           : 3;   // Pos 0
+    DWORD Protection        : 5;   // Pos 3
+    DWORD fImage            : 1;   // Pos 8
+    DWORD fFile             : 1;   // Pos 9
+    DWORD fPageFile         : 1;   // Pos 10
+    DWORD fPrivateMemory    : 1;   // Pos 11
+    DWORD fTeb              : 1;   // Pos 12
+    DWORD fStack            : 1;   // Pos 13
+    DWORD fSpare            : 2;   // Pos 14
+    DWORD HeapNum           : 7;   // Pos 16
+    DWORD fHeap             : 1;   // Pos 23
+    DWORD cwszDescription   : 8;   // Pos 24
+    // DWORD 1
+    DWORD CommitCharge      : 31;   // Pos 0
+    DWORD MemCommit         : 1;    // Pos 31
+    DWORD u2;
+    DWORD cbPrototypePte;
+    QWORD vaPrototypePte;
+    QWORD vaSubsection;
+    LPWSTR wszText;                 // optional LPWSTR pointed into VMMDLL_MAP_VAD.wszMultiText
+    DWORD cwszText;                 // WCHAR count not including terminating null
+    DWORD _Reserved;
+    QWORD vaFileObject;             // only valid if fFile/fImage _and_ after wszText is initialized
+} VMMDLL_MAP_VADENTRY, *PVMMDLL_MAP_VADENTRY;
+
+typedef struct tdVMMDLL_MAP_MODULEENTRY {
+    QWORD vaBase;
+    QWORD vaEntry;
+    DWORD cbImageSize;
+    BOOL  fWoW64;
+    LPWSTR wszText;
+    DWORD cwszText;                 // wchar count not including terminating null
+    DWORD _Reserved1[7];
+} VMMDLL_MAP_MODULEENTRY, *PVMMDLL_MAP_MODULEENTRY;
+
+typedef struct tdVMMDLL_MAP_HEAPENTRY {
+    QWORD vaHeapSegment;
+    DWORD cPages;
+    DWORD cPagesUnCommitted : 24;
+    DWORD HeapId : 7;
+    DWORD fPrimary : 1;
+} VMMDLL_MAP_HEAPENTRY, *PVMMDLL_MAP_HEAPENTRY;
+
+typedef struct tdVMMDLL_MAP_THREADENTRY {
+    DWORD dwTID;
+    DWORD dwPID;
+    DWORD dwExitStatus;
+    UCHAR bState;
+    UCHAR bRunning;
+    UCHAR bPriority;
+    UCHAR bBasePriority;
+    QWORD vaETHREAD;
+    QWORD vaTeb;
+    QWORD ftCreateTime;
+    QWORD ftExitTime;
+    QWORD vaStartAddress;
+    QWORD vaStackBaseUser;
+    QWORD vaStackLimitUser;
+    QWORD vaStackBaseKernel;
+    QWORD vaStackLimitKernel;
+    DWORD _FutureUse[10];
+} VMMDLL_MAP_THREADENTRY, *PVMMDLL_MAP_THREADENTRY;
+
+typedef struct tdVMMDLL_MAP_HANDLEENTRY {
+    QWORD vaObject;
+    DWORD dwHandle;
+    DWORD dwGrantedAccess : 24;
+    DWORD iType : 8;
+    QWORD qwHandleCount;
+    QWORD qwPointerCount;
+    QWORD vaObjectCreateInfo;
+    QWORD vaSecurityDescriptor;
+    LPWSTR wszText;
+    DWORD cwszText;
+    DWORD dwPID;
+    DWORD dwPoolTag;
+    DWORD _FutureUse[4];
+    DWORD cwszType;
+    LPWSTR wszType;
+} VMMDLL_MAP_HANDLEENTRY, *PVMMDLL_MAP_HANDLEENTRY;
+
+typedef struct tdVMMDLL_MAP_PHYSMEMENTRY {
+    QWORD pa;
+    QWORD cb;
+} VMMDLL_MAP_PHYSMEMENTRY, *PVMMDLL_MAP_PHYSMEMENTRY;
+
+typedef struct tdVMMDLL_MAP_USERENTRY {
+    DWORD cwszText;                 // WCHAR count not including terminating null
+    LPWSTR wszText;                 // LPWSTR pointed into VMMOB_MAP_USER.wszMultiText
+    ULONG64 vaRegHive;
+    CHAR szSID[MAX_PATH];
+    DWORD _FutureUse[9];
+} VMMDLL_MAP_USERENTRY, *PVMMDLL_MAP_USERENTRY;
+
+typedef struct tdVMMDLL_MAP_PTE {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    LPWSTR wszMultiText;            // NULL or multi-wstr pointed into by VMMDLL_MAP_VADENTRY.wszText
+    DWORD cbMultiText;
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_PTEENTRY pMap[];     // map entries.
+} VMMDLL_MAP_PTE, *PVMMDLL_MAP_PTE;
+
+typedef struct tdVMMDLL_MAP_VAD {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    LPWSTR wszMultiText;            // NULL or multi-wstr pointed into by VMMDLL_MAP_VADENTRY.wszText
+    DWORD cbMultiText;
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_VADENTRY pMap[];     // map entries.
+} VMMDLL_MAP_VAD, *PVMMDLL_MAP_VAD;
+
+typedef struct tdVMMDLL_MAP_MODULE {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    LPWSTR wszMultiText;            // multi-wstr pointed into by VMMDLL_MAP_MODULEENTRY.wszText
+    DWORD cbMultiText;
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_MODULEENTRY pMap[];  // map entries.
+} VMMDLL_MAP_MODULE, *PVMMDLL_MAP_MODULE; 
+
+typedef struct tdVMMDLL_MAP_HEAP {
+    DWORD dwVersion;
+    DWORD _Reserved1[8];
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_HEAPENTRY pMap[];    // map entries.
+} VMMDLL_MAP_HEAP, *PVMMDLL_MAP_HEAP;
+
+typedef struct tdVMMDLL_MAP_THREAD {
+    DWORD dwVersion;
+    DWORD _Reserved[8];
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_THREADENTRY pMap[];  // map entries.
+} VMMDLL_MAP_THREAD, *PVMMDLL_MAP_THREAD;
+
+typedef struct tdVMMDLL_MAP_HANDLE {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    LPWSTR wszMultiText;            // multi-wstr pointed into by VMMDLL_MAP_HANDLEENTRY.wszText
+    DWORD cbMultiText;
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_HANDLEENTRY pMap[];  // map entries.
+} VMMDLL_MAP_HANDLE, *PVMMDLL_MAP_HANDLE;
+
+typedef struct tdVMMDLL_MAP_PHYSMEM {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_PHYSMEMENTRY pMap[]; // map entries.
+} VMMDLL_MAP_PHYSMEM, *PVMMDLL_MAP_PHYSMEM;
+
+typedef struct tdVMMDLL_MAP_USER {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    LPWSTR wszMultiText;            // multi-wstr pointed into by VMMDLL_MAP_HANDLEENTRY.wszText
+    DWORD cbMultiText;
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_USERENTRY pMap[];    // map entries.
+} VMMDLL_MAP_USER, *PVMMDLL_MAP_USER;
+
+/*
+* Retrieve the memory map entries based on hardware page tables (PTE) for the
+* process. If pPteMap is set to NULL the number of bytes required will be
+* returned in parameter pcbPteMap.
+* Entries returned are sorted on VMMDLL_MAP_PTEENTRY.vaBase
+* -- dwPID
+* -- pPteMap = buffer of minimum byte length *pcbPteMap or NULL.
+* -- pcbPteMap = pointer to byte count of pPteMap buffer.
+* -- fIdentifyModules = try identify modules as well (= slower)
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetPte(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbPteMap) PVMMDLL_MAP_PTE pPteMap, _Inout_ PDWORD pcbPteMap, _In_ BOOL fIdentifyModules);
+
+/*
+* Retrieve memory map entries based on virtual address descriptor (VAD) for
+* the process. If pVadMap is set to NULL the number of bytes required
+* will be returned in parameter pcbVadMap.
+* Entries returned are sorted on VMMDLL_MAP_VADENTRY.vaStart
+* -- dwPID
+* -- pVadMap = buffer of minimum byte length *pcbVadMap or NULL.
+* -- pcbVadMap = pointer to byte count of pVadMap buffer.
+* -- fIdentifyModules = try identify modules as well (= slower)
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetVad(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbVadMap) PVMMDLL_MAP_VAD pVadMap, _Inout_ PDWORD pcbVadMap, _In_ BOOL fIdentifyModules);
+
+/*
+* Retrieve the modules (.dlls) for the specified process. If pModuleMap is set
+* to NULL the number of bytes required will be returned in parameter pcbModuleMap.
+* -- dwPID
+* -- pModuleMap = buffer of minimum byte length *pcbModuleMap or NULL.
+* -- pcbModuleMap = pointer to byte count of pModuleMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetModule(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbModuleMap) PVMMDLL_MAP_MODULE pModuleMap, _Inout_ PDWORD pcbModuleMap);
+
+/*
+* Retrieve a module map entry (.exe / .dll) given a process and module name.
+* NB! PVMMDLL_MAP_MODULEENTRY->wszText will not be set by this function.
+* If module name is required use VMMDLL_ProcessMap_GetModule().
+* -- dwPID
+* -- szModuleName
+* -- pModuleMapEntry
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetModuleFromName(_In_ DWORD dwPID, _In_ LPWSTR wszModuleName, _Out_ PVMMDLL_MAP_MODULEENTRY pModuleMapEntry);
+
+/*
+* Retrieve the heaps for the specified process. If pHeapMap is set to NULL
+* the number of bytes required will be returned in parameter pcbHeapMap.
+* -- dwPID
+* -- pHeapMap = buffer of minimum byte length *pcbHeapMap or NULL.
+* -- pcbHeapMap = pointer to byte count of pHeapMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetHeap(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbHeapMap) PVMMDLL_MAP_HEAP pHeapMap, _Inout_ PDWORD pcbHeapMap);
+
+/*
+* Retrieve the threads for the specified process. If pThreadMap is set to NULL
+* the number of bytes required will be returned in parameter pcbThreadMap.
+* Entries returned are sorted on VMMDLL_MAP_THREADENTRY.dwTID
+* -- dwPID
+* -- pThreadMap = buffer of minimum byte length *pcbThreadMap or NULL.
+* -- pcbThreadMap = pointer to byte count of pThreadMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetThread(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbThreadMap) PVMMDLL_MAP_THREAD pThreadMap, _Inout_ PDWORD pcbThreadMap);
+
+/*
+* Retrieve the handles for the specified process. If pHandleMap is set to NULL
+* the number of bytes required will be returned in parameter pcbHandleMap.
+* Entries returned are sorted on VMMDLL_MAP_HANDLEENTRY.dwHandle
+* -- dwPID
+* -- pHandleMap = buffer of minimum byte length *pcbHandleMap or NULL.
+* -- pcbHandleMap = pointer to byte count of pHandleMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessMap_GetHandle(_In_ DWORD dwPID, _Out_writes_bytes_opt_(*pcbHandleMap) PVMMDLL_MAP_HANDLE pHandleMap, _Inout_ PDWORD pcbHandleMap);
+
+/*
+* Retrieve the physical memory ranges from the physical memory map that Windows
+* have enumerated.
+* -- pPhysMemMap = buffer of minimum byte length *pcbPhysMemMap or NULL.
+* -- pcbPhysMemMap = pointer to byte count of pPhysMemMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_Map_GetPhysMem(_Out_writes_bytes_opt_(*pcbPhysMemMap) PVMMDLL_MAP_PHYSMEM pPhysMemMap, _Inout_ PDWORD pcbPhysMemMap);
+
+/*
+* Retrieve the non well known users that are detected in the target system.
+* NB! There may be more users in the system than the ones that are detected,
+* only users with mounted registry hives may currently be detected - this is
+* the normal behaviour for users with active processes.
+* -- pUserMap = buffer of minimum byte length *pcbUserMap or NULL.
+* -- pcbUserMap = pointer to byte count of pUserMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_Map_GetUsers(_Out_writes_bytes_opt_(*pcbUserMap) PVMMDLL_MAP_USER pUserMap, _Inout_ PDWORD pcbUserMap);
+
+
+
+//-----------------------------------------------------------------------------
+// WINDOWS SPECIFIC PAGE FRAME NUMBER (PFN) FUNCTIONALITY BELOW
+//-----------------------------------------------------------------------------
+
+#define VMMDLL_MAP_PFN_VERSION              1
+
+static LPCSTR VMMDLL_PFN_TYPE_TEXT[] = { "Zero", "Free", "Standby", "Modifiy", "ModNoWr", "Bad", "Active", "Transit" };
+static LPCSTR VMMDLL_PFN_TYPEEXTENDED_TEXT[] = { "-", "Unused", "ProcPriv", "PageTable", "LargePage", "DriverLock", "Shareable", "File" };
+
+typedef enum tdVMMDLL_MAP_PFN_TYPE {
+    VmmDll_PfnTypeZero = 0,
+    VmmDll_PfnTypeFree = 1,
+    VmmDll_PfnTypeStandby = 2,
+    VmmDll_PfnTypeModified = 3,
+    VmmDll_PfnTypeModifiedNoWrite = 4,
+    VmmDll_PfnTypeBad = 5,
+    VmmDll_PfnTypeActive = 6,
+    VmmDll_PfnTypeTransition = 7
+} VMMDLL_MAP_PFN_TYPE;
+
+typedef enum tdVMMDLL_MAP_PFN_TYPEEXTENDED {
+    VmmDll_PfnExType_Unknown = 0,
+    VmmDll_PfnExType_Unused = 1,
+    VmmDll_PfnExType_ProcessPrivate = 2,
+    VmmDll_PfnExType_PageTable = 3,
+    VmmDll_PfnExType_LargePage = 4,
+    VmmDll_PfnExType_DriverLocked = 5,
+    VmmDll_PfnExType_Shareable = 6,
+    VmmDll_PfnExType_File = 7,
+} VMMDLL_MAP_PFN_TYPEEXTENDED;
+
+typedef struct tdVMMDLL_MAP_PFNENTRY {
+    DWORD dwPfn;
+    VMMDLL_MAP_PFN_TYPEEXTENDED tpExtended;
+    struct {        // Only valid if active non-prototype PFN
+        union {
+            DWORD dwPid;
+            DWORD dwPfnPte[5];  // PFN of paging levels 1-4 (x64)
+        };
+        QWORD va;               // valid if non-zero
+    } AddressInfo;
+    QWORD vaPte;
+    QWORD OriginalPte;
+    union {
+        DWORD _u3;
+        struct {
+            WORD ReferenceCount;
+            // MMPFNENTRY
+            BYTE PageLocation       : 3;    // Pos 0  - VMMDLL_MAP_PFN_TYPE
+            BYTE WriteInProgress    : 1;    // Pos 3
+            BYTE Modified           : 1;    // Pos 4
+            BYTE ReadInProgress     : 1;    // Pos 5
+            BYTE CacheAttribute     : 2;    // Pos 6
+            BYTE Priority           : 3;    // Pos 0
+            BYTE Rom_OnProtectedStandby : 1;// Pos 3
+            BYTE InPageError        : 1;    // Pos 4
+            BYTE KernelStack_SystemChargedPage : 1; // Pos 5
+            BYTE RemovalRequested   : 1;    // Pos 6
+            BYTE ParityError        : 1;    // Pos 7
+        };
+    };
+    union {
+        QWORD _u4;
+        struct {
+            DWORD PteFrame;
+            DWORD PteFrameHigh      : 4;    // Pos 32
+            DWORD _Reserved         : 21;   // Pos 36
+            DWORD PrototypePte      : 1;    // Pos 57
+            DWORD PageColor         : 6;    // Pos 58
+        };
+    };
+    DWORD _FutureUse[6];
+} VMMDLL_MAP_PFNENTRY, *PVMMDLL_MAP_PFNENTRY;
+
+typedef struct tdVMMDLL_MAP_PFN {
+    DWORD dwVersion;
+    DWORD _Reserved1[5];
+    DWORD cMap;                     // # map entries.
+    VMMDLL_MAP_PFNENTRY pMap[];     // map entries.
+} VMMDLL_MAP_PFN, *PVMMDLL_MAP_PFN;
+
+/*
+* Retrieve information about scattered PFNs. The PFNs are returned in order of
+* in which they are stored in the pPfns set.
+* -- pPfns
+* -- cPfns
+* -- pPfnMap = buffer of minimum byte length *pcbPfnMap or NULL.
+* -- pcbPfnMap = pointer to byte count of pPhysMemMap buffer.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_Map_GetPfn(_In_ DWORD pPfns[], _In_ DWORD cPfns, _Out_writes_bytes_opt_(*pcbPfnMap) PVMMDLL_MAP_PFN pPfnMap, _Inout_ PDWORD pcbPfnMap);
+
+
+
+//-----------------------------------------------------------------------------
+// VMM PROCESS FUNCTIONALITY BELOW:
+// Functionality below is mostly relating to Windows processes.
+//-----------------------------------------------------------------------------
+
+/*
+* Retrieve an active process given it's name. Please note that if multiple
+* processes with the same name exists only one will be returned. If required to
+* parse all processes with the same name please iterate over the PID list by
+* calling VMMDLL_PidList together with VMMDLL_ProcessGetInformation.
+* -- szProcName = process name case insensitive.
+* -- pdwPID = pointer that will receive PID on success.
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_PidGetFromName(_In_ LPSTR szProcName, _Out_ PDWORD pdwPID);
+
+/*
+* List the PIDs in the system.
+* -- pPIDs = DWORD array of at least number of PIDs in system, or NULL.
+* -- pcPIDs = size of (in number of DWORDs) pPIDs array on entry, number of PIDs in system on exit.
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_PidList(_Out_writes_opt_(*pcPIDs) PDWORD pPIDs, _Inout_ PULONG64 pcPIDs); 
+
+#define VMMDLL_PROCESS_INFORMATION_MAGIC        0xc0ffee663df9301e
+#define VMMDLL_PROCESS_INFORMATION_VERSION      6
+
+typedef struct tdVMMDLL_PROCESS_INFORMATION {
+    ULONG64 magic;
+    WORD wVersion;
+    WORD wSize;
+    VMMDLL_MEMORYMODEL_TP tpMemoryModel;    // as given by VMMDLL_MEMORYMODEL_* enum
+    VMMDLL_SYSTEM_TP tpSystem;              // as given by VMMDLL_SYSTEM_* enum
+    BOOL fUserOnly;                         // only user mode pages listed
+    DWORD dwPID;
+    DWORD dwPPID;
+    DWORD dwState;
+    CHAR szName[16];
+    CHAR szNameLong[64];
+    ULONG64 paDTB;
+    ULONG64 paDTB_UserOpt;                  // may not exist
+    struct {
+        ULONG64 vaEPROCESS;
+        ULONG64 vaPEB;
+        ULONG64 _Reserved1;
+        BOOL fWow64;
+        DWORD vaPEB32;                  // WoW64 only
+        DWORD dwSessionId;
+        ULONG64 qwLUID;
+        CHAR szSID[MAX_PATH];
+    } win;
+} VMMDLL_PROCESS_INFORMATION, *PVMMDLL_PROCESS_INFORMATION;
+
+/*
+* Retrieve various process information from a PID. Process information such as
+* name, page directory bases and the process state may be retrieved.
+* -- dwPID
+* -- pProcessInformation = if null, size is given in *pcbProcessInfo
+* -- pcbProcessInformation = size of pProcessInfo (in bytes) on entry and exit
+* -- return = success/fail.
+*/
+_Success_(return)
+BOOL VMMDLL_ProcessGetInformation(_In_ DWORD dwPID, _Inout_opt_ PVMMDLL_PROCESS_INFORMATION pProcessInformation, _In_ PSIZE_T pcbProcessInformation);
+
+#define VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_KERNEL           1
+#define VMMDLL_PROCESS_INFORMATION_OPT_STRING_PATH_USER_IMAGE       2
+#define VMMDLL_PROCESS_INFORMATION_OPT_STRING_CMDLINE               3
+
+/*
+* Retrieve a string value belonging to a process. The function allocates a new
+* string buffer and returns the requested string in it. The string is always
+* NULL terminated. On failure NULL is returned.
+* NB! CALLER IS RESPONSIBLE FOR VMMDLL_MemFree return value!
+* CALLER FREE: VMMDLL_MemFree(return)
+* -- dwPID
+* -- fOptionString = string value to retrieve as given by VMMDLL_PROCESS_INFORMATION_OPT_STRING_*
+* -- return - fail: NULL, success: the string - NB! must be VMMDLL_MemFree'd by caller!
+*/
+LPSTR VMMDLL_ProcessGetInformationString(_In_ DWORD dwPID, _In_ DWORD fOptionString);
+
+typedef struct tdVMMDLL_EAT_ENTRY {
+    ULONG64 vaFunction;
+    DWORD vaFunctionOffset;
+    CHAR szFunction[40];
+} VMMDLL_EAT_ENTRY, *PVMMDLL_EAT_ENTRY;
+
+typedef struct tdVMMDLL_IAT_ENTRY {
+    ULONG64 vaFunction;
+    CHAR szFunction[40];
+    CHAR szModule[64];
+} VMMDLL_IAT_ENTRY, *PVMMDLL_IAT_ENTRY;
+
+/*
+* Retrieve information about: Data Directories, Sections, Export Address Table
+* and Import Address Table (IAT).
+* If the pData == NULL upon entry the number of entries of the pData array must
+* have in order to be able to hold the data is returned.
+* -- dwPID
+* -- wszModule
+* -- pData
+* -- cData
+* -- pcData
+* -- return = success/fail.
+*/
+_Success_(return) 
+BOOL VMMDLL_ProcessGetDirectories(_In_ DWORD dwPID, _In_ LPWSTR wszModule, _Out_writes_(16) PIMAGE_DATA_DIRECTORY pData, _In_ DWORD cData, _Out_ PDWORD pcData);
+_Success_(return)
+BOOL VMMDLL_ProcessGetSections(_In_ DWORD dwPID, _In_ LPWSTR wszModule, _Out_opt_ PIMAGE_SECTION_HEADER pData, _In_ DWORD cData, _Out_ PDWORD pcData);
+_Success_(return)
+BOOL VMMDLL_ProcessGetEAT(_In_ DWORD dwPID, _In_ LPWSTR wszModule, _Out_opt_ PVMMDLL_EAT_ENTRY pData, _In_ DWORD cData, _Out_ PDWORD pcData);
+_Success_(return)
+BOOL VMMDLL_ProcessGetIAT(_In_ DWORD dwPID, _In_ LPWSTR wszModule, _Out_opt_ PVMMDLL_IAT_ENTRY pData, _In_ DWORD cData, _Out_ PDWORD pcData);
+
+/*
+* Retrieve the virtual address of a given function inside a process/module.
+* -- dwPID
+* -- wszModuleName
+* -- szFunctionName
+* -- return = virtual address of function, zero on fail.
+*/
+ULONG64 VMMDLL_ProcessGetProcAddress(_In_ DWORD dwPID, _In_ LPWSTR wszModuleName, _In_ LPSTR szFunctionName);
+
+/*
+* Retrieve the base address of a given module.
+* -- dwPID
+* -- wszModuleName
+* -- return = virtual address of module base, zero on fail.
+*/
+ULONG64 VMMDLL_ProcessGetModuleBase(_In_ DWORD dwPID, _In_ LPWSTR wszModuleName);
+
+
+
+//-----------------------------------------------------------------------------
+// WINDOWS SPECIFIC DEBUGGING / SYMBOL FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+/*
+* Retrieve a symbol virtual address given a module name and a symbol name.
+* NB! not all modules may exist - initially only module "nt" is available.
+* NB! if multiple modules have the same name the 1st to be added will be used.
+* -- szModule
+* -- szSymbolName
+* -- pvaSymbolAddress
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_PdbSymbolAddress(_In_ LPSTR szModule, _In_ LPSTR szSymbolName, _Out_ PULONG64 pvaSymbolAddress);
+
+/*
+* Retrieve a type size given a module name and a type name.
+* NB! not all modules may exist - initially only module "nt" is available.
+* NB! if multiple modules have the same name the 1st to be added will be used.
+* -- szModule
+* -- szTypeName
+* -- pcbTypeSize
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_PdbTypeSize(_In_ LPSTR szModule, _In_ LPSTR szTypeName, _Out_ PDWORD pcbTypeSize);
+
+/*
+* Locate the offset of a type child - typically a sub-item inside a struct.
+* NB! not all modules may exist - initially only module "nt" is available.
+* NB! if multiple modules have the same name the 1st to be added will be used.
+* -- szModule
+* -- szTypeName
+* -- wszTypeChildName
+* -- pcbTypeChildOffset
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_PdbTypeChildOffset(_In_ LPSTR szModule, _In_ LPSTR szTypeName, _In_ LPWSTR wszTypeChildName, _Out_ PDWORD pcbTypeChildOffset);
+
+
+
+//-----------------------------------------------------------------------------
+// WINDOWS SPECIFIC REGISTRY FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+#define VMMDLL_REGISTRY_HIVE_INFORMATION_MAGIC      0xc0ffee653df8d01e
+#define VMMDLL_REGISTRY_HIVE_INFORMATION_VERSION    2
+
+typedef struct td_VMMDLL_REGISTRY_HIVE_INFORMATION {
+    ULONG64 magic;
+    WORD wVersion;
+    WORD wSize;
+    BYTE _FutureReserved1[0x14];
+    ULONG64 vaCMHIVE;
+    ULONG64 vaHBASE_BLOCK;
+    DWORD cbLength;
+    CHAR szName[128];
+    WCHAR wszNameShort[32 + 1];
+    WCHAR wszHiveRootPath[MAX_PATH];
+    QWORD _FutureReserved[0x10];
+} VMMDLL_REGISTRY_HIVE_INFORMATION, *PVMMDLL_REGISTRY_HIVE_INFORMATION;
+
+/*
+* Retrieve information about the registry hives in the target system.
+* -- pHives = buffer of cHives * sizeof(VMMDLL_REGISTRY_HIVE_INFORMATION) to receive information about all hives. NULL to receive # hives in pcHives.
+* -- cHives
+* -- pcHives = if pHives == NULL: # total hives. if pHives: # read hives.
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_HiveList(_Out_writes_(cHives) PVMMDLL_REGISTRY_HIVE_INFORMATION pHives, _In_ DWORD cHives, _Out_ PDWORD pcHives);
+
+/*
+* Read a contigious arbitrary amount of registry hive memory and report the
+* number of bytes read in pcbRead.
+* NB! Address space does not include regf registry hive file header!
+* -- vaCMHive
+* -- ra
+* -- pb
+* -- cb
+* -- pcbReadOpt
+* -- flags = flags as in VMMDLL_FLAG_*
+* -- return = success/fail. NB! reads may report as success even if 0 bytes are
+*        read - it's recommended to verify pcbReadOpt parameter.
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_HiveReadEx(_In_ ULONG64 vaCMHive, _In_ DWORD ra, _Out_ PBYTE pb, _In_ DWORD cb, _Out_opt_ PDWORD pcbReadOpt, _In_ ULONG64 flags);
+
+/*
+* Write a virtually contigious arbitrary amount of memory to a registry hive.
+* NB! Address space does not include regf registry hive file header!
+* -- vaCMHive
+* -- ra
+* -- pb
+* -- cb
+* -- return = TRUE on success, FALSE on partial or zero write.
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_HiveWrite(_In_ ULONG64 vaCMHive, _In_ DWORD ra, _In_ PBYTE pb, _In_ DWORD cb);
+
+/*
+* Enumerate registry sub keys - similar to WINAPI function 'RegEnumKeyExW.'
+* Please consult WINAPI function documentation for information.
+* May be called with HKLM base or virtual address of CMHIVE base examples:
+*   1) 'HKLM\SOFTWARE\Key\SubKey'
+*   2) 'HKLM\ORPHAN\SAM\Key\SubKey'              (orphan key)
+*   3) '0x<vaCMHIVE>\ROOT\Key\SubKey'
+*   4) '0x<vaCMHIVE>\ORPHAN\Key\SubKey'          (orphan key)
+* -- wszFullPathKey
+* -- dwIndex
+* -- lpName
+* -- lpcchName
+* -- lpftLastWriteTime
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_EnumKeyExW(
+    _In_ LPWSTR wszFullPathKey,
+    _In_ DWORD dwIndex,
+    _Out_writes_opt_(*lpcchName) LPWSTR lpName,
+    _Inout_ LPDWORD lpcchName,
+    _Out_opt_ PFILETIME lpftLastWriteTime
+);
+
+/*
+* Enumerate registry values given a registry key - similar to WINAPI function
+* 'EnumValueW'. Please consult WINAPI function documentation for information.
+* May be called in two ways:
+* May be called with HKLM base or virtual address of CMHIVE base examples:
+*   1) 'HKLM\SOFTWARE\Key\SubKey'
+*   2) 'HKLM\ORPHAN\SAM\Key\SubKey'              (orphan key)
+*   3) '0x<vaCMHIVE>\ROOT\Key\SubKey'
+*   4) '0x<vaCMHIVE>\ORPHAN\Key\SubKey'          (orphan key)
+* -- wszFullPathKey
+* -- dwIndex
+* -- lpValueName
+* -- lpcchValueName
+* -- lpType
+* -- lpData
+* -- lpcbData
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_EnumValueW(
+    _In_ LPWSTR wszFullPathKey,
+    _In_ DWORD dwIndex,
+    _Out_writes_opt_(*lpcchValueName) LPWSTR lpValueName,
+    _Inout_ LPDWORD lpcchValueName,
+    _Out_opt_ LPDWORD lpType,
+    _Out_writes_opt_(*lpcbData) LPBYTE lpData,
+    _Inout_opt_ LPDWORD lpcbData
+);
+
+/*
+* Query a registry value given a registry key/value path - similar to WINAPI
+* function 'RegQueryValueEx'.
+* Please consult WINAPI function documentation for information.
+* May be called with HKLM base or virtual address of CMHIVE base examples:
+*   1) 'HKLM\SOFTWARE\Key\SubKey\Value'
+*   2) 'HKLM\ORPHAN\SAM\Key\SubKey\'             (orphan key and default value)
+*   3) '0x<vaCMHIVE>\ROOT\Key\SubKey\Value'
+*   4) '0x<vaCMHIVE>\ORPHAN\Key\SubKey\Value'    (orphan key value)
+* -- wszFullPathKeyValue
+* -- lpType
+* -- lpData
+* -- lpcbData
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinReg_QueryValueExW(
+    _In_ LPWSTR wszFullPathKeyValue,
+    _Out_opt_ LPDWORD lpType,
+    _Out_writes_opt_(*lpcbData) LPBYTE lpData,
+    _When_(lpData == NULL, _Out_opt_) _When_(lpData != NULL, _Inout_opt_) LPDWORD lpcbData
+);
+
+
+
+//-----------------------------------------------------------------------------
+// WINDOWS SPECIFIC NETWORKING FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+#define VMMDLL_WIN_TCPIP_MAGIC        0xc0ffee663df93685
+#define VMMDLL_WIN_TCPIP_VERSION      1
+
+typedef struct tdVMMDLL_WIN_TCPIP_ENTRY {   // SHARED WITH VMMWINTCPIP
+    DWORD dwPID;
+    DWORD dwState;
+    CHAR szState[12];
+    struct {    // address family (IPv4/IPv6)
+        BOOL fValid;
+        WORD wAF;
+    } AF;
+    struct {
+        BOOL fValid;
+        WORD wPort;
+        BYTE pbA[16];   // ipv4 = 1st 4 bytes, ipv6 = all bytes
+    } Src;
+    struct {
+        BOOL fValid;
+        WORD wPort;
+        BYTE pbA[16];   // ipv4 = 1st 4 bytes, ipv6 = all bytes
+    } Dst;
+    QWORD vaTcpE;
+    QWORD qwTime;
+    QWORD vaEPROCESS;
+    QWORD _Reserved[2];
+} VMMDLL_WIN_TCPIP_ENTRY, *PVMMDLL_WIN_TCPIP_ENTRY;
+
+typedef struct tdVMMDLL_WIN_TCPIP {
+    QWORD magic;
+    DWORD dwVersion;
+    DWORD cTcpE;
+    VMMDLL_WIN_TCPIP_ENTRY pTcpE[];
+} VMMDLL_WIN_TCPIP, *PVMMDLL_WIN_TCPIP;
+
+/*
+* Retrieve networking information about network connections related to Windows TCP/IP stack.
+* NB! CALLER IS RESPONSIBLE FOR VMMDLL_MemFree return value!
+* CALLER FREE: VMMDLL_MemFree(return)
+* -- return - fail: NULL, success: a PVMMDLL_WIN_TCPIP struct scontaining the result - NB! Caller responsible for VMMDLL_MemFree!
+*/
+PVMMDLL_WIN_TCPIP VMMDLL_WinNet_Get();
+
+
+
+//-----------------------------------------------------------------------------
+// WINDOWS SPECIFIC UTILITY FUNCTIONS BELOW:
+//-----------------------------------------------------------------------------
+
+typedef struct tdVMMDLL_WIN_THUNKINFO_IAT {
+    BOOL fValid;
+    BOOL f32;               // if TRUE fn is a 32-bit/4-byte entry, otherwise 64-bit/8-byte entry.
+    ULONG64 vaThunk;        // address of import address table 'thunk'.
+    ULONG64 vaFunction;     // value if import address table 'thunk' == address of imported function.
+    ULONG64 vaNameModule;   // address of name string for imported module.
+    ULONG64 vaNameFunction; // address of name string for imported function.
+} VMMDLL_WIN_THUNKINFO_IAT, *PVMMDLL_WIN_THUNKINFO_IAT;
+
+typedef struct tdVMMDLL_WIN_THUNKINFO_EAT {
+    BOOL fValid;
+    DWORD valueThunk;       // value of export address table 'thunk'.
+    ULONG64 vaThunk;        // address of import address table 'thunk'.
+    ULONG64 vaNameFunction; // address of name string for exported function.
+    ULONG64 vaFunction;     // address of exported function (module base + value parameter).
+} VMMDLL_WIN_THUNKINFO_EAT, *PVMMDLL_WIN_THUNKINFO_EAT;
+
+/*
+* Retrieve information about the import address table IAT thunk for an imported
+* function. This includes the virtual address of the IAT thunk which is useful
+* for hooking.
+* -- dwPID
+* -- wszModuleName
+* -- szImportModuleName
+* -- szImportFunctionName
+* -- pThunkIAT
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinGetThunkInfoIAT(_In_ DWORD dwPID, _In_ LPWSTR wszModuleName, _In_ LPSTR szImportModuleName, _In_ LPSTR szImportFunctionName, _Out_ PVMMDLL_WIN_THUNKINFO_IAT pThunkInfoIAT);
+
+/*
+* Retrieve information about the export address table EAT thunk for an exported
+* function. This includes the virtual address of the EAT thunk which is useful
+* for hooking.
+* -- dwPID
+* -- wszModuleName
+* -- pThunkEAT
+* -- return
+*/
+_Success_(return)
+BOOL VMMDLL_WinGetThunkInfoEAT(_In_ DWORD dwPID, _In_ LPWSTR wszModuleName, _In_ LPSTR szExportFunctionName, _Out_ PVMMDLL_WIN_THUNKINFO_EAT pThunkInfoEAT);
+
+
+
+//-----------------------------------------------------------------------------
+// VMM UTIL FUNCTIONALITY BELOW:
+//-----------------------------------------------------------------------------
+
+/*
+* Fill a human readable hex ascii memory dump into the caller supplied sz buffer.
+* -- pb
+* -- cb
+* -- cbInitialOffset = offset, must be max 0x1000 and multiple of 0x10.
+* -- sz = buffer to fill, NULL to retrieve buffer size in pcsz parameter.
+* -- pcsz = IF sz==NULL :: size of buffer (including space for terminating NULL) on exit
+*           IF sz!=NULL :: size of buffer on entry, size of characters (excluding terminating NULL) on exit.
+*/
+_Success_(return)
+BOOL VMMDLL_UtilFillHexAscii(_In_ PBYTE pb, _In_ DWORD cb, _In_ DWORD cbInitialOffset, _Out_opt_ LPSTR sz, _Inout_ PDWORD pcsz);
+
+
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
+#endif /* __VMMDLL_H__ */
+
+```
+
+`LICENSE.txt`:
+
+```txt
+MIT License
+
+Copyright (c) [year] [fullname]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# DMALib
+
+This is just a small library which contains the basic support for your DMA including
+- memory reading
+- memory writing
+- getting PID and Base Address
+- pattern scanning
+- logging
+- good documentation and clean code
+
+Feel free to modify the code or make it better. Replace the example dlls with your own dlls.
+
+## Please read!
+
+The program expects you to have the dlls FTD3XX.dll, leechcore.dll and vmm.dll (download them from your DMA supplier) at the root directory when shipping the program.
+
+The project requires the leechcore.lib and vmm.lib libraries in the libs/ folder. I did not add the precompiled libraries for security purposes. 
+You can get the files from 
+https://github.com/ufrisk/LeechCore
+and
+https://github.com/ufrisk/MemProcFS/tree/master/vmm
+
+and compiled from if you are lazy.
+https://github.com/ufrisk/MemProcFS/tree/master/includes/lib32
+
+Also special thanks to ufrisk for the libraries i used in this project.
+```
