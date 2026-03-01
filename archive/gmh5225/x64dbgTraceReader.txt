@@ -1,0 +1,3241 @@
+Project Path: arc_gmh5225_x64dbgTraceReader_05lbc_tj
+
+Source Tree:
+
+```txt
+arc_gmh5225_x64dbgTraceReader_05lbc_tj
+├── LICENSE
+├── Project10
+│   ├── include
+│   │   ├── data
+│   │   │   ├── data_formats.h
+│   │   │   ├── data_manager.h
+│   │   │   └── data_objects
+│   │   │       ├── x64dbg_tracedata
+│   │   │       │   ├── data_buf.h
+│   │   │       │   └── x64dbg_tracedata.h
+│   │   │       └── xtr_tracedata
+│   │   │           ├── trace_instruction.h
+│   │   │           └── xtr_tracedata.h
+│   │   ├── logger.h
+│   │   ├── processor
+│   │   │   ├── capstone
+│   │   │   │   ├── capstone_engine.h
+│   │   │   │   └── disasm_tool.h
+│   │   │   ├── regex
+│   │   │   │   └── regex_tool.h
+│   │   │   └── xtr_processor.h
+│   │   └── x64dbgTraceReader.h
+│   └── src
+│       ├── data
+│       │   ├── data_manager.cpp
+│       │   └── data_objects
+│       │       ├── x64dbg_tracedata
+│       │       │   ├── data_buf.cpp
+│       │       │   └── x64dbg_tracedata.cpp
+│       │       └── xtr_tracedata
+│       │           ├── trace_instruction.cpp
+│       │           └── xtr_tracedata.cpp
+│       ├── logger.cpp
+│       ├── main.cpp
+│       ├── processor
+│       │   ├── capstone
+│       │   │   ├── capstone_engine.cpp
+│       │   │   └── disasm_tool.cpp
+│       │   ├── regex
+│       │   │   └── regex_tool.cpp
+│       │   └── xtr_processor.cpp
+│       └── x64dbgTraceReader.cpp
+├── README.md
+└── x64dbgTraceReader.sln
+
+```
+
+`LICENSE`:
+
+```
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    <program>  Copyright (C) <year>  <name of author>
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details.
+
+The hypothetical commands `show w' and `show c' should show the appropriate
+parts of the General Public License.  Of course, your program's commands
+might be different; for a GUI interface, you would use an "about box".
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+<https://www.gnu.org/licenses/>.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+<https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+```
+
+`Project10/include/data/data_formats.h`:
+
+```h
+#pragma once
+/*
+* 
+* **********************************************************************
+*   Namespaces
+* **********************************************************************
+*       
+*       ns_dtypes - basic data types just given names i'm comfy with
+* 
+* 
+* 
+* 
+* 
+* **********************************************************************
+*   Custom data structs
+* **********************************************************************
+*   
+*/
+#include <unordered_map>
+#include <vector>
+
+#include <iostream>
+#include <string>
+#include <stdlib.h>
+
+
+namespace ns_xtr {
+
+	namespace ns_dtypes {
+		typedef __int8 int_8;
+		typedef __int16 int_16;
+		typedef __int32 int_32;
+		typedef __int64 int_64;
+		typedef unsigned __int8 uint_8;
+		typedef unsigned __int16 uint_16;
+		typedef unsigned __int32 uint_32;
+		typedef unsigned __int64 uint_64;
+        
+		typedef unsigned __int8  BYTE;
+		typedef unsigned __int16 WORD;
+		typedef unsigned __int32 DWORD;
+		typedef unsigned __int64 QWORD;
+
+        typedef void* HANDLE;
+
+	}
+    using namespace ns_dtypes;
+    namespace misc {
+
+       
+
+        namespace bitstuff {
+            constexpr BYTE THREAD_ID_MASK_SET = 0x80;	 // 128 (dec)		| 1000 0000 (binary) 
+            constexpr BYTE OPCODE_LENGTH_MASK = 0xF; // 15  (dec)		| 0000 1111	(binary)
+        }
+
+        constexpr DWORD X64DBG_TRACE_MAGIC_BYTES_LE = 1128354388;	// in hex: 0x43415254	T R A C = 0x54 0x52 0x41 0x43 
+        constexpr WORD X64DBG_MULTIPLE_OF_512 = 512;
+        constexpr BYTE X64DBG_ALL_REGISTERS_SAVED = 172; // 0xAC 
+        constexpr BYTE XTR_ALL_REGISTERS_SAVED = 30;
+        constexpr BYTE X64DBG_TRACE_MAGIC_SIG_LENGTH = 4;
+        constexpr BYTE JSON_BLOB_HEADER_SIZE = 4;
+
+        constexpr BYTE X64DBG_BLOCKTYPE_ID = 0;
+        constexpr BYTE X64DBG_ZERO = 0;
+
+ 
+
+    }
+
+    namespace ns_trace {
+
+        constexpr unsigned short NUM_OF_REGS_I_WANT_TO_LOOK_AT = 30;
+
+        typedef enum REGISTERCONTEXT {
+
+            RAX = 0,
+            RCX,    // 1
+            RDX,    // 2
+            RBX,    // 3
+            RSP,    // 4
+            RBP,    // 5
+            RSI,    // 6
+            RDI,    // 7
+            R8,     // 8
+            R9,     // 9
+            R10,    // 10
+            R11,    // 11
+            R12,    // 12
+            R13,    // 13
+            R14,    // 14
+            R15,    // 15
+            RIP,    // 16
+            RFLAGS, // 17
+            GS,     // 18
+            FS,     // 19
+            ES,     // 20
+            DS,     // 21
+            CS,     // 22
+            SS,     // 23
+            DR0,    // 24
+            DR1,    // 25
+            DR2,    // 26
+            DR3,    // 27
+            DR6,    // 28
+            DR7     // 29
+        } REGISTERCONTEXT;
+
+    }
+	
+    // labelmapper
+    template <typename T, typename Y>
+    class umap {
+
+        // on top for visibility; default private
+        typedef typename std::unordered_map<T, Y>::iterator umap_iterator;
+        typedef typename std::unordered_map<T, Y>::const_iterator umap_const_iterator;
+
+    public:
+        umap() {};
+        umap(const std::unordered_map<T, Y>& umapobj) : _umap(umapobj) {};
+
+ 
+        Y& at(T& argtype1) { return _umap.at(argtype1); };
+        const Y& at(const T& argtype1) const { return _umap.at(argtype1); };
+
+        void insert(T index, Y output) { _umap.insert(std::make_pair(index, output)); };
+        void insert(std::pair<T, Y> input) { _umap.insert(input); };
+
+        void clear() { _umap.clear(); };
+
+        bool empty() { return _umap.empty(); };
+
+        //see: https://stackoverflow.com/questions/60459011/contains-is-not-a-member-of-stdmap-msvc
+        bool contains(const T& target) const { return (_umap.count(target) == 1) ? true : false; };// requires C++20 standard { return _umap.contains(target); }
+
+        const uint_64 size() const { return _umap.size(); };
+
+        umap_iterator erase(umap_iterator pos) { return _umap.erase(pos); };
+        umap_const_iterator erase(umap_const_iterator pos) { return _umap.erase(pos); };
+        umap_const_iterator erase(umap_const_iterator first, umap_const_iterator last) { return _umap.erase(first, last); };
+        const uint_64 erase(const T& target) { return _umap.erase(target); };
+
+        umap_iterator find(const T& target) { return _umap.find(target); };
+        umap_const_iterator find(const T& target) const { return _umap.find(target); };
+
+        umap_iterator begin() noexcept { return _umap.begin(); };
+        umap_iterator end() noexcept { return _umap.end(); };
+
+
+
+    private:
+        std::unordered_map<T, Y> _umap;
+    };
+
+
+	
+
+}
+```
+
+`Project10/include/data/data_manager.h`:
+
+```h
+#pragma once
+
+#include "../data/data_objects/xtr_tracedata/xtr_tracedata.h"
+#include "../data/data_objects/x64dbg_tracedata/x64dbg_tracedata.h"
+#include <utility>
+
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	namespace misc {
+	
+	}
+	
+	class data_manager {
+	public:
+
+		void testfn();
+
+		data_manager(const char* file_name);
+		~data_manager();
+
+		// checks for 'TRAC' magic bytes and JSON blob data associated w/ trace64 file
+		bool confirmTrace64File();
+
+		// 
+		void parseTraceBlocks();
+		
+		void parseToEnd();
+
+		std::string rcToEnglish(uint_8 index);
+
+		// process buf w/ trace64 data 
+		bool trace64ToXTR();
+		// convert analyzed data into readable trace64 file 
+		bool xtrToTrace64File(const char* filename);
+		
+
+		// ( •̀ᴗ•́ )
+		// input: list of vals for what regs changed. output: corresponding reg, new val
+		std::vector<uint_8> getAbsoRelativeForm(const std::vector<REGISTERCONTEXT>& changelist) {
+			std::vector<uint_8> absorelative;
+			uint_8 absorelativeindex = 0;
+			for (int i = 0; i < changelist.size(); i++) {
+
+				// i == 0? ret 1st element. else: ret (curr element - prev element - 1)
+				absorelativeindex = (i == 0) ? static_cast<uint_8>(changelist[0]) : (static_cast<uint_8>(changelist[i]) - static_cast<uint_8>(changelist[i - 1]) - 1);
+				absorelative.push_back(absorelativeindex);
+				}
+		
+			return absorelative;
+		}
+		// convert x64dbg 'absorelative' format 
+		std::vector<REGISTERCONTEXT> getRCForm(const std::vector<BYTE>& changelist) {
+			BYTE absorelativeindex = 0;
+			BYTE prev_val = 0;
+			std::vector<REGISTERCONTEXT> affected_list;
+
+			for (int i = 0; i < changelist.size(); i++) {
+				absorelativeindex = (i == 0) ? changelist[0] : prev_val + changelist[i] + 1;
+				prev_val = absorelativeindex;
+
+				switch (absorelativeindex) {
+					case 0:  affected_list.push_back(RAX);break;
+					case 1:	 affected_list.push_back(RCX);break;
+					case 2:	 affected_list.push_back(RDX);break;
+					case 3:	 affected_list.push_back(RBX);break;
+					case 4:	 affected_list.push_back(RSP);break;
+					case 5:	 affected_list.push_back(RBP);break;
+					case 6:  affected_list.push_back(RSI);break;
+					case 7:	 affected_list.push_back(RDI);break;
+					case 8:	 affected_list.push_back(R8); break;
+					case 9:	 affected_list.push_back(R9); break;
+					case 10: affected_list.push_back(R10);break;
+					case 11: affected_list.push_back(R11);break;
+					case 12: affected_list.push_back(R12);break;
+					case 13: affected_list.push_back(R13);break;
+					case 14: affected_list.push_back(R14);break;
+					case 15: affected_list.push_back(R15);break;
+					case 16: affected_list.push_back(RIP);break;
+					case 17: affected_list.push_back(RFLAGS);break;
+					case 18: affected_list.push_back(GS);break;
+					case 19: affected_list.push_back(FS);break;
+					case 20: affected_list.push_back(ES);break;
+					case 21: affected_list.push_back(DS);break;
+					case 22: affected_list.push_back(CS);break;
+					case 23: affected_list.push_back(SS);break;
+					case 24: affected_list.push_back(DR0);break;
+					case 25: affected_list.push_back(DR1);break;
+					case 26: affected_list.push_back(DR2);break;
+					case 27: affected_list.push_back(DR3);break;
+					case 28: affected_list.push_back(DR6);break;
+					case 29: affected_list.push_back(DR7);break;
+					default:
+						break;
+					}
+				}
+			
+
+			return affected_list;
+		};
+
+		
+	private:
+		x64dbg_tracedata* _provided_file = nullptr;	// contains INPUT trace data. NOT YET MAPPED TO USABLE FORMAT (must call trace64ToXTR() )
+		xtr_tracedata* _xtr_trace = nullptr;
+		DWORD _prev_TID{ 0 };
+
+		DWORD _trace_entry{ 0 };
+
+		
+
+		bool _createNewTrace64File(const char* filename);
+		bool _copyBlobData();
+		bool _setupXTRTracedata();
+
+		// lol
+		std::vector<BYTE> _newfile_databuf;
+		bool _appendToNewFileBuf(BYTE* srcval, QWORD valsize);
+		bool _appendToNewFileBuf(BYTE srcval);
+		bool _appendToNewFileBuf(DWORD srcval);
+		bool _appendToNewFileBuf(QWORD srcval);
+		void _clearNewFileBuf();
+		HANDLE _newfile = nullptr;
+
+
+		registers* _logged_regs = nullptr;
+		bool _isSetUp = false;
+		bool _preserveData = false;
+
+		std::string _newblob;
+		bool _processJSONBlob();
+		bool _isMagicBytesSigFound();
+
+
+
+		xtr_data _TRACE64FORMAT_convertToXTREntry(x64dbg_trace_block& entry);
+
+		/*
+		* fns to convert .trace64 data into data usable by x64dbgTraceReader 
+		*/
+		void _TRACE64FORMAT_BYTE1_readBlockType(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_BYTE2_readRegisterChanges(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_BYTE3_readMemoryAccesses(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_BYTE4_readBlockFlagsAndOpcodeSize(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_BYTE5_readRegisterChangePosition(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_QWORD6_readRegisterChangeNewData(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_BYTE7_readMemoryAccessFlags(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_QWORD8_readMemoryAccessAddresses(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_QWORD9_readMemoryAccessOldData(x64dbg_trace_block& entry);
+		void _TRACE64FORMAT_QWORD10_readMemoryAccessNewData(x64dbg_trace_block& entry);
+
+
+		/*
+		* fns to convert x64dbgTraceReader into data usable by .trace64 files
+		*/
+		 DWORD _TRACE64FORMAT_writeAsTrace64Entry(DWORD Nth_Entry);
+
+		 void _TRACE64FORMAT_HEADER1_writeMagicBytes();
+		 void _TRACE64FORMAT_HEADER2_writeJsonData();
+
+		 void _TRACE64FORMAT_BYTE1_writeBlockType(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_BYTE2_writeRegisterChanges(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_BYTE3_writeMemoryAccesses(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_BYTE4_writeBlockFlagsAndOpcodeSize(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_BYTE5_writeRegisterChangePosition(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_QWORD6_writeRegisterChangeNewData(DWORD Nth_Entry);
+		 void _TRACE64FORMAT_BYTE7_writeMemoryAccessFields(DWORD Nth_Entry);
+
+		 
+		 //void _TRACE64FORMAT_QWORD8_writeMemoryAccessAddresses(DWORD Nth_Entry);
+		 //void _TRACE64FORMAT_QWORD9_writeMemoryAccessOldData(DWORD Nth_Entry);
+		 //void _TRACE64FORMAT_QWORD10_writeMemoryAccessNewData(DWORD Nth_Entry);
+	};
+}
+```
+
+`Project10/include/data/data_objects/x64dbg_tracedata/data_buf.h`:
+
+```h
+#pragma once
+
+
+
+#include <stdint.h>
+
+#include "../../data_formats.h"
+
+#define TEST
+
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	namespace misc {
+
+
+		constexpr uint_8 LEN_BYTE = 1;
+		constexpr uint_8 LEN_WORD = 2;
+		constexpr uint_8 LEN_DWORD = 4;
+		constexpr uint_8 LEN_QWORD = 8;
+
+	}
+
+	
+
+	class data_buf {
+	public:
+		data_buf(const uint_64 total_bytes);
+		~data_buf();
+
+		// BYTE, WORD, DWORD, OR QWORD (1, 2, 4, 8 bytes)
+		const QWORD read_data_size(const uint_8 read_amt);
+
+		// read 1 byte at a time
+		const BYTE read_byte();
+
+		BYTE* get_buffer_address();
+
+		
+		uint_64 curr_file_position() { return _current_pos; };
+		uint_64 buffer_size() { return _total_bytes_read; };
+
+	private:
+
+		bool _can_read(const uint_8 read_amt);
+		const BYTE& _read_next_byte();
+		const WORD& _read_next_word();
+		const DWORD& _read_next_dword();
+		const QWORD& _read_next_qword();
+		void zero_out_buf();
+
+		bool _allgood = false;
+		BYTE* _contents = nullptr;
+		uint_64 _total_bytes_read = 0;	// len of total bytes read.
+		uint_64 _current_pos = 0;
+		uint_32 _current_ins_block_processed = 0;
+
+	};
+}
+```
+
+`Project10/include/data/data_objects/x64dbg_tracedata/x64dbg_tracedata.h`:
+
+```h
+#pragma once
+
+#include <Windows.h>
+#include "data_buf.h"
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	struct x64dbg_trace_block {
+
+		/*
+		void output() {
+			std::cout << "blocktype: " << static_cast<int>(blocktype) << std::endl;
+			std::cout << "regchanges: " << static_cast<int>(RegisterChanges) << std::endl;
+			std::cout << "memaccs: " << static_cast<int>(MemoryAccesses) << std::endl;
+			std::cout << "tid: " << static_cast<int>(ThreadID) << std::endl;
+			std::cout << "opc len: " << opcodes.size() << std::endl;
+			std::cout << "regchanges len: " << regchanges.size() << std::endl;
+			std::cout << "regdata len: " << regdata.size() << std::endl;
+			std::cout << "memaccflags len: " << mem_acc_flags.size() << std::endl;
+			std::cout << "memaccaddr len: " << mem_acc_addr.size() << std::endl;
+			std::cout << "mem_acc_old len: " << mem_acc_old.size() << std::endl;
+			std::cout << "mem_acc_new len: " << mem_acc_new.size() << std::endl;
+
+		}
+		*/
+		BYTE blocktype = 0;
+		BYTE RegisterChanges = 0;
+		BYTE MemoryAccesses = 0;
+		DWORD ThreadID = 0;
+		std::vector<BYTE> opcodes;
+		std::vector<BYTE> regchanges;
+		std::vector<QWORD> regdata;
+		std::vector<bool> mem_acc_flags;
+		std::vector<QWORD> mem_acc_addr;
+		std::vector<QWORD> mem_acc_old;
+		std::vector<QWORD> mem_acc_new;
+		DWORD mem_access_entries = 0;
+	};
+	
+	class x64dbg_tracedata {
+	public:
+
+		x64dbg_tracedata(const char* file_name);
+		~x64dbg_tracedata();
+
+		// read BYTE, WORD, DWORD, or QWORD sized data
+		const QWORD readDataSize(const BYTE data_size) const;
+		// read byte at a time
+		const BYTE readByte() const;
+
+		
+		bool readFile();
+		bool atEndOfFile();
+
+
+		const std::string& getFileName() { return _file_name;};
+		const std::string& getJSONBlob() { return _jsonblob; };
+		const QWORD& getFileSize() { return _file_size; };
+
+		void saveJsonData(const std::string jsonblob);
+		bool saveFileSize();
+		bool saveFileHandle();
+	private:
+
+		void _cleanup();
+		void _cleanupIfNeededThenForceExit();
+
+		data_buf* _raw_tracefile_buf = nullptr;
+		HANDLE _tracefile_handle = nullptr;
+
+		std::string _file_name;	// char* _file_name = nullptr;
+		std::string _jsonblob;
+		QWORD _file_size {0};
+		DWORD _bytes_read {0};
+	 
+
+	};
+}
+```
+
+`Project10/include/data/data_objects/xtr_tracedata/trace_instruction.h`:
+
+```h
+#pragma once
+/*
+*
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+*/
+#include "../../data_formats.h"
+#include <string>
+namespace ns_xtr {
+
+    
+
+    using namespace ns_trace;
+    using namespace ns_dtypes;
+
+    class registers {
+    public:
+        registers() : _values(NUM_OF_REGS_I_WANT_TO_LOOK_AT) { };
+
+        QWORD& operator[](REGISTERCONTEXT regname) {
+            return _values[regname];
+        };
+
+    
+        registers& operator=(registers data) {
+            _values = data._values;
+            return *this;
+        }
+
+        void update(REGISTERCONTEXT regname, QWORD value) { _values[regname] = value; };
+    private:
+        std::vector<QWORD> _values;
+    };
+
+    struct mem_access {
+
+        mem_access(bool hasnewval, BYTE access, QWORD involved_addr, QWORD oldval, QWORD newval) {
+            has_new_val = hasnewval;
+            access_type = access;
+            target_addr = involved_addr;
+            prev_val = oldval;
+            new_val = newval;
+        };
+        bool has_new_val = false;
+        BYTE access_type  { 0 };
+        QWORD target_addr { 0 };
+        QWORD prev_val    { 0 };
+        QWORD new_val     { 0 };
+    };
+
+    class traceinstruction {
+    public:
+        traceinstruction(registers regs, std::vector<BYTE> opcodes, std::vector<mem_access> memdata);
+        
+        QWORD& getRIP()    { return _regs[RIP]; };
+        QWORD& getRFLAGS() { return _regs[RFLAGS]; };
+        QWORD& getRegister(REGISTERCONTEXT regname) { return _regs[regname]; };
+        const uint_8& getOpcodeCount() { return _opcodes.size(); };
+        std::vector<BYTE>& getOpcodes() { return _opcodes; }
+        const uint_8& getMemAccessCount() { return _memdata.size(); };
+        
+        registers& getRegistersObject() { return _regs; };
+        std::vector<mem_access>& getMemAccessObject() { return _memdata; }
+        //const std::string& get_disasm_line() const { return _disasm_line; }
+    private:
+        registers _regs;
+        std::vector<BYTE> _opcodes;
+        std::vector<mem_access> _memdata;
+        //std::string _disasm_line;
+    };
+}
+```
+
+`Project10/include/data/data_objects/xtr_tracedata/xtr_tracedata.h`:
+
+```h
+#pragma once
+#include "trace_instruction.h"
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	struct xtr_data {
+
+		xtr_data(std::vector<REGISTERCONTEXT> affected_regs, 
+				registers regs, 
+				std::vector<BYTE> opcodes, 
+				std::vector<mem_access> memdata) : _ins_data(regs, opcodes, memdata) {_affected_regs = affected_regs;};
+
+		std::vector<REGISTERCONTEXT> _affected_regs;
+		traceinstruction _ins_data;
+
+		/*
+		void outRIP() { std::cout << "RIP: " << _ins_data.getRIP() << " " << std::hex << std::endl; }
+		void output() {
+			std::cout << "---------------------------------------------------------------------------------\n" << std::endl;
+			std::cout << "affected regs len: " << _affected_regs.size() << std::endl;
+			std::cout << "registers values: " << std::endl;
+			
+			std::cout << std::hex << "RAX: " << _ins_data.getRegister(RAX) << std::endl;
+			std::cout << "RCX: " << _ins_data.getRegister(RCX) << std::endl;
+			std::cout << "RDX: " << _ins_data.getRegister(RDX) << std::endl;
+			std::cout << "RBX: " << _ins_data.getRegister(RBX) << std::endl;
+			std::cout << "RSP: " << _ins_data.getRegister(RSP) << std::endl;
+			std::cout << "RBP: " << _ins_data.getRegister(RBP) << std::endl;
+			std::cout << "RSI: " << _ins_data.getRegister(RSI) << std::endl;
+			std::cout << "RDI: " << _ins_data.getRegister(RDI) << std::endl;
+			std::cout << "R8: " << _ins_data.getRegister(R8) << std::endl;
+			std::cout << "R9: " << _ins_data.getRegister(R9) << std::endl;
+			std::cout << "R10: " << _ins_data.getRegister(R10) << std::endl;
+			std::cout << "RIP: " << _ins_data.getRegister(RIP) << std::endl;
+
+			std::cout << "---------------------------------------------------------------------------------\n" << std::endl;
+		}
+		*/
+	};
+
+	// _history[threadID] = lookup table
+	//	
+	class xtr_tracedata {
+	public:
+		xtr_tracedata();
+		~xtr_tracedata();
+
+		void someInfo(); // useless
+		
+		traceinstruction& getInstructionFromNthEntry(DWORD Nth_entry);
+		bool doesNthEntryExist(DWORD Nth_entry);
+		xtr_data& getNthEntry(DWORD Nth_entry);
+		bool updateNthEntry(xtr_data& Nth_ins) {};
+		bool removeNthEntry(DWORD Nth_entry);
+		bool addNthEntry(DWORD Nth_entry) {};
+		umap<DWORD, xtr_data>& getTraceEntryForThreadID(DWORD threadID);
+		bool createThreadIDEntry(DWORD threadID);
+
+		bool isEncounteredThreadID(DWORD threadID) { return _history.contains(threadID); };
+		
+		bool checkIfSameThreadID(DWORD threadID) { return (_currTID == threadID); };
+
+		bool addInstructionEntry(xtr_data ins_info);
+		bool addInstructionEntryForThreadID(DWORD threadID, xtr_data ins_info);
+		const DWORD& getInstructionCount() const { return _history.at(_currTID).size(); };
+
+		// get # of threads that had their instructions recorded in curr trace file.
+		const DWORD& getThreadIDCount() const { return _history.size(); };
+
+		const DWORD& size() const { return _history.size(); };
+		const DWORD& getCurrentThreadID() const { return _currTID; };
+
+		
+		const DWORD& getInstructionCountForThreadID(DWORD threadID);
+
+		const DWORD getThreadIDForInstruction(DWORD instructionID);
+		
+
+
+		/*
+		* fns solely for formatting. can ignore
+		*/
+		const uint_8& _TRACE64FORMAT_getNthInstructionMemAccessesCount(DWORD instructionID) { return getInstructionFromNthEntry(instructionID).getMemAccessCount(); };
+		const uint_8 _TRACE64FORMAT_getNthInstructionRegChangesCount(DWORD instructionID) 
+		{ 
+			uint_8 amt = getNthEntry(instructionID)._affected_regs.size();
+			return (amt == misc::XTR_ALL_REGISTERS_SAVED) ? misc::X64DBG_ALL_REGISTERS_SAVED : amt; // if len(affected_regs) == 30, return 172 aka 0xAC. otherwise ret the size from fn
+		};
+		const DWORD& _TRACE64FORMAT_getNthInstructionThreadID(DWORD instructionID) 
+		{
+			return getThreadIDForInstruction(instructionID);
+		};
+
+		const std::vector<uint_8>& _TRACE64FORMAT_getNthInstructionOpcodes(DWORD instructionID) { return getInstructionFromNthEntry(instructionID).getOpcodes()	; };
+		const uint_8& _TRACE64FORMAT_getNthInstructionOpcodesLen(DWORD instructionID) { return getInstructionFromNthEntry(instructionID).getOpcodes().size(); };
+
+		const std::vector<REGISTERCONTEXT> _TRACE64FORMAT_getNthInstructionRegChangesIndices(DWORD instructionID) 
+		{
+			
+			xtr_data& nth_entry = getNthEntry(instructionID);
+			std::vector<REGISTERCONTEXT> changed = nth_entry._affected_regs;
+			
+			return changed;
+		}
+
+		const std::vector<QWORD> _TRACE64FORMAT_getNthInstructionRegChangesData(DWORD instructionID)
+		{
+			xtr_data& nth_entry = getNthEntry(instructionID);
+			std::vector<REGISTERCONTEXT> changed = nth_entry._affected_regs;
+			std::vector<QWORD> registerdata;
+
+			for (int i = 0; i < changed.size(); i++) {
+				registerdata.push_back(nth_entry._ins_data.getRegister(changed[i]));
+			}
+
+			return registerdata;
+
+		}
+
+		const std::vector<mem_access> _TRACE64FORMAT_getNthInstructionMemAccessesData(DWORD instructionID) {
+
+			traceinstruction nth_ins = getInstructionFromNthEntry(instructionID);
+			const std::vector<mem_access> memdata = nth_ins.getMemAccessObject();
+
+			return memdata;
+		};
+
+	private:
+		//umap<ThreadID, umap<execution #, xtr_data>> - could've used umap<DWORD, vector<xtr_data>> but removing elements affects original order
+		umap<DWORD, umap<DWORD, xtr_data>> _history;
+		DWORD _currTID = 0;
+
+	};
+}
+```
+
+`Project10/include/logger.h`:
+
+```h
+#pragma once
+
+namespace ns_xtr {
+
+	namespace ns_lazylog {
+
+		void print_string(const char* cstr);
+
+	}
+}
+```
+
+`Project10/include/processor/capstone/capstone_engine.h`:
+
+```h
+#pragma once
+
+/*
+* get needed data regarding instructions so that writing actual analyses is much easier
+* 
+* 
+* 
+* 
+* 
+* 
+* 
+*/
+#include <capstone/capstone.h>
+#include "../../data/data_formats.h"
+
+//#include "fmt-10.1.1/include/fmt/core.h"
+//#include "fmt-10.1.1/include/fmt/format.h"
+//#include "fmt-10.1.1/include/fmt/format-inl.h"
+//#include "fmt-10.1.1/src/format.cc"
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	namespace misc {
+		constexpr size_t NONE = 0;
+	}
+
+	class capstone_engine {
+	public:
+
+		capstone_engine() {
+			std::cout << "calling capstone_engine constructor" << std::endl; 
+			init_capstone();
+		};
+		capstone_engine(cs_mode hw_mode) { init_capstone(hw_mode); }
+		~capstone_engine();
+
+		// default setting = x86-64 
+		
+
+		const BYTE& getOperandCount() const;
+		const BYTE& getOperandType() const;
+		cs_x86_op& getNthOperand(uint_8 index);
+
+		void disasm(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit = misc::NONE);
+		
+		
+
+	private:
+		csh _capstone_handle;
+		cs_insn* _instructions = nullptr;
+		size_t _ins_count = 0;
+		bool _open_success = false;
+
+		void _csdata_reset();
+		size_t _disassemble(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit);
+
+
+		// see constructor
+		void init_capstone(cs_mode hw_mode = CS_MODE_64);
+		void set_capstone_option(cs_opt_type option, cs_opt_value enabled);
+
+		// see destructor
+		void cleanup();
+		
+
+	};
+}
+```
+
+`Project10/include/processor/capstone/disasm_tool.h`:
+
+```h
+#pragma once
+
+#include "capstone_engine.h"
+
+namespace ns_xtr {
+
+	using namespace ns_dtypes;
+
+	namespace misc {
+	
+	}
+
+	class disasm_tool {
+	public:
+
+		disasm_tool();
+		~disasm_tool();
+
+		void disasm(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit);
+		capstone_engine* _capstone = nullptr;
+	private:
+		
+
+	};
+}
+```
+
+`Project10/include/processor/regex/regex_tool.h`:
+
+```h
+#pragma once
+
+//TODO
+namespace ns_xtr {
+
+	class regex_tool {
+
+	};
+}
+```
+
+`Project10/include/processor/xtr_processor.h`:
+
+```h
+#pragma once
+#include "capstone/disasm_tool.h"
+#include "regex/regex_tool.h"
+#include "../data/data_objects/xtr_tracedata/xtr_tracedata.h"
+
+namespace ns_xtr {
+
+
+	class xtr_processor : public disasm_tool, public regex_tool {
+	public:
+		xtr_processor() : disasm_tool(), regex_tool() {};
+		~xtr_processor();
+
+		void doStuff(xtr_tracedata* xtr_trace);
+	private:
+		disasm_tool* _disasm_tool = nullptr;
+		regex_tool* _regex_tool = nullptr;
+	};
+
+
+
+}
+```
+
+`Project10/include/x64dbgTraceReader.h`:
+
+```h
+#pragma once
+#include "data/data_manager.h"
+#include "processor/xtr_processor.h"
+namespace ns_xtr {
+
+	
+	class x64dbgTraceReader {
+	public:
+		x64dbgTraceReader() {};
+		x64dbgTraceReader(const char* file_name);
+		~x64dbgTraceReader();
+
+		void testfn();
+		bool processTraceFile();
+
+		bool processTraceBlocks();
+
+		bool createNewTrace64File(const char* file_name);
+		
+	private:
+		data_manager* _trace_data_manager = nullptr;
+		xtr_processor* _xtr_processor = nullptr;
+	};
+
+
+
+}
+```
+
+`Project10/src/data/data_manager.cpp`:
+
+```cpp
+#include "../../include/data/data_manager.h"
+
+#include <nlohmann/json.hpp>
+
+// for convenience
+using json = nlohmann::json;
+
+using namespace ns_xtr;
+
+void ns_xtr::data_manager::testfn()
+{
+	if (_xtr_trace != nullptr) {
+		_xtr_trace->removeNthEntry(3);
+		_xtr_trace->someInfo();
+	}
+}
+
+ns_xtr::data_manager::data_manager(const char* file_name)
+{
+	// init xtr_tracedata later. first need to format trace64 data
+	if (_provided_file == nullptr) {
+		_provided_file = new x64dbg_tracedata(file_name);
+	}
+
+}
+
+ns_xtr::data_manager::~data_manager()
+{
+	if (_provided_file != nullptr) {
+		delete _provided_file;
+		_provided_file = nullptr;
+	}
+
+	if (_xtr_trace != nullptr) {
+		delete _xtr_trace;
+		_xtr_trace = nullptr;
+	}
+	if (_newfile != nullptr && _newfile != INVALID_HANDLE_VALUE) {
+		CloseHandle(_newfile);
+		_newfile = nullptr;
+	}
+	if (_logged_regs != nullptr) {
+		delete _logged_regs;
+		_logged_regs = nullptr;
+	}
+}
+
+// check that input file header adheres to trace64 file format
+bool ns_xtr::data_manager::confirmTrace64File()
+{
+	return (_isMagicBytesSigFound() && _processJSONBlob());//(_isMagicBytesSigFound() && _processJSONBlob());
+
+}
+
+
+/*
+* NOTE: current implementation renders most of the data from REGDUMP struct useless.
+*		ONLY "essential" registers from REGISTERCONTEXT and FLAGS members are preserved.
+*/
+
+void ns_xtr::data_manager::parseToEnd()
+{
+	if (!_setupXTRTracedata())
+		return;
+
+	while (!_provided_file->atEndOfFile()) {
+		trace64ToXTR();
+		//std::cout << "hmm" << std::endl;
+	}
+}
+
+std::string ns_xtr::data_manager::rcToEnglish(uint_8 index)
+{
+	switch (index) {
+
+	}
+	return std::string();
+}
+
+bool ns_xtr::data_manager::trace64ToXTR()
+{
+	
+
+	//see https://github.com/x64dbg/docs/blob/master/developers/tracefile.md 
+	x64dbg_trace_block trace64_data;
+	std::vector<REGISTERCONTEXT> changes;
+	
+
+	_TRACE64FORMAT_BYTE1_readBlockType(trace64_data); // can 'ignore' for now
+ 	_TRACE64FORMAT_BYTE2_readRegisterChanges(trace64_data);
+
+	//x64dbg saves all reg data at very start of a trace/every 512th
+	if (trace64_data.RegisterChanges == misc::X64DBG_ALL_REGISTERS_SAVED || ((_xtr_trace->size() % misc::X64DBG_MULTIPLE_OF_512) == 0)) {
+
+		std::cout << "Every 512 instructions OR at the beginning of each tracefile, x64dbg saves data. this is one of them." << std::endl;
+		_preserveData = true;
+	}
+
+	_TRACE64FORMAT_BYTE3_readMemoryAccesses(trace64_data);
+	_TRACE64FORMAT_BYTE4_readBlockFlagsAndOpcodeSize(trace64_data);
+	_TRACE64FORMAT_BYTE5_readRegisterChangePosition(trace64_data);
+	_TRACE64FORMAT_QWORD6_readRegisterChangeNewData(trace64_data);
+	_TRACE64FORMAT_BYTE7_readMemoryAccessFlags(trace64_data);
+	_TRACE64FORMAT_QWORD8_readMemoryAccessAddresses(trace64_data);
+	_TRACE64FORMAT_QWORD9_readMemoryAccessOldData(trace64_data);
+	_TRACE64FORMAT_QWORD10_readMemoryAccessNewData(trace64_data);
+
+
+	// check if threadID is already 'registered'. if not, create container.
+	if (!_xtr_trace->isEncounteredThreadID(trace64_data.ThreadID)) {
+		_xtr_trace->createThreadIDEntry(trace64_data.ThreadID);
+	}
+	
+	_xtr_trace->addInstructionEntryForThreadID(trace64_data.ThreadID, _TRACE64FORMAT_convertToXTREntry(trace64_data));
+
+	_preserveData = false; // reset
+
+
+	return false; // fix
+}
+
+bool ns_xtr::data_manager::xtrToTrace64File(const char* filename)
+{
+	// if it's not initialized, then trace64 data wasnt processed properly
+	if (_xtr_trace != nullptr) {
+
+		if (_prev_TID) // reset val if was used when processing input data 
+			_prev_TID = 0;
+
+		// if more than 1 entry for threads, true.
+		bool multiple_threadIDs = (_xtr_trace->getThreadIDCount() > 1) ? true : false;
+		DWORD bytes_written = 0;
+		std::vector<BYTE> tmp_trace64buf;
+
+		// create new output file, get its handle and original json data.
+		if (_createNewTrace64File(filename) && _copyBlobData()) {
+
+			_TRACE64FORMAT_HEADER1_writeMagicBytes();
+			_TRACE64FORMAT_HEADER2_writeJsonData();
+
+			QWORD index = 0;
+			QWORD size = 0;
+			
+			if (!multiple_threadIDs) {
+				while (index < _xtr_trace->getInstructionCount()) {
+					_TRACE64FORMAT_writeAsTrace64Entry(index);
+					index++;
+				}
+			}
+			else {
+
+			}
+			
+
+			std::cout << "file successfully written" << std::endl;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ns_xtr::data_manager::_createNewTrace64File(const char* filename)
+{
+	if (filename == nullptr || strlen(filename) == 0) {
+		std::cout << "output name not provided. file will be created with default name: processed_trace.trace64" << std::endl;
+		std::string tmpname = "processed_trace.trace64";
+
+		_newfile = CreateFileA(tmpname.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE,
+								NULL, CREATE_ALWAYS,
+								FILE_ATTRIBUTE_NORMAL, NULL);
+	}
+	else {
+		_newfile = CreateFileA(filename, GENERIC_WRITE, FILE_SHARE_WRITE,
+								NULL, CREATE_ALWAYS,
+								FILE_ATTRIBUTE_NORMAL, NULL);
+	}
+	bool success = (_newfile != INVALID_HANDLE_VALUE);
+
+	return success;
+}
+
+bool ns_xtr::data_manager::_copyBlobData()
+{
+	if (_provided_file != nullptr) {
+
+		_newblob = _provided_file->getJSONBlob();
+		return true;
+	}
+
+	return false;
+}
+
+bool ns_xtr::data_manager::_setupXTRTracedata()
+{
+	if (!_isSetUp) {
+
+		if (_xtr_trace == nullptr) {
+			_xtr_trace = new xtr_tracedata();
+		}
+		if (_logged_regs == nullptr) {
+			_logged_regs = new registers();
+		}
+
+		_isSetUp = true;
+	}
+	
+	return _isSetUp;
+}
+
+bool ns_xtr::data_manager::_appendToNewFileBuf(BYTE* srcval, QWORD valsize)
+{
+	if (srcval != nullptr && valsize != 0) 
+	{
+		for (int i = 0; i < valsize; i++) {
+			_newfile_databuf.push_back((*(srcval + i) & 0xFF));
+		}
+		return true;
+	}
+
+	std::cout << "failed to append to buffer required to write to new trace64 file." << std::endl;
+	return false; 
+}
+
+bool ns_xtr::data_manager::_appendToNewFileBuf(ns_xtr::QWORD srcval) {
+
+	_newfile_databuf.push_back(((srcval) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 8) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 16) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 24) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 32) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 40) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 48) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 56) & 0xFF));
+
+	return true; //fix
+}
+
+bool ns_xtr::data_manager::_appendToNewFileBuf(ns_xtr::DWORD srcval) {
+
+	_newfile_databuf.push_back(((srcval) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 8) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 16) & 0xFF));
+	_newfile_databuf.push_back(((srcval >> 24) & 0xFF));
+
+	return true; //fix
+}
+
+bool ns_xtr::data_manager::_appendToNewFileBuf(BYTE srcval)
+{
+	_newfile_databuf.push_back(((srcval) & 0xFF));
+	return false; //fix
+}
+
+void ns_xtr::data_manager::_clearNewFileBuf() 
+{
+	_newfile_databuf.clear();
+}
+
+bool ns_xtr::data_manager::_processJSONBlob()
+{
+	bool success = false;
+	std::string blob;
+	uint_32 blob_length = _provided_file->readDataSize(misc::JSON_BLOB_HEADER_SIZE);
+
+	if (!_provided_file->atEndOfFile()) {
+
+		
+		for (int i = 0; i < blob_length; i++) {
+			blob += _provided_file->readByte();
+		}
+
+		_provided_file->saveJsonData(blob);
+
+		// ensure supposed blob len is equal to real blob len. 
+		success = (_newblob.length() == blob_length) ? true : false;
+
+	}
+
+	return success;
+}
+
+bool ns_xtr::data_manager::_isMagicBytesSigFound()
+{
+	bool success = false;
+	DWORD magic_bytes = 0;
+
+	magic_bytes = _provided_file->readDataSize(misc::X64DBG_TRACE_MAGIC_SIG_LENGTH);
+
+	// ensure 'magic' sig TRAC is present: checking 1st 4 magic bytes (is == TRAC?) 
+	success = (magic_bytes == misc::X64DBG_TRACE_MAGIC_BYTES_LE) ? true : false;
+
+	return success;
+}
+
+xtr_data ns_xtr::data_manager::_TRACE64FORMAT_convertToXTREntry(x64dbg_trace_block& entry)
+{
+	std::vector<REGISTERCONTEXT> affregs;
+	std::vector<mem_access> memstuff;
+	bool hasnew = false;
+	// very start of trace OR multiple of 512
+	if (_preserveData) {
+
+		// save ALL context (only 0-30 rn) 
+		for (int i = 0; i < ns_trace::NUM_OF_REGS_I_WANT_TO_LOOK_AT; i++) {
+			_logged_regs->update(static_cast<REGISTERCONTEXT>(i), entry.regdata[i]); //update all regs
+			affregs.push_back(static_cast<REGISTERCONTEXT>(i));		// keep track of what updated
+		}
+
+
+	}
+	else { // normal update
+ 
+			affregs = getRCForm(entry.regchanges);
+			
+			// only update regs that correspond to appropriate RegChange register
+			for (int j = 0; j < affregs.size(); j++) {
+				_logged_regs->update(affregs[j], entry.regdata[j]);
+			}
+		 
+	}
+	for (int i = 0; i < entry.mem_acc_flags.size(); i++) {
+
+		if (entry.mem_acc_flags[i]) {
+			memstuff.push_back(mem_access(true, 0, entry.mem_acc_addr[i], entry.mem_acc_old[i], entry.mem_acc_new[i]));
+		}
+		else {
+			memstuff.push_back(mem_access(false, 0, entry.mem_acc_addr[i], entry.mem_acc_old[i], 0));
+		}
+		
+	}
+	
+	return xtr_data(affregs, *_logged_regs, entry.opcodes, memstuff);
+	}
+
+
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE1_readBlockType(x64dbg_trace_block& entry)
+{
+	entry.blocktype = _provided_file->readByte(); // 1st field = BlockType. currently only 0 defined.
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE2_readRegisterChanges(x64dbg_trace_block& entry)
+{
+	entry.RegisterChanges = _provided_file->readByte(); // Field 2: len(RegisterChangePosition) and len(RegisterChangeNewData). eg: if RegisterChanges = 4, len(RegisterChangePosition) = 4 and len(RegisterChangeNewData) = 32 [4 QWORDs]
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE3_readMemoryAccesses(x64dbg_trace_block& entry)
+{
+	entry.MemoryAccesses = _provided_file->readByte(); // Field 3: len(MemoryAccessFlags)
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE4_readBlockFlagsAndOpcodeSize(x64dbg_trace_block& entry)
+{
+	BYTE BlockFlagsAndOpcodeSize = _provided_file->readByte();
+	BYTE opcode_size = 0;
+	
+	// BlockFlagsAndOpcodeSize - MSB(byte) set? Y - entry for ThreadID exists. N - next.
+	if (BlockFlagsAndOpcodeSize & misc::bitstuff::THREAD_ID_MASK_SET) {
+
+		entry.ThreadID = _provided_file->readDataSize(misc::LEN_DWORD);
+		_prev_TID = entry.ThreadID; // save entry to check
+	}
+	else { // MSB not set; same thread ID
+
+		if (!_prev_TID) // TID == 0 should never happen if valid trace64 block
+		{
+			std::cout << "threadID == 0 or invalid block format" << std::endl;
+			exit(EXIT_FAILURE);
+		}
+
+		entry.ThreadID = _prev_TID; // same TID as prior block
+	}
+
+	// lower 4 bits represent length of opcode bytes
+	opcode_size = BlockFlagsAndOpcodeSize & misc::bitstuff::OPCODE_LENGTH_MASK;
+	for (int i = 0; i < opcode_size; i++) {
+		entry.opcodes.push_back(_provided_file->readByte());
+	}
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE5_readRegisterChangePosition(x64dbg_trace_block& entry) 
+{
+	for (int i = 0; i < entry.RegisterChanges; i++) {
+		entry.regchanges.push_back(_provided_file->readByte());
+	}
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_QWORD6_readRegisterChangeNewData(x64dbg_trace_block& entry)
+{
+	// RegisterChanges # of QWORDs
+	for (int i = 0; i < entry.RegisterChanges; i++) {
+		entry.regdata.push_back(_provided_file->readDataSize(misc::LEN_QWORD));
+	}
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE7_readMemoryAccessFlags(x64dbg_trace_block& entry)
+{
+	BYTE value = 0;
+	// MemoryAccessFlags array
+	for (int i = 0; i < entry.MemoryAccesses; i++) {
+		value = _provided_file->readByte();
+		std::cout << static_cast<int>(value) << std::endl;
+
+		if ((value & 1) == 0) { // When bit 0 is set, it indicates the memory is not changed (This could mean it is read, or it is overwritten with identical value). bit 0 not set = mem change
+			//std::cout << "position " << i << " " << "has a mem change!" << std::endl;
+			entry.mem_access_entries += 1;
+			entry.mem_acc_flags.push_back(true);
+		}
+		else {
+			entry.mem_acc_flags.push_back(false);
+		}
+
+	}
+
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_QWORD8_readMemoryAccessAddresses(x64dbg_trace_block& entry)
+{
+	// MemoryAccesses # of QWORDs
+	for (int i = 0; i < entry.MemoryAccesses; i++) {
+		entry.mem_acc_addr.push_back(_provided_file->readDataSize(misc::LEN_QWORD));
+	}
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_QWORD9_readMemoryAccessOldData(x64dbg_trace_block& entry)
+{
+	// MemoryAccesses # of QWORDs
+	for (int i = 0; i < entry.MemoryAccesses; i++) {
+		entry.mem_acc_old.push_back(_provided_file->readDataSize(misc::LEN_QWORD));
+	}
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_QWORD10_readMemoryAccessNewData(x64dbg_trace_block& entry)
+{
+	// mem_access_entries # of QWORDs. DIFFERENT THAN ABOVE 2
+	for (int i = 0; i < entry.mem_access_entries; i++) {
+		entry.mem_acc_new.push_back(_provided_file->readDataSize(misc::LEN_QWORD));
+	}
+}
+
+
+
+ns_xtr::DWORD ns_xtr::data_manager::_TRACE64FORMAT_writeAsTrace64Entry(ns_xtr::DWORD Nth_Entry)
+{
+	DWORD bytes_written = 0;
+
+	if (_xtr_trace->doesNthEntryExist(Nth_Entry)) {
+		BYTE RegChangeCount = _xtr_trace->_TRACE64FORMAT_getNthInstructionRegChangesCount(Nth_Entry);
+		bool success = false;
+
+		if (RegChangeCount == misc::X64DBG_ALL_REGISTERS_SAVED || ((Nth_Entry % misc::X64DBG_MULTIPLE_OF_512) == 0)) {
+
+			std::cout << "WRITE - Every 512 instructions OR at the beginning of each tracefile, x64dbg saves data. this is one of them." << std::endl;
+			_preserveData = true;
+		}
+		// does the hard work! : )
+		_TRACE64FORMAT_BYTE1_writeBlockType(Nth_Entry);
+		_TRACE64FORMAT_BYTE2_writeRegisterChanges(Nth_Entry);
+		_TRACE64FORMAT_BYTE3_writeMemoryAccesses(Nth_Entry);
+		_TRACE64FORMAT_BYTE4_writeBlockFlagsAndOpcodeSize(Nth_Entry);
+		_TRACE64FORMAT_BYTE5_writeRegisterChangePosition(Nth_Entry);
+		_TRACE64FORMAT_QWORD6_writeRegisterChangeNewData(Nth_Entry);
+		_TRACE64FORMAT_BYTE7_writeMemoryAccessFields(Nth_Entry);
+
+		success = WriteFile(_newfile, &_newfile_databuf[0], _newfile_databuf.size(), reinterpret_cast<LPDWORD>(&bytes_written), NULL);
+
+		_preserveData = false; // reset
+		_clearNewFileBuf();
+
+		/*
+		if (success) {
+			std::cout << "number of bytes written: " << bytes_written << std::endl;
+		}
+		else {
+			std::cout << "WriteFile failed. bytes written = " << bytes_written << std::endl;
+		}
+		*/
+	}
+	return bytes_written;
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_HEADER1_writeMagicBytes()
+{
+	std::string trace64_magic = "TRAC";
+
+	_appendToNewFileBuf(reinterpret_cast<BYTE*>(&trace64_magic[0]), trace64_magic.length());
+}
+
+
+void ns_xtr::data_manager::_TRACE64FORMAT_HEADER2_writeJsonData()
+{
+	DWORD bloblen = _newblob.length();
+
+	// DWORD indicating size of upcoming json blob data
+	_appendToNewFileBuf(reinterpret_cast<BYTE*>(&bloblen), 4);
+
+	// json blob data
+	_appendToNewFileBuf(reinterpret_cast<BYTE*>(&_newblob[0]), bloblen);
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE1_writeBlockType(ns_xtr::DWORD Nth_Entry)
+{
+	// start entry with 0
+	_appendToNewFileBuf(misc::X64DBG_BLOCKTYPE_ID);
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE2_writeRegisterChanges(ns_xtr::DWORD Nth_Entry)
+{
+	BYTE RegisterChangesValue = _xtr_trace->_TRACE64FORMAT_getNthInstructionRegChangesCount(Nth_Entry);
+	_appendToNewFileBuf(RegisterChangesValue);
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE3_writeMemoryAccesses(ns_xtr::DWORD Nth_Entry)
+{
+	BYTE MemoryAccessesValue = _xtr_trace->_TRACE64FORMAT_getNthInstructionMemAccessesCount(Nth_Entry);
+	_appendToNewFileBuf(MemoryAccessesValue);
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE4_writeBlockFlagsAndOpcodeSize(ns_xtr::DWORD Nth_Entry)
+{
+	bool setMSB = false;
+	BYTE BlockFlagsAndOpcodeSizeValue = 0;
+
+	if (!_prev_TID) { // _prev_TID should never be 0 unless we just started to output data as trace64
+		_prev_TID = _xtr_trace->_TRACE64FORMAT_getNthInstructionThreadID(Nth_Entry);
+		setMSB = true;
+	}
+	else // _prev_TID = nonzero; check if diff
+	{
+		DWORD curr_TID = _xtr_trace->getThreadIDForInstruction(Nth_Entry);
+
+		if ((_prev_TID != curr_TID) || _preserveData) { // ids diff or (n*512)th entry
+			_prev_TID = curr_TID;
+			setMSB = true;
+		}
+		// otherwise, tids are same; keep default val
+	}
+
+	// get opcode bytes of curr ins
+	std::vector<BYTE> op_bytes = _xtr_trace->_TRACE64FORMAT_getNthInstructionOpcodes(Nth_Entry);
+
+	BlockFlagsAndOpcodeSizeValue = op_bytes.size();
+
+	if (setMSB) {// if MSB set, need write TID. else dw
+		BlockFlagsAndOpcodeSizeValue |= misc::bitstuff::THREAD_ID_MASK_SET; // set MSB; entry exists so next write is a DWORD
+
+		_appendToNewFileBuf(BlockFlagsAndOpcodeSizeValue);
+		_appendToNewFileBuf(_prev_TID);	// thread val added since MSB set
+
+	}
+	else 
+	{
+		_appendToNewFileBuf(BlockFlagsAndOpcodeSizeValue);
+	}
+
+	_appendToNewFileBuf(&op_bytes[0], op_bytes.size());
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE5_writeRegisterChangePosition(ns_xtr::DWORD Nth_Entry)
+{
+	if (_preserveData) 
+	{
+		// 0xAC = 172 #s of 0s; see absorelative form lol
+		for (int i = 0; i < misc::X64DBG_ALL_REGISTERS_SAVED; i++) {
+			_appendToNewFileBuf(misc::X64DBG_ZERO);
+		}
+	}
+	else {
+
+		std::vector<REGISTERCONTEXT> RegChangePositions = _xtr_trace->_TRACE64FORMAT_getNthInstructionRegChangesIndices(Nth_Entry);
+		std::vector<uint_8> proper_form = getAbsoRelativeForm(RegChangePositions);	// convert back to form understandable by x64dbg
+
+		for (int i = 0; i < proper_form.size(); i++) {
+			_appendToNewFileBuf(proper_form[i]);
+		}
+
+	}
+	
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_QWORD6_writeRegisterChangeNewData(ns_xtr::DWORD Nth_Entry)
+{
+	// get new values
+	std::vector<QWORD> RegChangeNewData =  _xtr_trace->_TRACE64FORMAT_getNthInstructionRegChangesData(Nth_Entry);
+
+	for (int i = 0; i < RegChangeNewData.size(); i++) {
+		_appendToNewFileBuf(RegChangeNewData[i]); 
+	}
+
+
+	// need to fill in space to match 172 slots.
+	if (_preserveData) {
+		DWORD remaining = ((misc::X64DBG_ALL_REGISTERS_SAVED - RegChangeNewData.size()) * misc::LEN_QWORD);
+		for (int i = 0; i < remaining; i++) {
+			_appendToNewFileBuf(misc::X64DBG_ZERO);
+		}
+	}
+
+
+
+}
+
+void ns_xtr::data_manager::_TRACE64FORMAT_BYTE7_writeMemoryAccessFields(ns_xtr::DWORD Nth_Entry)
+{
+	std::vector<mem_access> memdata = _xtr_trace->_TRACE64FORMAT_getNthInstructionMemAccessesData(Nth_Entry);
+
+	umap<DWORD, QWORD> cheekydata;
+	uint_8 new_addr_count = 0;
+
+	constexpr DWORD START_INDEX_0_FLAGS = 0;
+	constexpr DWORD START_INDEX_1_ADDRS = 1000;
+	constexpr DWORD START_INDEX_2_NEW   = 2000;
+	constexpr DWORD START_INDEX_2_OLD   = 3000;
+	
+	// get needed data w/ cheeky mapping
+	for (int i = 0; i < memdata.size(); i++) {
+
+		cheekydata.insert(START_INDEX_1_ADDRS + i, memdata[i].target_addr); // mem access addr data 
+		cheekydata.insert(START_INDEX_2_OLD + i, memdata[i].prev_val);	// mem access old val
+
+		if (memdata[i].has_new_val) {
+			cheekydata.insert(START_INDEX_0_FLAGS + i, 0); // memAccFlags
+			cheekydata.insert(START_INDEX_2_NEW + i, memdata[i].new_val); // only append if exists
+			//_appendToNewFileBuf(0); // bit NOT set = entry exists
+			new_addr_count++;
+		}
+		else {
+			cheekydata.insert(START_INDEX_0_FLAGS + i, 1); // bit SET = DNE 
+		}
+
+	}
+
+	for (int i = 0; i < memdata.size(); i++) {
+		if (cheekydata.contains(START_INDEX_0_FLAGS + i))
+			_appendToNewFileBuf(static_cast<BYTE>(cheekydata.at(START_INDEX_0_FLAGS + i)));
+	}
+
+	for (int i = 0; i < memdata.size(); i++) {
+		if (cheekydata.contains(START_INDEX_1_ADDRS + i)) {
+			 _appendToNewFileBuf(cheekydata.at(START_INDEX_1_ADDRS + i));
+		}
+	}
+ 
+
+	for (int i = 0; i < memdata.size(); i++) {
+		if (cheekydata.contains(START_INDEX_2_OLD + i)) {
+			_appendToNewFileBuf(cheekydata.at(START_INDEX_2_OLD + i));
+		}
+	}
+
+	for (int i = 0; i < memdata.size(); i++) {
+		if (cheekydata.contains(START_INDEX_2_NEW + i)) {
+			_appendToNewFileBuf(cheekydata.at(START_INDEX_2_NEW + i));
+		}
+	}
+
+}
+
+
+/*
+void ns_xtr::data_manager::parseTraceBlocks()
+{
+	//see https://github.com/x64dbg/docs/blob/master/developers/tracefile.md
+	x64dbg_trace_block trace64_data;
+	BYTE BlockFlagsAndOpcodeSize = 0;
+	BYTE opcode_size = 0;
+
+	// BlockType - always 0 for now
+	trace64_data.blocktype = _provided_file->readByte();
+
+	if (trace64_data.blocktype == 0) {
+		std::cout << "start of blocktype!" << std::endl;
+	}
+
+	// RegisterChanges - # of elements in arr. RegisterChangePosition and RegisterChangeNewData
+	trace64_data.RegisterChanges = _provided_file->readByte();
+
+	//x64dbg saves all reg data at very start of a trace/every 512th
+	if (trace64_data.RegisterChanges == misc::X64DBG_ALL_REGISTERS_SAVED || ((_trace_entry % misc::X64DBG_MULTIPLE_OF_512) == 0)  ) {
+
+		std::cout << "Every 512 instructions, x64dbg saves data. this is one of them." << std::endl;
+	}
+
+	std::cout << "\t\tRegisterChanges byte read. value: " << static_cast<int>(trace64_data.RegisterChanges) << std::endl;
+	// MemoryAccesses - # of elements in arr. MemoryAccessFlags
+	trace64_data.MemoryAccesses  = _provided_file->readByte();
+
+	std::cout << "\t\tMemoryAccesses byte read. value: " << static_cast<int>(trace64_data.MemoryAccesses) << std::endl;
+	// BlockFlagsAndOpcodeSize - MSB(byte) set? Y - entry for ThreadID exists. N - next.
+	BlockFlagsAndOpcodeSize = _provided_file->readByte();
+	if (BlockFlagsAndOpcodeSize & misc::bitstuff::THREAD_ID_MASK) {
+		std::cout << "ThreadID field exists!" << std::endl;
+
+		trace64_data.ThreadID = _provided_file->readDataSize(misc::LEN_DWORD);
+		std::cout << "Thread ID: " << std::hex << trace64_data.ThreadID << std::endl;
+
+		_prev_TID = trace64_data.ThreadID;
+	}
+	else {
+
+		if (_prev_TID)
+			trace64_data.ThreadID = _prev_TID;
+	}
+
+	opcode_size = BlockFlagsAndOpcodeSize & misc::bitstuff::OPCODE_LENGTH_MASK;
+	std::cout << "Opcode length: " << static_cast<int>(opcode_size) << " " << std::endl;
+	for (int i = 0; i < opcode_size; i++) {
+		trace64_data.opcodes.push_back(_provided_file->readByte());
+	}
+
+	for (int i = 0; i < opcode_size; i++) {
+		std::cout << std::hex << static_cast<int>(trace64_data.opcodes[i]) << " ";
+	}
+	std::cout << std::endl;
+
+	//_disasm_tool->disasm(0x1000, &trace64_data.opcodes[0], opcode_size, 0);//disasm(0x1000, &trace64_data.opcodes[0], opcode_size, 0);
+
+	// RegisterChangePosition - read RegisterChanges amount of bytes.
+	std::cout << "next bytes should correspond to RegisterChangePosition. looping " << static_cast<int>(trace64_data.RegisterChanges) << " times." << std::endl;
+
+	for (int i = 0; i < trace64_data.RegisterChanges; i++) {
+		trace64_data.regchanges.push_back(_provided_file->readByte());
+
+		std::cout << "index: " << i << " = " << static_cast<int>(trace64_data.regchanges[i]) << std::endl;
+
+	}
+	get_absorelative_mapping(trace64_data.regchanges);
+
+	std::cout << "next bytes should correspond to RegisterChangeNewData. looping " << static_cast<int>(trace64_data.RegisterChanges) << " times." << std::endl;
+	int pos = 0;
+	// RegisterChangeNewData pointers
+	for (int i = 0; i < trace64_data.RegisterChanges; i++) {
+		trace64_data.regdata.push_back(_provided_file->readDataSize(misc::LEN_QWORD));
+		std::cout << pos << " "  << std::hex << trace64_data.regdata[i] << ")" << std::endl;
+		pos += 1;
+
+	}
+
+	BYTE value = 0;
+	// MemoryAccessFlags array
+	std::cout << "next bytes should correspond to MemoryAccesses. looping " << static_cast<int>(trace64_data.MemoryAccesses) << " times." << std::endl;
+	for (int i = 0; i < trace64_data.MemoryAccesses; i++) {
+		value = _provided_file->readByte();
+		std::cout << static_cast<int>(value) << std::endl;
+
+		if ((value & 1) == 0) {
+			std::cout << "position " << i << " " << "has a mem change!" << std::endl;
+			trace64_data.mem_access_entries += 1;
+		}
+
+	}
+	std::cout << "num of mem changes " << trace64_data.mem_access_entries << std::endl;
+
+	QWORD ptrval = 0;
+	// MemoryAccessAddresses
+	for (int i = 0; i < trace64_data.MemoryAccesses; i++) {
+		ptrval = _provided_file->readDataSize(misc::LEN_QWORD);
+		std::cout << "MemoryAccessAddresses: " << std::hex << ptrval << std::endl;
+	}
+
+	// MemoryAccessOldData
+	for (int i = 0; i < trace64_data.MemoryAccesses; i++) {
+		ptrval = _provided_file->readDataSize(misc::LEN_QWORD);
+		std::cout << "MemoryAccessOldData: " << std::hex << ptrval << std::endl;
+	}
+
+	// MemoryAccessNewData - entry only exists if memory acc flags not set.
+	for (int i = 0; i < trace64_data.mem_access_entries; i++) {
+		ptrval = _provided_file->readDataSize(misc::LEN_QWORD);
+		std::cout << "MemoryAccessNewData: " << std::hex << ptrval << std::endl;
+
+	}
+
+	_trace_entry += 1;
+
+}
+*/
+```
+
+`Project10/src/data/data_objects/x64dbg_tracedata/data_buf.cpp`:
+
+```cpp
+#include "../../../../include/data/data_objects/x64dbg_tracedata/data_buf.h"	
+
+#include <algorithm>
+
+using namespace ns_xtr;
+
+ns_xtr::data_buf::data_buf(const uint_64 total_bytes)
+{
+	if (total_bytes > 0) {
+		_total_bytes_read = total_bytes;
+		_contents = new BYTE[_total_bytes_read];
+		zero_out_buf();
+	}
+
+#ifdef TEST
+#endif
+}
+
+ns_xtr::data_buf::~data_buf()
+{
+	if (_contents != nullptr) {
+		delete[] _contents;
+
+#ifdef TEST
+#endif
+	}
+}
+
+const QWORD ns_xtr::data_buf::read_data_size(const uint_8 read_amt)
+{
+	QWORD result = 0LL;
+ 
+	switch (read_amt) {
+	case misc::LEN_BYTE:
+		result = _read_next_byte();
+		break;
+	case misc::LEN_WORD:
+		result = _read_next_word();
+		break;
+	case misc::LEN_DWORD:
+		result = _read_next_dword();
+		break;
+	case misc::LEN_QWORD:
+		result = _read_next_qword();
+		break;
+	default:
+		_allgood = false;
+		break;
+	}
+
+	if (_allgood) {
+		_current_pos += read_amt;
+	}
+	else {
+		std::cout << "failed to read @ " << _current_pos << "/" << _total_bytes_read << std::endl;
+	}
+
+	//std::cout << "curr pos: " << _current_pos << " " << static_cast<int>(result) << std::endl;
+	return result;
+
+}
+
+const BYTE ns_xtr::data_buf::read_byte()
+{
+	const BYTE content = _read_next_byte();
+	
+	if (_allgood) {
+		_current_pos += misc::LEN_BYTE;
+	}
+	else {
+		std::cout << "ERROR! EXITING..." << std::endl;
+		std::cout << "current file position: " << _current_pos << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	return content;
+}
+
+BYTE* ns_xtr::data_buf::get_buffer_address()
+{
+	if (_contents != nullptr) {
+		return _contents;
+	}
+}
+
+bool ns_xtr::data_buf::_can_read(const uint_8 read_amt)
+{
+	return ((((_current_pos + read_amt)) <= _total_bytes_read)  // ( •̀ᴗ•́ ) this just checks if end of buf reached
+		&& (_current_pos < _total_bytes_read)) ? true : false;
+}
+
+const BYTE& ns_xtr::data_buf::_read_next_byte()
+{
+	if (_can_read(misc::LEN_BYTE))
+	{
+		_allgood = true;
+		return *reinterpret_cast<BYTE*>((_contents + _current_pos));
+	}
+
+	// if ret val 0 and allgood == false; invalid.
+	_allgood = false;
+	return 0;
+}
+
+const WORD& ns_xtr::data_buf::_read_next_word()
+{
+	if (_can_read(misc::LEN_WORD))
+	{
+		_allgood = true;
+		return *reinterpret_cast<WORD*>((_contents + _current_pos));
+	}
+
+	// if ret val 0 and allgood == false; invalid.
+	_allgood = false;
+	return 0;
+}
+
+const DWORD& ns_xtr::data_buf::_read_next_dword()
+{
+	if (_can_read(misc::LEN_DWORD))
+	{
+		_allgood = true;
+		return *reinterpret_cast<DWORD*>((_contents + _current_pos));
+	}
+
+	// if ret val 0 and allgood == false; invalid.
+	_allgood = false;
+	return 0;
+}
+
+const QWORD& ns_xtr::data_buf::_read_next_qword()
+{
+	if (_can_read(misc::LEN_QWORD))
+	{
+		_allgood = true;
+		return *reinterpret_cast<QWORD*>((_contents + _current_pos));
+	}
+
+	// if ret val 0 and allgood == false; invalid.
+	_allgood = false;
+	return 0;
+}
+
+void ns_xtr::data_buf::zero_out_buf()
+{
+	if (_total_bytes_read > 0)
+	{
+		std::fill((_contents),
+				 (_contents + (_total_bytes_read - 1)),
+				 0);
+
+		_current_pos = 0;
+	}
+}
+
+```
+
+`Project10/src/data/data_objects/x64dbg_tracedata/x64dbg_tracedata.cpp`:
+
+```cpp
+#include "../../../../include/data/data_objects/x64dbg_tracedata/x64dbg_tracedata.h"
+
+//#include <Windows.h>
+
+using namespace ns_xtr;
+
+ns_xtr::x64dbg_tracedata::x64dbg_tracedata(const char* file_name) : _file_name(file_name)
+{
+	/*
+	if (_file_name == nullptr) {
+		uint_8 name_len = strlen(file_name) + 1;
+
+		_file_name = new char[name_len];	// name stored to use as part of output file name later
+		strcpy_s(_file_name, name_len, file_name);
+
+	}
+	*/
+
+	// couldn't get file handle or size? something broken
+	if (!saveFileHandle() || !saveFileSize()) {
+		std::cout << "\tthis message is not supposed to be displayed! Exiting..." << std::endl;
+		_cleanupIfNeededThenForceExit();
+	}
+
+	std::cout << "[+] - File handle obtained! " << std::endl;
+
+	if (_raw_tracefile_buf == nullptr) {
+
+		if (_file_size <= 0) {
+			std::cout << "[!] - Supplied file is empty/blank or failed to detect its actual size! Exiting..." << std::endl;
+			_cleanupIfNeededThenForceExit();
+		}
+
+		_raw_tracefile_buf = new data_buf(_file_size);
+
+		if (readFile()) {
+			std::cout << "\tSuccessfully read " << _bytes_read << " bytes." << std::endl;
+		}
+		else {
+			std::cout << "OOF something wrong" << std::endl;
+		}
+		
+	}
+	std::cout << "\tx64dbg_tracedata object successfully created!" << std::endl;
+}
+
+ns_xtr::x64dbg_tracedata::~x64dbg_tracedata()
+{
+	_cleanup();
+}
+
+const QWORD ns_xtr::x64dbg_tracedata::readDataSize(const BYTE data_size) const
+{
+	return _raw_tracefile_buf->read_data_size(data_size);
+}
+
+const BYTE ns_xtr::x64dbg_tracedata::readByte() const
+{
+	return _raw_tracefile_buf->read_byte();
+}
+
+// get size of file to see how many bytes we reading
+bool ns_xtr::x64dbg_tracedata::saveFileSize()
+{
+	// if failed to get file size, get error code [not interpreted; TODO later..?]
+	if (!GetFileSizeEx(_tracefile_handle, reinterpret_cast<PLARGE_INTEGER>(&_file_size))) {
+
+		DWORD error = GetLastError();
+
+		std::cout << "[!] - Error code " << error << ": " << "Failed to get file size!" << std::endl;
+
+		return false;
+	}
+
+	std::cout << "file size: " << _file_size << std::endl;
+
+	return true;
+}
+
+bool ns_xtr::x64dbg_tracedata::saveFileHandle()
+{
+	bool success = true;
+
+	/*
+	param2: DWORD dwShareMode
+	-----------------------------
+	0 - prevent other processes from opening a file/dev if del/read/write access requested.
+
+	0x4 - FILE_SHARE_DELETE - enable subsequent open operations on file/dev to request delete access.
+
+	0x1 - FILE_SHARE_READ - enable subsequent open operations on file or dev to request read access.
+
+	0x2 - FILE_SHARE_WRITE - enable subsequent open operations on file or dev to request write access.
+	-----------------------------
+
+	param4: DWORD dwCreationDisposition
+
+	2 - CREATE_ALWAYS
+	1 - CREATE_NEW
+	4 - OPEN_ALWAYS
+	3 - OPEN_EXISTING
+	5 - TRUNCATE_EXISTING
+	-----------------------------
+	*/
+	// get handle to file w/ read rights
+	_tracefile_handle = CreateFileA(_file_name.c_str(),
+									GENERIC_READ,
+									FILE_SHARE_READ,
+									NULL,
+									OPEN_EXISTING,
+									FILE_ATTRIBUTE_NORMAL, NULL);
+
+	// if failed to open, get error code and set to false...
+	if (_tracefile_handle == INVALID_HANDLE_VALUE) {
+
+		DWORD error = GetLastError();
+
+		// TODO way later: provide info corresponding to error code?
+		if (error == ERROR_FILE_NOT_FOUND)
+			std::cout << "[!] - Error code " << error << ": file not found!" << std::endl;
+		else
+			std::cout << "[!] - Error code " << error << std::endl;
+
+
+		success = false;
+	}
+
+	
+
+	return success;
+}
+
+bool ns_xtr::x64dbg_tracedata::readFile()
+{
+	bool success = false;
+
+	if (_raw_tracefile_buf != nullptr) {
+
+		success = ReadFile(_tracefile_handle,
+			_raw_tracefile_buf->get_buffer_address(),
+			_file_size,
+			reinterpret_cast<LPDWORD>(&_bytes_read), NULL);
+
+	}
+	
+	return success;
+}
+
+bool ns_xtr::x64dbg_tracedata::atEndOfFile()
+{
+	return (_raw_tracefile_buf->curr_file_position() >= _raw_tracefile_buf->buffer_size());
+}
+
+void ns_xtr::x64dbg_tracedata::saveJsonData(const std::string jsonblob)
+{
+	_jsonblob = jsonblob;
+}
+
+void ns_xtr::x64dbg_tracedata::_cleanup()
+{
+	if (_tracefile_handle != nullptr) {
+
+		if (_tracefile_handle != INVALID_HANDLE_VALUE)
+			CloseHandle(_tracefile_handle);
+
+		_tracefile_handle = nullptr;
+	}
+
+	if (_raw_tracefile_buf != nullptr) {
+		delete _raw_tracefile_buf;
+
+		_raw_tracefile_buf = nullptr;
+	}
+
+}
+
+void ns_xtr::x64dbg_tracedata::_cleanupIfNeededThenForceExit()
+{
+	_cleanup();
+	exit(EXIT_FAILURE);
+
+}
+
+```
+
+`Project10/src/data/data_objects/xtr_tracedata/trace_instruction.cpp`:
+
+```cpp
+#include "../../../../include/data/data_objects/xtr_tracedata/trace_instruction.h"
+
+ns_xtr::traceinstruction::traceinstruction(registers regs, std::vector<BYTE> opcodes, std::vector<mem_access> memdata)
+{
+	_regs = regs;
+	_opcodes = opcodes;
+	_memdata = memdata;
+}
+
+```
+
+`Project10/src/data/data_objects/xtr_tracedata/xtr_tracedata.cpp`:
+
+```cpp
+#include "../../../../include/data/data_objects/xtr_tracedata/xtr_tracedata.h"
+
+using namespace ns_xtr;
+
+ns_xtr::xtr_tracedata::xtr_tracedata()
+{
+}
+
+ns_xtr::xtr_tracedata::~xtr_tracedata()
+{
+}
+
+void ns_xtr::xtr_tracedata::someInfo()
+{
+	std::cout << "Total threadID entries: " << size();
+	for (auto umap_itr = _history.begin(); umap_itr != _history.end(); ++umap_itr) {
+		auto tID = umap_itr->first;
+		std::cout << " " << tID << std::endl;
+	}
+}
+
+traceinstruction& ns_xtr::xtr_tracedata::getInstructionFromNthEntry(DWORD Nth_entry)
+{
+	return getNthEntry(Nth_entry)._ins_data;
+}
+
+bool ns_xtr::xtr_tracedata::doesNthEntryExist(DWORD Nth_entry)
+{
+	return _history.at(_currTID).contains(Nth_entry);
+}
+
+xtr_data& ns_xtr::xtr_tracedata::getNthEntry(DWORD Nth_entry)
+{
+	// make sure _currTID set or dont do
+	if (isEncounteredThreadID(_currTID)) 
+	{
+		return _history.at(_currTID).at(Nth_entry);
+	}
+}
+
+bool ns_xtr::xtr_tracedata::removeNthEntry(DWORD Nth_entry)
+{
+	if (isEncounteredThreadID(_currTID))
+	{
+		return _history.at(_currTID).erase(Nth_entry);
+	}
+}
+
+bool ns_xtr::xtr_tracedata::createThreadIDEntry(DWORD threadID)
+{
+	if (_history.contains(threadID)) {
+		std::cout << "threadID: " << threadID << " is already registered!" << std::endl;
+		return false;
+	}
+
+	_history.insert(threadID, umap<DWORD, xtr_data>());
+	_currTID = threadID;
+
+	return true;
+
+}
+
+bool ns_xtr::xtr_tracedata::addInstructionEntry(xtr_data ins_info)
+{
+	if (isEncounteredThreadID(_currTID)) {
+
+	}
+	return false;
+}
+
+bool ns_xtr::xtr_tracedata::addInstructionEntryForThreadID(DWORD threadID, xtr_data ins_info)
+{
+	if (isEncounteredThreadID(threadID)) {
+		_history.at(threadID).insert(getInstructionCountForThreadID(threadID), ins_info);
+		//ins_info.output();
+		return true;
+	}
+	return false;
+}
+
+umap<DWORD, xtr_data>& ns_xtr::xtr_tracedata::getTraceEntryForThreadID(DWORD threadID)
+{
+	if (isEncounteredThreadID(threadID))
+	{
+		_currTID = threadID;
+		return _history.at(threadID);
+	}
+	
+}
+
+const DWORD& ns_xtr::xtr_tracedata::getInstructionCountForThreadID(DWORD threadID) 
+{
+	if (isEncounteredThreadID(threadID)) {
+		return _history.at(threadID).size();
+	}
+	
+	return 0;
+}
+
+const DWORD ns_xtr::xtr_tracedata::getThreadIDForInstruction(DWORD instructionID)
+{
+	for (auto umap_itr = _history.begin(); umap_itr != _history.end(); ++umap_itr) {
+		auto tID = umap_itr->first;
+		//std::cout << "val is: " << tID << std::endl;
+		if (_history.at(tID).contains(instructionID)) {
+			return tID;
+		}
+	}
+}
+
+```
+
+`Project10/src/logger.cpp`:
+
+```cpp
+#include "logger.h"
+```
+
+`Project10/src/main.cpp`:
+
+```cpp
+#include <iostream>
+//#include "file_handler.h"
+#include "../include/x64dbgTraceReader.h"
+#include <Windows.h>
+
+int main(int argc, char* argv[])
+{
+ 
+    if (argc != 2) {
+        std::cout << "Incorrect number of arguments provided.\nExample usage:\n " << std::endl;
+        std::cout << "\t" << argv[0] << " <x64dbg trace file name>" << std::endl;
+        return -1;
+    }
+    
+    char* file_name = argv[1];
+    DWORD file_size = 0;
+    DWORD bytes_read = 0;
+    ns_xtr::x64dbgTraceReader xtest = ns_xtr::x64dbgTraceReader(file_name);
+    xtest.processTraceFile();
+    xtest.processTraceBlocks();
+    xtest.testfn();
+    xtest.createNewTrace64File("name.trace64");
+ 
+
+
+
+    return 0;
+}
+
+```
+
+`Project10/src/processor/capstone/capstone_engine.cpp`:
+
+```cpp
+#include "../../../include/processor/capstone/capstone_engine.h"
+
+using namespace ns_xtr;
+
+const BYTE& ns_xtr::capstone_engine::getOperandCount() const
+{
+	if (_instructions != nullptr) {
+		std::cout << "op count: " << static_cast<int>(_instructions->detail->x86.op_count) << std::endl;
+
+		return _instructions->detail->x86.op_count;
+	}
+
+	return X86_REG_INVALID;
+}
+
+const BYTE& ns_xtr::capstone_engine::getOperandType() const
+{
+	if (_instructions != nullptr) {
+		std::cout << "op type: {}\n" << _instructions->detail->x86.operands->type << std::endl;
+		return _instructions->detail->x86.operands->type;
+	}
+}
+
+cs_x86_op& ns_xtr::capstone_engine::getNthOperand(uint_8 index) 
+{
+	if (_instructions != nullptr) {
+
+		return _instructions->detail->x86.operands[index];
+	}
+
+}
+
+void ns_xtr::capstone_engine::disasm(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit)
+{
+	_ins_count = _disassemble(ins_addr, code, code_size, limit);
+
+	std::cout << "errno: " << cs_errno(_capstone_handle) << std::endl;
+	std::cout << "ins count: " << _ins_count << std::endl;
+	if (_instructions == nullptr) {
+		std::cout << "instructions is nullptr" << std::endl;
+	}
+	else {
+		std::cout << "access: " << static_cast<int>(_instructions->detail->x86.operands->access) << std::endl;
+		std::cout << "instr: " << _instructions->mnemonic << " " << _instructions->op_str << std::endl;
+		getOperandCount();
+		getOperandType();
+	}
+	_csdata_reset();
+}
+
+// clear any csh resources (if applicable) and free handle
+void ns_xtr::capstone_engine::cleanup()
+{
+	_csdata_reset();
+
+	if (_open_success)
+		cs_close(&_capstone_handle);
+}
+
+ns_xtr::capstone_engine::~capstone_engine()
+{
+#ifdef DEBUG_ON
+
+#endif
+
+	cleanup();
+}
+
+void ns_xtr::capstone_engine::_csdata_reset()
+{
+	if (_open_success) {
+
+		if (_instructions != nullptr) {
+
+			if (_ins_count > 0) {
+				cs_free(_instructions, _ins_count);
+				_ins_count = 0;
+			}
+
+			_instructions = nullptr;
+		}
+
+	}
+}
+
+size_t ns_xtr::capstone_engine::_disassemble(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit=0)
+{
+	return cs_disasm(_capstone_handle, reinterpret_cast<const uint8_t*>(code), code_size, ins_addr, limit, &_instructions);
+}
+
+void ns_xtr::capstone_engine::init_capstone(cs_mode hw_mode)
+{
+ 
+
+	// cs_open returns CS_ERR_OK on success; handle successfully initialized if _open_success == CS_ERR_OK.
+	_open_success = cs_open(CS_ARCH_X86, hw_mode, &_capstone_handle) == CS_ERR_OK ? true : false;
+
+	std::cout << "errno: " << cs_strerror(cs_errno(_capstone_handle)) << std::endl;
+	if (!_open_success) {
+
+		auto cs_error = cs_errno(_capstone_handle);
+		std::cout << "[!] - Error setting up Capstone: " << cs_strerror(cs_error) << std::endl << "Exiting..." << std::endl;
+		return;
+	}
+
+	set_capstone_option(CS_OPT_DETAIL, CS_OPT_ON);
+
+}
+
+void ns_xtr::capstone_engine::set_capstone_option(cs_opt_type option, cs_opt_value enabled)
+{
+	if (!_open_success)
+		return;
+
+	switch (option) {
+	case CS_OPT_DETAIL:
+		cs_option(_capstone_handle, CS_OPT_DETAIL, enabled);
+		break;
+	case CS_OPT_SKIPDATA:
+		cs_option(_capstone_handle, CS_OPT_SKIPDATA, enabled);
+		break;
+	default:
+
+		break;
+	}
+}
+
+```
+
+`Project10/src/processor/capstone/disasm_tool.cpp`:
+
+```cpp
+
+#include "../../../include/processor/capstone/disasm_tool.h"
+
+ns_xtr::disasm_tool::disasm_tool()
+{
+	if (_capstone == nullptr) {
+		_capstone = new capstone_engine(CS_MODE_64);	// default x86-64
+		std::cout << "created new capstone_engine obj" << std::endl;
+	}
+}
+
+ns_xtr::disasm_tool::~disasm_tool()
+{
+	if (_capstone != nullptr) {
+		delete _capstone;
+		_capstone = nullptr;
+	}
+}
+
+void ns_xtr::disasm_tool::disasm(uint64_t ins_addr, const BYTE* code, size_t code_size, size_t limit)
+{
+	std::cout << "provided addr: " << ins_addr << std::endl;
+	std::cout << "code: " << code << std::endl;
+	std::cout << "code size: " << code_size << std::endl;
+	_capstone->disasm(ins_addr, code, code_size, limit);
+}
+
+```
+
+`Project10/src/processor/regex/regex_tool.cpp`:
+
+```cpp
+#include "../../../include/processor/regex/regex_tool.h"
+```
+
+`Project10/src/processor/xtr_processor.cpp`:
+
+```cpp
+#include "../../include/processor/xtr_processor.h"
+
+ns_xtr::xtr_processor::~xtr_processor()
+{
+	if (_disasm_tool != nullptr) {
+		delete _disasm_tool;
+		_disasm_tool = nullptr;
+	}
+	if (_regex_tool != nullptr) {
+		delete _regex_tool;
+		_regex_tool = nullptr;
+	}
+}
+
+```
+
+`Project10/src/x64dbgTraceReader.cpp`:
+
+```cpp
+#include "../include/x64dbgTraceReader.h"
+
+ns_xtr::x64dbgTraceReader::x64dbgTraceReader(const char* file_name)
+{
+	if (_trace_data_manager == nullptr) {
+		_trace_data_manager = new data_manager(file_name);
+	}
+
+	if (_xtr_processor == nullptr) {
+		_xtr_processor = new xtr_processor();
+	}
+ 
+}
+
+ns_xtr::x64dbgTraceReader::~x64dbgTraceReader()
+{
+	if (_trace_data_manager != nullptr) {
+		delete _trace_data_manager;
+		_trace_data_manager = nullptr;
+	}
+ 
+
+	if (_xtr_processor != nullptr) {
+		delete _xtr_processor;
+		_xtr_processor = nullptr;
+	}
+ 
+}
+
+void ns_xtr::x64dbgTraceReader::testfn()
+{
+	_trace_data_manager->testfn();
+}
+
+bool ns_xtr::x64dbgTraceReader::processTraceFile()
+{
+	return _trace_data_manager->confirmTrace64File();
+}
+
+
+bool ns_xtr::x64dbgTraceReader::processTraceBlocks()
+{
+	_trace_data_manager->parseToEnd();
+	return true; //fix
+}
+
+bool ns_xtr::x64dbgTraceReader::createNewTrace64File(const char* file_name)
+{
+	return _trace_data_manager->xtrToTrace64File(file_name);
+}
+
+```
+
+`README.md`:
+
+```md
+# x64dbgTraceReader
+[WIP] tool to analyze/manipulate a .trace64 file and output the data back into a working .trace64 file or w/e format desired
+
+ideally 'user' only needs to deal with the following:
+
+data_manager.h/cpp - fns to manage data 
+
+xtr_processor.h/cpp - analysis functions 
+
+x64dbgTraceReader.h/cpp - access data via data_manager and analyze via xtr_processor
+
+main.cpp - init x64dbgTraceReader and run functions
+
+```
+
+`x64dbgTraceReader.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.6.33829.357
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Project10", "Project10\Project10.vcxproj", "{C7B71744-FC25-41D3-9703-7B33403D5711}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Debug|x64.ActiveCfg = Debug|x64
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Debug|x64.Build.0 = Debug|x64
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Debug|x86.ActiveCfg = Debug|Win32
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Debug|x86.Build.0 = Debug|Win32
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Release|x64.ActiveCfg = Release|x64
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Release|x64.Build.0 = Release|x64
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Release|x86.ActiveCfg = Release|Win32
+		{C7B71744-FC25-41D3-9703-7B33403D5711}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8403C6CB-BA39-4256-B6EC-25E1B72049DF}
+	EndGlobalSection
+EndGlobal
+
+```
