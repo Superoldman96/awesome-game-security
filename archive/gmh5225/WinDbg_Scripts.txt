@@ -1,0 +1,308 @@
+Project Path: arc_gmh5225_WinDbg_Scripts_9mz73o9t
+
+Source Tree:
+
+```txt
+arc_gmh5225_WinDbg_Scripts_9mz73o9t
+├── EtwPrintNotificationGuids.txt
+├── EtwPrintRegisteredProvidersForGuid.txt
+├── FindLookasideLists.txt
+├── FindNonSystem32Modules.txt
+├── FindResourcesInPool.txt
+├── FindSymbolForNPagedLookasideList.txt
+├── GroupProcsBySecurityDomain
+├── OPCDE
+│   └── opcde_commands
+├── README.md
+├── alpcPortsForProcesses.txt
+├── appcontainers.txt
+├── enumerateProcessesFromHandleTable.txt
+├── getMemWritesInFunction.txt
+├── getProcessNotifyRoutinesWithSyntheticTypes.txt
+├── getWaitBlockInformation.txt
+├── halDispatchTableWithSymbol
+├── printApcs.txt
+├── printIrpsForLsass.txt
+├── printKernelInvertedFunctionTable.txt
+├── printUserInvertedFunctionTable.txt
+├── processNotifyRoutinesSymbols
+├── processRedirectionTrust.txt
+├── windbg_the_fun_way.pdf
+├── wow64_peb
+└── writeVerAccessInFile.txt
+
+```
+
+`EtwPrintNotificationGuids.txt`:
+
+```txt
+dx -r0 @$etwNotificationGuid = 1
+dx -r0 @$GuidTable = ((nt!_ESERVERSILO_GLOBALS*)&nt!PspHostSiloGlobals)->EtwSiloState->EtwpGuidHashTable
+dx -g @$GuidTable.Select(bucket => bucket.ListHead[@$etwNotificationGuid]).Where(list => list.Flink != &list).Select(list => (nt!_ETW_GUID_ENTRY*)(list.Flink)).Select(Entry => new { Guid = Entry->Guid, Refs = Entry->RefCount, SD = Entry->SecurityDescriptor, Reg = (nt!_ETW_REG_ENTRY*)Entry->RegListHead.Flink})
+```
+
+`EtwPrintRegisteredProvidersForGuid.txt`:
+
+```txt
+dx -r0 @$guidEntryIndex = 0n25
+dx -r0 @$GuidTable = ((nt!_ESERVERSILO_GLOBALS*)&nt!PspHostSiloGlobals)->EtwSiloState->EtwpGuidHashTable
+dx -r0 @$guidEntry = (nt!_ETW_GUID_ENTRY*)(@$GuidTable.Select(bucket => bucket.ListHead[@$etwNotificationGuid])[@$guidEntryIndex].Flink)
+dx -g Debugger.Utility.Collections.FromListEntry(@$guidEntry->RegListHead, "nt!_ETW_REG_ENTRY", "RegList").Select(r => new {Caller = r.Caller, SessionId = r.SessionId, Process = r.Process, ProcessName = ((char[15])r.Process->ImageFileName)->ToDisplayString("s"), Callback = r.Callback, CallbackContext = r.CallbackContext})
+```
+
+`FindLookasideLists.txt`:
+
+```txt
+dx -r0 @$GeneralLookaside = Debugger.Utility.Collections.FromListEntry(*(nt!_LIST_ENTRY*)&nt!ExPagedLookasideListHead, "nt!_GENERAL_LOOKASIDE", "ListEntry")
+dx -r0 @$lookasideAddr = @$GeneralLookaside.Select(l => ((__int64)&l).ToDisplayString("x"))
+dx -r0 @$extractBetween = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, x.IndexOf(z) - x.IndexOf(y) - y.Length))
+dx -r0 @$extractWithSize = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, z))
+dx -r0 @$poolData = @$lookasideAddr.Select(l => Debugger.Utility.Control.ExecuteCommand("!pool "+l+" 2")).Where(l => l[1].Length != 0x55 && l[1].Length != 0).Select(l => new {address = "0x" + @$extractBetween(l[1], "*", "size:"), tag = @$extractWithSize(l[1], "(Allocated) *", 4), tagDesc = l[2].Contains(",") ? @$extractBetween(l[2], ": ", ",") : l[2].Substring(l[2].IndexOf(":")+2), binary = l[2].Contains("Binary") ? l[2].Substring(l[2].IndexOf("Binary :")+9) : "unknown", size = "0x" + @$extractBetween(l[1], "size:", "previous size:").Replace(" ", "")})
+
+```
+
+`FindNonSystem32Modules.txt`:
+
+```txt
+# Prints a table of all processes, total number of modules loaded in them and number of modules whose path contains "System32"
+# Run in a kernel debugger session (first run .reload to get all paths) - 
+# having a small gap isn normal: ntkrnlmp.exe, hal.dll, kdnet.dll only contain a basename
+# Other processes might have their own DLLs loaded from "Program Files" or have DLLs injected by AVs such as Windows Defender
+dx -g @$cursession.Processes.Select(p => new {Name = p.Name, PID = p.Id, System32Modules = p.Modules.Where(m => m.Name.ToLower().Contains("system32")).Count(), TotalModules = p.Modules.Count()})
+
+# To print all the non-system32 modules in a specific process:
+dx @$pid = 0
+dx @$cursession.Processes[0].Modules.Where(m => m.Name.ToLower().Contains("system32") == false)
+
+```
+
+`FindResourcesInPool.txt`:
+
+```txt
+dx -r0 @$eresource = Debugger.Utility.Collections.FromListEntry(*(nt!_LIST_ENTRY*)&nt!ExpSystemResourcesList, "nt!_ERESOURCE", "SystemResourcesList")
+dx -r0 @$eresourceAddr = @$eresource.Select(l => ((__int64)&l).ToDisplayString("x"))
+dx -r0 @$extractBetween = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, x.IndexOf(z) - x.IndexOf(y) - y.Length))
+dx -r0 @$extractWithSize = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, z))
+dx -r0 @$poolData = @$eresourceAddr.Select(l => Debugger.Utility.Control.ExecuteCommand("!pool "+l+" 2")).Where(l => l[1].Length != 0x55 && l[1].Length != 0).Select(l => new {address = "0x" + @$extractBetween(l[1], "*", "size:"), tag = @$extractWithSize(l[1], "(Allocated) *", 4), tagDesc = l[2].Contains(",") ? @$extractBetween(l[2], ": ", ",") : l[2].Substring(l[2].IndexOf(":")+2), binary = l[2].Contains("Binary") ? l[2].Substring(l[2].IndexOf("Binary :")+9) : "unknown", size = "0x" + @$extractBetween(l[1], "size:", "previous size:").Replace(" ", "")})
+dx -r1 @$poolData.Where(l => l.size != "0x80")
+
+```
+
+`FindSymbolForNPagedLookasideList.txt`:
+
+```txt
+dx -r0 @$GeneralLookaside = Debugger.Utility.Collections.FromListEntry(*(nt!_LIST_ENTRY*)&nt!ExNPagedLookasideListHead, "nt!_GENERAL_LOOKASIDE", "ListEntry")
+dx -r0 @$lookasideAddr = @$GeneralLookaside.Select(l => ((__int64)&l).ToDisplayString("x"))
+dx -r0 @$extractBetween = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, x.IndexOf(z) - x.IndexOf(y) - y.Length))
+dx -r2 @$symData = @$lookasideAddr.Select(l => new {addr = l, sym = Debugger.Utility.Control.ExecuteCommand("ln "+l)}).Where(l => l.sym.Count() > 3).Select(l => new {addr = l.addr, sym = @$extractBetween(l.sym[3], "   ", "|")})
+```
+
+`GroupProcsBySecurityDomain`:
+
+```
+dx -r2 @$cursession.Processes.Select(p => new {Name = p.Name, SecurityDomain = p.KernelObject.SecurityDomain}).GroupBy(p => p.SecurityDomain).Select(x => x.Select(p => p.Name)), 1000
+
+```
+
+`OPCDE/opcde_commands`:
+
+```
+OPCDE Keynote - commands and steps:
+
+1. Explore built-in registers - @$curthread, @$curprocess, @$cursession...
+   Print process array in decimal: dx @$cursession.Processes, d
+
+2. Find explorer.exe and its signature level:
+    dx @$cursession.Processes.Where(p => p.Name == "explorer.exe").KernelObject.SignatureLevel & 0xF
+    
+3. Print signature level for all processes:
+    dx -r2 @$cursession.Processes.Select(p => p.KernelObject.SignatureLevel)
+    
+4. Use anonymous type to print more information for each process, use -r2 to show 2 levels, use -g for grid view, order by signature level:
+    dx -r2 @$cursession.Processes.Select(p => new {Name = p.Name, PID = p.Id, SignatureLevel = p.KernelObject.SignatureLevel & 0xF}).OrderBy(p => p.SignatureLevel)
+
+5. Conditional Breakpoint - use bp /w to break on nt!NtWriteFile only when writing thread is impersonating:
+    bp /w "@$curthread.KernelObject.ClientSecurity.ImpersonationData != 0" nt!NtWriteFile
+    
+6. When breakpoint is hit, use anonymous type to print process name, thread ID, impersonation token authentication ID and name of file that's written into, and keep running:
+    bp /w "@$curthread.KernelObject.ClientSecurity.ImpersonationData != 0" nt!NtWriteFile "dx new { ProcName = @$curprocess.Name, ThreadId = @$curthread.Id, 
+      AuthId = ((nt!_TOKEN*)(@$curthread.KernelObject.ClientSecurity.ImpersonationToken & ~0xF))->AuthenticationId.LowPart, 
+      FileName = @$curprocess.Io.Handles[@rcx].Object.UnderlyingObject.FileName}; g"
+      
+Bonus - How to choose number of items printed from an array:
+    Only show first 10 items: dx @$cursession.Processes, 10
+    Show 9999 items: dx @$cursession.Processes, 9999
+    Show all items in array: dx @$cursession.Processes, [@$cursession.Processes.Count()]
+```
+
+`README.md`:
+
+```md
+# WinDbg_Scripts
+Useful scripts for WinDbg using the debugger data model
+
+Usage, examples, explanations and general rants (also available in PDF form here):
+
+https://medium.com/@yardenshafir2/windbg-the-fun-way-part-1-2e4978791f9b,
+https://medium.com/@yardenshafir2/windbg-the-fun-way-part-2-7a904cba5435
+
+```
+
+`alpcPortsForProcesses.txt`:
+
+```txt
+# Get all open ALPC ports for all processes. Pretty much like !alpc /lpp but for all processes, with much uglier output
+
+dx -r4 @$ports = @$cursession.Processes.Select(p => new {Name = p.Name, AlpcPorts = p.Io.Handles.Where(h => h.Type == "ALPC Port").Select(a => new {PortName = a.ObjectName, Port = (nt!_ALPC_PORT*)&a.Object.Body})}).Select(p => new {Name = p.Name, AlpcPortsCount = p.AlpcPorts.Count(), AlpcPorts = p.AlpcPorts})
+
+
+# Alternatively, run !alpc /lpp on all processes (slower but nicer output):
+
+dx @$getPortsForProcess = (p => Debugger.Utility.Control.ExecuteCommand("!alpc /lpp " + ((__int64)p).ToDisplayString("x")))
+dx -r3 @$cursession.Processes.Select(p => new {Name = p.Name, Ports = @$getPortsForProcess(&p.KernelObject)})
+
+```
+
+`appcontainers.txt`:
+
+```txt
+# Get all appcontainer processes (makred by Token.TokenFlags.LowBox (value == 0x4000)
+
+dx -g @$appcontainers = @$cursession.Processes.Select(p => new {Name = p.Name, Id = p.Id, ProcessObj = p, TokenFlags = ((nt!_TOKEN*)(p.KernelObject.Token.Object & ~0xf))->TokenFlags}).Where(p => (p.TokenFlags & 0x4000) == 0x4000)
+
+```
+
+`enumerateProcessesFromHandleTable.txt`:
+
+```txt
+dx -r2 (Debugger.Utility.Collections.FromListEntry(*(nt!_LIST_ENTRY*)&nt!HandleTableListHead, "nt!_HANDLE_TABLE", "HandleTableList")).Where(h => h.QuotaProcess != 0).Select(h => new { Object = h.QuotaProcess, Name = (char*)h.QuotaProcess->ImageFileName, PID = h.QuotaProcess->UniqueProcessId})
+```
+
+`getMemWritesInFunction.txt`:
+
+```txt
+dx -r0 @$rspId = 0x14
+dx -r0 @$rbpId = 0x15
+dx -r0 @$isMemWrite = (b => b.Instructions.Where(i => i.Operands.Count() > 1 && i.Operands[0].Attributes.IsOutput && i.Operands[0].Registers[0].Id != @$rspId && i.Operands[0].Registers[0].Id != @$rbpId && i.Operands[0].Attributes.IsMemoryReference))
+dx -r0 @$findMemWrite = (a => Debugger.Utility.Code.CreateDisassembler().DisassembleBlocks(a).Select(b => @$isMemWrite(b)))
+dx -r2 @$findMemWrite(&nt!ZwSetInformationProcess).Where(b => b.Count() != 0)
+```
+
+`getProcessNotifyRoutinesWithSyntheticTypes.txt`:
+
+```txt
+# define this structure in header file (c:\temp\header.h):
+typedef struct _EX_CALLBACK_ROUTINE_BLOCK
+{
+    _EX_RUNDOWN_REF RundownProtect;
+    void* Function;
+    void* Context;
+} EX_CALLBACK_ROUTINE_BLOCK, *PEX_CALLBACK_ROUTINE_BLOCK;
+
+
+dx Debugger.Utility.Analysis.SyntheticTypes.ReadHeader("c:\\temp\\header.h", "nt")
+dx @$getCallbackRoutine = (a => Debugger.Utility.Analysis.SyntheticTypes.CreateInstance("_EX_CALLBACK_ROUTINE_BLOCK", (__int64)(a & ~0xf)))
+dx -r0 @$getsym = (x => Debugger.Utility.Control.ExecuteCommand(".printf\"%y\", " + ((__int64)x).ToDisplayString("x")))[0]
+dx ((void**[0x40])&nt!PspCreateProcessNotifyRoutine).Where(a => a != 0).Select(a => @$getsym(@$getCallbackRoutine(a).Function))
+
+```
+
+`getWaitBlockInformation.txt`:
+
+```txt
+//
+// Print the first wait block in each process wait list
+//
+dx -g @$procWaits = @$cursession.Processes.Where(p => (__int64)&p.KernelObject.Pcb.Header.WaitListHead != (__int64)p.KernelObject.Pcb.Header.WaitListHead.Flink).Select(p => Debugger.Utility.Collections.FromListEntry(p.KernelObject.Pcb.Header.WaitListHead, "nt!_KWAIT_BLOCK", "WaitListEntry")[0]).Select(p => new { WaitType = p.WaitType, BlockState = p.BlockState, Thread = p.Thread, Dpc = p.Dpc, Object = p.Object, Name = ((char*)((nt!_EPROCESS*)p.Object)->ImageFileName).ToDisplayString("sb")})
+
+//
+// Find all processes that have wait blocks with WaitDpc type
+//
+dx @$dpcwaits = @$cursession.Processes.Where(p => (__int64)&p.KernelObject.Pcb.Header.WaitListHead != (__int64)p.KernelObject.Pcb.Header.WaitListHead.Flink && Debugger.Utility.Collections.FromListEntry(p.KernelObject.Pcb.Header.WaitListHead, "nt!_KWAIT_BLOCK", "WaitListEntry").Where(p => p.WaitType == 4).Count() != 0)
+
+//
+// Print information about wait blocks of type WaitDpc waiting on processes
+//
+dx -r0 @$getsym = (x => Debugger.Utility.Control.ExecuteCommand(".printf\"%y\", " + ((__int64)x).ToDisplayString("x")))
+dx -g Debugger.Utility.Collections.FromListEntry(@$dpcwaits.First().KernelObject.Pcb.Header.WaitListHead, "nt!_KWAIT_BLOCK", "WaitListEntry").Select(p => new { WaitType = p.WaitType, BlockState = p.BlockState, Thread = p.Thread, Dpc = p.Dpc, Object = p.Object, Name = ((char*)((nt!_EPROCESS*)p.Object)->ImageFileName).ToDisplayString("sb"), DpcTarget = (@$getsym(p.Dpc->DeferredRoutine))[0]})
+```
+
+`halDispatchTableWithSymbol`:
+
+```
+dx ((__int64*(*)[30])&nt!HalDispatchTable)->Select(f => (void(*)())f)
+
+```
+
+`printApcs.txt`:
+
+```txt
+dx -r0 @$printLn = (a => Debugger.Utility.Control.ExecuteCommand("ln "+((__int64)a).ToDisplayString("x")))
+dx -r0 @$extractBetween = ((x,y,z) => x.Substring(x.IndexOf(y) + y.Length, x.IndexOf(z) - x.IndexOf(y) - y.Length))
+dx -r0 @$printSymbol = (a => @$extractBetween(@$printLn(a)[3], " ", "|"))
+dx -r0 @$apcsForThread = (t => new {TID = t.Id, Object = (void*)&t.KernelObject, Apcs = Debugger.Utility.Collections.FromListEntry(*(nt!_LIST_ENTRY*)&t.KernelObject.Tcb.ApcState.ApcListHead[0], "nt!_KAPC", "ApcListEntry").Select(a => new { Kernel = @$printSymbol(a.KernelRoutine), Rundown = @$printSymbol(a.RundownRoutine)})})
+dx -r0 @$procWithKernelApc = @$cursession.Processes.Select(p => new {Name = p.Name, PID = p.Id, Object = (void*)&p.KernelObject, ApcThreads = p.Threads.Where(t => t.KernelObject.Tcb.ApcState.KernelApcPending != 0)}).Where(p => p.ApcThreads.Count() != 0)
+dx -r6 @$procWithKernelApc.Select(p => new { Name = p.Name, PID = p.PID, Object = p.Object, ApcThreads = p.ApcThreads.Select(t => @$apcsForThread(t))})
+```
+
+`printIrpsForLsass.txt`:
+
+```txt
+dx @$lsass = @$cursession.Processes.Where(p => p.Name == "lsass.exe").First()
+dx -r4 @$irpThreads = @$lsass.Threads.Select(t => new {irp = Debugger.Utility.Collections.FromListEntry(t.KernelObject.IrpList, "nt!_IRP", "ThreadListEntry")}).Where(t => t.irp.Count() != 0)
+dx -r3 @$irpThreads.Select(t => t.irp.Select(i => Debugger.Utility.Control.ExecuteCommand("!irp " + ((__int64)&i).ToDisplayString("x"))))
+```
+
+`printKernelInvertedFunctionTable.txt`:
+
+```txt
+dx @$inverted = (nt!_INVERTED_FUNCTION_TABLE*)&nt!PsInvertedFunctionTable
+dx -g @$tableEntry = *(nt!_INVERTED_FUNCTION_TABLE_ENTRY(*)[0xbe])@$inverted->TableEntry
+```
+
+`printUserInvertedFunctionTable.txt`:
+
+```txt
+dx @$inverted = *(nt!_INVERTED_FUNCTION_TABLE**)&nt!KeUserInvertedFunctionTable
+dx -g @$inverted->TableEntry->Take(@$inverted->CurrentSize)
+```
+
+`processNotifyRoutinesSymbols`:
+
+```
+# This works on newer debugger builds to print the symbols for each registered routine with the syntax: (void(*)()).
+# The structure is not documenting so I'm hardcoding the offset of the routine pointer inside the callback block (offset 8).
+# Notice that the pointers need to be alined since they encode a reference number.
+# Replace PspCreateProcessNotifyRoutine with PspCreateThreadNotifyRoutine or PspLoadImageNotifyRoutine to print the registered routines for those.
+
+dx ((__int64(*)[64])&nt!PspCreateProcessNotifyRoutine)->Where(p => p)->Select(p => (void(*)())(*(((__int64*)(p & ~0xf)) + 1)))
+
+```
+
+`processRedirectionTrust.txt`:
+
+```txt
+# Print a table of all the processes running with a token that has Redirection Trust mitigation enabled in full / audit mode
+# Only looks at primany token, not at impersonation token
+
+dx -g @$cursession.Processes.Select(p => new {Name = p.Name, RedirectionTrust = ((((nt!_TOKEN*)(p.KernelObject.Token.Object & ~0xf))->TokenFlags & 0x400000) == 0x400000), RedirectionTrustAudit = ((((nt!_TOKEN*)(p.KernelObject.Token.Object & ~0xf))->TokenFlags & 0x800000) == 0x800000)}).OrderByDescending(obj => obj.@"RedirectionTrustAudit").Where(p => p.RedirectionTrust || p.RedirectionTrustAudit)
+
+```
+
+`wow64_peb`:
+
+```
+# get the 64-bit and 32-bit PEB for all WoW64 processes
+
+dx -g @$cursession.Processes.Where(p => p.KernelObject.WoW64Process).Select(p => new {Name = p.Name, Peb = p.KernelObject.Peb, Peb32 = p.KernelObject.WoW64Process->Peb})
+
+```
+
+`writeVerAccessInFile.txt`:
+
+```txt
+dx @$tmpFile = Debugger.Utility.FileSystem.TempDirectory.OpenFile("log.txt")
+dx @$txtWriter = Debugger.Utility.FileSystem.CreateTextWriter(@$tmpFile)
+ba r4 nt!PsInitialSystemProcess "dx @$txtWriter.WriteLine(@$getsym(@$curstack.Frames[0].Attributes.InstructionOffset)); g"
+dx @$tmpFile.Close()
+```
