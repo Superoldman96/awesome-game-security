@@ -1,0 +1,1364 @@
+Project Path: arc_gmh5225_AntiFrida_nzzmrz0f
+
+Source Tree:
+
+```txt
+arc_gmh5225_AntiFrida_nzzmrz0f
+├── README.md
+├── app
+│   ├── build.gradle
+│   ├── proguard-rules.pro
+│   └── src
+│       ├── androidTest
+│       │   └── java
+│       │       └── com
+│       │           └── qtfreet
+│       │               └── antifrida
+│       │                   └── ExampleInstrumentedTest.java
+│       ├── main
+│       │   ├── AndroidManifest.xml
+│       │   ├── cpp
+│       │   │   ├── CMakeLists.txt
+│       │   │   ├── __set_errno.cpp
+│       │   │   ├── bionic_asm.h
+│       │   │   ├── bionic_asm_arm.h
+│       │   │   ├── detect.cpp
+│       │   │   └── syscall.S
+│       │   ├── java
+│       │   │   └── com
+│       │   │       └── qtfreet
+│       │   │           └── antifrida
+│       │   │               └── MainActivity.java
+│       │   └── res
+│       │       ├── drawable
+│       │       │   └── ic_launcher_background.xml
+│       │       ├── drawable-v24
+│       │       │   └── ic_launcher_foreground.xml
+│       │       ├── layout
+│       │       │   └── activity_main.xml
+│       │       ├── mipmap-anydpi-v26
+│       │       │   ├── ic_launcher.xml
+│       │       │   └── ic_launcher_round.xml
+│       │       ├── mipmap-hdpi
+│       │       │   ├── ic_launcher.png
+│       │       │   └── ic_launcher_round.png
+│       │       ├── mipmap-mdpi
+│       │       │   ├── ic_launcher.png
+│       │       │   └── ic_launcher_round.png
+│       │       ├── mipmap-xhdpi
+│       │       │   ├── ic_launcher.png
+│       │       │   └── ic_launcher_round.png
+│       │       ├── mipmap-xxhdpi
+│       │       │   ├── ic_launcher.png
+│       │       │   └── ic_launcher_round.png
+│       │       ├── mipmap-xxxhdpi
+│       │       │   ├── ic_launcher.png
+│       │       │   └── ic_launcher_round.png
+│       │       └── values
+│       │           ├── colors.xml
+│       │           ├── strings.xml
+│       │           └── styles.xml
+│       └── test
+│           └── java
+│               └── com
+│                   └── qtfreet
+│                       └── antifrida
+│                           └── ExampleUnitTest.java
+├── build.gradle
+├── gradle
+│   └── wrapper
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+├── gradle.properties
+├── gradlew
+├── gradlew.bat
+└── settings.gradle
+
+```
+
+`README.md`:
+
+```md
+#### Frida检测
+
+通过Frida内存特征对maps中elf文件进行扫描匹配特征，支持frida-gadget和frida-server
+
+不使用frida文件名和端口进行扫描，该方式相对来说篡改比较方便，
+
+在`https://github.com/b-mueller/frida-detection-demo`上进行了改进
+
+上面项目仅支持frida-inject和端口扫描，frida可通过frida -l 修改远程端口bypass
+
+新版实现可用性要高一些，测试Frida 12.7.3通过，原生不检测端口，修改端口无法bypass
+
+编译需要在ndk 15及以上
+
+```
+
+`app/build.gradle`:
+
+```gradle
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.2"
+    defaultConfig {
+        applicationId "com.qtfreet.antifrida"
+        minSdkVersion 17
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++11 "
+            }
+
+            ndk {
+                abiFilters "armeabi-v7a"
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test:runner:1.2.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.2.0'
+}
+
+```
+
+`app/proguard-rules.pro`:
+
+```pro
+# Add project specific ProGuard rules here.
+# You can control the set of applied configuration files using the
+# proguardFiles setting in build.gradle.
+#
+# For more details, see
+#   http://developer.android.com/guide/developing/tools/proguard.html
+
+# If your project uses WebView with JS, uncomment the following
+# and specify the fully qualified class name to the JavaScript interface
+# class:
+#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
+#   public *;
+#}
+
+# Uncomment this to preserve the line number information for
+# debugging stack traces.
+#-keepattributes SourceFile,LineNumberTable
+
+# If you keep the line number information, uncomment this to
+# hide the original source file name.
+#-renamesourcefileattribute SourceFile
+
+```
+
+`app/src/androidTest/java/com/qtfreet/antifrida/ExampleInstrumentedTest.java`:
+
+```java
+package com.qtfreet.antifrida;
+
+import android.content.Context;
+
+import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
+import static org.junit.Assert.*;
+
+/**
+ * Instrumented test, which will execute on an Android device.
+ *
+ * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
+ */
+@RunWith(AndroidJUnit4.class)
+public class ExampleInstrumentedTest {
+    @Test
+    public void useAppContext() {
+        // Context of the app under test.
+        Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+
+        assertEquals("com.qtfreet.antifrida", appContext.getPackageName());
+    }
+}
+
+```
+
+`app/src/main/AndroidManifest.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.qtfreet.antifrida">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
+```
+
+`app/src/main/cpp/CMakeLists.txt`:
+
+```txt
+# For more information about using CMake with Android Studio, read the
+# documentation: https://d.android.com/studio/projects/add-native-code.html
+
+# Sets the minimum version of CMake required to build the native library.
+
+cmake_minimum_required(VERSION 3.4.1)
+
+set(can_use_assembler TRUE)
+enable_language(ASM)
+if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
+set(SYSCALL syscall.S)
+endif ()
+# Creates and names a library, sets it as either STATIC
+# or SHARED, and provides the relative paths to its source code.
+# You can define multiple libraries, and CMake builds them for you.
+# Gradle automatically packages shared libraries with your APK.
+
+add_library( # Sets the name of the library.
+        anti-frida
+        # Sets the library as a shared library.
+        SHARED
+        ${SYSCALL}
+        __set_errno.cpp
+        # Provides a relative path to your source file(s).
+        detect.cpp)
+
+# Searches for a specified prebuilt library and stores the path as a
+# variable. Because CMake includes system libraries in the search path by
+# default, you only need to specify the name of the public NDK library
+# you want to add. CMake verifies that the library exists before
+# completing its build.
+
+find_library( # Sets the name of the path variable.
+        log-lib
+
+        # Specifies the name of the NDK library that
+        # you want CMake to locate.
+        log)
+
+# Specifies libraries CMake should link to your target library. You
+# can link multiple libraries, such as libraries you define in this
+# build script, prebuilt third-party libraries, or system libraries.
+
+target_link_libraries( # Specifies the target library.
+        anti-frida
+
+        # Links the target library to the log library
+        # included in the NDK.
+        ${log-lib})
+```
+
+`app/src/main/cpp/__set_errno.cpp`:
+
+```cpp
+//
+// Created by qtfreet00 on 2019/6/19.
+//
+
+#include <errno.h>
+
+#define __LIBC_HIDDEN__ __attribute__((visibility("hidden")))
+
+extern "C" __LIBC_HIDDEN__ long __carleen_set_errno(int n) {
+    errno = n;
+    return -1;
+}
+
+```
+
+`app/src/main/cpp/bionic_asm.h`:
+
+```h
+/*
+ * Copyright (C) 2013 The Android Open Source Project
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *  * Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ * BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+ * OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+ * OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
+#ifndef _PRIVATE_BIONIC_ASM_H_
+#define _PRIVATE_BIONIC_ASM_H_
+
+#include <asm/unistd.h> /* For system call numbers. */
+#define CARLEEN_MAX_ERRNO 4095  /* For recognizing system call error returns. */
+
+#define __bionic_asm_custom_entry(f)
+#define __bionic_asm_custom_end(f)
+#define __bionic_asm_function_type @function
+
+//#include <machine/asm.h>
+#include "bionic_asm_arm.h"
+
+#define ENTRY_NO_DWARF(f) \
+    .text; \
+    .globl f; \
+    .balign __bionic_asm_align; \
+    .type f, __bionic_asm_function_type; \
+    f: \
+    __bionic_asm_custom_entry(f); \
+
+#define ENTRY(f) \
+    ENTRY_NO_DWARF(f) \
+    .cfi_startproc \
+
+#define END_NO_DWARF(f) \
+    .size f, .-f; \
+    __bionic_asm_custom_end(f) \
+
+#define END(f) \
+    .cfi_endproc; \
+    END_NO_DWARF(f) \
+
+/* Like ENTRY, but with hidden visibility. */
+#define ENTRY_PRIVATE(f) \
+    ENTRY(f); \
+    .hidden f \
+
+/* Like ENTRY_NO_DWARF, but with hidden visibility. */
+#define ENTRY_PRIVATE_NO_DWARF(f) \
+    ENTRY_NO_DWARF(f); \
+    .hidden f \
+
+#define ALIAS_SYMBOL(alias, original) \
+    .globl alias; \
+    .equ alias, original
+
+
+#endif /* _PRIVATE_BIONIC_ASM_H_ */
+
+
+```
+
+`app/src/main/cpp/bionic_asm_arm.h`:
+
+```h
+#pragma once
+
+#define __bionic_asm_align 0
+
+#undef __bionic_asm_custom_entry
+#undef __bionic_asm_custom_end
+#define __bionic_asm_custom_entry(f) .fnstart
+#define __bionic_asm_custom_end(f) .fnend
+
+#undef __bionic_asm_function_type
+#define __bionic_asm_function_type #function
+
+```
+
+`app/src/main/cpp/detect.cpp`:
+
+```cpp
+#include <jni.h>
+#include <sys/types.h>
+#include <cstring>
+#include <cstdio>
+#include <android/log.h>
+#include <unistd.h>
+#include <android/log.h>
+#include <pthread.h>
+#include <cstdlib>
+#include <elf.h>
+#include <link.h>
+#include <fcntl.h>
+
+extern "C" int wrap_openat(int, const char *, int, ...);
+
+extern "C" ssize_t wrap_read(int __fd, void *__buf, size_t __count);
+
+extern "C" int wrap_close(int __fd);
+
+extern "C" int wrap_kill(pid_t, int);
+
+#define BUFFER_LEN 512
+
+#define TAG "carleen"
+
+#define DEBUG
+
+#ifdef DEBUG
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
+#else
+#define LOGW(...) ((void)0)
+#define LOGI(...) ((void)0)
+#endif
+
+int
+wrap_memcmp(const unsigned char *s1, const unsigned char *s2, size_t n) {
+    if (n != 0) {
+        const unsigned char *p1 = s1;
+        const unsigned char *p2 = s2;
+
+        do {
+            if (*p1++ != *p2++)
+                return (*--p1 - *--p2);
+        } while (--n != 0);
+    }
+    return (0);
+}
+
+
+int find_mem_string(long long base, long long end, unsigned char *ptr, unsigned int len) {
+
+    unsigned char *rc = (unsigned char *) base;
+
+    while ((long long) rc < end - len) {
+        if (*rc == *ptr) {
+            if (wrap_memcmp(rc, ptr, len) == 0) {
+                return 1;
+            }
+        }
+
+        rc++;
+
+    }
+    return 0;
+}
+
+int read_line(int fd, char *ptr, unsigned int maxlen) {
+    int n;
+    int rc;
+    char c;
+
+    for (n = 1; n < maxlen; n++) {
+        if ((rc = wrap_read(fd, &c, 1)) == 1) {
+            *ptr++ = c;
+            if (c == '\n')
+                break;
+        } else if (rc == 0) {
+            if (n == 1)
+                return 0;    /* EOF no data read */
+            else
+                break;    /* EOF, some data read */
+        } else
+            return (-1);    /* error */
+    }
+    *ptr = 0;
+    return (n);
+}
+
+int elf_check_header(uintptr_t base_addr) {
+    ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *) base_addr;
+    if (0 != memcmp(ehdr->e_ident, ELFMAG, SELFMAG)) return 0;
+#if defined(__LP64__)
+    if(ELFCLASS64 != ehdr->e_ident[EI_CLASS]) return 0;
+#else
+    if (ELFCLASS32 != ehdr->e_ident[EI_CLASS]) return 0;
+#endif
+    if (ELFDATA2LSB != ehdr->e_ident[EI_DATA]) return 0;
+    if (EV_CURRENT != ehdr->e_ident[EI_VERSION]) return 0;
+    if (ET_EXEC != ehdr->e_type && ET_DYN != ehdr->e_type) return 0;
+    if (EV_CURRENT != ehdr->e_version) return 0;
+    return 1;
+}
+
+int wrap_endsWith(const char *str, const char *suffix) {
+    if (!str || !suffix)
+        return 0;
+    size_t lenA = strlen(str);
+    size_t lenB = strlen(suffix);
+    if (lenB > lenA)
+        return 0;
+    return strncmp(str + lenA - lenB, suffix, lenB) == 0;
+}
+
+
+void *check_loop(void *) {
+    int fd;
+    char path[256];
+    char perm[5];
+    unsigned long offset;
+    unsigned int base;
+    long end;
+    char buffer[BUFFER_LEN];
+    int loop = 0;
+    unsigned int length = 11;
+    //"frida:rpc"
+    unsigned char frida_rpc[] =
+            {
+
+                    0xfe, 0xba, 0xfb, 0x4a, 0x9a, 0xca, 0x7f, 0xfb,
+                    0xdb, 0xea, 0xfe, 0xdc
+            };
+
+    for (unsigned char &m : frida_rpc) {
+        unsigned char c = m;
+        c = ~c;
+        c ^= 0xb1;
+        c = (c >> 0x6) | (c << 0x2);
+        c ^= 0x4a;
+        c = (c >> 0x6) | (c << 0x2);
+        m = c;
+    }
+    LOGI("start check frida loop");
+    while (loop < 10) {
+        fd = wrap_openat(AT_FDCWD, "/proc/self/maps", O_RDONLY, 0);
+        if (fd > 0) {
+            while ((read_line(fd, buffer, BUFFER_LEN)) > 0) {
+
+                if (sscanf(buffer, "%x-%lx %4s %lx %*s %*s %s", &base, &end, perm, &offset, path) !=
+                    5) {
+                    continue;
+                }
+                if (perm[0] != 'r') continue;
+                if (perm[3] != 'p') continue; //do not touch the shared memory
+                if (0 != offset) continue;
+                if (strlen(path) == 0) continue;
+                if ('[' == path[0]) continue;
+                if (end - base <= 1000000) continue;
+                if (wrap_endsWith(path, ".oat")) continue;
+                if (elf_check_header(base) != 1) continue;
+                if (find_mem_string(base, end, frida_rpc, length) == 1) {
+                    LOGI("frida found in memory!");
+#ifndef DEBUG
+                    wrap_kill(wrap_getpid(),SIGKILL);
+#endif
+                    break;
+                }
+            }
+        } else {
+            LOGI("open maps error");
+        }
+        wrap_close(fd);
+        loop++;
+        sleep(3);
+    }
+    return nullptr;
+}
+
+
+void anti_frida_loop() {
+    pthread_t t;
+    if (pthread_create(&t, nullptr, check_loop, (void *) nullptr) != 0) {
+        exit(-1);
+    };
+    pthread_detach(t);
+}
+
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_qtfreet_antifrida_MainActivity_startCheck(JNIEnv *env, jobject thiz) {
+    anti_frida_loop();
+}
+```
+
+`app/src/main/cpp/syscall.S`:
+
+```S
+#include "bionic_asm.h"
+
+ENTRY_PRIVATE(wrap_openat)
+    mov ip, r7
+    .cfi_register r7, ip
+    ldr r7, =__NR_openat
+    swi #0
+    mov r7, ip
+    .cfi_restore r7
+    cmn r0, #(CARLEEN_MAX_ERRNO + 1)
+    bxls lr
+    neg r0, r0
+    b __carleen_set_errno
+END(wrap_openat)
+
+ENTRY_PRIVATE(wrap_read)
+    mov     ip, r7
+    .cfi_register r7, ip
+    ldr     r7, =__NR_read
+    swi     #0
+    mov     r7, ip
+    .cfi_restore r7
+    cmn     r0, #(CARLEEN_MAX_ERRNO + 1)
+    bxls    lr
+    neg     r0, r0
+    b       __carleen_set_errno
+END(wrap_read)
+
+ENTRY_PRIVATE(wrap_kill)
+    mov     ip, r7
+    .cfi_register r7, ip
+    ldr     r7, =__NR_kill
+    swi     #0
+    mov     r7, ip
+    .cfi_restore r7
+    cmn     r0, #(CARLEEN_MAX_ERRNO + 1)
+    bxls    lr
+    neg     r0, r0
+    b       __carleen_set_errno
+END(wrap_kill)
+
+
+ENTRY_PRIVATE(wrap_close)
+    mov     ip, r7
+    .cfi_register r7, ip
+    ldr     r7, =__NR_close
+    swi     #0
+    mov     r7, ip
+    .cfi_restore r7
+    cmn     r0, #(CARLEEN_MAX_ERRNO + 1)
+    bxls    lr
+    neg     r0, r0
+    b       __carleen_set_errno
+END(wrap_close)
+
+```
+
+`app/src/main/java/com/qtfreet/antifrida/MainActivity.java`:
+
+```java
+package com.qtfreet.antifrida;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import android.os.Bundle;
+import android.widget.TextView;
+
+public class MainActivity extends AppCompatActivity {
+
+    // Used to load the 'native-lib' library on application startup.
+    static {
+        System.loadLibrary("anti-frida");
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        startCheck();
+    }
+
+    /**
+     * A native method that is implemented by the 'native-lib' native library,
+     * which is packaged with this application.
+     */
+    public native void startCheck();
+}
+
+```
+
+`app/src/main/res/drawable-v24/ic_launcher_foreground.xml`:
+
+```xml
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M32,64C32,64 38.39,52.99 44.13,50.95C51.37,48.37 70.14,49.57 70.14,49.57L108.26,87.69L108,109.01L75.97,107.97L32,64Z"
+        android:strokeWidth="1"
+        android:strokeColor="#00000000">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="78.5885"
+                android:endY="90.9159"
+                android:startX="48.7653"
+                android:startY="61.0927"
+                android:type="linear">
+                <item
+                    android:color="#44000000"
+                    android:offset="0.0" />
+                <item
+                    android:color="#00000000"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:pathData="M66.94,46.02L66.94,46.02C72.44,50.07 76,56.61 76,64L32,64C32,56.61 35.56,50.11 40.98,46.06L36.18,41.19C35.45,40.45 35.45,39.3 36.18,38.56C36.91,37.81 38.05,37.81 38.78,38.56L44.25,44.05C47.18,42.57 50.48,41.71 54,41.71C57.48,41.71 60.78,42.57 63.68,44.05L69.11,38.56C69.84,37.81 70.98,37.81 71.71,38.56C72.44,39.3 72.44,40.45 71.71,41.19L66.94,46.02ZM62.94,56.92C64.08,56.92 65,56.01 65,54.88C65,53.76 64.08,52.85 62.94,52.85C61.8,52.85 60.88,53.76 60.88,54.88C60.88,56.01 61.8,56.92 62.94,56.92ZM45.06,56.92C46.2,56.92 47.13,56.01 47.13,54.88C47.13,53.76 46.2,52.85 45.06,52.85C43.92,52.85 43,53.76 43,54.88C43,56.01 43.92,56.92 45.06,56.92Z"
+        android:strokeWidth="1"
+        android:strokeColor="#00000000" />
+</vector>
+
+```
+
+`app/src/main/res/drawable/ic_launcher_background.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#008577"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9,0L9,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,0L19,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,0L29,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,0L39,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,0L49,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,0L59,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,0L69,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,0L79,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M89,0L89,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M99,0L99,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,9L108,9"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,19L108,19"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,29L108,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,39L108,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,49L108,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,59L108,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,69L108,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,79L108,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,89L108,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,99L108,99"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,29L89,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,39L89,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,49L89,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,59L89,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,69L89,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,79L89,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,19L29,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,19L39,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,19L49,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,19L59,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,19L69,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,19L79,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+</vector>
+
+```
+
+`app/src/main/res/layout/activity_main.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:id="@+id/sample_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hello World!"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+`app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+```
+
+`app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+```
+
+`app/src/main/res/values/colors.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#008577</color>
+    <color name="colorPrimaryDark">#00574B</color>
+    <color name="colorAccent">#D81B60</color>
+</resources>
+
+```
+
+`app/src/main/res/values/strings.xml`:
+
+```xml
+<resources>
+    <string name="app_name">AntiFrida</string>
+</resources>
+
+```
+
+`app/src/main/res/values/styles.xml`:
+
+```xml
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+</resources>
+
+```
+
+`app/src/test/java/com/qtfreet/antifrida/ExampleUnitTest.java`:
+
+```java
+package com.qtfreet.antifrida;
+
+import org.junit.Test;
+
+import static org.junit.Assert.*;
+
+/**
+ * Example local unit test, which will execute on the development machine (host).
+ *
+ * @see <a href="http://d.android.com/tools/testing">Testing documentation</a>
+ */
+public class ExampleUnitTest {
+    @Test
+    public void addition_isCorrect() {
+        assertEquals(4, 2 + 2);
+    }
+}
+```
+
+`build.gradle`:
+
+```gradle
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    repositories {
+        google()
+        jcenter()
+        
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:3.5.0'
+        
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        jcenter()
+        
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
+
+```
+
+`gradle.properties`:
+
+```properties
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+# For more details on how to configure your build environment visit
+# http://www.gradle.org/docs/current/userguide/build_environment.html
+# Specifies the JVM arguments used for the daemon process.
+# The setting is particularly useful for tweaking memory settings.
+org.gradle.jvmargs=-Xmx1536m
+# When configured, Gradle will run in incubating parallel mode.
+# This option should only be used with decoupled projects. More details, visit
+# http://www.gradle.org/docs/current/userguide/multi_project_builds.html#sec:decoupled_projects
+# org.gradle.parallel=true
+# AndroidX package structure to make it clearer which packages are bundled with the
+# Android operating system, and which are packaged with your app's APK
+# https://developer.android.com/topic/libraries/support-library/androidx-rn
+android.useAndroidX=true
+# Automatically convert third-party libraries to use AndroidX
+android.enableJetifier=true
+
+
+```
+
+`gradle/wrapper/gradle-wrapper.properties`:
+
+```properties
+#Tue Sep 17 17:03:30 CST 2019
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-5.4.1-all.zip
+
+```
+
+`gradlew`:
+
+```
+#!/usr/bin/env sh
+
+##############################################################################
+##
+##  Gradle start up script for UN*X
+##
+##############################################################################
+
+# Attempt to set APP_HOME
+# Resolve links: $0 may be a link
+PRG="$0"
+# Need this for relative symlinks.
+while [ -h "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=`dirname "$PRG"`"/$link"
+    fi
+done
+SAVED="`pwd`"
+cd "`dirname \"$PRG\"`/" >/dev/null
+APP_HOME="`pwd -P`"
+cd "$SAVED" >/dev/null
+
+APP_NAME="Gradle"
+APP_BASE_NAME=`basename "$0"`
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS=""
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD="maximum"
+
+warn () {
+    echo "$*"
+}
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "`uname`" in
+  CYGWIN* )
+    cygwin=true
+    ;;
+  Darwin* )
+    darwin=true
+    ;;
+  MINGW* )
+    msys=true
+    ;;
+  NONSTOP* )
+    nonstop=true
+    ;;
+esac
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD="$JAVA_HOME/jre/sh/java"
+    else
+        JAVACMD="$JAVA_HOME/bin/java"
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD="java"
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+fi
+
+# Increase the maximum file descriptors if we can.
+if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
+    MAX_FD_LIMIT=`ulimit -H -n`
+    if [ $? -eq 0 ] ; then
+        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+            MAX_FD="$MAX_FD_LIMIT"
+        fi
+        ulimit -n $MAX_FD
+        if [ $? -ne 0 ] ; then
+            warn "Could not set maximum file descriptor limit: $MAX_FD"
+        fi
+    else
+        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+    fi
+fi
+
+# For Darwin, add options to specify how the application appears in the dock
+if $darwin; then
+    GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
+fi
+
+# For Cygwin, switch paths to Windows format before running java
+if $cygwin ; then
+    APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+    CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
+    JAVACMD=`cygpath --unix "$JAVACMD"`
+
+    # We build the pattern for arguments to be converted via cygpath
+    ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
+    SEP=""
+    for dir in $ROOTDIRSRAW ; do
+        ROOTDIRS="$ROOTDIRS$SEP$dir"
+        SEP="|"
+    done
+    OURCYGPATTERN="(^($ROOTDIRS))"
+    # Add a user-defined pattern to the cygpath arguments
+    if [ "$GRADLE_CYGPATTERN" != "" ] ; then
+        OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
+    fi
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    i=0
+    for arg in "$@" ; do
+        CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
+        CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
+
+        if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
+            eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
+        else
+            eval `echo args$i`="\"$arg\""
+        fi
+        i=$((i+1))
+    done
+    case $i in
+        (0) set -- ;;
+        (1) set -- "$args0" ;;
+        (2) set -- "$args0" "$args1" ;;
+        (3) set -- "$args0" "$args1" "$args2" ;;
+        (4) set -- "$args0" "$args1" "$args2" "$args3" ;;
+        (5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
+        (6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
+        (7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
+        (8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
+        (9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
+    esac
+fi
+
+# Escape application args
+save () {
+    for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
+    echo " "
+}
+APP_ARGS=$(save "$@")
+
+# Collect all arguments for the java command, following the shell quoting and substitution rules
+eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
+
+# by default we should be in the correct project dir, but when run from Finder on Mac, the cwd is wrong
+if [ "$(uname)" = "Darwin" ] && [ "$HOME" = "$PWD" ]; then
+  cd "$(dirname "$0")"
+fi
+
+exec "$JAVACMD" "$@"
+
+```
+
+`gradlew.bat`:
+
+```bat
+@if "%DEBUG%" == "" @echo off
+@rem ##########################################################################
+@rem
+@rem  Gradle startup script for Windows
+@rem
+@rem ##########################################################################
+
+@rem Set local scope for the variables with windows NT shell
+if "%OS%"=="Windows_NT" setlocal
+
+set DIRNAME=%~dp0
+if "%DIRNAME%" == "" set DIRNAME=.
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+
+@rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+set DEFAULT_JVM_OPTS=
+
+@rem Find java.exe
+if defined JAVA_HOME goto findJavaFromJavaHome
+
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if "%ERRORLEVEL%" == "0" goto init
+
+echo.
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+
+if exist "%JAVA_EXE%" goto init
+
+echo.
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:init
+@rem Get command-line arguments, handling Windows variants
+
+if not "%OS%" == "Windows_NT" goto win9xME_args
+
+:win9xME_args
+@rem Slurp the command line arguments.
+set CMD_LINE_ARGS=
+set _SKIP=2
+
+:win9xME_args_slurp
+if "x%~1" == "x" goto execute
+
+set CMD_LINE_ARGS=%*
+
+:execute
+@rem Setup the command line
+
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+
+@rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %CMD_LINE_ARGS%
+
+:end
+@rem End local scope for the variables with windows NT shell
+if "%ERRORLEVEL%"=="0" goto mainEnd
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code!
+if  not "" == "%GRADLE_EXIT_CONSOLE%" exit 1
+exit /b 1
+
+:mainEnd
+if "%OS%"=="Windows_NT" endlocal
+
+:omega
+
+```
+
+`settings.gradle`:
+
+```gradle
+include ':app'
+rootProject.name='AntiFrida'
+
+```
