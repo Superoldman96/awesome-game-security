@@ -1,0 +1,184 @@
+Project Path: arc_gmh5225_delete-self-poc_dk636q33
+
+Source Tree:
+
+```txt
+arc_gmh5225_delete-self-poc_dk636q33
+├── LICENSE
+├── README.md
+├── main.c
+└── main.h
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2021 Lloyd
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# 🗑️ delete-self-poc
+A way to delete a locked, or current running executable, on disk. This was originally found by Jonas Lykkegaard - I just wrote the POC for it. This can also be used to delete locked files on disk, that the current calling process has permissions to get `DELETE` access to. 
+
+How does this work, though - in this POC?
+1. Open a `HANDLE` to the current running process, with `DELETE` access. Note, `DELETE` is only needed.
+2. Rename the primary file stream, `:$DATA`, using `SetFileInformationByHandle` to `:wtfbbq`.
+3. Close the `HANDLE`
+4. Open a `HANDLE` to the current process, set `DeleteFile` for the `FileDispositionInfo` class to `TRUE`.
+5. Close the `HANDLE` to trigger the file disposition
+6. Viola - the file is gone.
+
+# Releases
+I have included a statically linked release within this repository, if you can't be bothered compiling the original source code.
+
+```
+
+`main.c`:
+
+```c
+#include "main.h"
+
+static
+HANDLE
+ds_open_handle(
+	PWCHAR pwPath
+)
+{
+	return CreateFileW(pwPath, DELETE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+}
+
+static
+BOOL
+ds_rename_handle(
+	HANDLE hHandle
+)
+{
+	FILE_RENAME_INFO fRename;
+	RtlSecureZeroMemory(&fRename, sizeof(fRename));
+
+	// set our FileNameLength and FileName to DS_STREAM_RENAME
+	LPWSTR lpwStream = DS_STREAM_RENAME;
+	fRename.FileNameLength = sizeof(lpwStream);
+	RtlCopyMemory(fRename.FileName, lpwStream, sizeof(lpwStream));
+
+	return SetFileInformationByHandle(hHandle, FileRenameInfo, &fRename, sizeof(fRename) + sizeof(lpwStream));
+}
+
+static
+BOOL 
+ds_deposite_handle(
+	HANDLE hHandle
+)
+{
+	// set FILE_DISPOSITION_INFO::DeleteFile to TRUE
+	FILE_DISPOSITION_INFO fDelete;
+	RtlSecureZeroMemory(&fDelete, sizeof(fDelete));
+
+	fDelete.DeleteFile = TRUE;
+
+	return SetFileInformationByHandle(hHandle, FileDispositionInfo, &fDelete, sizeof(fDelete));
+}
+
+int
+main(
+	int argc,
+	char** argv
+)
+{
+	WCHAR wcPath[MAX_PATH + 1];
+	RtlSecureZeroMemory(wcPath, sizeof(wcPath));
+
+	// get the path to the current running process ctx
+	if (GetModuleFileNameW(NULL, wcPath, MAX_PATH) == 0)
+	{
+		DS_DEBUG_LOG(L"failed to get the current module handle");
+		return 0;
+	}
+
+	HANDLE hCurrent = ds_open_handle(wcPath);
+	if (hCurrent == INVALID_HANDLE_VALUE)
+	{
+		DS_DEBUG_LOG(L"failed to acquire handle to current running process");
+		return 0;
+	}
+
+	// rename the associated HANDLE's file name
+	DS_DEBUG_LOG(L"attempting to rename file name");
+	if (!ds_rename_handle(hCurrent))
+	{
+		DS_DEBUG_LOG(L"failed to rename to stream");
+		return 0;
+	}
+
+	DS_DEBUG_LOG(L"successfully renamed file primary :$DATA ADS to specified stream, closing initial handle");
+	CloseHandle(hCurrent);
+
+	// open another handle, trigger deletion on close
+	hCurrent = ds_open_handle(wcPath);
+	if (hCurrent == INVALID_HANDLE_VALUE)
+	{
+		DS_DEBUG_LOG(L"failed to reopen current module");
+		return 0;
+	}
+
+	if (!ds_deposite_handle(hCurrent))
+	{
+		DS_DEBUG_LOG(L"failed to set delete deposition");
+		return 0;
+	}
+
+	// trigger the deletion deposition on hCurrent
+	DS_DEBUG_LOG(L"closing handle to trigger deletion deposition");
+	CloseHandle(hCurrent);
+
+	// verify we've been deleted
+	if (PathFileExistsW(wcPath))
+	{
+		DS_DEBUG_LOG(L"failed to delete copy, file still exists");
+		return 0;
+	}
+
+	DS_DEBUG_LOG(L"successfully deleted self from disk");
+	return 1;
+}
+```
+
+`main.h`:
+
+```h
+#pragma once
+
+#pragma comment(lib, "Shlwapi.lib")
+
+#include <Windows.h>
+#include <shlwapi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define DS_STREAM_RENAME L":wtfbbq"
+#define DS_DEBUG_LOG(msg) wprintf(L"[LOG] - %s\n", msg)
+```
