@@ -1,0 +1,6760 @@
+Project Path: arc_gmh5225_pciem_5ouaem0m
+
+Source Tree:
+
+```txt
+arc_gmh5225_pciem_5ouaem0m
+├── LICENSE
+├── Makefile
+├── README.md
+├── include
+│   ├── pciem_capabilities.h
+│   ├── pciem_dma.h
+│   ├── pciem_framework.h
+│   ├── pciem_p2p.h
+│   ├── pciem_userspace.h
+│   └── protopciem_device.h
+├── kernel
+│   ├── Makefile
+│   ├── driver
+│   │   └── protopciem_driver.c
+│   └── framework
+│       ├── pciem_bar.c
+│       ├── pciem_capabilities.c
+│       ├── pciem_dma.c
+│       ├── pciem_framework.c
+│       ├── pciem_p2p.c
+│       └── pciem_userspace.c
+├── qemu
+│   ├── protopciem_backend.c
+│   ├── protopciem_backend.h
+│   └── protopciem_cmds.h
+├── resources
+│   └── icon.png
+├── test_system.sh
+└── userspace
+    └── protopciem_card.c
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2025 Joel Bueno
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`Makefile`:
+
+```
+KDIR ?= /lib/modules/$(shell uname -r)/build
+GCC ?= gcc
+PWD := $(shell pwd)
+
+all: modules protopciem_card
+
+modules:
+	$(MAKE) -C $(KDIR) M=$(PWD)/kernel modules
+
+protopciem_card:
+	$(GCC) -Wall -Wextra -O2 -pthread -Iinclude -o userspace/protopciem_card userspace/protopciem_card.c
+
+clean:
+	$(MAKE) -C $(KDIR) M=$(PWD)/kernel clean
+	rm -f userspace/protopciem_card
+
+.PHONY: all modules clean
+
+```
+
+`README.md`:
+
+```md
+<div align="center">
+  <img src="resources/icon.png">
+</div>
+
+<div align="center">
+  A Linux kernel framework for synthetic PCIe device emulation entirely in userspace.
+</div>
+
+<div align="center">
+  https://cakehonolulu.github.io/introducing-pciem/
+
+  https://cakehonolulu.github.io/docs/pciem/
+</div>
+
+
+## What is PCIem?
+
+PCIem is a framework that creates virtual PCIe devices in the Linux kernel by leveraging a few novel techniques to populate synthetic cards as legitimate PCI devices to the host OS.
+
+To brief what PCIem is: a framework for developing and testing PCIe device drivers without requiring actual hardware.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────┐                                   ┌──────────────────────────────────────────────────┐
+│                                          │                                   │                                                  │
+│ ┌─────────►Host Linux Kernel             │                                   │                  Linux Userspace                 │
+│ │                                        │                                   │                                                  │
+│ │                                        │                                   │                                                  │
+│ │    ┌────────────────────────────┐      │                                   │    ┌────────────────────────────────────────┐    │
+│ │    │      PCIem Framework       ◄──────┼────────────►/dev/pciem◄───────────┼────►          Userspace PCI shim            │    │
+│ │    │                            │      │                                   │    │                                        │    │
+│ │    │ - PCI Config Space         │      │                                   │    │ - Emulates PCIe device logic           │    │
+│ │    │                            │      │                                   │    │                                        │    │
+│ │    │ - BAR Mappings             │      │                                   │    └────────────────────────────────────────┘    │
+│ │    │                            │      │                                   │                                                  │
+│ │◄───┤ - INT/MSI/MSI-X Interrupts │      │                                   │                                                  │
+│ │    │                            │      │                                   └──────────────────────────────────────────────────┘
+│ │    │ - DMA (With/without IOMMU) │      │                                                         Userspace                     
+│ │    │                            │      │                                                                                       
+│ │    │ - P2P DMA                  │      │                                                                                       
+│ │    │                            │      │                                                                                       
+│ │    └────────────────────────────┘      │                                                                                       
+│ │                                        │                                                                                       
+│ │                                        │                                                                                       
+│ │    PCIe driver is unaware of PCIem     │                                                                                       
+│ │                                        │                                                                                       
+│ │                                        │                                                                                       
+│ │ ┌──────────────────────────────────┐   │                                                                                       
+│ │ │          Real PCIe Driver        │   │                                                                                       
+│ │ │                                  │   │                                                                                       
+│ └─┤ - Untouched logic from production│   │                                                                                       
+│   │                                  │   │                                                                                       
+│   └──────────────────────────────────┘   │                                                                                       
+│                                          │                                                                                       
+└──────────────────────────────────────────┘                                                                                       
+               Kernel Space                                                                                                        
+```
+
+## Current Features
+
+- **BAR Support**: Register and manage BARs programmatically
+- **Watchpoints**: Event-driven architecture using CPU watchpoints for access detection
+- **Legacy IRQ/MSI/MSI-X Support**: Full interrupt support with dynamic triggering
+- **PCI Capability Framework**: Modular PCI capabilities system (Linked-list underneath)
+- **DMA System**: IOMMU-aware DMA operations with atomic memory operations support
+- **P2P DMA**: Peer-to-peer DMA between devices with whitelist-based access control
+- **Userspace-defined**: Implement your PCIe prototypes anywhere
+
+# Examples
+
+## ProtoPCIem card
+
+The card is programmed entirely in QEMU, who does all the userspace initialization and command handling from the real driver running in the host. Can run software-rendered DOOM (Submits finished frames with DMA to the card which QEMU displays) and also simple OpenGL 1.X games (On the screenshots, tyr-glquake and xash3d; thanks to a custom OpenGL state machine implemented entirely in QEMU that software-renders the command lists and updates the internal state accordingly).
+
+<p align="center">
+  <img width="1903" height="1029" alt="imagen" src="https://github.com/user-attachments/assets/16f64475-ee51-4f79-ae17-b06363f0b12a" />
+</p>
+
+<p align="center">
+  <img width="1757" height="893" alt="imagen" src="https://github.com/user-attachments/assets/4ad00e14-83e5-4e1f-b374-fbaa92def4e3" />
+</p>
+
+<p align="center">
+  <img width="1227" height="846" alt="imagen" src="https://github.com/user-attachments/assets/d21a7d84-f857-4790-bdc6-7bf2714e9eda" />
+</p>
+
+## License
+
+Dual MIT/GPLv2 (pciem_framework.c and protopciem_driver.c)
+
+MIT (Rest)
+
+## References
+
+- Blog post: https://cakehonolulu.github.io/introducing-pciem/
+- Documentation: https://cakehonolulu.github.io/docs/pciem/
+- PCI Express specification: https://pcisig.com/specifications
+
+```
+
+`include/pciem_capabilities.h`:
+
+```h
+#ifndef PCIEM_CAPABILITIES_H
+#define PCIEM_CAPABILITIES_H
+
+#include <linux/pci_regs.h>
+#include <linux/types.h>
+
+#define MAX_PCI_CAPS 16
+
+enum pciem_cap_type
+{
+    PCIEM_CAP_MSI,
+    PCIEM_CAP_MSIX,
+    PCIEM_CAP_PM,
+    PCIEM_CAP_PCIE,
+    PCIEM_CAP_VSEC,
+    PCIEM_CAP_PASID,
+};
+
+struct pciem_cap_msi_config
+{
+    bool has_64bit;
+    bool has_per_vector_masking;
+    u8 num_vectors_log2;
+};
+
+struct pciem_cap_msix_config
+{
+    u8 bar_index;
+    u32 table_offset;
+    u32 pba_offset;
+    u16 table_size;
+};
+
+struct pciem_cap_pm_config
+{
+    bool d1_support;
+    bool d2_support;
+    bool pme_support;
+    u8 version;
+};
+
+struct pciem_cap_pcie_config
+{
+    u8 device_type;
+    u8 link_width;
+    u8 link_speed;
+};
+
+struct pciem_cap_vsec_config
+{
+    u16 vendor_id;
+    u16 vsec_id;
+    u8 vsec_rev;
+    u16 vsec_length;
+    u8 *data;
+};
+
+struct pciem_cap_pasid_config
+{
+    u8 max_pasid_width;
+    bool execute_permission;
+    bool privileged_mode;
+};
+
+struct pciem_cap_entry
+{
+    enum pciem_cap_type type;
+    u8 offset;
+    u8 size;
+    union {
+        struct pciem_cap_msi_config msi;
+        struct pciem_cap_msix_config msix;
+        struct pciem_cap_pm_config pm;
+        struct pciem_cap_pcie_config pcie;
+        struct pciem_cap_vsec_config vsec;
+        struct pciem_cap_pasid_config pasid;
+    } config;
+
+    union {
+        struct
+        {
+            u16 control;
+            u32 address_lo;
+            u32 address_hi;
+            u16 data;
+            u32 mask_bits;
+        } msi_state;
+
+        struct
+        {
+            u16 control;
+        } msix_state;
+
+        struct
+        {
+            u16 control;
+            u16 status;
+        } pm_state;
+
+        struct
+        {
+            u16 control;
+            u32 pasid;
+        } pasid_state;
+    } state;
+};
+
+struct pciem_cap_manager
+{
+    struct pciem_cap_entry caps[MAX_PCI_CAPS];
+    int num_caps;
+    u8 next_offset;
+};
+
+struct pciem_root_complex;
+
+int pciem_add_cap_msi(struct pciem_root_complex *v, struct pciem_cap_msi_config *cfg);
+int pciem_add_cap_msix(struct pciem_root_complex *v, struct pciem_cap_msix_config *cfg);
+int pciem_add_cap_pm(struct pciem_root_complex *v, struct pciem_cap_pm_config *cfg);
+int pciem_add_cap_pcie(struct pciem_root_complex *v, struct pciem_cap_pcie_config *cfg);
+int pciem_add_cap_vsec(struct pciem_root_complex *v, struct pciem_cap_vsec_config *cfg);
+int pciem_add_cap_pasid(struct pciem_root_complex *v, struct pciem_cap_pasid_config *cfg);
+
+void pciem_init_cap_manager(struct pciem_root_complex *v);
+void pciem_build_config_space(struct pciem_root_complex *v);
+void pciem_cleanup_cap_manager(struct pciem_root_complex *v);
+
+bool pciem_handle_cap_read(struct pciem_root_complex *v, int where, int size, u32 *value);
+bool pciem_handle_cap_write(struct pciem_root_complex *v, int where, int size, u32 value);
+
+#endif /* PCIEM_CAPABILITIES_H */
+```
+
+`include/pciem_dma.h`:
+
+```h
+#ifndef PCIEM_DMA_H
+#define PCIEM_DMA_H
+
+#include <linux/types.h>
+
+struct pciem_root_complex;
+
+int pciem_dma_read_from_guest(struct pciem_root_complex *v, u64 guest_iova, void *dst, size_t len, u32 pasid);
+int pciem_dma_write_to_guest(struct pciem_root_complex *v, u64 guest_iova, const void *src, size_t len, u32 pasid);
+
+u64 pciem_dma_atomic_fetch_add(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+u64 pciem_dma_atomic_fetch_sub(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+u64 pciem_dma_atomic_swap(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+u64 pciem_dma_atomic_cas(struct pciem_root_complex *v, u64 guest_iova, u64 expected, u64 new_val, u32 pasid);
+u64 pciem_dma_atomic_fetch_and(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+u64 pciem_dma_atomic_fetch_or(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+u64 pciem_dma_atomic_fetch_xor(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid);
+
+#define pciem_dma_read(v, iova, dst, len) pciem_dma_read_from_guest(v, iova, dst, len, 0)
+#define pciem_dma_write(v, iova, src, len) pciem_dma_write_to_guest(v, iova, src, len, 0)
+
+struct pciem_dma_req
+{
+    u64 guest_iova;
+    u64 host_buf_addr;
+    u32 length;
+    u32 pasid;
+    u8 op_type;
+    u8 atomic_op;
+    u16 reserved;
+    u64 atomic_operand;
+    u64 atomic_compare;
+} __attribute__((packed));
+
+#define PCIEM_ATOMIC_FETCH_ADD 1
+#define PCIEM_ATOMIC_FETCH_SUB 2
+#define PCIEM_ATOMIC_SWAP 3
+#define PCIEM_ATOMIC_CAS 4
+#define PCIEM_ATOMIC_FETCH_AND 5
+#define PCIEM_ATOMIC_FETCH_OR 6
+#define PCIEM_ATOMIC_FETCH_XOR 7
+
+#endif /* PCIEM_DMA_H */
+```
+
+`include/pciem_framework.h`:
+
+```h
+#ifndef PCIEM_FRAMEWORK_H
+#define PCIEM_FRAMEWORK_H
+
+#include <linux/completion.h>
+#include <linux/fs.h>
+#include <linux/irq_work.h>
+#include <linux/miscdevice.h>
+#include <linux/mm.h>
+#include <linux/msi.h>
+#include <linux/mutex.h>
+#include <linux/pci.h>
+#include <linux/platform_device.h>
+#include <linux/poll.h>
+#include <linux/wait.h>
+#include <linux/list.h>
+
+#ifdef CONFIG_X86
+#include <asm/pci.h>
+#endif
+
+struct pciem_host_bridge_priv {
+    struct pciem_root_complex *v;
+
+#ifdef CONFIG_X86
+    struct pci_sysdata sd;
+#endif
+};
+
+#include "pciem_p2p.h"
+#include "pciem_userspace.h"
+
+enum pciem_map_type
+{
+    PCIEM_MAP_NONE = 0,
+    PCIEM_MAP_MEMREMAP,
+    PCIEM_MAP_IOREMAP_CACHE,
+    PCIEM_MAP_IOREMAP,
+    PCIEM_MAP_IOREMAP_WC,
+};
+
+struct pciem_bar_info
+{
+    resource_size_t size;
+    u32 flags;
+    bool intercept_page_faults;
+
+    u32 base_addr_val;
+
+    struct resource *res;
+
+    struct resource *allocated_res;
+    void __iomem *virt_addr;
+    struct page *pages;
+    phys_addr_t phys_addr;
+    enum pciem_map_type map_type;
+    unsigned int order;
+    bool mem_owned_by_framework;
+
+    resource_size_t carved_start;
+    resource_size_t carved_end;
+
+    struct list_head vma_list;
+    spinlock_t vma_lock;
+};
+
+struct pciem_root_complex
+{
+    struct list_head list_node;
+
+    unsigned int msi_irq;
+    struct irq_work msi_irq_work;
+    unsigned int pending_msi_irq;
+    struct pci_dev *pciem_pdev;
+    struct pci_bus *root_bus;
+    u8 cfg[256];
+
+    struct pciem_bar_info bars[PCI_STD_NUM_BARS];
+
+    struct platform_device *shared_bridge_pdev;
+
+    struct pciem_cap_manager *cap_mgr;
+
+    resource_size_t total_carved_start;
+    resource_size_t total_carved_end;
+    resource_size_t next_carve_offset;
+
+    struct pciem_p2p_manager *p2p_mgr;
+};
+
+void pciem_trigger_msi(struct pciem_root_complex *v, int vector);
+int pciem_register_bar(struct pciem_root_complex *v, int bar_num, resource_size_t size, u32 flags);
+struct pciem_root_complex *pciem_alloc_root_complex(void);
+void pciem_free_root_complex(struct pciem_root_complex *v);
+int pciem_init_bar_tracking(void);
+void pciem_cleanup_bar_tracking(void);
+void pciem_disable_bar_tracking(void);
+void __iomem *pciem_get_driver_bar_vaddr(struct pci_dev *pdev, int bar);
+
+#endif /* PCIEM_FRAMEWORK_H */
+```
+
+`include/pciem_p2p.h`:
+
+```h
+#ifndef PCIEM_P2P_H
+#define PCIEM_P2P_H
+
+#include <linux/types.h>
+#include <linux/list.h>
+#include <linux/mutex.h>
+
+struct pciem_root_complex;
+
+struct pciem_p2p_region {
+    struct list_head list;
+    phys_addr_t phys_start;
+    resource_size_t size;
+    void __iomem *kaddr;
+    char name[32];
+};
+
+struct pciem_p2p_manager {
+    struct list_head regions;
+    struct mutex lock;
+    size_t max_transfer_size;
+    bool enabled;
+};
+
+#define PCIEM_P2P_MAX_TRANSFER (16 * 1024 * 1024)
+
+int pciem_p2p_init(struct pciem_root_complex *v, const char *regions_str);
+void pciem_p2p_cleanup(struct pciem_root_complex *v);
+int pciem_p2p_register_region(struct pciem_root_complex *v,
+                               phys_addr_t phys,
+                               resource_size_t size,
+                               const char *name);
+int pciem_p2p_unregister_region(struct pciem_root_complex *v,
+                                 phys_addr_t phys);
+int pciem_p2p_read(struct pciem_root_complex *v,
+                   phys_addr_t phys_addr,
+                   void *dst,
+                   size_t len);
+int pciem_p2p_write(struct pciem_root_complex *v,
+                    phys_addr_t phys_addr,
+                    const void *src,
+                    size_t len);
+int pciem_p2p_validate_access(struct pciem_root_complex *v,
+                               phys_addr_t phys_addr,
+                               size_t len);
+struct pciem_p2p_region *pciem_p2p_get_region(struct pciem_root_complex *v,
+                                               phys_addr_t phys_addr);
+
+#endif /* PCIEM_P2P_H */
+```
+
+`include/pciem_userspace.h`:
+
+```h
+#ifndef PCIEM_USERSPACE_H
+#define PCIEM_USERSPACE_H
+
+#ifdef __KERNEL__
+#include <linux/atomic.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
+#include <linux/wait.h>
+#include <linux/workqueue.h>
+#include <linux/poll.h>
+#else
+#include <stdatomic.h>
+#include <stdint.h>
+typedef atomic_int atomic_t;
+#endif
+
+struct pciem_create_device
+{
+    uint32_t flags;
+};
+
+struct pciem_bar_config
+{
+    uint32_t bar_index;
+    uint32_t flags;
+    uint64_t size;
+    uint32_t reserved;
+};
+
+struct pciem_cap_msi_userspace
+{
+    uint8_t num_vectors_log2;
+    uint8_t has_64bit;
+    uint8_t has_masking;
+    uint8_t reserved;
+};
+
+struct pciem_cap_msix_userspace
+{
+    uint8_t bar_index;
+    uint8_t reserved[3];
+    uint32_t table_offset;
+    uint32_t pba_offset;
+    uint16_t table_size;
+    uint16_t reserved2;
+};
+
+struct pciem_cap_config
+{
+    uint32_t cap_type;
+    union {
+        struct pciem_cap_msi_userspace msi;
+        struct pciem_cap_msix_userspace msix;
+    };
+};
+
+struct pciem_config_space
+{
+    uint16_t vendor_id;
+    uint16_t device_id;
+    uint16_t subsys_vendor_id;
+    uint16_t subsys_device_id;
+    uint8_t revision;
+    uint8_t class_code[3];
+    uint8_t header_type;
+    uint8_t reserved[7];
+};
+
+struct pciem_event
+{
+    uint64_t seq;
+    uint32_t type;
+    uint32_t bar;
+    uint64_t offset;
+    uint32_t size;
+    uint32_t reserved;
+    uint64_t data;
+    uint64_t timestamp;
+};
+
+#define PCIEM_EVENT_MMIO_READ 1
+#define PCIEM_EVENT_MMIO_WRITE 2
+#define PCIEM_EVENT_CONFIG_READ 3
+#define PCIEM_EVENT_CONFIG_WRITE 4
+#define PCIEM_EVENT_MSI_ACK 5
+#define PCIEM_EVENT_RESET 6
+
+struct pciem_response
+{
+    uint64_t seq;
+    uint64_t data;
+    int32_t status;
+    uint32_t reserved;
+};
+
+struct pciem_irq_inject
+{
+    uint32_t vector;
+    uint32_t reserved;
+};
+
+struct pciem_dma_op
+{
+    uint64_t guest_iova;
+    uint64_t user_addr;
+    uint32_t length;
+    uint32_t pasid;
+    uint32_t flags;
+    uint32_t reserved;
+};
+
+#define PCIEM_DMA_FLAG_READ 0x1
+#define PCIEM_DMA_FLAG_WRITE 0x2
+
+struct pciem_dma_atomic
+{
+    uint64_t guest_iova;
+    uint64_t operand;
+    uint64_t compare;
+    uint32_t op_type;
+    uint32_t pasid;
+    uint64_t result;
+};
+
+#define PCIEM_ATOMIC_FETCH_ADD 1
+#define PCIEM_ATOMIC_FETCH_SUB 2
+#define PCIEM_ATOMIC_SWAP 3
+#define PCIEM_ATOMIC_CAS 4
+#define PCIEM_ATOMIC_FETCH_AND 5
+#define PCIEM_ATOMIC_FETCH_OR 6
+#define PCIEM_ATOMIC_FETCH_XOR 7
+
+struct pciem_p2p_op_user
+{
+    uint64_t target_phys_addr;
+    uint64_t user_addr;
+    uint32_t length;
+    uint32_t flags;
+};
+
+struct pciem_bar_info_query
+{
+    uint32_t bar_index;
+    uint64_t phys_addr;
+    uint64_t size;
+    uint32_t flags;
+};
+
+struct pciem_watchpoint_config
+{
+    uint32_t bar_index;
+    uint32_t offset;
+    uint32_t width;
+    uint32_t flags;
+};
+
+#define PCIEM_WP_FLAG_BAR_KPROBES  (1 << 0)
+#define PCIEM_WP_FLAG_BAR_MANUAL   (1 << 1)
+
+struct pciem_eventfd_config
+{
+    int32_t eventfd;
+    uint32_t reserved;
+};
+
+struct pciem_irq_eventfd_config
+{
+    int32_t eventfd;
+    uint32_t vector;
+    uint32_t flags;
+    uint32_t reserved;
+};
+
+#define PCIEM_IRQ_EVENTFD_FLAG_LEVEL    (1 << 0)
+#define PCIEM_IRQ_EVENTFD_FLAG_DEASSERT (1 << 1)
+
+struct pciem_dma_indirect
+{
+    uint64_t prp1;
+    uint64_t prp2;
+    uint64_t user_addr;
+    uint32_t length;
+    uint32_t page_size;
+    uint32_t pasid;
+    uint32_t flags;
+    uint32_t reserved;
+};
+
+#define PCIEM_IOCTL_MAGIC 0xAF
+
+#define PCIEM_IOCTL_CREATE_DEVICE _IOWR(PCIEM_IOCTL_MAGIC, 10, struct pciem_create_device)
+#define PCIEM_IOCTL_ADD_BAR _IOW(PCIEM_IOCTL_MAGIC, 11, struct pciem_bar_config)
+#define PCIEM_IOCTL_ADD_CAPABILITY _IOW(PCIEM_IOCTL_MAGIC, 12, struct pciem_cap_config)
+#define PCIEM_IOCTL_SET_CONFIG _IOW(PCIEM_IOCTL_MAGIC, 13, struct pciem_config_space)
+#define PCIEM_IOCTL_REGISTER _IO(PCIEM_IOCTL_MAGIC, 14)
+#define PCIEM_IOCTL_INJECT_IRQ _IOW(PCIEM_IOCTL_MAGIC, 15, struct pciem_irq_inject)
+#define PCIEM_IOCTL_DMA _IOWR(PCIEM_IOCTL_MAGIC, 16, struct pciem_dma_op)
+#define PCIEM_IOCTL_DMA_ATOMIC _IOWR(PCIEM_IOCTL_MAGIC, 17, struct pciem_dma_atomic)
+#define PCIEM_IOCTL_P2P _IOWR(PCIEM_IOCTL_MAGIC, 18, struct pciem_p2p_op_user)
+#define PCIEM_IOCTL_GET_BAR_INFO _IOWR(PCIEM_IOCTL_MAGIC, 19, struct pciem_bar_info_query)
+#define PCIEM_IOCTL_SET_WATCHPOINT _IOW(PCIEM_IOCTL_MAGIC, 20, struct pciem_watchpoint_config)
+#define PCIEM_IOCTL_SET_EVENTFD _IOW(PCIEM_IOCTL_MAGIC, 21, struct pciem_eventfd_config)
+#define PCIEM_IOCTL_SET_IRQ_EVENTFD _IOW(PCIEM_IOCTL_MAGIC, 22, struct pciem_irq_eventfd_config)
+#define PCIEM_IOCTL_DMA_INDIRECT _IOWR(PCIEM_IOCTL_MAGIC, 24, struct pciem_dma_indirect)
+
+#define PCIEM_RING_SIZE 256
+#define PCIEM_MAX_IRQ_EVENTFDS 32
+
+struct pciem_shared_ring
+{
+    atomic_t head;
+    char _pad1[60];
+    atomic_t tail;
+    char _pad2[60];
+    struct pciem_event events[PCIEM_RING_SIZE];
+};
+
+#ifdef __KERNEL__
+
+#define MAX_WATCHPOINTS 8
+
+struct pciem_watchpoint_info
+{
+    bool active;
+    uint32_t bar_index;
+    uint32_t offset;
+    uint32_t width;
+    struct perf_event * __percpu * perf_bp;
+};
+
+struct pciem_irq_eventfd_entry
+{
+    struct eventfd_ctx *trigger;
+    wait_queue_head_t *wqh;
+    wait_queue_entry_t wait;
+    struct work_struct inject_work;
+    struct pciem_userspace_state *us;
+    uint32_t vector;
+    uint32_t flags;
+    bool active;
+};
+
+struct pciem_userspace_state
+{
+    struct pciem_root_complex *rc;
+
+    struct hlist_head pending_requests[256];
+    spinlock_t pending_lock;
+    uint64_t next_seq;
+
+    bool registered;
+    bool config_locked;
+    atomic_t event_pending;
+
+    struct pciem_shared_ring *shared_ring;
+    spinlock_t shared_ring_lock;
+
+    struct pciem_watchpoint_info watchpoints[MAX_WATCHPOINTS];
+    spinlock_t watchpoint_lock;
+
+    struct eventfd_ctx *eventfd;
+    spinlock_t eventfd_lock;
+
+    struct pciem_irq_eventfd_entry irq_eventfds[PCIEM_MAX_IRQ_EVENTFDS];
+    spinlock_t irq_eventfd_lock;
+
+    bool bar_tracking_disabled;
+};
+
+struct pciem_pending_request
+{
+    struct hlist_node node;
+    uint64_t seq;
+    struct completion done;
+    uint64_t response_data;
+    int response_status;
+};
+
+int pciem_userspace_init(void);
+void pciem_userspace_cleanup(void);
+struct pciem_userspace_state *pciem_userspace_create(void);
+void pciem_userspace_destroy(struct pciem_userspace_state *us);
+int pciem_userspace_register_device(struct pciem_userspace_state *us);
+void pciem_userspace_queue_event(struct pciem_userspace_state *us, struct pciem_event *event);
+int pciem_userspace_wait_response(struct pciem_userspace_state *us, uint64_t seq, uint64_t *data_out,
+                                  unsigned long timeout_ms);
+
+extern const struct file_operations pciem_device_fops;
+
+#else
+#define PCIEM_CAP_MSI 0
+#define PCIEM_CAP_MSIX 1
+#define PCIEM_CAP_PM 2
+#define PCIEM_CAP_PCIE 3
+#define PCIEM_CAP_VSEC 4
+#define PCIEM_CAP_PASID 5
+#endif
+
+#endif /* PCIEM_USERSPACE_H */
+
+```
+
+`include/protopciem_device.h`:
+
+```h
+#ifndef PROTOPCIEM_DEVICE_H
+#define PROTOPCIEM_DEVICE_H
+
+#define PCIEM_PCI_VENDOR_ID 0x1F0C
+#define PCIEM_PCI_DEVICE_ID 0x0001
+
+#define PCIEM_BAR0_SIZE (64 * 1024)
+#define PCIEM_BAR2_SIZE (1024 * 1024)
+
+#define REG_CONTROL 0x00
+#define REG_STATUS 0x04
+#define REG_CMD 0x08
+#define REG_DATA 0x0C
+#define REG_RESULT_LO 0x10
+#define REG_RESULT_HI 0x14
+#define REG_DMA_SRC_LO 0x20
+#define REG_DMA_SRC_HI 0x24
+#define REG_DMA_DST_LO 0x28
+#define REG_DMA_DST_HI 0x2C
+#define REG_DMA_LEN 0x30
+#define REG_DMA_FLAGS 0x34
+
+#define CTRL_RESET BIT(1)
+#define STATUS_BUSY BIT(0)
+#define STATUS_DONE BIT(1)
+#define STATUS_ERROR BIT(2)
+
+#define CMD_ADD 0x01
+#define CMD_MULTIPLY 0x02
+#define CMD_XOR 0x03
+#define CMD_PROCESS_BUFFER 0x04
+#define CMD_EXECUTE_CMDBUF 0x05
+#define CMD_DMA_FRAME 0x06
+#define CMD_DMA_P2P_READ  0x07
+#define CMD_DMA_P2P_WRITE 0x08
+
+#endif /* PROTOPCIEM_DEVICE_H */
+```
+
+`kernel/Makefile`:
+
+```
+KDIR ?= /lib/modules/$(shell uname -r)/build
+
+ccflags-y := -I$(src)/../include -I$(src)/framework
+
+pciem-objs := framework/pciem_framework.o \
+              framework/pciem_capabilities.o \
+              framework/pciem_p2p.o \
+              framework/pciem_dma.o \
+			  framework/pciem_bar.o \
+			  framework/pciem_userspace.o
+
+protopciem-driver-objs := driver/protopciem_driver.c
+
+obj-m += pciem.o
+obj-m += driver/protopciem_driver.o
+
+ccflags-y += -Wall
+
+all:
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
+clean:
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
+
+.PHONY: all clean
+
+```
+
+`kernel/driver/protopciem_driver.c`:
+
+```c
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+#include <linux/completion.h>
+#include <linux/delay.h>
+#include <linux/dma-mapping.h>
+#include <linux/fs.h>
+#include <linux/interrupt.h>
+#include <linux/jiffies.h>
+#include <linux/kernel.h>
+#include <linux/miscdevice.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/pci.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/workqueue.h>
+
+MODULE_LICENSE("Dual MIT/GPL");
+MODULE_AUTHOR("cakehonolulu (cakehonolulu@protonmail.com)");
+MODULE_DESCRIPTION("ProtoPCIem Driver");
+
+#define PCIEM_PCI_VENDOR_ID 0x1F0C
+#define PCIEM_PCI_DEVICE_ID 0x0001
+
+#define REG_CONTROL 0x00
+#define REG_STATUS 0x04
+#define REG_CMD 0x08
+#define REG_DATA 0x0C
+#define REG_RESULT_LO 0x10
+#define REG_RESULT_HI 0x14
+#define REG_DMA_SRC_LO 0x20
+#define REG_DMA_SRC_HI 0x24
+#define REG_DMA_DST_LO 0x28
+#define REG_DMA_DST_HI 0x2C
+#define REG_DMA_LEN 0x30
+#define REG_DMA_FLAGS 0x34
+
+#define CTRL_ENABLE BIT(0)
+#define CTRL_RESET BIT(1)
+
+#define STATUS_BUSY BIT(0)
+#define STATUS_DONE BIT(1)
+#define STATUS_ERROR BIT(2)
+
+#define CMD_ADD 0x01
+#define CMD_MULTIPLY 0x02
+#define CMD_XOR 0x03
+#define CMD_PROCESS_BUFFER 0x04
+#define CMD_EXECUTE_CMDBUF 0x05
+#define CMD_DMA_FRAME 0x06
+#define CMD_DMA_P2P_READ  0x07
+#define CMD_DMA_P2P_WRITE 0x08
+
+#define FB_WIDTH 640
+#define FB_HEIGHT 480
+#define FB_BPP 3
+#define FB_PITCH (FB_WIDTH * FB_BPP)
+#define FB_SIZE (FB_PITCH * FB_HEIGHT)
+#define MMAP_SIZE (FB_SIZE * 2)
+
+#define PROTOPCIEM_IOC_MAGIC 'a'
+#define PROTOPCIEM_IOCTL_SUBMIT_FRAME _IOW(PROTOPCIEM_IOC_MAGIC, 1, __u32)
+
+struct pci_device
+{
+    struct pci_dev *pdev;
+    void __iomem *bar0;
+    int irq;
+    bool msi_enabled;
+    struct workqueue_struct *wq;
+    struct work_struct work;
+    struct completion op_completion;
+    spinlock_t lock;
+    bool operation_pending;
+    u32 last_command;
+    u64 last_result;
+    u64 operations_completed;
+    u64 interrupts_received;
+    u64 errors;
+    struct miscdevice protopciem_miscdev;
+    void *cmdbuf_virt;
+    dma_addr_t cmdbuf_phys;
+    size_t cmdbuf_size;
+    void *framebuf_virt;
+    dma_addr_t framebuf_phys;
+    size_t framebuf_size;
+};
+
+static inline u32 pci_read_reg(struct pci_device *adev, u32 offset)
+{
+    return ioread32(adev->bar0 + offset);
+}
+
+static inline void pci_write_reg(struct pci_device *adev, u32 offset, u32 value)
+{
+    iowrite32(value, adev->bar0 + offset);
+}
+
+static inline void pci_write_reg64(struct pci_device *adev, u32 offset_lo, u64 value)
+{
+    pci_write_reg(adev, offset_lo, (u32)(value & 0xFFFFFFFF));
+    pci_write_reg(adev, offset_lo + 4, (u32)(value >> 32));
+}
+
+static inline u64 pci_read_result(struct pci_device *adev)
+{
+    u32 lo = pci_read_reg(adev, REG_RESULT_LO);
+    u32 hi = pci_read_reg(adev, REG_RESULT_HI);
+    return ((u64)hi << 32) | lo;
+}
+
+static int pci_reset(struct pci_device *adev)
+{
+    u32 status;
+    int timeout = 1000;
+    pr_info("Resetting PCI card\n");
+    pci_write_reg(adev, REG_CONTROL, CTRL_RESET);
+    msleep(10);
+    pci_write_reg(adev, REG_CONTROL, 0);
+    while (timeout-- > 0)
+    {
+        status = pci_read_reg(adev, REG_STATUS);
+        if (!(status & STATUS_BUSY))
+            break;
+        udelay(10);
+    }
+    if (timeout <= 0)
+    {
+        pr_err("Reset timeout\n");
+        return -ETIMEDOUT;
+    }
+    pr_info("Reset complete\n");
+    return 0;
+}
+
+static int pci_execute_command(struct pci_device *adev, u32 cmd, u32 data, u64 *result)
+{
+    unsigned long flags;
+    u32 status;
+    int ret = 0;
+    long timeout_jiffies;
+    u64 local_result;
+
+    spin_lock_irqsave(&adev->lock, flags);
+    if (adev->operation_pending)
+    {
+        spin_unlock_irqrestore(&adev->lock, flags);
+        return -EBUSY;
+    }
+    adev->operation_pending = true;
+    adev->last_command = cmd;
+    if (adev->irq)
+    {
+        reinit_completion(&adev->op_completion);
+    }
+    spin_unlock_irqrestore(&adev->lock, flags);
+    pr_info("Executing command 0x%02x (IRQ: %s)\n", cmd, adev->irq ? "yes" : "no");
+    pci_write_reg(adev, REG_STATUS, 0);
+    if (cmd != CMD_EXECUTE_CMDBUF && cmd != CMD_DMA_FRAME)
+    {
+        pci_write_reg(adev, REG_DATA, data);
+    }
+    pci_write_reg(adev, REG_CONTROL, CTRL_ENABLE);
+    pci_write_reg(adev, REG_CMD, cmd);
+    if (adev->irq)
+    {
+        timeout_jiffies = msecs_to_jiffies(2000);
+        if (!wait_for_completion_timeout(&adev->op_completion, timeout_jiffies))
+        {
+            pr_err("Operation timeout (IRQ mode)\n");
+            ret = -ETIMEDOUT;
+            spin_lock_irqsave(&adev->lock, flags);
+            adev->operation_pending = false;
+            spin_unlock_irqrestore(&adev->lock, flags);
+            goto out;
+        }
+        else
+        {
+            pr_info("Command complete (IRQ mode)\n");
+        }
+        spin_lock_irqsave(&adev->lock, flags);
+        local_result = adev->last_result;
+        spin_unlock_irqrestore(&adev->lock, flags);
+
+        status = pci_read_reg(adev, REG_STATUS);
+        if (status & STATUS_ERROR)
+        {
+            pr_err("Operation failed (IRQ mode), reported by device\n");
+            ret = -EIO;
+        }
+    }
+    else
+    {
+        int timeout_poll = 1000;
+        pr_info("No IRQ, using polling mode\n");
+        while (timeout_poll-- > 0)
+        {
+            status = pci_read_reg(adev, REG_STATUS);
+            if (status & STATUS_DONE)
+            {
+                adev->last_result = pci_read_result(adev);
+                if (status & STATUS_ERROR)
+                {
+                    pr_warn("Error in operation (Poll mode)\n");
+                    adev->errors++;
+                    ret = -EIO;
+                }
+                adev->operations_completed++;
+                break;
+            }
+            udelay(100);
+        }
+        if (timeout_poll <= 0)
+        {
+            pr_err("Operation timeout (Poll mode)\n");
+            ret = -ETIMEDOUT;
+        }
+        spin_lock_irqsave(&adev->lock, flags);
+        adev->operation_pending = false;
+        spin_unlock_irqrestore(&adev->lock, flags);
+    }
+    pci_write_reg(adev, REG_CONTROL, CTRL_ENABLE);
+out:
+    if (ret == 0)
+    {
+        *result = local_result;
+    }
+    return ret;
+}
+
+static irqreturn_t pci_irq_handler(int irq, void *data)
+{
+    struct pci_device *adev = data;
+    u32 status = pci_read_reg(adev, REG_STATUS);
+    if (!(status & (STATUS_DONE | STATUS_ERROR)))
+    {
+        return IRQ_NONE;
+    }
+    adev->interrupts_received++;
+    pci_write_reg(adev, REG_STATUS, 0);
+    queue_work(adev->wq, &adev->work);
+    return IRQ_HANDLED;
+}
+
+static void pci_work_handler(struct work_struct *work)
+{
+    struct pci_device *adev = container_of(work, struct pci_device, work);
+    unsigned long flags;
+    u32 status;
+    spin_lock_irqsave(&adev->lock, flags);
+    if (adev->operation_pending)
+    {
+        status = pci_read_reg(adev, REG_STATUS);
+        adev->last_result = pci_read_result(adev);
+        pr_info("Work: result=0x%016llx\n", adev->last_result);
+        if (status & STATUS_ERROR)
+        {
+            pr_warn("Work: Operation completed with error\n");
+            adev->errors++;
+        }
+        pci_write_reg(adev, REG_CMD, 0);
+        adev->operations_completed++;
+        adev->operation_pending = false;
+        complete(&adev->op_completion);
+    }
+    spin_unlock_irqrestore(&adev->lock, flags);
+}
+
+static ssize_t protopciem_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+    struct pci_device *adev = container_of(file->private_data, struct pci_device, protopciem_miscdev);
+    u64 result;
+    int ret;
+    if (count == 0)
+        return 0;
+    if (count > adev->cmdbuf_size)
+    {
+        pr_warn("Command buffer too large: %zu > %zu\n", count, adev->cmdbuf_size);
+        return -EINVAL;
+    }
+    if (copy_from_user(adev->cmdbuf_virt, buf, count))
+        return -EFAULT;
+    pr_info("Submitting command buffer: host_phys=0x%llx, len=%zu\n", (u64)adev->cmdbuf_phys, count);
+    pci_write_reg64(adev, REG_DMA_SRC_LO, adev->cmdbuf_phys);
+    pci_write_reg64(adev, REG_DMA_DST_LO, 0);
+    pci_write_reg(adev, REG_DMA_LEN, (u32)count);
+    ret = pci_execute_command(adev, CMD_EXECUTE_CMDBUF, 0, &result);
+    if (ret)
+    {
+        pr_err("CMD_EXECUTE_CMDBUF command failed: %d\n", ret);
+        return ret;
+    }
+    pr_info("Command buffer processed, result=0x%llx\n", result);
+    return count;
+}
+
+static long protopciem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    struct pci_device *adev = container_of(file->private_data, struct pci_device, protopciem_miscdev);
+    u64 result;
+    int ret;
+    u32 buffer_id;
+    dma_addr_t frame_phys_addr;
+
+    switch (cmd)
+    {
+    case PROTOPCIEM_IOCTL_SUBMIT_FRAME: {
+        if (copy_from_user(&buffer_id, (void __user *)arg, sizeof(buffer_id)))
+            return -EFAULT;
+
+        if (buffer_id > 1)
+        {
+            pr_warn("DMA_FRAME: Invalid buffer_id %u\n", buffer_id);
+            return -EINVAL;
+        }
+
+        frame_phys_addr = adev->framebuf_phys + (buffer_id * FB_SIZE);
+
+        pr_info("DMA_FRAME: Submitting frame %u: host_phys=0x%llx, len=%u\n", buffer_id, (u64)frame_phys_addr,
+                (u32)FB_SIZE);
+
+        pci_write_reg64(adev, REG_DMA_SRC_LO, frame_phys_addr);
+        pci_write_reg64(adev, REG_DMA_DST_LO, 0);
+        pci_write_reg(adev, REG_DMA_LEN, (u32)FB_SIZE);
+
+        ret = pci_execute_command(adev, CMD_DMA_FRAME, 0, &result);
+        if (ret)
+        {
+            pr_err("CMD_DMA_FRAME command failed: %d\n", ret);
+            return ret;
+        }
+
+        pr_info("Frame DMA processed, result=0x%llx\n", result);
+        break;
+    }
+    default:
+        return -ENOTTY;
+    }
+    return 0;
+}
+
+static int protopciem_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    struct pci_device *adev = container_of(file->private_data, struct pci_device, protopciem_miscdev);
+    unsigned long size = vma->vm_end - vma->vm_start;
+    unsigned long offset = vma->vm_pgoff << PAGE_SHIFT;
+
+    if (offset != 0 || size > adev->framebuf_size)
+    {
+        pr_warn("mmap invalid, offset %lu or size %lu > %zu\n", offset, size, adev->framebuf_size);
+        return -EINVAL;
+    }
+
+    if (size != MMAP_SIZE)
+    {
+        pr_warn("mmap: Warning: App mapping %lu bytes, but driver allocated %zu "
+                "(for double buffering)\n",
+                size, adev->framebuf_size);
+    }
+
+    return dma_mmap_coherent(&adev->pdev->dev, vma, adev->framebuf_virt, adev->framebuf_phys, size);
+}
+
+static int protopciem_open(struct inode *inode, struct file *file)
+{
+    pr_info("Device opened\n");
+    return 0;
+}
+
+static int protopciem_release(struct inode *inode, struct file *file)
+{
+    pr_info("Device released\n");
+    return 0;
+}
+
+static const struct file_operations protopciem_fops = {
+    .owner = THIS_MODULE,
+    .open = protopciem_open,
+    .release = protopciem_release,
+    .write = protopciem_write,
+    .unlocked_ioctl = protopciem_ioctl,
+    .compat_ioctl = protopciem_ioctl,
+    .mmap = protopciem_mmap,
+};
+
+static ssize_t stats_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct pci_device *adev = dev_get_drvdata(dev);
+    return scnprintf(buf, PAGE_SIZE, "Operations: %llu\nInterrupts: %llu\nErrors: %llu\n", adev->operations_completed,
+                     adev->interrupts_received, adev->errors);
+}
+
+static DEVICE_ATTR_RO(stats);
+static struct attribute *pci_attrs[] = {
+    &dev_attr_stats.attr,
+    NULL,
+};
+static const struct attribute_group pci_attr_group = {
+    .attrs = pci_attrs,
+};
+static const struct attribute_group *pci_groups[] = {
+    &pci_attr_group,
+    NULL,
+};
+
+static int pci_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+{
+    struct pci_device *adev;
+    int ret = 0;
+    pr_info("==== Probing PCI Card ====\n");
+    pr_info("Vendor: 0x%04x Device: 0x%04x\n", pdev->vendor, pdev->device);
+    adev = kzalloc(sizeof(*adev), GFP_KERNEL);
+    if (!adev)
+        return -ENOMEM;
+    adev->pdev = pdev;
+    spin_lock_init(&adev->lock);
+    init_completion(&adev->op_completion);
+    pci_set_drvdata(pdev, adev);
+    ret = pci_enable_device(pdev);
+    if (ret)
+        goto err_free;
+    ret = pci_request_regions(pdev, "protopciem_pci");
+    if (ret)
+        goto err_disable;
+    adev->bar0 = pci_iomap(pdev, 0, 0);
+    if (!adev->bar0)
+    {
+        ret = -ENOMEM;
+        goto err_regions;
+    }
+    pr_info("BAR0 mapped at %px (size: %llu bytes)\n", adev->bar0, (u64)pci_resource_len(pdev, 0));
+
+    ret = pci_enable_msi(pdev);
+    if (ret == 0)
+    {
+        adev->msi_enabled = true;
+        adev->irq = pdev->irq;
+        pr_info("MSI enabled, IRQ: %d\n", adev->irq);
+        ret = request_irq(adev->irq, pci_irq_handler, 0, "protopciem_pci", adev);
+        if (ret)
+        {
+            pci_disable_msi(pdev);
+            adev->msi_enabled = false;
+            adev->irq = 0;
+        }
+    }
+    if (!adev->msi_enabled && pdev->irq > 0)
+    {
+        adev->irq = pdev->irq;
+        ret = request_irq(adev->irq, pci_irq_handler, IRQF_SHARED, "protopciem_pci", adev);
+        if (ret)
+            adev->irq = 0;
+        else
+            pr_info("Legacy interrupt enabled, IRQ: %d\n", adev->irq);
+    }
+    if (adev->irq == 0)
+        pr_warn("No interrupt available. Driver will use polling.");
+
+    pci_set_master(pdev);
+    adev->wq = create_singlethread_workqueue("pci_wq");
+    if (!adev->wq)
+    {
+        ret = -ENOMEM;
+        goto err_irq;
+    }
+    INIT_WORK(&adev->work, pci_work_handler);
+    pci_reset(adev);
+
+    adev->cmdbuf_size = 4 * 1024 * 1024;
+    adev->cmdbuf_virt = dma_alloc_coherent(&pdev->dev, adev->cmdbuf_size, &adev->cmdbuf_phys, GFP_KERNEL);
+    if (!adev->cmdbuf_virt)
+    {
+        dev_err(&pdev->dev, "Failed to allocate DMA command buffer\n");
+        ret = -ENOMEM;
+        goto err_wq;
+    }
+    dev_info(&pdev->dev, "DMA command buffer: virt=%px phys=%pad size=%zu\n", adev->cmdbuf_virt, &adev->cmdbuf_phys,
+             adev->cmdbuf_size);
+
+    adev->framebuf_size = MMAP_SIZE;
+    adev->framebuf_virt = dma_alloc_coherent(&pdev->dev, adev->framebuf_size, &adev->framebuf_phys, GFP_KERNEL);
+    if (!adev->framebuf_virt)
+    {
+        dev_err(&pdev->dev, "Failed to allocate DMA frame buffer\n");
+        ret = -ENOMEM;
+        goto err_dma_cmdbuf;
+    }
+    dev_info(&pdev->dev, "DMA frame buffer (double): virt=%px phys=%pad size=%zu\n", adev->framebuf_virt,
+             &adev->framebuf_phys, adev->framebuf_size);
+
+    adev->protopciem_miscdev.minor = MISC_DYNAMIC_MINOR;
+    adev->protopciem_miscdev.name = "protopciem";
+    adev->protopciem_miscdev.fops = &protopciem_fops;
+    adev->protopciem_miscdev.parent = &pdev->dev;
+    ret = misc_register(&adev->protopciem_miscdev);
+    if (ret)
+    {
+        pr_err("Failed to register misc device: %d\n", ret);
+        goto err_dma_framebuf;
+    }
+
+    pci_write_reg(adev, REG_CONTROL, CTRL_ENABLE);
+    pr_info("Device enabled, ready for userspace on /dev/%s\n", adev->protopciem_miscdev.name);
+    pr_info("==== Probe Complete ====\n");
+    return 0;
+
+err_dma_framebuf:
+    dma_free_coherent(&pdev->dev, adev->framebuf_size, adev->framebuf_virt, adev->framebuf_phys);
+err_dma_cmdbuf:
+    dma_free_coherent(&pdev->dev, adev->cmdbuf_size, adev->cmdbuf_virt, adev->cmdbuf_phys);
+err_wq:
+    destroy_workqueue(adev->wq);
+err_irq:
+    if (adev->irq)
+        free_irq(adev->irq, adev);
+    if (adev->msi_enabled)
+        pci_disable_msi(pdev);
+    if (adev->bar0)
+        pci_iounmap(pdev, adev->bar0);
+err_regions:
+    pci_release_regions(pdev);
+err_disable:
+    pci_disable_device(pdev);
+err_free:
+    kfree(adev);
+    return ret;
+}
+
+static void pci_remove(struct pci_dev *pdev)
+{
+    struct pci_device *adev = pci_get_drvdata(pdev);
+    pr_info("Removing PCI device\n");
+    if (!adev)
+        return;
+    misc_deregister(&adev->protopciem_miscdev);
+    if (adev->cmdbuf_virt)
+    {
+        dma_free_coherent(&pdev->dev, adev->cmdbuf_size, adev->cmdbuf_virt, adev->cmdbuf_phys);
+    }
+    if (adev->framebuf_virt)
+    {
+        dma_free_coherent(&pdev->dev, adev->framebuf_size, adev->framebuf_virt, adev->framebuf_phys);
+    }
+    pci_write_reg(adev, REG_CONTROL, 0);
+    if (adev->wq)
+    {
+        cancel_work_sync(&adev->work);
+        destroy_workqueue(adev->wq);
+    }
+    if (adev->irq)
+        free_irq(adev->irq, adev);
+    if (adev->msi_enabled)
+        pci_disable_msi(pdev);
+    if (adev->bar0)
+        pci_iounmap(pdev, adev->bar0);
+    pci_release_regions(pdev);
+    pci_disable_device(pdev);
+    kfree(adev);
+    pr_info("Device removed\n");
+}
+
+static const struct pci_device_id pci_ids[] = {{PCI_DEVICE(PCIEM_PCI_VENDOR_ID, PCIEM_PCI_DEVICE_ID)},
+                                               {
+                                                   0,
+                                               }};
+
+MODULE_DEVICE_TABLE(pci, pci_ids);
+
+static struct pci_driver pci_driver = {
+    .name = "protopciem_pci",
+    .id_table = pci_ids,
+    .probe = pci_probe,
+    .remove = pci_remove,
+    .dev_groups = pci_groups,
+};
+
+module_pci_driver(pci_driver);
+```
+
+`kernel/framework/pciem_bar.c`:
+
+```c
+#include "pciem_framework.h"
+#include <linux/hashtable.h>
+#include <linux/kprobes.h>
+#include <linux/pci.h>
+#include <linux/slab.h>
+
+struct pciem_bar_mapping
+{
+    struct hlist_node node;
+    struct pci_bus *bus;
+    unsigned int devfn;
+    int bar;
+    void __iomem *virt_addr;
+    char dev_name[32];
+};
+
+struct pci_iomap_data
+{
+    struct pci_dev *pdev;
+    int bar;
+};
+
+#define PCIEM_MAPPING_HASH_BITS 8
+static DEFINE_HASHTABLE(pciem_bar_mappings, PCIEM_MAPPING_HASH_BITS);
+static DEFINE_SPINLOCK(pciem_mapping_lock);
+
+static inline u32 pciem_hash(struct pci_bus *bus, unsigned int devfn, int bar)
+{
+    return hash_ptr(bus, PCIEM_MAPPING_HASH_BITS) ^ devfn ^ bar;
+}
+
+static void track_bar(struct pci_dev *pdev, int bar, void __iomem *vaddr)
+{
+    struct pciem_bar_mapping *m;
+
+    if (!vaddr || !pdev || bar < 0 || bar >= PCI_STD_NUM_BARS)
+        return;
+
+    m = kmalloc(sizeof(*m), GFP_ATOMIC);
+    if (!m)
+        return;
+
+    m->bus = pdev->bus;
+    m->devfn = pdev->devfn;
+    m->bar = bar;
+    m->virt_addr = vaddr;
+    snprintf(m->dev_name, sizeof(m->dev_name), "%s", pci_name(pdev));
+
+    spin_lock(&pciem_mapping_lock);
+    hash_add(pciem_bar_mappings, &m->node, pciem_hash(pdev->bus, pdev->devfn, bar));
+    spin_unlock(&pciem_mapping_lock);
+
+    pr_debug("PCIem: Tracked %s BAR%d -> %px\n", m->dev_name, bar, vaddr);
+}
+
+static int entry_pci_iomap(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    data->pdev = (struct pci_dev *)regs_get_kernel_argument(regs, 0);
+    data->bar = (int)regs_get_kernel_argument(regs, 1);
+
+    return 0;
+}
+
+static int ret_pci_iomap(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    void __iomem *vaddr = (void __iomem *)regs_return_value(regs);
+    track_bar(data->pdev, data->bar, vaddr);
+    return 0;
+}
+
+static int ret_generic(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    void __iomem *vaddr = (void __iomem *)regs_return_value(regs);
+    track_bar(data->pdev, data->bar, vaddr);
+    return 0;
+}
+
+static int entry_generic(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    data->pdev = (struct pci_dev *)regs_get_kernel_argument(regs, 0);
+    data->bar = (int)regs_get_kernel_argument(regs, 1);
+    return 0;
+}
+
+static int ret_pcim_iomap_regions(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    int mask = data->bar;
+    int ret = (int)regs_return_value(regs);
+    void __iomem *const *iomap_table;
+    int bar;
+
+    if (ret != 0)
+        return 0;
+
+    iomap_table = pcim_iomap_table(data->pdev);
+    if (!iomap_table)
+        return 0;
+
+    for (bar = 0; bar < PCI_STD_NUM_BARS; bar++)
+    {
+        if ((mask & (1 << bar)) && iomap_table[bar])
+            track_bar(data->pdev, bar, iomap_table[bar]);
+    }
+
+    return 0;
+}
+
+static int entry_pcim_iomap_regions(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct pci_iomap_data *data = (struct pci_iomap_data *)ri->data;
+    data->pdev = (struct pci_dev *)regs_get_kernel_argument(regs, 0);
+    data->bar = (int)regs_get_kernel_argument(regs, 1);
+    return 0;
+}
+
+static struct kretprobe kretprobes[] = {
+    {.handler = ret_pci_iomap,
+     .entry_handler = entry_pci_iomap,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+    {.handler = ret_generic,
+     .entry_handler = entry_generic,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+    {.handler = ret_generic,
+     .entry_handler = entry_generic,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+    {.handler = ret_generic,
+     .entry_handler = entry_generic,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+    {.handler = ret_generic,
+     .entry_handler = entry_generic,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+    {.handler = ret_pcim_iomap_regions,
+     .entry_handler = entry_pcim_iomap_regions,
+     .data_size = sizeof(struct pci_iomap_data),
+     .maxactive = 20},
+};
+
+static const char *symbols[] = {
+    "pci_iomap", "pci_iomap_range", "pci_ioremap_bar", "pcim_iomap", "pci_ioremap_wc_bar", "pcim_iomap_regions",
+};
+
+#define NUM_PROBES ARRAY_SIZE(kretprobes)
+
+int pciem_init_bar_tracking(void)
+{
+    int i, ret, failed = 0;
+
+    BUILD_BUG_ON(ARRAY_SIZE(kretprobes) != ARRAY_SIZE(symbols));
+
+    for (i = 0; i < NUM_PROBES; i++)
+    {
+        kretprobes[i].kp.symbol_name = symbols[i];
+        ret = register_kretprobe(&kretprobes[i]);
+        if (ret < 0)
+        {
+            pr_warn("PCIem: Failed to register %s: %d\n", symbols[i], ret);
+            kretprobes[i].kp.symbol_name = NULL;
+            failed++;
+        }
+    }
+
+    if (failed == NUM_PROBES)
+    {
+        pr_err("PCIem: All kretprobes failed!\n");
+        return -ENODEV;
+    }
+
+    pr_info("PCIem: BAR tracking active (%lu/%lu probes)\n", NUM_PROBES - failed, NUM_PROBES);
+    return 0;
+}
+
+void pciem_disable_bar_tracking(void)
+{
+    int i;
+
+    for (i = 0; i < NUM_PROBES; i++)
+    {
+        if (kretprobes[i].kp.symbol_name)
+        {
+            unregister_kretprobe(&kretprobes[i]);
+            kretprobes[i].kp.symbol_name = NULL;
+        }
+    }
+
+    pr_info("PCIem: BAR tracking disabled (mappings preserved)\n");
+}
+
+void pciem_cleanup_bar_tracking(void)
+{
+    struct pciem_bar_mapping *m;
+    struct hlist_node *tmp;
+    int i, bkt;
+
+    for (i = 0; i < NUM_PROBES; i++)
+    {
+        if (kretprobes[i].kp.symbol_name)
+            unregister_kretprobe(&kretprobes[i]);
+    }
+
+    spin_lock(&pciem_mapping_lock);
+    hash_for_each_safe(pciem_bar_mappings, bkt, tmp, m, node)
+    {
+        hash_del(&m->node);
+        kfree(m);
+    }
+    spin_unlock(&pciem_mapping_lock);
+}
+
+void __iomem *pciem_get_driver_bar_vaddr(struct pci_dev *pdev, int bar)
+{
+    struct pciem_bar_mapping *m;
+    void __iomem *vaddr = NULL;
+
+    if (!pdev || bar < 0 || bar >= PCI_STD_NUM_BARS)
+        return NULL;
+
+    spin_lock(&pciem_mapping_lock);
+    hash_for_each_possible(pciem_bar_mappings, m, node, pciem_hash(pdev->bus, pdev->devfn, bar))
+    {
+        if (m->bus == pdev->bus && m->devfn == pdev->devfn && m->bar == bar)
+        {
+            vaddr = m->virt_addr;
+            break;
+        }
+    }
+    spin_unlock(&pciem_mapping_lock);
+
+    return vaddr;
+}
+EXPORT_SYMBOL_GPL(pciem_get_driver_bar_vaddr);
+EXPORT_SYMBOL_GPL(pciem_disable_bar_tracking);
+```
+
+`kernel/framework/pciem_capabilities.c`:
+
+```c
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
+#include "pciem_capabilities.h"
+#include "pciem_framework.h"
+#include <linux/pci_regs.h>
+#include <linux/slab.h>
+#include <linux/unaligned.h>
+
+static u8 msi_cap_size(struct pciem_cap_msi_config *cfg)
+{
+    u8 size = 10;
+
+    if (cfg->has_64bit)
+    {
+        size += 4;
+    }
+
+    size += 2;
+
+    if (cfg->has_per_vector_masking)
+    {
+        size += 8;
+    }
+
+    return size;
+}
+
+void pciem_init_cap_manager(struct pciem_root_complex *v)
+{
+    if (!v->cap_mgr)
+    {
+        v->cap_mgr = kzalloc(sizeof(*v->cap_mgr), GFP_KERNEL);
+        if (!v->cap_mgr)
+        {
+            pr_err("Failed to allocate capability manager\n");
+            return;
+        }
+        v->cap_mgr->num_caps = 0;
+        v->cap_mgr->next_offset = 0x40;
+    }
+}
+
+void pciem_cleanup_cap_manager(struct pciem_root_complex *v)
+{
+    int i;
+
+    if (!v->cap_mgr)
+    {
+        return;
+    }
+
+    for (i = 0; i < v->cap_mgr->num_caps; i++)
+    {
+        if (v->cap_mgr->caps[i].type == PCIEM_CAP_VSEC && v->cap_mgr->caps[i].config.vsec.data)
+        {
+            kfree(v->cap_mgr->caps[i].config.vsec.data);
+        }
+    }
+
+    kfree(v->cap_mgr);
+    v->cap_mgr = NULL;
+}
+
+int pciem_add_cap_msi(struct pciem_root_complex *v, struct pciem_cap_msi_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_MSI;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = msi_cap_size(cfg);
+    cap->config.msi = *cfg;
+
+    memset(&cap->state.msi_state, 0, sizeof(cap->state.msi_state));
+    cap->state.msi_state.control = 0;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added MSI capability at offset 0x%02x (size %u)\n", cap->offset, cap->size);
+
+    return 0;
+}
+EXPORT_SYMBOL(pciem_add_cap_msi);
+
+int pciem_add_cap_msix(struct pciem_root_complex *v, struct pciem_cap_msix_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_MSIX;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = 12;
+    cap->config.msix = *cfg;
+
+    cap->state.msix_state.control = 0;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added MSI-X capability at offset 0x%02x\n", cap->offset);
+
+    return 0;
+}
+
+int pciem_add_cap_pm(struct pciem_root_complex *v, struct pciem_cap_pm_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_PM;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = 8;
+    cap->config.pm = *cfg;
+
+    cap->state.pm_state.control = 0;
+    cap->state.pm_state.status = 0;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added Power Management capability at offset 0x%02x\n", cap->offset);
+
+    return 0;
+}
+
+int pciem_add_cap_pcie(struct pciem_root_complex *v, struct pciem_cap_pcie_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_PCIE;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = 60;
+    cap->config.pcie = *cfg;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added PCIe capability at offset 0x%02x\n", cap->offset);
+
+    return 0;
+}
+
+int pciem_add_cap_vsec(struct pciem_root_complex *v, struct pciem_cap_vsec_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+    u8 *data_copy;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    data_copy = kmalloc(cfg->vsec_length, GFP_KERNEL);
+    if (!data_copy)
+    {
+        return -ENOMEM;
+    }
+
+    memcpy(data_copy, cfg->data, cfg->vsec_length);
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_VSEC;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = 8 + cfg->vsec_length;
+    cap->config.vsec = *cfg;
+    cap->config.vsec.data = data_copy;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added VSEC capability at offset 0x%02x (vendor 0x%04x)\n", cap->offset, cfg->vendor_id);
+
+    return 0;
+}
+
+int pciem_add_cap_pasid(struct pciem_root_complex *v, struct pciem_cap_pasid_config *cfg)
+{
+    struct pciem_cap_entry *cap;
+
+    if (!v->cap_mgr || v->cap_mgr->num_caps >= MAX_PCI_CAPS)
+    {
+        return -ENOMEM;
+    }
+
+    cap = &v->cap_mgr->caps[v->cap_mgr->num_caps];
+    cap->type = PCIEM_CAP_PASID;
+    cap->offset = v->cap_mgr->next_offset;
+    cap->size = 8;
+    cap->config.pasid = *cfg;
+
+    cap->state.pasid_state.control = 0;
+    cap->state.pasid_state.pasid = 0;
+
+    v->cap_mgr->next_offset += cap->size;
+    v->cap_mgr->num_caps++;
+
+    pr_info("Added PASID capability at offset 0x%02x\n", cap->offset);
+
+    return 0;
+}
+
+void pciem_build_config_space(struct pciem_root_complex *v)
+{
+    int i;
+    struct pciem_cap_manager *mgr = v->cap_mgr;
+
+    if (!mgr || mgr->num_caps == 0)
+    {
+        v->cfg[PCI_CAPABILITY_LIST] = 0;
+        v->cfg[PCI_STATUS] &= ~(PCI_STATUS_CAP_LIST >> 8);
+        return;
+    }
+
+    v->cfg[PCI_CAPABILITY_LIST] = mgr->caps[0].offset;
+    v->cfg[PCI_STATUS] |= (PCI_STATUS_CAP_LIST >> 8);
+
+    for (i = 0; i < mgr->num_caps; i++)
+    {
+        struct pciem_cap_entry *cap = &mgr->caps[i];
+        u8 *cfg = &v->cfg[cap->offset];
+        u8 next_ptr = (i + 1 < mgr->num_caps) ? mgr->caps[i + 1].offset : 0;
+
+        switch (cap->type)
+        {
+        case PCIEM_CAP_MSI: {
+            struct pciem_cap_msi_config *msi = &cap->config.msi;
+            u16 control = 0;
+            u8 pos = 0;
+
+            cfg[pos++] = PCI_CAP_ID_MSI;
+            cfg[pos++] = next_ptr;
+
+            if (msi->has_64bit)
+            {
+                control |= PCI_MSI_FLAGS_64BIT;
+            }
+
+            if (msi->has_per_vector_masking)
+            {
+                control |= PCI_MSI_FLAGS_MASKBIT;
+            }
+
+            control |= (msi->num_vectors_log2 << 1);
+            put_unaligned_le16(control, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le32(0, &cfg[pos]);
+            pos += 4;
+
+            if (msi->has_64bit)
+            {
+                put_unaligned_le32(0, &cfg[pos]);
+                pos += 4;
+            }
+
+            put_unaligned_le16(0, &cfg[pos]);
+            pos += 2;
+
+            if (msi->has_per_vector_masking)
+            {
+                put_unaligned_le32(0, &cfg[pos]);
+                pos += 4;
+                put_unaligned_le32(0, &cfg[pos]);
+            }
+            break;
+        }
+
+        case PCIEM_CAP_MSIX: {
+            struct pciem_cap_msix_config *msix = &cap->config.msix;
+            u8 pos = 0;
+
+            cfg[pos++] = PCI_CAP_ID_MSIX;
+            cfg[pos++] = next_ptr;
+
+            put_unaligned_le16((msix->table_size - 1) & 0x7FF, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le32((msix->table_offset & ~0x7) | (msix->bar_index & 0x7), &cfg[pos]);
+            pos += 4;
+
+            put_unaligned_le32((msix->pba_offset & ~0x7) | (msix->bar_index & 0x7), &cfg[pos]);
+            break;
+        }
+
+        case PCIEM_CAP_PM: {
+            struct pciem_cap_pm_config *pm = &cap->config.pm;
+            u16 pmc = 0;
+            u8 pos = 0;
+
+            cfg[pos++] = PCI_CAP_ID_PM;
+            cfg[pos++] = next_ptr;
+
+            pmc |= (pm->version & 0x3);
+            if (pm->d1_support)
+            {
+                pmc |= PCI_PM_CAP_D1;
+            }
+            if (pm->d2_support)
+            {
+                pmc |= PCI_PM_CAP_D2;
+            }
+            if (pm->pme_support)
+            {
+                pmc |= PCI_PM_CAP_PME_D0 | PCI_PM_CAP_PME_D3hot | PCI_PM_CAP_PME_D3cold;
+            }
+            put_unaligned_le16(pmc, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le16(0, &cfg[pos]);
+            pos += 2;
+
+            cfg[pos++] = 0;
+            cfg[pos++] = 0;
+            break;
+        }
+
+        case PCIEM_CAP_PCIE: {
+            struct pciem_cap_pcie_config *pcie = &cap->config.pcie;
+            u8 pos = 0;
+
+            cfg[pos++] = PCI_CAP_ID_EXP;
+            cfg[pos++] = next_ptr;
+
+            put_unaligned_le16((pcie->device_type << 4) | 2, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le32(0x00008000, &cfg[pos]);
+            pos += 4;
+
+            put_unaligned_le32(0, &cfg[pos]);
+            pos += 4;
+
+            put_unaligned_le32((pcie->link_speed & 0xF) | ((pcie->link_width & 0x3F) << 4), &cfg[pos]);
+            pos += 4;
+
+            put_unaligned_le32(((pcie->link_speed & 0xF) | ((pcie->link_width & 0x3F) << 4)) << 16, &cfg[pos]);
+            pos += 4;
+
+            memset(&cfg[pos], 0, 60 - pos);
+            break;
+        }
+
+        case PCIEM_CAP_VSEC: {
+            struct pciem_cap_vsec_config *vsec = &cap->config.vsec;
+            u8 pos = 0;
+
+            cfg[pos++] = PCI_CAP_ID_VNDR;
+            cfg[pos++] = next_ptr;
+
+            cfg[pos++] = (8 + vsec->vsec_length) & 0xFF;
+
+            cfg[pos++] = 0;
+
+            put_unaligned_le16(vsec->vendor_id, &cfg[pos]);
+            pos += 2;
+
+            cfg[pos++] = vsec->vsec_id & 0xFF;
+            cfg[pos++] = ((vsec->vsec_id >> 8) & 0xF) | ((vsec->vsec_rev & 0xF) << 4);
+
+            memcpy(&cfg[pos], vsec->data, vsec->vsec_length);
+            break;
+        }
+
+        case PCIEM_CAP_PASID: {
+            struct pciem_cap_pasid_config *pasid = &cap->config.pasid;
+            u16 caps = 0;
+            u8 pos = 0;
+
+            cfg[pos++] = 0x1B;
+            cfg[pos++] = next_ptr;
+
+            if (pasid->execute_permission)
+            {
+                caps |= 0x02;
+            }
+            if (pasid->privileged_mode)
+            {
+                caps |= 0x04;
+            }
+            caps |= ((pasid->max_pasid_width - 1) << 8);
+            put_unaligned_le16(caps, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le16(0, &cfg[pos]);
+            pos += 2;
+
+            put_unaligned_le16(0, &cfg[pos]);
+            break;
+        }
+        }
+    }
+}
+
+bool pciem_handle_cap_read(struct pciem_root_complex *v, int where, int size, u32 *value)
+{
+    struct pciem_cap_manager *mgr = v->cap_mgr;
+    int i;
+
+    if (!mgr)
+    {
+        return false;
+    }
+
+    for (i = 0; i < mgr->num_caps; i++)
+    {
+        struct pciem_cap_entry *cap = &mgr->caps[i];
+
+        if (where >= cap->offset && where < (cap->offset + cap->size))
+        {
+            int cap_offset = where - cap->offset;
+
+            switch (cap->type)
+            {
+            case PCIEM_CAP_MSI:
+                if (cap_offset == 2 && size == 2)
+                {
+                    *value = cap->state.msi_state.control;
+                    return true;
+                }
+                if (cap->config.msi.has_64bit)
+                {
+                    if (cap_offset == 4)
+                    {
+                        *value = cap->state.msi_state.address_lo;
+                        return true;
+                    }
+                    else if (cap_offset == 8)
+                    {
+                        *value = cap->state.msi_state.address_hi;
+                        return true;
+                    }
+                    else if (cap_offset == 12)
+                    {
+                        *value = cap->state.msi_state.data;
+                        return true;
+                    }
+                }
+                else
+                {
+                    if (cap_offset == 4)
+                    {
+                        *value = cap->state.msi_state.address_lo;
+                        return true;
+                    }
+                    else if (cap_offset == 8)
+                    {
+                        *value = cap->state.msi_state.data;
+                        return true;
+                    }
+                }
+                break;
+
+            case PCIEM_CAP_MSIX:
+                if (cap_offset == 2 && size == 2)
+                {
+                    *value = cap->state.msix_state.control;
+                    return true;
+                }
+                break;
+
+            case PCIEM_CAP_PM:
+                if (cap_offset == 4 && size == 2)
+                {
+                    *value = cap->state.pm_state.control;
+                    return true;
+                }
+                break;
+
+            case PCIEM_CAP_PASID:
+                if (cap_offset == 4 && size == 2)
+                {
+                    *value = cap->state.pasid_state.control;
+                    return true;
+                }
+                break;
+
+            default:
+                break;
+            }
+
+            return false;
+        }
+    }
+
+    return false;
+}
+
+bool pciem_handle_cap_write(struct pciem_root_complex *v, int where, int size, u32 value)
+{
+    struct pciem_cap_manager *mgr = v->cap_mgr;
+    int i;
+
+    if (!mgr)
+    {
+        return false;
+    }
+
+    for (i = 0; i < mgr->num_caps; i++)
+    {
+        struct pciem_cap_entry *cap = &mgr->caps[i];
+
+        if (where >= cap->offset && where < (cap->offset + cap->size))
+        {
+            int cap_offset = where - cap->offset;
+
+            switch (cap->type)
+            {
+            case PCIEM_CAP_MSI:
+                if (cap_offset == 2 && size == 2)
+                {
+                    cap->state.msi_state.control = value & 0xFFFF;
+                    pr_info("MSI Control written: 0x%04x (Enable: %d)\n", value, !!(value & PCI_MSI_FLAGS_ENABLE));
+                    return true;
+                }
+                if (cap->config.msi.has_64bit)
+                {
+                    if (cap_offset == 4 && size == 4)
+                    {
+                        cap->state.msi_state.address_lo = value;
+                        pr_info("MSI Address Lo written: 0x%08x\n", value);
+                        return true;
+                    }
+                    else if (cap_offset == 8 && size == 4)
+                    {
+                        cap->state.msi_state.address_hi = value;
+                        pr_info("MSI Address Hi written: 0x%08x\n", value);
+                        return true;
+                    }
+                    else if (cap_offset == 12 && size == 2)
+                    {
+                        cap->state.msi_state.data = value & 0xFFFF;
+                        pr_info("MSI Data written: 0x%04x\n", value);
+                        return true;
+                    }
+                    else if (cap_offset == 14 && size == 4)
+                    {
+                        cap->state.msi_state.mask_bits = value;
+                        pr_info("MSI Mask bits written: 0x%08x\n", value);
+                        return true;
+                    }
+                }
+                else
+                {
+                    if (cap_offset == 4 && size == 4)
+                    {
+                        cap->state.msi_state.address_lo = value;
+                        pr_info("MSI Address written: 0x%08x\n", value);
+                        return true;
+                    }
+                    else if (cap_offset == 8 && size == 2)
+                    {
+                        cap->state.msi_state.data = value & 0xFFFF;
+                        pr_info("MSI Data written: 0x%04x\n", value);
+                        return true;
+                    }
+                    else if (cap_offset == 10 && size == 4)
+                    {
+                        cap->state.msi_state.mask_bits = value;
+                        pr_info("MSI Mask bits written: 0x%08x\n", value);
+                        return true;
+                    }
+                }
+                break;
+
+            case PCIEM_CAP_MSIX:
+                if (cap_offset == 2 && size == 2)
+                {
+                    cap->state.msix_state.control = value & 0xC7FF;
+                    pr_info("MSI-X Control written: 0x%04x (Enable: %d)\n", value, !!(value & PCI_MSIX_FLAGS_ENABLE));
+                    return true;
+                }
+                break;
+
+            case PCIEM_CAP_PM:
+                if (cap_offset == 4 && size == 2)
+                {
+                    cap->state.pm_state.control = value & 0x8103;
+                    pr_info("PM Control written: 0x%04x (Power State: D%d)\n", value, value & 0x3);
+                    return true;
+                }
+                break;
+
+            case PCIEM_CAP_PASID:
+                if (cap_offset == 4 && size == 2)
+                {
+                    cap->state.pasid_state.control = value & 0x07;
+                    if (value & 0x01)
+                    {
+                        pr_info("PASID Enabled\n");
+                    }
+                    return true;
+                }
+                break;
+
+            default:
+                break;
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+```
+
+`kernel/framework/pciem_dma.c`:
+
+```c
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
+#include "pciem_dma.h"
+#include "pciem_framework.h"
+#include <asm/cacheflush.h>
+#include <linux/atomic.h>
+#include <linux/iommu.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+
+static int translate_iova(struct pciem_root_complex *v, u64 guest_iova, size_t len,
+                          phys_addr_t **phys_pages_out, int *num_pages)
+{
+    struct iommu_domain *domain;
+    size_t remaining = len;
+    u64 iova = guest_iova;
+    int page_count = 0;
+    int max_pages;
+    phys_addr_t *phys_pages;
+
+    domain = iommu_get_domain_for_dev(&v->pciem_pdev->dev);
+
+    max_pages = ((PAGE_ALIGN(guest_iova + len) - (guest_iova & PAGE_MASK)) >> PAGE_SHIFT) + 1;
+
+    phys_pages = kmalloc_array(max_pages, sizeof(phys_addr_t), GFP_KERNEL);
+    if (!phys_pages) {
+        pr_err("translate_iova: failed to allocate page array for %d pages\n", max_pages);
+        return -ENOMEM;
+    }
+
+    while (remaining > 0)
+    {
+        phys_addr_t hpa;
+        size_t chunk_len;
+
+        if (page_count >= max_pages)
+        {
+            pr_err("translate_iova: page buffer overflow (max %d)\n", max_pages);
+            kfree(phys_pages);
+            return -EOVERFLOW;
+        }
+
+        if (domain) {
+            hpa = iommu_iova_to_phys(domain, iova);
+            if (!hpa)
+            {
+                pr_err("Failed to translate IOVA 0x%llx\n", iova);
+                kfree(phys_pages);
+                return -EFAULT;
+            }
+        } else {
+            hpa = (phys_addr_t)iova;
+        }
+
+        phys_pages[page_count++] = hpa;
+
+        chunk_len = min_t(size_t, remaining, PAGE_SIZE - (iova & ~PAGE_MASK));
+        remaining -= chunk_len;
+        iova += chunk_len;
+    }
+
+    *num_pages = page_count;
+    *phys_pages_out = phys_pages;
+    return 0;
+}
+
+int pciem_dma_read_from_guest(struct pciem_root_complex *v, u64 guest_iova, void *dst, size_t len, u32 pasid)
+{
+    phys_addr_t *phys_pages = NULL;
+    int num_pages = 0;
+    size_t offset = 0;
+    int i;
+    u8 *dst_buf = (u8 *)dst;
+    int ret;
+
+    if (!v || !dst || len == 0)
+    {
+        return -EINVAL;
+    }
+
+    ret = translate_iova(v, guest_iova, len, &phys_pages, &num_pages);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    pr_info("pciem: DMA read: IOVA 0x%llx -> %d pages, len %zu, PASID %u\n", 
+            guest_iova, num_pages, len, pasid);
+
+    for (i = 0; i < num_pages && offset < len; i++)
+    {
+        void *kva;
+        size_t chunk_len;
+        size_t page_offset = (i == 0) ? (guest_iova & ~PAGE_MASK) : 0;
+
+        chunk_len = min_t(size_t, len - offset, PAGE_SIZE - page_offset);
+
+        kva = memremap(phys_pages[i], chunk_len, MEMREMAP_WB);
+        if (!kva)
+        {
+            pr_err("pciem: memremap failed for physical page %pa\n", &phys_pages[i]);
+            kfree(phys_pages);
+            return -ENOMEM;
+        }
+
+        memcpy(dst_buf + offset, kva, chunk_len);
+        memunmap(kva);
+
+        offset += chunk_len;
+    }
+
+    kfree(phys_pages);
+    return 0;
+}
+EXPORT_SYMBOL(pciem_dma_read_from_guest);
+
+int pciem_dma_write_to_guest(struct pciem_root_complex *v, u64 guest_iova, const void *src, size_t len, u32 pasid)
+{
+    phys_addr_t *phys_pages = NULL;
+    int num_pages = 0;
+    size_t offset = 0;
+    int i;
+    int ret;
+
+    if (!v || !src || len == 0)
+    {
+        return -EINVAL;
+    }
+
+    ret = translate_iova(v, guest_iova, len, &phys_pages, &num_pages);
+    if (ret < 0)
+    {
+        return ret;
+    }
+
+    pr_info("DMA write: IOVA 0x%llx -> %d pages, len %zu, PASID %u\n", guest_iova, num_pages, len, pasid);
+
+    for (i = 0; i < num_pages && offset < len; i++)
+    {
+        void *kva;
+        size_t chunk_len;
+        size_t page_offset = (i == 0) ? (guest_iova & ~PAGE_MASK) : 0;
+
+        chunk_len = min_t(size_t, len - offset, PAGE_SIZE - page_offset);
+
+        kva = memremap(phys_pages[i], chunk_len, MEMREMAP_WB);
+        if (!kva)
+        {
+            pr_err("Failed to map physical page %pa\n", &phys_pages[i]);
+            kfree(phys_pages);
+            return -ENOMEM;
+        }
+
+        memcpy(kva, (u8 *)src + offset, chunk_len);
+        memunmap(kva);
+
+        offset += chunk_len;
+    }
+
+    kfree(phys_pages);
+    return 0;
+}
+EXPORT_SYMBOL(pciem_dma_write_to_guest);
+
+static u64 do_atomic_op(struct pciem_root_complex *v, u64 guest_iova, u8 op_type, u64 operand, u64 compare, u32 pasid)
+{
+    phys_addr_t phys_addr;
+    void *kva;
+    u64 old_val = 0;
+    phys_addr_t *phys_pages = NULL;
+    int num_pages;
+    atomic64_t *atomic_ptr;
+    int ret;
+
+    if (guest_iova & 0x7)
+    {
+        pr_err("Atomic operation on unaligned address 0x%llx\n", guest_iova);
+        return 0;
+    }
+
+    ret = translate_iova(v, guest_iova, 8, &phys_pages, &num_pages);
+    if (ret < 0)
+    {
+        pr_err("Failed to translate IOVA for atomic op\n");
+        return 0;
+    }
+
+    phys_addr = phys_pages[0];
+    kfree(phys_pages);
+
+    kva = memremap(phys_addr, 8, MEMREMAP_WB);
+    if (!kva)
+    {
+        pr_err("Failed to map page for atomic op\n");
+        return 0;
+    }
+
+    if (!IS_ALIGNED((unsigned long)kva, 8))
+    {
+        pr_err("Mapped address not 8-byte aligned: %px\n", kva);
+        memunmap(kva);
+        return 0;
+    }
+
+    atomic_ptr = (atomic64_t *)kva;
+
+    switch (op_type)
+    {
+    case PCIEM_ATOMIC_FETCH_ADD:
+        old_val = atomic64_fetch_add(operand, atomic_ptr);
+        pr_info("Atomic FETCH_ADD: IOVA 0x%llx, old=0x%llx, add=0x%llx, PASID %u\n", guest_iova, old_val, operand,
+                pasid);
+        break;
+
+    case PCIEM_ATOMIC_FETCH_SUB:
+        old_val = atomic64_fetch_sub(operand, atomic_ptr);
+        pr_info("Atomic FETCH_SUB: IOVA 0x%llx, old=0x%llx, sub=0x%llx, PASID %u\n", guest_iova, old_val, operand,
+                pasid);
+        break;
+
+    case PCIEM_ATOMIC_SWAP:
+        old_val = atomic64_xchg(atomic_ptr, operand);
+        pr_info("Atomic SWAP: IOVA 0x%llx, old=0x%llx, new=0x%llx, PASID %u\n", guest_iova, old_val, operand, pasid);
+        break;
+
+    case PCIEM_ATOMIC_CAS:
+        old_val = atomic64_cmpxchg(atomic_ptr, compare, operand);
+        pr_info("Atomic CAS: IOVA 0x%llx, old=0x%llx, expected=0x%llx, new=0x%llx, PASID %u\n", guest_iova, old_val,
+                compare, operand, pasid);
+        break;
+
+    case PCIEM_ATOMIC_FETCH_AND:
+        old_val = atomic64_fetch_and(operand, atomic_ptr);
+        pr_info("Atomic FETCH_AND: IOVA 0x%llx, old=0x%llx, mask=0x%llx, PASID %u\n", guest_iova, old_val, operand,
+                pasid);
+        break;
+
+    case PCIEM_ATOMIC_FETCH_OR:
+        old_val = atomic64_fetch_or(operand, atomic_ptr);
+        pr_info("Atomic FETCH_OR: IOVA 0x%llx, old=0x%llx, bits=0x%llx, PASID %u\n", guest_iova, old_val, operand,
+                pasid);
+        break;
+
+    case PCIEM_ATOMIC_FETCH_XOR:
+        old_val = atomic64_fetch_xor(operand, atomic_ptr);
+        pr_info("Atomic FETCH_XOR: IOVA 0x%llx, old=0x%llx, bits=0x%llx, PASID %u\n", guest_iova, old_val, operand,
+                pasid);
+        break;
+
+    default:
+        pr_err("Unknown atomic operation type %u\n", op_type);
+        break;
+    }
+
+    memunmap(kva);
+
+    return old_val;
+}
+
+u64 pciem_dma_atomic_fetch_add(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_FETCH_ADD, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_fetch_add);
+
+u64 pciem_dma_atomic_fetch_sub(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_FETCH_SUB, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_fetch_sub);
+
+u64 pciem_dma_atomic_swap(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_SWAP, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_swap);
+
+u64 pciem_dma_atomic_cas(struct pciem_root_complex *v, u64 guest_iova, u64 expected, u64 new_val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_CAS, new_val, expected, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_cas);
+
+u64 pciem_dma_atomic_fetch_and(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_FETCH_AND, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_fetch_and);
+
+u64 pciem_dma_atomic_fetch_or(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_FETCH_OR, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_fetch_or);
+
+u64 pciem_dma_atomic_fetch_xor(struct pciem_root_complex *v, u64 guest_iova, u64 val, u32 pasid)
+{
+    return do_atomic_op(v, guest_iova, PCIEM_ATOMIC_FETCH_XOR, val, 0, pasid);
+}
+EXPORT_SYMBOL(pciem_dma_atomic_fetch_xor);
+```
+
+`kernel/framework/pciem_framework.c`:
+
+```c
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
+#include <linux/pci.h>
+#include <linux/pci_ids.h>
+
+#include <asm/cacheflush.h>
+#include <asm/io.h>
+#include <asm/tlbflush.h>
+#include <linux/atomic.h>
+#include <linux/cleanup.h>
+#include <linux/delay.h>
+#include <linux/init.h>
+#include <linux/interrupt.h>
+#include <linux/io.h>
+#include <linux/iommu.h>
+#include <linux/ioport.h>
+#include <linux/kernel.h>
+#include <linux/kthread.h>
+#include <linux/list.h>
+#include <linux/module.h>
+#include <linux/pci-acpi.h>
+#include <linux/pci_regs.h>
+#include <linux/resource.h>
+#include <linux/sched.h>
+#include <linux/sizes.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/vmalloc.h>
+#include <linux/idr.h>
+
+#include "pciem_capabilities.h"
+#include "pciem_dma.h"
+#include "pciem_framework.h"
+#include "pciem_p2p.h"
+
+static char *pciem_phys_regions = "";
+module_param(pciem_phys_regions, charp, 0444);
+MODULE_PARM_DESC(pciem_phys_regions,
+                 "Physical memory regions for BARs: bar0:0x1bf000000:0x10000,bar2:0x1bf010000:0x20000");
+
+static char *p2p_regions = "";
+module_param(p2p_regions, charp, 0444);
+MODULE_PARM_DESC(p2p_regions,
+    "P2P whitelist: 0xADDR:0xSIZE,0xADDR:0xSIZE");
+
+static struct miscdevice pciem_dev;
+static const struct file_operations pciem_fops;
+
+static void pciem_fixup_bridge_domain(struct pci_host_bridge *bridge, 
+                                      struct pciem_host_bridge_priv *priv, 
+                                      int domain)
+{
+    bridge->domain_nr = domain;
+
+#ifdef CONFIG_X86
+    priv->sd.domain = domain;
+    priv->sd.node = NUMA_NO_NODE;
+    bridge->sysdata = &priv->sd;
+#else
+    bridge->sysdata = priv;
+#endif
+}
+
+static int parse_phys_regions(struct pciem_root_complex *v)
+{
+    char *str, *token, *cur;
+    int bar_num;
+    resource_size_t start, size;
+
+    if (!pciem_phys_regions || strlen(pciem_phys_regions) == 0)
+    {
+        return 0;
+    }
+
+    str = kstrdup(pciem_phys_regions, GFP_KERNEL);
+    if (!str)
+    {
+        return -ENOMEM;
+    }
+
+    cur = str;
+    while ((token = strsep(&cur, ",")) != NULL)
+    {
+        if (sscanf(token, "bar%d:0x%llx:0x%llx", &bar_num, &start, &size) == 3 ||
+            sscanf(token, "bar%d:%llx:%llx", &bar_num, &start, &size) == 3)
+        {
+            if (bar_num < 0 || bar_num >= PCI_STD_NUM_BARS)
+            {
+                pr_warn("Invalid BAR number %d in phys_regions\n", bar_num);
+                continue;
+            }
+
+            v->bars[bar_num].carved_start = start;
+            v->bars[bar_num].carved_end = start + size - 1;
+            pr_info("Parsed BAR%d phys region: 0x%llx-0x%llx\n", bar_num, (u64)start, (u64)(start + size - 1));
+        }
+    }
+
+    kfree(str);
+    return 0;
+}
+
+int pciem_register_bar(struct pciem_root_complex *v, int bar_num, resource_size_t size, u32 flags)
+{
+    if (bar_num < 0 || bar_num >= PCI_STD_NUM_BARS)
+    {
+        return -EINVAL;
+    }
+
+    if (size == 0)
+    {
+        v->bars[bar_num].size = 0;
+        v->bars[bar_num].flags = 0;
+        return 0;
+    }
+
+    if (size & (size - 1))
+    {
+        pr_err("pciem: BAR %d size 0x%llx is not a power of 2\n", bar_num, (u64)size);
+        return -EINVAL;
+    }
+
+    v->bars[bar_num].size = size;
+    v->bars[bar_num].flags = flags;
+    v->bars[bar_num].base_addr_val = 0;
+
+    pr_info("pciem: Registered BAR %d: size 0x%llx, flags 0x%x\n", bar_num, (u64)size, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(pciem_register_bar);
+
+void pciem_trigger_msi(struct pciem_root_complex *v, int vector)
+{
+    struct pci_dev *dev = v->pciem_pdev;
+    unsigned int irq;
+
+    if (!dev || (!dev->msi_enabled && !dev->msix_enabled))
+    {
+        pr_warn("Cannot trigger MSI/MSI-X: device not ready or interrupts not enabled (msi=%d, msix=%d)\n",
+                dev ? dev->msi_enabled : 0, dev ? dev->msix_enabled : 0);
+        return;
+    }
+
+    if (dev->msix_enabled) {
+        irq = pci_irq_vector(dev, vector);
+        if (irq == 0) {
+            pr_warn("Cannot get IRQ for MSI-X vector %d\n", vector);
+            return;
+        }
+        pr_info("Triggering MSI-X vector %d (IRQ %u) via irq_work\n", vector, irq);
+    }
+    else {
+        irq = dev->irq;
+        if (irq == 0) {
+            pr_warn("Cannot trigger MSI: dev->irq is 0\n");
+            return;
+        }
+        pr_info("Triggering MSI (IRQ %u) via irq_work\n", irq);
+    }
+
+    v->pending_msi_irq = irq;
+    irq_work_queue(&v->msi_irq_work);
+}
+EXPORT_SYMBOL(pciem_trigger_msi);
+
+static void pciem_msi_irq_work_func(struct irq_work *work)
+{
+    struct pciem_root_complex *v = container_of(work, struct pciem_root_complex, msi_irq_work);
+    unsigned int irq = v->pending_msi_irq;
+    if (irq)
+    {
+        generic_handle_irq(irq);
+    }
+}
+
+static void pciem_bus_copy_resources(struct pciem_root_complex *v)
+{
+    int i;
+    struct pciem_bar_info *bar;
+    struct pci_dev *dev __free(pci_dev_put) = pci_get_slot(v->root_bus, 0);
+
+    if (!dev)
+        return;
+
+    for (i = 0; i < PCI_STD_NUM_BARS; i++)
+    {
+        bar = &v->bars[i];
+        if (bar->size > 0 && bar->allocated_res)
+        {
+            dev->resource[i] = *bar->allocated_res;
+            dev->resource[i].flags |= IORESOURCE_BUSY;
+            bar->res = &dev->resource[i];
+        }
+    }
+}
+
+static int pciem_reserve_bar_res(struct pciem_bar_info *bar, int i, struct list_head *resources)
+{
+    struct resource_entry *entry;
+
+    if (!bar->allocated_res)
+        return 0;
+
+    entry = resource_list_create_entry(bar->allocated_res, i);
+    if (!entry)
+        return -ENOMEM;
+
+    resource_list_add_tail(entry, resources);
+    pr_info("init: Added BAR%d to resource list", i);
+    return 0;
+}
+
+static int pciem_reserve_bars_res(struct pciem_root_complex *v, struct list_head *resources)
+{
+    int i, rc;
+    struct pciem_bar_info *bar, *prev = NULL;
+
+    for (i = 0; i < PCI_STD_NUM_BARS; i++)
+    {
+        bar = &v->bars[i];
+        if (i > 0)
+            prev = &v->bars[i - 1];
+
+        if (!bar->size)
+            continue;
+
+        if (i & 1 && prev && prev->flags & PCI_BASE_ADDRESS_MEM_TYPE_64)
+            continue;
+
+        rc = pciem_reserve_bar_res(bar, i, resources);
+        if (rc)
+            return rc;
+    }
+
+    return 0;
+}
+
+static int pciem_map_bar_userspace(struct pciem_bar_info *bar, int i)
+{
+    pr_info("init: BAR%d userspace mode - lightweight kernel mapping", i);
+
+    bar->virt_addr = ioremap(bar->phys_addr, bar->size);
+    if (bar->virt_addr) {
+        bar->map_type = PCIEM_MAP_IOREMAP;
+        return 0;
+    }
+
+    pr_warn("init: BAR%d kernel mapping failed, continuing without it (userspace will map directly)", i);
+    bar->map_type = PCIEM_MAP_NONE;
+    bar->virt_addr = NULL;
+    return 0;
+}
+
+static int pciem_map_bars(struct pciem_root_complex *v)
+{
+    int rc, i;
+    struct pciem_bar_info *bar, *prev = NULL;
+
+    for (i = 0; i < PCI_STD_NUM_BARS; i++)
+    {
+        bar = &v->bars[i];
+        if (i > 0)
+            prev = &v->bars[i - 1];
+
+        if (!bar->size)
+            continue;
+
+        if (i & 1 && prev && prev->flags & PCI_BASE_ADDRESS_MEM_TYPE_64)
+            continue;
+
+        bar->map_type = PCIEM_MAP_NONE;
+
+        rc = pciem_map_bar_userspace(bar, i);
+
+        if (rc) {
+            pr_err("init: Failed to create mapping for BAR%d", i);
+            return rc;
+        }
+
+        if (bar->virt_addr) {
+            pr_info("init: BAR%d mapped at %px for emulator (map_type=%d)",
+                    i, bar->virt_addr, bar->map_type);
+        } else {
+            pr_info("init: BAR%d physical at 0x%llx (no kernel mapping)",
+                    i, (u64)bar->phys_addr);
+        }
+    }
+
+    return 0;
+}
+
+static void pciem_cleanup_bar(struct pciem_bar_info *bar)
+{
+    if (bar->virt_addr)
+    {
+        if (bar->map_type == PCIEM_MAP_IOREMAP_CACHE || bar->map_type == PCIEM_MAP_IOREMAP ||
+            bar->map_type == PCIEM_MAP_IOREMAP_WC)
+        {
+            iounmap(bar->virt_addr);
+        }
+        bar->virt_addr = NULL;
+    }
+    if (bar->allocated_res && bar->mem_owned_by_framework)
+    {
+        if (bar->allocated_res->parent) {
+            release_resource(bar->allocated_res);
+        }
+        kfree(bar->allocated_res->name);
+        kfree(bar->allocated_res);
+        bar->allocated_res = NULL;
+    }
+    if (bar->pages) {
+        __free_pages(bar->pages, bar->order);
+        bar->pages = NULL;
+    }
+}
+
+static void pciem_cleanup_bars(struct pciem_root_complex *v)
+{
+    for (int i = 0; i < PCI_STD_NUM_BARS; i++)
+        pciem_cleanup_bar(&v->bars[i]);
+}
+
+static int vph_read_config(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 *value)
+{
+    struct pciem_root_complex *v;
+    u32 val = ~0U;
+
+#ifdef CONFIG_X86
+    struct pci_sysdata *sd = bus->sysdata;
+    struct pciem_host_bridge_priv *priv = container_of(sd, struct pciem_host_bridge_priv, sd);
+    v = priv->v;
+#else
+    struct pciem_host_bridge_priv *priv = bus->sysdata;
+    v = priv->v;
+#endif
+
+    if (!v || devfn != 0)
+    {
+        *value = ~0U;
+        return PCIBIOS_DEVICE_NOT_FOUND;
+    }
+    if (where < 0 || (where + size) > (int)sizeof(v->cfg))
+    {
+        *value = ~0U;
+        return PCIBIOS_DEVICE_NOT_FOUND;
+    }
+    if (pciem_handle_cap_read(v, where, size, &val))
+    {
+        *value = val;
+        return PCIBIOS_SUCCESSFUL;
+    }
+
+    if (where >= 0x10 && where <= 0x27 && (where % 4 == 0) && size == 4)
+    {
+        int idx = (where - 0x10) / 4;
+        resource_size_t bsize = v->bars[idx].size;
+
+        if (bsize != 0)
+        {
+            u32 probe_val = (u32)(~(bsize - 1));
+            u32 flags = v->bars[idx].flags;
+
+            if (v->bars[idx].base_addr_val == probe_val)
+            {
+                val = probe_val | (flags & ~PCI_BASE_ADDRESS_MEM_MASK);
+            }
+            else
+            {
+                val = v->bars[idx].base_addr_val | (flags & ~PCI_BASE_ADDRESS_MEM_MASK);
+            }
+        }
+
+        else if (idx > 0 && (idx % 2 == 1) && (v->bars[idx - 1].flags & PCI_BASE_ADDRESS_MEM_TYPE_64))
+        {
+            resource_size_t bsize_prev = v->bars[idx - 1].size;
+            u32 probe_val_high = 0xffffffff;
+
+            if (bsize_prev >= (1ULL << 32))
+            {
+                probe_val_high = (u32)(~(bsize_prev - 1) >> 32);
+            }
+
+            if (v->bars[idx].base_addr_val == probe_val_high)
+            {
+                val = probe_val_high;
+            }
+            else
+            {
+                val = v->bars[idx].base_addr_val;
+            }
+        }
+        else
+        {
+            val = 0;
+        }
+    }
+    else if (where == 0x30 && size == 4)
+    {
+        val = 0;
+    }
+    else
+    {
+        switch (size)
+        {
+        case 1:
+            val = v->cfg[where];
+            break;
+        case 2:
+            val = *(u16 *)&v->cfg[where];
+            break;
+        case 4:
+            val = *(u32 *)&v->cfg[where];
+            break;
+        default:
+            val = ~0U;
+        }
+    }
+    *value = val;
+    return PCIBIOS_SUCCESSFUL;
+}
+
+static int vph_write_config(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 value)
+{
+    struct pciem_root_complex *v;
+
+#ifdef CONFIG_X86
+    struct pci_sysdata *sd = bus->sysdata;
+    struct pciem_host_bridge_priv *priv = container_of(sd, struct pciem_host_bridge_priv, sd);
+    v = priv->v;
+#else
+    struct pciem_host_bridge_priv *priv = bus->sysdata;
+    v = priv->v;
+#endif
+
+    if (!v)
+    {
+        return PCIBIOS_DEVICE_NOT_FOUND;
+    }
+    if (where < 0 || (where + size) > (int)sizeof(v->cfg))
+    {
+        return PCIBIOS_DEVICE_NOT_FOUND;
+    }
+
+    if (pciem_handle_cap_write(v, where, size, value))
+    {
+        return PCIBIOS_SUCCESSFUL;
+    }
+
+    if (where >= 0x10 && where <= 0x27 && (where % 4 == 0) && size == 4)
+    {
+        int idx = (where - 0x10) / 4;
+        resource_size_t bsize = v->bars[idx].size;
+
+        if (bsize != 0)
+        {
+            u32 mask = (u32)(~(bsize - 1));
+            if (v->bars[idx].flags & PCI_BASE_ADDRESS_SPACE_IO)
+            {
+                mask &= ~PCI_BASE_ADDRESS_IO_MASK;
+            }
+            else
+            {
+                mask &= ~PCI_BASE_ADDRESS_MEM_MASK;
+            }
+
+            v->bars[idx].base_addr_val = value & mask;
+            return PCIBIOS_SUCCESSFUL;
+        }
+        else if (idx > 0 && (idx % 2 == 1) && (v->bars[idx - 1].flags & PCI_BASE_ADDRESS_MEM_TYPE_64))
+        {
+            resource_size_t bsize_prev = v->bars[idx - 1].size;
+            u32 mask_high = 0xffffffff;
+            
+            if (bsize_prev < (1ULL << 32))
+            {
+                mask_high = 0;
+            }
+            else
+            {
+                mask_high = (u32)(~(bsize_prev - 1) >> 32);
+            }
+            
+            v->bars[idx].base_addr_val = value & mask_high;
+            return PCIBIOS_SUCCESSFUL;
+        }
+    }
+    else if (where == 0x30)
+    {
+        return PCIBIOS_SUCCESSFUL;
+    }
+    switch (size)
+    {
+    case 1:
+        v->cfg[where] = (u8)value;
+        break;
+    case 2:
+        *(u16 *)&v->cfg[where] = (u16)value;
+        break;
+    case 4:
+        *(u32 *)&v->cfg[where] = (u32)value;
+        break;
+    default:
+        return PCIBIOS_FUNC_NOT_SUPPORTED;
+    }
+    return PCIBIOS_SUCCESSFUL;
+}
+
+static struct pci_ops vph_pci_ops = {
+    .read = vph_read_config,
+    .write = vph_write_config,
+};
+
+int pciem_complete_init(struct pciem_root_complex *v)
+{
+    int rc = 0;
+    struct resource *mem_res = NULL;
+    LIST_HEAD(resources);
+    int busnr = 1;
+    int domain = 0;
+    int i;
+
+    struct platform_device_info pdevinfo = {
+        .name = "pciem",
+        .id = PLATFORM_DEVID_AUTO,
+        .res = NULL,
+        .num_res = 0,
+    };
+    
+    v->shared_bridge_pdev = platform_device_register_full(&pdevinfo);
+
+    if (IS_ERR(v->shared_bridge_pdev))
+    {
+        rc = PTR_ERR(v->shared_bridge_pdev);
+        goto fail_pdev_null;
+    }
+
+    rc = parse_phys_regions(v);
+    if (rc)
+    {
+        pr_err("pciem: Failed to parse physical regions: %d\n", rc);
+        goto fail_pdev;
+    }
+
+    rc = pciem_p2p_init(v, p2p_regions);
+    if (rc) {
+        pr_warn("pciem: P2P init failed: %d (non-fatal)\n", rc);
+    }
+
+    for (i = 0; i < PCI_STD_NUM_BARS; i++)
+    {
+        struct pciem_bar_info *bar = &v->bars[i];
+        resource_size_t start, end;
+
+        if (bar->size == 0)
+        {
+            continue;
+        }
+
+        if (i > 0 && (i % 2 == 1) && (v->bars[i - 1].flags & PCI_BASE_ADDRESS_MEM_TYPE_64))
+        {
+            continue;
+        }
+
+        bar->order = get_order(bar->size);
+        pr_info("init: preparing BAR%d physical memory (%llu KB, order %u)", i, (u64)bar->size / 1024, bar->order);
+
+        if (bar->carved_start != 0 && bar->carved_end != 0)
+        {
+            start = bar->carved_start;
+            end = bar->carved_end;
+
+            pr_info("init: BAR%d using pre-carved region [0x%llx-0x%llx]", i, (u64)start, (u64)end);
+
+            struct resource *r = iomem_resource.child;
+            struct resource *found = NULL;
+            struct resource *parent = NULL;
+
+            while (r)
+            {
+                if ((r->flags & IORESOURCE_MEM) && r->start <= start && r->end >= end)
+                {
+                    struct resource *c = r->child;
+                    while (c)
+                    {
+                        if ((c->flags & IORESOURCE_MEM) && c->start == start && c->end == end)
+                        {
+                            found = c;
+                            break;
+                        }
+                        c = c->sibling;
+                    }
+
+                    if (found)
+                    {
+                        break;
+                    }
+
+                    if (!parent || (r->start >= parent->start && r->end <= parent->end))
+                    {
+                        parent = r;
+                    }
+                }
+                r = r->sibling;
+            }
+
+            if (found && found->start == start && found->end == end)
+            {
+                pr_info("init: BAR%d found existing iomem resource: %s [0x%llx-0x%llx]", i,
+                        found->name ? found->name : "<unnamed>", (u64)found->start, (u64)found->end);
+                bar->allocated_res = found;
+                bar->mem_owned_by_framework = false;
+                bar->phys_addr = start;
+                bar->virt_addr = NULL;
+                bar->pages = NULL;
+            }
+            else
+            {
+                mem_res = kzalloc(sizeof(*mem_res), GFP_KERNEL);
+                if (!mem_res)
+                {
+                    rc = -ENOMEM;
+                    goto fail_bars;
+                }
+
+                mem_res->name = kasprintf(GFP_KERNEL, "PCI BAR%d", i);
+                if (!mem_res->name)
+                {
+                    kfree(mem_res);
+                    rc = -ENOMEM;
+                    goto fail_bars;
+                }
+
+                mem_res->start = start;
+                mem_res->end = end;
+                mem_res->flags = IORESOURCE_MEM;
+
+                if (parent)
+                {
+                    pr_info("init: BAR%d inserting into parent resource: %s [0x%llx-0x%llx]", i,
+                            parent->name ? parent->name : "<unnamed>", (u64)parent->start, (u64)parent->end);
+                    if (request_resource(parent, mem_res))
+                    {
+                        pr_err("init: BAR%d failed to insert into parent resource", i);
+                        kfree(mem_res->name);
+                        kfree(mem_res);
+                        rc = -EBUSY;
+                        goto fail_bars;
+                    }
+                }
+                else
+                {
+                    if (request_resource(&iomem_resource, mem_res))
+                    {
+                        pr_err("init: BAR%d phys region 0x%llx busy (request_resource failed).", i, (u64)start);
+                        kfree(mem_res->name);
+                        kfree(mem_res);
+                        rc = -EBUSY;
+                        goto fail_bars;
+                    }
+                }
+
+                bar->allocated_res = mem_res;
+                bar->mem_owned_by_framework = true;
+                bar->phys_addr = start;
+                bar->virt_addr = NULL;
+                bar->pages = NULL;
+                pr_info("init: BAR%d successfully reserved [0x%llx-0x%llx]", i, (u64)start, (u64)end);
+            }
+        }
+    }
+
+    rc = pciem_reserve_bars_res(v, &resources);
+    if (rc)
+        goto fail_res_list;
+
+    while (pci_find_bus(domain, busnr))
+    {
+        busnr++;
+        if (busnr > 255)
+        {
+            pr_err("init: No free bus number available\n");
+            rc = -EBUSY;
+            goto fail_res_list;
+        }
+    }
+
+    struct pci_host_bridge *bridge;
+    struct pciem_host_bridge_priv *priv;
+
+    bridge = pci_alloc_host_bridge(sizeof(*priv));
+    if (!bridge) {
+        rc = -ENOMEM;
+        goto fail_res_list;
+    }
+
+    priv = pci_host_bridge_priv(bridge);
+    priv->v = v;
+
+    pciem_fixup_bridge_domain(bridge, priv, domain);
+
+    bridge->dev.parent = &v->shared_bridge_pdev->dev;
+    bridge->busnr = busnr;
+    bridge->ops = &vph_pci_ops;
+    list_splice_init(&resources, &bridge->windows);
+
+    rc = pci_host_probe(bridge);
+
+    if (rc < 0)
+    {
+        pr_err("init: pci_host_probe failed: %d\n", rc);
+        pci_free_host_bridge(bridge);
+        rc = -ENODEV;
+        goto fail_res_list;
+    }
+
+    v->root_bus = bridge->bus;
+
+    if (!v->root_bus)
+    {
+        pr_err("init: pci_scan_bus failed");
+        rc = -ENODEV;
+        goto fail_res_list;
+    }
+
+    pci_bus_add_devices(v->root_bus);
+
+    if (v->root_bus)
+        pciem_bus_copy_resources(v);
+
+    pci_bus_assign_resources(v->root_bus);
+
+    if (v->root_bus)
+    {
+        struct pci_dev *dev;
+        dev = pci_get_slot(v->root_bus, 0);
+        if (dev)
+        {
+            pr_info("init: found pci_dev vendor=%04x device=%04x", dev->vendor, dev->device);
+            pci_dev_put(dev);
+        }
+    }
+
+    v->pciem_pdev = pci_get_domain_bus_and_slot(domain, v->root_bus->number, PCI_DEVFN(0, 0));
+    if (!v->pciem_pdev)
+    {
+        pr_err("init: failed to find ProtoPCIem pci_dev");
+        rc = -ENODEV;
+        goto fail_map;
+    }
+
+    rc = pciem_map_bars(v);
+    if (rc)
+        goto fail_map;
+
+    pr_info("init: pciem instance ready");
+    return 0;
+
+fail_map:
+    if (v->pciem_pdev)
+    {
+        pci_dev_put(v->pciem_pdev);
+        v->pciem_pdev = NULL;
+    }
+    if (v->root_bus)
+    {
+        pci_remove_root_bus(v->root_bus);
+    }
+fail_res_list:
+    resource_list_free(&resources);
+fail_bars:
+    pciem_cleanup_bars(v);
+fail_pdev:
+    platform_device_unregister(v->shared_bridge_pdev);
+fail_pdev_null:
+    v->shared_bridge_pdev = NULL;
+    return rc;
+}
+EXPORT_SYMBOL(pciem_complete_init);
+
+static void pciem_teardown_device(struct pciem_root_complex *v)
+{
+    pr_info("exit: tearing down pciem device\n");
+
+    irq_work_sync(&v->msi_irq_work);
+
+    if (v->pciem_pdev)
+    {
+        pci_dev_put(v->pciem_pdev);
+        v->pciem_pdev = NULL;
+    }
+
+    if (v->root_bus)
+    {
+        pci_remove_root_bus(v->root_bus);
+        v->root_bus = NULL;
+    }
+
+    pciem_cleanup_bars(v);
+
+    if (v->shared_bridge_pdev)
+    {
+        platform_device_unregister(v->shared_bridge_pdev);
+        v->shared_bridge_pdev = NULL;
+    }
+
+    pciem_cleanup_cap_manager(v);
+    pciem_p2p_cleanup(v);
+}
+
+static int __init pciem_init(void)
+{
+    int ret;
+    pr_info("init: pciem framework loading\n");
+
+    ret = pciem_init_bar_tracking();
+    if (ret) {
+        pr_info("init: BAR tracking unavailable\n");
+    }
+
+    ret = pciem_userspace_init();
+    if (ret) {
+        pr_err("init: Failed to initialize userspace support: %d\n", ret);
+        goto fail_userspace;
+    }
+
+    pciem_dev.minor = MISC_DYNAMIC_MINOR;
+    pciem_dev.name = "pciem";
+    pciem_dev.fops = &pciem_fops;
+    pciem_dev.mode = 0666;
+
+    ret = misc_register(&pciem_dev);
+    if (ret) {
+        pr_err("init: Failed to register main device: %d\n", ret);
+        goto fail_misc;
+    }
+
+    pr_info("init: Created /dev/pciem for userspace device creation\n");
+    pr_info("init: pciem framework loaded\n");
+    return 0;
+
+fail_misc:
+    pciem_userspace_cleanup();
+fail_userspace:
+    return ret;
+}
+
+static void __exit pciem_exit(void)
+{
+    pr_info("exit: unloading pciem framework\n");
+
+    misc_deregister(&pciem_dev);
+    pciem_userspace_cleanup();
+    pr_info("exit: Unregistered /dev/pciem\n");
+
+    pciem_cleanup_bar_tracking();
+    pr_info("exit: pciem framework done");
+}
+
+struct pciem_root_complex *pciem_alloc_root_complex(void)
+{
+    struct pciem_root_complex *v;
+
+    v = kzalloc(sizeof(*v), GFP_KERNEL);
+    if (!v)
+        return ERR_PTR(-ENOMEM);
+
+    /* Essential initialization that must happen */
+    init_irq_work(&v->msi_irq_work, pciem_msi_irq_work_func);
+    v->pending_msi_irq = 0;
+    memset(v->bars, 0, sizeof(v->bars));
+
+    pr_info("Allocated pciem root complex\n");
+    return v;
+}
+EXPORT_SYMBOL(pciem_alloc_root_complex);
+
+void pciem_free_root_complex(struct pciem_root_complex *v)
+{
+    if (!v)
+        return;
+
+    pr_info("Freeing pciem root complex\n");
+    pciem_teardown_device(v);
+    kfree(v);
+}
+EXPORT_SYMBOL(pciem_free_root_complex);
+
+static int pciem_open(struct inode *inode, struct file *file)
+{
+    struct pciem_userspace_state *us;
+
+    us = pciem_userspace_create();
+    if (IS_ERR(us))
+        return PTR_ERR(us);
+
+    file->private_data = us;
+    return 0;
+}
+
+static long pciem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    return pciem_device_fops.unlocked_ioctl(file, cmd, arg);
+}
+
+static int pciem_release(struct inode *inode, struct file *file)
+{
+    if (pciem_device_fops.release)
+        return pciem_device_fops.release(inode, file);
+    return 0;
+}
+
+static ssize_t pciem_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+{
+    if (pciem_device_fops.read)
+        return pciem_device_fops.read(file, buf, count, ppos);
+    return -EINVAL;
+}
+
+static ssize_t pciem_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+    if (pciem_device_fops.write)
+        return pciem_device_fops.write(file, buf, count, ppos);
+    return -EINVAL;
+}
+
+static __poll_t pciem_poll(struct file *file, struct poll_table_struct *wait)
+{
+    if (pciem_device_fops.poll)
+        return pciem_device_fops.poll(file, wait);
+    return 0;
+}
+
+static int pciem_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    if (pciem_device_fops.mmap)
+        return pciem_device_fops.mmap(file, vma);
+    return -EINVAL;
+}
+
+static const struct file_operations pciem_fops = {
+    .owner = THIS_MODULE,
+    .open = pciem_open,
+    .release = pciem_release,
+    .read = pciem_read,
+    .write = pciem_write,
+    .poll = pciem_poll,
+    .unlocked_ioctl = pciem_ioctl,
+    .compat_ioctl = pciem_ioctl,
+    .mmap = pciem_mmap,
+};
+
+module_init(pciem_init);
+module_exit(pciem_exit);
+
+MODULE_LICENSE("Dual MIT/GPL");
+MODULE_AUTHOR("cakehonolulu (cakehonolulu@protonmail.com)");
+MODULE_DESCRIPTION("Synthetic PCIe device with QEMU forwarding");
+
+```
+
+`kernel/framework/pciem_p2p.c`:
+
+```c
+#define pr_fmt(fmt) "pciem_p2p: " fmt
+
+#include "pciem_p2p.h"
+#include "pciem_framework.h"
+#include <linux/io.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+
+static int parse_p2p_regions(struct pciem_p2p_manager *mgr,
+                              const char *regions_str)
+{
+    char *str __free(kfree) = NULL, *token, *cur;
+    phys_addr_t phys;
+    resource_size_t size;
+    int count = 0;
+
+    if (!regions_str || strlen(regions_str) == 0) {
+        return 0;
+    }
+
+    str = kstrdup(regions_str, GFP_KERNEL);
+    if (!str) {
+        return -ENOMEM;
+    }
+
+    cur = str;
+    while ((token = strsep(&cur, ",")) != NULL) {
+        struct pciem_p2p_region *region;
+
+        if (sscanf(token, "0x%llx:0x%llx", &phys, &size) != 2 &&
+            sscanf(token, "%llx:%llx", &phys, &size) != 2) {
+            pr_warn("Invalid P2P region format: '%s'\n", token);
+            continue;
+        }
+
+        if (size == 0 || size > (1ULL << 40)) {
+            pr_warn("Invalid P2P region size: 0x%llx\n", size);
+            continue;
+        }
+
+        phys_addr_t region_end = phys + size;
+        struct pciem_p2p_region *existing;
+        bool overlap = false;
+
+        list_for_each_entry(existing, &mgr->regions, list) {
+            phys_addr_t existing_end = existing->phys_start + existing->size;
+
+            if ((phys < existing_end && region_end > existing->phys_start)) {
+                pr_err("P2P region 0x%llx-0x%llx overlaps with existing 0x%llx-0x%llx\n",
+                       phys, region_end, existing->phys_start, existing_end);
+                overlap = true;
+                break;
+            }
+        }
+
+        if (overlap) {
+            continue;
+        }
+
+        region = kzalloc(sizeof(*region), GFP_KERNEL);
+        if (!region) {
+            pr_err("Failed to allocate P2P region struct\n");
+            continue;
+        }
+
+        region->phys_start = phys;
+        region->size = size;
+
+        region->kaddr = ioremap_wc(phys, size);
+        if (!region->kaddr) {
+            pr_err("Failed to ioremap P2P region 0x%llx (size 0x%llx)\n",
+                   phys, size);
+            kfree(region);
+            continue;
+        }
+
+        snprintf(region->name, sizeof(region->name), "p2p_%d", count);
+
+        list_add_tail(&region->list, &mgr->regions);
+        count++;
+
+        pr_info("Registered P2P region: 0x%llx-0x%llx (size %llu KB)\n",
+                phys, phys + size, size / 1024);
+    }
+
+    if (count > 0) {
+        mgr->enabled = true;
+        pr_info("P2P enabled with %d regions\n", count);
+    }
+
+    return 0;
+}
+
+int pciem_p2p_init(struct pciem_root_complex *v, const char *regions_str)
+{
+    struct pciem_p2p_manager *mgr;
+    int ret;
+
+    if (!v) {
+        return -EINVAL;
+    }
+
+    mgr = kzalloc(sizeof(*mgr), GFP_KERNEL);
+    if (!mgr) {
+        return -ENOMEM;
+    }
+
+    INIT_LIST_HEAD(&mgr->regions);
+    mutex_init(&mgr->lock);
+    mgr->max_transfer_size = PCIEM_P2P_MAX_TRANSFER;
+    mgr->enabled = false;
+
+    ret = parse_p2p_regions(mgr, regions_str);
+    if (ret < 0) {
+        pr_err("Failed to parse P2P regions: %d\n", ret);
+        mutex_destroy(&mgr->lock);
+        kfree(mgr);
+        return ret;
+    }
+
+    v->p2p_mgr = mgr;
+    return 0;
+}
+EXPORT_SYMBOL(pciem_p2p_init);
+
+void pciem_p2p_cleanup(struct pciem_root_complex *v)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region, *tmp;
+
+    if (!v || !v->p2p_mgr) {
+        return;
+    }
+
+    mgr = v->p2p_mgr;
+
+    mutex_lock(&mgr->lock);
+
+    list_for_each_entry_safe(region, tmp, &mgr->regions, list) {
+        pr_info("Unregistering P2P region: 0x%llx (size 0x%llx)\n",
+                region->phys_start, region->size);
+
+        if (region->kaddr) {
+            iounmap(region->kaddr);
+        }
+
+        list_del(&region->list);
+        kfree(region);
+    }
+
+    mutex_unlock(&mgr->lock);
+
+    kfree(mgr);
+    v->p2p_mgr = NULL;
+}
+EXPORT_SYMBOL(pciem_p2p_cleanup);
+
+int pciem_p2p_register_region(struct pciem_root_complex *v,
+                               phys_addr_t phys,
+                               resource_size_t size,
+                               const char *name)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region;
+
+    if (!v || !v->p2p_mgr) {
+        return -EINVAL;
+    }
+
+    if (size == 0 || size > PCIEM_P2P_MAX_TRANSFER) {
+        return -EINVAL;
+    }
+
+    mgr = v->p2p_mgr;
+
+    region = kzalloc(sizeof(*region), GFP_KERNEL);
+    if (!region) {
+        return -ENOMEM;
+    }
+
+    region->phys_start = phys;
+    region->size = size;
+    region->kaddr = ioremap_wc(phys, size);
+
+    if (!region->kaddr) {
+        kfree(region);
+        return -ENOMEM;
+    }
+
+    if (name) {
+        strncpy(region->name, name, sizeof(region->name) - 1);
+    } else {
+        snprintf(region->name, sizeof(region->name), "dynamic_0x%llx", phys);
+    }
+
+    guard(mutex)(&mgr->lock);
+    list_add_tail(&region->list, &mgr->regions);
+    mgr->enabled = true;
+
+    pr_info("Dynamically registered P2P region: %s at 0x%llx (size 0x%llx)\n",
+            region->name, phys, size);
+
+    return 0;
+}
+EXPORT_SYMBOL(pciem_p2p_register_region);
+
+int pciem_p2p_unregister_region(struct pciem_root_complex *v,
+                                 phys_addr_t phys)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region, *tmp;
+
+    if (!v || !v->p2p_mgr) {
+        return -EINVAL;
+    }
+
+    mgr = v->p2p_mgr;
+
+    guard(mutex)(&mgr->lock);
+
+    list_for_each_entry_safe(region, tmp, &mgr->regions, list) {
+        if (region->phys_start == phys) {
+            pr_info("Unregistering P2P region: %s\n", region->name);
+
+            if (region->kaddr) {
+                iounmap(region->kaddr);
+            }
+
+            list_del(&region->list);
+            kfree(region);
+            return 0;
+        }
+    }
+
+    return -ENOENT;
+}
+EXPORT_SYMBOL(pciem_p2p_unregister_region);
+
+struct pciem_p2p_region *pciem_p2p_get_region(struct pciem_root_complex *v,
+                                               phys_addr_t phys_addr)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region;
+
+    if (!v || !v->p2p_mgr) {
+        return NULL;
+    }
+
+    mgr = v->p2p_mgr;
+
+    list_for_each_entry(region, &mgr->regions, list) {
+        phys_addr_t region_end = region->phys_start + region->size;
+
+        if (phys_addr >= region->phys_start && phys_addr < region_end) {
+            return region;
+        }
+    }
+
+    return NULL;
+}
+EXPORT_SYMBOL(pciem_p2p_get_region);
+
+int pciem_p2p_validate_access(struct pciem_root_complex *v,
+                               phys_addr_t phys_addr,
+                               size_t len)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region;
+    phys_addr_t access_end;
+    int ret = -EACCES;
+
+    if (!v || !v->p2p_mgr) {
+        return -EINVAL;
+    }
+
+    mgr = v->p2p_mgr;
+
+    if (!mgr->enabled) {
+        return -EACCES;
+    }
+
+    if (len == 0 || len > mgr->max_transfer_size) {
+        return -EINVAL;
+    }
+
+    access_end = phys_addr + len;
+
+    if (access_end < phys_addr) {
+        return -EINVAL;
+    }
+
+    guard(mutex)(&mgr->lock);
+
+    list_for_each_entry(region, &mgr->regions, list) {
+        phys_addr_t region_end = region->phys_start + region->size;
+
+        if (phys_addr >= region->phys_start && access_end <= region_end) {
+            ret = 0;
+            break;
+        }
+    }
+
+    if (ret != 0) {
+        pr_warn_ratelimited("P2P access denied: 0x%llx+0x%zx not whitelisted\n",
+                           phys_addr, len);
+    }
+
+    return ret;
+}
+EXPORT_SYMBOL(pciem_p2p_validate_access);
+
+int pciem_p2p_read(struct pciem_root_complex *v,
+                   phys_addr_t phys_addr,
+                   void *dst,
+                   size_t len)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region;
+    size_t offset;
+    int ret;
+
+    if (!v || !v->p2p_mgr || !dst) {
+        return -EINVAL;
+    }
+
+    ret = pciem_p2p_validate_access(v, phys_addr, len);
+    if (ret < 0) {
+        return ret;
+    }
+
+    mgr = v->p2p_mgr;
+
+    guard(mutex)(&mgr->lock);
+
+    region = pciem_p2p_get_region(v, phys_addr);
+    if (!region)
+        return -EFAULT;
+
+    offset = phys_addr - region->phys_start;
+
+    memcpy_fromio(dst, region->kaddr + offset, len);
+
+    pr_debug("P2P read: 0x%llx+0x%zx from region '%s'\n",
+             phys_addr, len, region->name);
+
+    return 0;
+}
+EXPORT_SYMBOL(pciem_p2p_read);
+
+int pciem_p2p_write(struct pciem_root_complex *v,
+                    phys_addr_t phys_addr,
+                    const void *src,
+                    size_t len)
+{
+    struct pciem_p2p_manager *mgr;
+    struct pciem_p2p_region *region;
+    size_t offset;
+    int ret;
+
+    if (!v || !v->p2p_mgr || !src) {
+        return -EINVAL;
+    }
+
+    ret = pciem_p2p_validate_access(v, phys_addr, len);
+    if (ret < 0) {
+        return ret;
+    }
+
+    mgr = v->p2p_mgr;
+
+    guard(mutex)(&mgr->lock);
+
+    region = pciem_p2p_get_region(v, phys_addr);
+    if (!region)
+        return -EFAULT;
+
+    offset = phys_addr - region->phys_start;
+
+    memcpy_toio(region->kaddr + offset, src, len);
+
+    pr_debug("P2P write: 0x%llx+0x%zx to region '%s'\n",
+             phys_addr, len, region->name);
+
+    return 0;
+}
+EXPORT_SYMBOL(pciem_p2p_write);
+
+```
+
+`kernel/framework/pciem_userspace.c`:
+
+```c
+#define pr_fmt(fmt) "pciem_userspace: " fmt
+
+#include <linux/anon_inodes.h>
+#include <linux/capability.h>
+#include <linux/eventfd.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/hw_breakpoint.h>
+#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/pci_regs.h>
+#include <linux/perf_event.h>
+#include <linux/poll.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+#include <linux/kthread.h>
+#include <linux/delay.h>
+
+#include "pciem_capabilities.h"
+#include "pciem_dma.h"
+#include "pciem_framework.h"
+#include "pciem_p2p.h"
+#include "pciem_userspace.h"
+
+static int pciem_device_release(struct inode *inode, struct file *file);
+static void pciem_irqfd_shutdown(struct pciem_irq_eventfd_entry *entry);
+static ssize_t pciem_device_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos);
+static long pciem_device_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+static int pciem_device_mmap(struct file *file, struct vm_area_struct *vma);
+
+const struct file_operations pciem_device_fops = {
+    .owner = THIS_MODULE,
+    .release = pciem_device_release,
+    .write = pciem_device_write,
+    .unlocked_ioctl = pciem_device_ioctl,
+    .compat_ioctl = pciem_device_ioctl,
+    .mmap = pciem_device_mmap,
+};
+EXPORT_SYMBOL(pciem_device_fops);
+
+static int pciem_instance_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    struct pciem_userspace_state *us = file->private_data;
+    struct pciem_bar_info *bar;
+    unsigned long size = vma->vm_end - vma->vm_start;
+
+    int bar_index = vma->vm_pgoff;
+
+    if (!us || !us->rc)
+        return -ENODEV;
+
+    if (bar_index < 0 || bar_index >= PCI_STD_NUM_BARS)
+    {
+        pr_err("pciem_instance: Invalid BAR index %d via mmap offset\n", bar_index);
+        return -EINVAL;
+    }
+
+    bar = &us->rc->bars[bar_index];
+
+    if (bar->size == 0 || bar->phys_addr == 0)
+    {
+        pr_err("pciem_instance: BAR%d is not active or has no physical address\n", bar_index);
+        return -EINVAL;
+    }
+
+    vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+
+    if (remap_pfn_range(vma, vma->vm_start,
+                        bar->phys_addr >> PAGE_SHIFT,
+                        size, vma->vm_page_prot))
+    {
+        return -EAGAIN;
+    }
+
+    pr_debug("pciem_instance: Mapped BAR%d (phys: 0x%llx) to userspace via instance FD\n",
+            bar_index, (u64)bar->phys_addr);
+
+    return 0;
+}
+
+static const struct file_operations pciem_instance_fops = {
+    .owner = THIS_MODULE,
+    .mmap = pciem_instance_mmap,
+};
+
+static void free_pending_request(struct pciem_userspace_state *us, struct pciem_pending_request *req)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&us->pending_lock, flags);
+    hlist_del(&req->node);
+    spin_unlock_irqrestore(&us->pending_lock, flags);
+
+    kfree(req);
+}
+
+static struct pciem_pending_request *find_pending_request(struct pciem_userspace_state *us, uint64_t seq)
+{
+    struct pciem_pending_request *req;
+    int hash = (int)(seq % ARRAY_SIZE(us->pending_requests));
+
+    hlist_for_each_entry(req, &us->pending_requests[hash], node)
+    {
+        if (req->seq == seq)
+            return req;
+    }
+
+    return NULL;
+}
+
+struct pciem_userspace_state *pciem_userspace_create(void)
+{
+    struct pciem_userspace_state *us;
+    int i;
+
+    us = kzalloc(sizeof(*us), GFP_KERNEL);
+    if (!us)
+        return ERR_PTR(-ENOMEM);
+
+    for (i = 0; i < ARRAY_SIZE(us->pending_requests); i++)
+        INIT_HLIST_HEAD(&us->pending_requests[i]);
+    spin_lock_init(&us->pending_lock);
+    us->next_seq = 1;
+
+    us->registered = false;
+    us->config_locked = false;
+    atomic_set(&us->event_pending, 0);
+
+    spin_lock_init(&us->watchpoint_lock);
+    for (i = 0; i < MAX_WATCHPOINTS; i++)
+    {
+        us->watchpoints[i].active = false;
+        us->watchpoints[i].perf_bp = NULL;
+    }
+
+    us->eventfd = NULL;
+    spin_lock_init(&us->eventfd_lock);
+
+    spin_lock_init(&us->irq_eventfd_lock);
+    for (i = 0; i < PCIEM_MAX_IRQ_EVENTFDS; i++)
+    {
+        us->irq_eventfds[i].active = false;
+        us->irq_eventfds[i].trigger = NULL;
+        us->irq_eventfds[i].vector = 0;
+        us->irq_eventfds[i].flags = 0;
+    }
+
+    return us;
+}
+
+void pciem_userspace_destroy(struct pciem_userspace_state *us)
+{
+    struct pciem_pending_request *req;
+    struct hlist_node *tmp;
+    int i;
+
+    if (!us)
+        return;
+
+    for (i = 0; i < MAX_WATCHPOINTS; i++)
+    {
+        if (us->watchpoints[i].active && us->watchpoints[i].perf_bp)
+        {
+            unregister_wide_hw_breakpoint(us->watchpoints[i].perf_bp);
+            us->watchpoints[i].perf_bp = NULL;
+            us->watchpoints[i].active = false;
+        }
+    }
+
+    for (i = 0; i < PCIEM_MAX_IRQ_EVENTFDS; i++)
+    {
+        if (us->irq_eventfds[i].active)
+        {
+            pciem_irqfd_shutdown(&us->irq_eventfds[i]);
+        }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(us->pending_requests); i++)
+    {
+        hlist_for_each_entry_safe(req, tmp, &us->pending_requests[i], node)
+        {
+            req->response_status = -ENODEV;
+            complete(&req->done);
+            hlist_del(&req->node);
+            kfree(req);
+        }
+    }
+
+    if (us->shared_ring)
+        __free_pages(virt_to_page(us->shared_ring), get_order(sizeof(struct pciem_shared_ring)));
+
+    kfree(us);
+}
+
+static int pciem_shared_ring_alloc(struct pciem_userspace_state *us)
+{
+    struct page *page;
+    int order = get_order(sizeof(struct pciem_shared_ring));
+
+    page = alloc_pages(GFP_KERNEL_ACCOUNT | __GFP_ZERO | __GFP_COMP, order);
+    if (!page)
+        return -ENOMEM;
+
+    us->shared_ring = page_address(page);
+    atomic_set(&us->shared_ring->head, 0);
+    atomic_set(&us->shared_ring->tail, 0);
+    spin_lock_init(&us->shared_ring_lock);
+
+    return 0;
+}
+
+static bool pciem_shared_ring_push(struct pciem_userspace_state *us,
+                                   struct pciem_event *event)
+{
+    int tail, next_tail, head;
+
+    if (!us->shared_ring)
+        return true;
+
+    guard(spinlock_irqsave)(&us->shared_ring_lock);
+
+    tail = atomic_read(&us->shared_ring->tail);
+    next_tail = (tail + 1) % PCIEM_RING_SIZE;
+    head = atomic_read(&us->shared_ring->head);
+
+    if (next_tail == head)
+        return false;
+
+    memcpy(&us->shared_ring->events[tail], event, sizeof(*event));
+    atomic_set_release(&us->shared_ring->tail, next_tail);
+
+    return true;
+}
+
+void pciem_userspace_queue_event(struct pciem_userspace_state *us, struct pciem_event *event)
+{
+    unsigned long flags;
+
+    if (!us || !event)
+        return;
+
+    event->timestamp = ktime_get_ns();
+
+    if (!pciem_shared_ring_push(us, event))
+        pr_warn_ratelimited("Shared ring buffer full, dropping event for userspace (seq=%llu)\n",
+                            event->seq);
+
+    spin_lock_irqsave(&us->eventfd_lock, flags);
+    if (us->eventfd)
+    {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(6,7,0)
+        eventfd_signal(us->eventfd, 1);
+#else
+        eventfd_signal(us->eventfd);
+#endif
+    }
+    spin_unlock_irqrestore(&us->eventfd_lock, flags);
+}
+
+int pciem_userspace_wait_response(struct pciem_userspace_state *us, uint64_t seq, uint64_t *data_out,
+                                  unsigned long timeout_ms)
+{
+    struct pciem_pending_request *req;
+    unsigned long timeout_jiffies;
+    int ret;
+
+    req = find_pending_request(us, seq);
+    if (!req)
+        return -EINVAL;
+
+    timeout_jiffies = msecs_to_jiffies(timeout_ms);
+    ret = wait_for_completion_timeout(&req->done, timeout_jiffies);
+
+    if (ret == 0)
+    {
+        pr_warn("Request seq=%llu timed out\n", seq);
+        free_pending_request(us, req);
+        return -ETIMEDOUT;
+    }
+
+    if (data_out)
+        *data_out = req->response_data;
+
+    ret = req->response_status;
+    free_pending_request(us, req);
+
+    return ret;
+}
+
+static int pciem_device_release(struct inode *inode, struct file *file)
+{
+    struct pciem_userspace_state *us = file->private_data;
+
+    pr_info("Userspace device fd closed\n");
+
+    if (us)
+    {
+        if (us->rc && us->registered)
+        {
+            pr_info("Cleaning up registered device instance\n");
+            pciem_free_root_complex(us->rc);
+            us->rc = NULL;
+        }
+
+        pciem_userspace_destroy(us);
+    }
+
+    return 0;
+}
+
+static ssize_t pciem_device_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
+{
+    struct pciem_userspace_state *us = file->private_data;
+    struct pciem_response response;
+    struct pciem_pending_request *req;
+    unsigned long flags;
+
+    if (count < sizeof(response))
+        return -EINVAL;
+
+    if (copy_from_user(&response, buf, sizeof(response)))
+        return -EFAULT;
+
+    spin_lock_irqsave(&us->pending_lock, flags);
+    req = find_pending_request(us, response.seq);
+    if (req)
+    {
+        req->response_data = response.data;
+        req->response_status = response.status;
+        complete(&req->done);
+    }
+    spin_unlock_irqrestore(&us->pending_lock, flags);
+
+    if (!req)
+        return -EINVAL;
+
+    return sizeof(response);
+}
+
+static int pciem_device_mmap(struct file *file, struct vm_area_struct *vma)
+{
+    struct pciem_userspace_state *us = file->private_data;
+    unsigned long pfn;
+    int ret;
+
+    if (!us->shared_ring)
+    {
+        ret = pciem_shared_ring_alloc(us);
+        if (ret)
+            return ret;
+    }
+
+    pfn = page_to_pfn(virt_to_page(us->shared_ring));
+    ret = remap_pfn_range(vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot);
+
+    if (ret == 0)
+        pr_info("Shared ring mmap successful\n");
+
+    return ret;
+}
+
+static long pciem_ioctl_create_device(struct pciem_userspace_state *us, struct pciem_create_device __user *arg)
+{
+    if (us->rc)
+        return -EBUSY;
+
+    us->rc = pciem_alloc_root_complex();
+    if (IS_ERR(us->rc))
+    {
+        int ret = PTR_ERR(us->rc);
+        us->rc = NULL;
+        return ret;
+    }
+
+    pciem_init_cap_manager(us->rc);
+
+    pr_info("Created userspace device instance\n");
+
+    return 0;
+}
+
+static long pciem_ioctl_add_bar(struct pciem_userspace_state *us, struct pciem_bar_config __user *arg)
+{
+    struct pciem_bar_config cfg;
+    int ret;
+
+    if (!us->rc)
+        return -EINVAL;
+
+    if (us->config_locked)
+        return -EBUSY;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    if (cfg.bar_index >= PCI_STD_NUM_BARS)
+        return -EINVAL;
+
+    if (cfg.size && (cfg.size & (cfg.size - 1)))
+    {
+        pr_err("BAR%d size 0x%llx is not a power of 2\n", cfg.bar_index, cfg.size);
+        return -EINVAL;
+    }
+
+    ret = pciem_register_bar(us->rc, cfg.bar_index, cfg.size, cfg.flags);
+
+    if (ret == 0)
+    {
+        pr_info("Registered BAR%d: size=0x%llx, flags=0x%x\n", cfg.bar_index, cfg.size, cfg.flags);
+    }
+
+    return ret;
+}
+
+static long pciem_ioctl_add_capability(struct pciem_userspace_state *us, struct pciem_cap_config __user *arg)
+{
+    struct pciem_cap_config cfg;
+    int ret = 0;
+
+    if (!us->rc)
+        return -EINVAL;
+
+    if (us->config_locked)
+        return -EBUSY;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    switch (cfg.cap_type)
+    {
+    case PCIEM_CAP_MSI: {
+        struct pciem_cap_msi_userspace *msi_cfg;
+        struct pciem_cap_msi_config msi;
+
+        msi_cfg = &cfg.msi;
+        msi.num_vectors_log2 = msi_cfg->num_vectors_log2;
+        msi.has_64bit = msi_cfg->has_64bit;
+        msi.has_per_vector_masking = msi_cfg->has_masking;
+
+        ret = pciem_add_cap_msi(us->rc, &msi);
+        break;
+    }
+
+    case PCIEM_CAP_MSIX: {
+        struct pciem_cap_msix_userspace *msix_cfg;
+        struct pciem_cap_msix_config msix;
+
+        msix_cfg = &cfg.msix;
+        msix.bar_index = msix_cfg->bar_index;
+        msix.table_offset = msix_cfg->table_offset;
+        msix.pba_offset = msix_cfg->pba_offset;
+        msix.table_size = msix_cfg->table_size;
+
+        ret = pciem_add_cap_msix(us->rc, &msix);
+        break;
+    }
+
+    default:
+        pr_warn("Unsupported capability type: %d\n", cfg.cap_type);
+        ret = -ENOTSUPP;
+    }
+
+    return ret;
+}
+
+static long pciem_ioctl_set_config(struct pciem_userspace_state *us, struct pciem_config_space __user *arg)
+{
+    struct pciem_config_space cfg;
+    u8 *config;
+
+    if (!us->rc)
+        return -EINVAL;
+
+    if (us->config_locked)
+        return -EBUSY;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    config = us->rc->cfg;
+
+    *(u16 *)(config + PCI_VENDOR_ID) = cfg.vendor_id;
+    *(u16 *)(config + PCI_DEVICE_ID) = cfg.device_id;
+    *(u16 *)(config + PCI_SUBSYSTEM_VENDOR_ID) = cfg.subsys_vendor_id;
+    *(u16 *)(config + PCI_SUBSYSTEM_ID) = cfg.subsys_device_id;
+    *(u8 *)(config + PCI_REVISION_ID) = cfg.revision;
+    *(u8 *)(config + PCI_CLASS_PROG) = cfg.class_code[0];
+    *(u8 *)(config + PCI_CLASS_DEVICE) = cfg.class_code[1];
+    *(u8 *)(config + PCI_CLASS_DEVICE + 1) = cfg.class_code[2];
+    *(u8 *)(config + PCI_HEADER_TYPE) = cfg.header_type;
+    *(u16 *)(config + PCI_COMMAND) = PCI_COMMAND_MEMORY;
+    *(u16 *)(config + PCI_STATUS) = PCI_STATUS_CAP_LIST;
+
+    pr_info("Config space set: vendor=0x%04x, device=0x%04x, class=0x%02x%02x%02x\n", cfg.vendor_id, cfg.device_id,
+            cfg.class_code[2], cfg.class_code[1], cfg.class_code[0]);
+
+    return 0;
+}
+
+static long pciem_ioctl_register(struct pciem_userspace_state *us)
+{
+    extern int pciem_complete_init(struct pciem_root_complex * v);
+    int ret;
+    int fd;
+
+    if (!us->rc)
+        return -EINVAL;
+
+    if (us->registered)
+        return -EBUSY;
+
+    pr_info("Registering userspace-defined device on PCI bus\n");
+
+    pciem_build_config_space(us->rc);
+
+    ret = pciem_complete_init(us->rc);
+    if (ret)
+    {
+        pr_err("Failed to complete device initialization: %d\n", ret);
+        return ret;
+    }
+
+    us->config_locked = true;
+    us->registered = true;
+
+    fd = anon_inode_getfd("pciem_instance", &pciem_instance_fops, us, O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        pr_err("Failed to create instance fd\n");
+        return fd;
+    }
+
+    pr_info("Userspace device registered successfully, returning FD %d\n",
+            fd);
+
+    return fd;
+}
+
+static long pciem_ioctl_inject_irq(struct pciem_userspace_state *us, struct pciem_irq_inject __user *arg)
+{
+    struct pciem_irq_inject inject;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&inject, arg, sizeof(inject)))
+        return -EFAULT;
+
+    pr_debug("Injecting MSI vector %d\n", inject.vector);
+
+    pciem_trigger_msi(us->rc, inject.vector);
+
+    return 0;
+}
+
+static long pciem_ioctl_dma(struct pciem_userspace_state *us, struct pciem_dma_op __user *arg)
+{
+    struct pciem_dma_op op;
+    void *kernel_buf;
+    int ret;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&op, arg, sizeof(op)))
+        return -EFAULT;
+
+    if (op.length == 0)
+        return -EINVAL;
+
+    kernel_buf = kmalloc(op.length, GFP_KERNEL);
+    if (!kernel_buf)
+        return -ENOMEM;
+
+    if (op.flags & PCIEM_DMA_FLAG_WRITE)
+    {
+        if (copy_from_user(kernel_buf, (void __user *)op.user_addr, op.length))
+        {
+            kfree(kernel_buf);
+            return -EFAULT;
+        }
+
+        ret = pciem_dma_write_to_guest(us->rc, op.guest_iova, kernel_buf, op.length, op.pasid);
+    }
+    else
+    {
+        ret = pciem_dma_read_from_guest(us->rc, op.guest_iova, kernel_buf, op.length, op.pasid);
+
+        if (ret == 0 && copy_to_user((void __user *)op.user_addr, kernel_buf, op.length))
+            ret = -EFAULT;
+    }
+
+    kfree(kernel_buf);
+    return ret;
+}
+
+static long pciem_ioctl_dma_atomic(struct pciem_userspace_state *us, struct pciem_dma_atomic __user *arg)
+{
+    struct pciem_dma_atomic atomic;
+    u64 result;
+    int ret = 0;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&atomic, arg, sizeof(atomic)))
+        return -EFAULT;
+
+    switch (atomic.op_type)
+    {
+    case PCIEM_ATOMIC_FETCH_ADD:
+        result = pciem_dma_atomic_fetch_add(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_FETCH_SUB:
+        result = pciem_dma_atomic_fetch_sub(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_SWAP:
+        result = pciem_dma_atomic_swap(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_CAS:
+        result = pciem_dma_atomic_cas(us->rc, atomic.guest_iova, atomic.compare, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_FETCH_AND:
+        result = pciem_dma_atomic_fetch_and(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_FETCH_OR:
+        result = pciem_dma_atomic_fetch_or(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    case PCIEM_ATOMIC_FETCH_XOR:
+        result = pciem_dma_atomic_fetch_xor(us->rc, atomic.guest_iova, atomic.operand, atomic.pasid);
+        break;
+    default:
+        return -EINVAL;
+    }
+
+    atomic.result = result;
+
+    if (copy_to_user(arg, &atomic, sizeof(atomic)))
+        return -EFAULT;
+
+    return ret;
+}
+
+static long pciem_ioctl_p2p(struct pciem_userspace_state *us, struct pciem_p2p_op_user __user *arg)
+{
+    struct pciem_p2p_op_user op;
+    void *kernel_buf;
+    int ret;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&op, arg, sizeof(op)))
+        return -EFAULT;
+
+    if (op.length == 0)
+        return -EINVAL;
+
+    kernel_buf = kmalloc(op.length, GFP_KERNEL);
+    if (!kernel_buf)
+        return -ENOMEM;
+
+    if (op.flags & PCIEM_DMA_FLAG_WRITE)
+    {
+        if (copy_from_user(kernel_buf, (void __user *)op.user_addr, op.length))
+        {
+            kfree(kernel_buf);
+            return -EFAULT;
+        }
+
+        ret = pciem_p2p_write(us->rc, op.target_phys_addr, kernel_buf, op.length);
+    }
+    else
+    {
+        ret = pciem_p2p_read(us->rc, op.target_phys_addr, kernel_buf, op.length);
+
+        if (ret == 0 && copy_to_user((void __user *)op.user_addr, kernel_buf, op.length))
+            ret = -EFAULT;
+    }
+
+    kfree(kernel_buf);
+    return ret;
+}
+
+static long pciem_ioctl_get_bar_info(struct pciem_userspace_state *us, struct pciem_bar_info_query __user *arg)
+{
+    struct pciem_bar_info_query query;
+    struct pciem_bar_info *bar;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&query, arg, sizeof(query)))
+        return -EFAULT;
+
+    if (query.bar_index >= PCI_STD_NUM_BARS)
+        return -EINVAL;
+
+    bar = &us->rc->bars[query.bar_index];
+
+    if (bar->size == 0)
+        return -ENOENT;
+
+    query.phys_addr = bar->phys_addr;
+    query.size = bar->size;
+    query.flags = bar->flags;
+
+    if (copy_to_user(arg, &query, sizeof(query)))
+        return -EFAULT;
+
+    pr_debug("BAR%d info: phys=0x%llx size=0x%llx flags=0x%x\n", query.bar_index, query.phys_addr, query.size,
+             query.flags);
+
+    return 0;
+}
+
+static void pciem_userspace_bp_handler(struct perf_event *bp, struct perf_sample_data *data, struct pt_regs *regs)
+{
+    unsigned long context = (unsigned long)bp->overflow_handler_context;
+    struct pciem_userspace_state *us = (struct pciem_userspace_state *)(context & ~0xFFUL);
+    int wp_index = (int)(context & 0xFF);
+
+    if (!us || wp_index >= MAX_WATCHPOINTS)
+        return;
+
+    struct pciem_watchpoint_info *wp = &us->watchpoints[wp_index];
+    if (!wp->active)
+        return;
+
+    struct pciem_event event = {
+        .type = PCIEM_EVENT_MMIO_WRITE, .bar = wp->bar_index, .offset = wp->offset, .size = wp->width, .data = 0};
+
+    pciem_userspace_queue_event(us, &event);
+}
+
+static void __iomem *pciem_resolve_bar_address(struct pci_dev *pdev, int bar_index, uint32_t flags)
+{
+    void __iomem *bar_base = NULL;
+    bool try_kprobes = true;
+    bool try_manual = true;
+
+    if (flags & PCIEM_WP_FLAG_BAR_KPROBES) {
+        try_manual = false;
+    } else if (flags & PCIEM_WP_FLAG_BAR_MANUAL) {
+        try_kprobes = false;
+    }
+
+    if (try_kprobes) {
+        bar_base = pciem_get_driver_bar_vaddr(pdev, bar_index);
+        if (bar_base) {
+            pr_debug("pciem_userspace: BAR%d resolved via kprobes\n", bar_index);
+            return bar_base;
+        }
+        if (!try_manual) {
+            pr_warn("pciem_userspace: BAR%d not found via kprobes (kprobes-only mode)\n", bar_index);
+            return NULL;
+        }
+    }
+
+    if (try_manual) {
+        void *drvdata = pci_get_drvdata(pdev);
+        if (drvdata) {
+            /*
+                FIXME?:
+
+                This assumes that the driver's private data structure is as follows:
+
+                struct drvdata {
+                    struct pci_dev *pdev;
+                    void __iomem *bars[x];
+                    ...
+                };
+            */
+            void __iomem **bar_array = (void __iomem **)((char *)drvdata + sizeof(struct pci_dev *));
+            bar_base = bar_array[bar_index];
+            if (bar_base) {
+                pr_debug("pciem_userspace: BAR%d resolved via manual method\n", bar_index);
+                return bar_base;
+            }
+        }
+        if (!try_kprobes) {
+            pr_warn("pciem_userspace: BAR%d not found via manual method (manual-only mode)\n", bar_index);
+            return NULL;
+        }
+    }
+    
+    return NULL;
+}
+
+static long pciem_ioctl_set_watchpoint(struct pciem_userspace_state *us, struct pciem_watchpoint_config __user *arg)
+{
+    struct pciem_watchpoint_config cfg;
+    struct pci_dev *pdev;
+    void __iomem *bar_base;
+    void __iomem *target_va;
+    struct perf_event_attr attr;
+    unsigned long flags;
+    int wp_slot = -1;
+    int i;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    if (cfg.bar_index >= PCI_STD_NUM_BARS)
+        return -EINVAL;
+
+    spin_lock_irqsave(&us->watchpoint_lock, flags);
+
+    for (i = 0; i < MAX_WATCHPOINTS; i++)
+    {
+        if (us->watchpoints[i].active && us->watchpoints[i].bar_index == cfg.bar_index &&
+            us->watchpoints[i].offset == cfg.offset)
+        {
+            wp_slot = i;
+            break;
+        }
+    }
+
+    if (wp_slot == -1 && cfg.flags != 0)
+    {
+        for (i = 0; i < MAX_WATCHPOINTS; i++)
+        {
+            if (!us->watchpoints[i].active)
+            {
+                wp_slot = i;
+                break;
+            }
+        }
+    }
+
+    spin_unlock_irqrestore(&us->watchpoint_lock, flags);
+
+    if (wp_slot == -1)
+    {
+        if (cfg.flags != 0)
+        {
+            pr_err("pciem_userspace: No free watchpoint slots (max %d)\n", MAX_WATCHPOINTS);
+            return -ENOSPC;
+        }
+        return 0;
+    }
+
+    if (us->watchpoints[wp_slot].active)
+    {
+        if (us->watchpoints[wp_slot].perf_bp)
+        {
+            unregister_wide_hw_breakpoint(us->watchpoints[wp_slot].perf_bp);
+            us->watchpoints[wp_slot].perf_bp = NULL;
+        }
+        us->watchpoints[wp_slot].active = false;
+
+        pr_info("pciem_userspace: Watchpoint[%d] disabled (BAR%d+0x%x)\n", wp_slot, us->watchpoints[wp_slot].bar_index,
+                us->watchpoints[wp_slot].offset);
+    }
+
+    if (cfg.flags == 0)
+    {
+        return 0;
+    }
+
+    pdev = us->rc->pciem_pdev;
+    if (!pdev)
+    {
+        pr_err("pciem_userspace: No pdev available\n");
+        return -ENODEV;
+    }
+
+    bar_base = pciem_resolve_bar_address(pdev, cfg.bar_index, cfg.flags);
+
+    if (!bar_base)
+    {
+        const char *method_str = 
+            (cfg.flags & PCIEM_WP_FLAG_BAR_KPROBES) ? " (kprobes-only)" :
+            (cfg.flags & PCIEM_WP_FLAG_BAR_MANUAL) ? " (manual-only)" : "";
+        pr_err("pciem_userspace: Could not locate BAR%d mapping%s\n", 
+               cfg.bar_index, method_str);
+        return -EAGAIN;
+    }
+
+    target_va = bar_base + cfg.offset;
+
+    hw_breakpoint_init(&attr);
+    attr.bp_addr = (unsigned long)target_va;
+
+    switch (cfg.width)
+    {
+    case 1:
+        attr.bp_len = HW_BREAKPOINT_LEN_1;
+        break;
+    case 2:
+        attr.bp_len = HW_BREAKPOINT_LEN_2;
+        break;
+    case 4:
+        attr.bp_len = HW_BREAKPOINT_LEN_4;
+        break;
+    case 8:
+        attr.bp_len = HW_BREAKPOINT_LEN_8;
+        break;
+    default:
+        pr_err("pciem_userspace: Invalid watchpoint width %d\n", cfg.width);
+        return -EINVAL;
+    }
+
+    attr.bp_type = HW_BREAKPOINT_W;
+    attr.disabled = false;
+
+    unsigned long context = ((unsigned long)us & ~0xFFUL) | (wp_slot & 0xFF);
+
+    us->watchpoints[wp_slot].perf_bp = register_wide_hw_breakpoint(&attr, pciem_userspace_bp_handler, (void *)context);
+
+    if (IS_ERR(us->watchpoints[wp_slot].perf_bp))
+    {
+        int err = PTR_ERR(us->watchpoints[wp_slot].perf_bp);
+        us->watchpoints[wp_slot].perf_bp = NULL;
+        pr_err("pciem_userspace: Failed to register watchpoint: %d\n", err);
+        return err;
+    }
+
+    us->watchpoints[wp_slot].active = true;
+    us->watchpoints[wp_slot].bar_index = cfg.bar_index;
+    us->watchpoints[wp_slot].offset = cfg.offset;
+    us->watchpoints[wp_slot].width = cfg.width;
+
+    pr_info("pciem_userspace: Watchpoint[%d] enabled on BAR%d+0x%x (VA %px, width %d)\n", wp_slot, cfg.bar_index,
+            cfg.offset, target_va, cfg.width);
+
+    if (!us->bar_tracking_disabled) {
+        pciem_disable_bar_tracking();
+        us->bar_tracking_disabled = true;
+    }
+
+    return 0;
+}
+
+static long pciem_ioctl_set_eventfd(struct pciem_userspace_state *us, struct pciem_eventfd_config __user *arg)
+{
+    struct pciem_eventfd_config cfg;
+    struct eventfd_ctx *eventfd = NULL;
+    struct eventfd_ctx *old_eventfd = NULL;
+    unsigned long flags;
+    int fd;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    fd = cfg.eventfd;
+
+    if (fd >= 0)
+    {
+        eventfd = eventfd_ctx_fdget(fd);
+        if (IS_ERR(eventfd))
+        {
+            pr_err("Failed to get eventfd context for fd %d: %ld\n", fd, PTR_ERR(eventfd));
+            return PTR_ERR(eventfd);
+        }
+        pr_info("Registered eventfd %d for ring buffer notifications\n", fd);
+    }
+
+    spin_lock_irqsave(&us->eventfd_lock, flags);
+    old_eventfd = us->eventfd;
+    us->eventfd = eventfd;
+    spin_unlock_irqrestore(&us->eventfd_lock, flags);
+
+    if (old_eventfd)
+    {
+        eventfd_ctx_put(old_eventfd);
+        pr_info("Unregistered previous eventfd\n");
+    }
+
+    return 0;
+}
+
+static void pciem_irqfd_work(struct work_struct *work)
+{
+    struct pciem_irq_eventfd_entry *entry = container_of(work, struct pciem_irq_eventfd_entry, inject_work);
+    struct pciem_userspace_state *us = entry->us;
+    u64 count;
+
+    eventfd_ctx_do_read(entry->trigger, &count);
+
+    if (count > 0 && us && us->rc) {
+        pciem_trigger_msi(us->rc, entry->vector);
+    }
+}
+
+static int pciem_irqfd_wakeup(wait_queue_entry_t *wait, unsigned mode, int sync, void *key)
+{
+    struct pciem_irq_eventfd_entry *entry = container_of(wait, struct pciem_irq_eventfd_entry, wait);
+    __poll_t flags = key_to_poll(key);
+
+    if (flags & EPOLLIN) {
+        schedule_work(&entry->inject_work);
+    }
+
+    return 0;
+}
+
+struct pciem_poll_helper {
+    struct poll_table_struct pt;
+    struct pciem_irq_eventfd_entry *entry;
+};
+
+static void pciem_irqfd_ptable_queue_proc(struct file *file, wait_queue_head_t *wqh, poll_table *pt)
+{
+    struct pciem_poll_helper *helper = container_of(pt, struct pciem_poll_helper, pt);
+    struct pciem_irq_eventfd_entry *entry = helper->entry;
+
+    entry->wqh = wqh;
+    add_wait_queue(wqh, &entry->wait);
+}
+
+static void pciem_irqfd_shutdown(struct pciem_irq_eventfd_entry *entry)
+{
+    if (!entry->active)
+        return;
+
+    remove_wait_queue(entry->wqh, &entry->wait);
+    entry->active = false;
+
+    flush_work(&entry->inject_work);
+
+    eventfd_ctx_put(entry->trigger);
+    entry->trigger = NULL;
+}
+
+static long pciem_ioctl_set_irq_eventfd(struct pciem_userspace_state *us,
+                                        struct pciem_irq_eventfd_config __user *arg)
+{
+    struct pciem_irq_eventfd_config cfg;
+    struct eventfd_ctx *eventfd = NULL;
+    struct pciem_irq_eventfd_entry *entry = NULL;
+    struct fd f;
+    struct pciem_poll_helper pt_helper;
+    unsigned long flags;
+    int i;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&cfg, arg, sizeof(cfg)))
+        return -EFAULT;
+
+    spin_lock_irqsave(&us->irq_eventfd_lock, flags);
+
+    for (i = 0; i < PCIEM_MAX_IRQ_EVENTFDS; i++)
+    {
+        if (us->irq_eventfds[i].active && us->irq_eventfds[i].vector == cfg.vector) {
+            entry = &us->irq_eventfds[i];
+            break;
+        } else if (!entry && !us->irq_eventfds[i].active) {
+            entry = &us->irq_eventfds[i];
+        }
+    }
+    spin_unlock_irqrestore(&us->irq_eventfd_lock, flags);
+
+    if (cfg.eventfd < 0)
+    {
+        if (!entry || !entry->active || entry->vector != cfg.vector)
+            return -ENOENT;
+
+        pciem_irqfd_shutdown(entry);
+        pr_info("Unregistered IRQ eventfd for vector %u\n", cfg.vector);
+        return 0;
+    }
+
+    if (!entry)
+        return -ENOSPC;
+
+    if (entry->active)
+        pciem_irqfd_shutdown(entry);
+
+    eventfd = eventfd_ctx_fdget(cfg.eventfd);
+    if (IS_ERR(eventfd))
+        return PTR_ERR(eventfd);
+
+    f = fdget(cfg.eventfd);
+    if (!f.file) {
+        eventfd_ctx_put(eventfd);
+        return -EBADF;
+    }
+
+    entry->trigger = eventfd;
+    entry->vector = cfg.vector;
+    entry->flags = cfg.flags;
+    entry->us = us;
+    INIT_WORK(&entry->inject_work, pciem_irqfd_work);
+    init_waitqueue_func_entry(&entry->wait, pciem_irqfd_wakeup);
+
+    init_poll_funcptr(&pt_helper.pt, pciem_irqfd_ptable_queue_proc);
+    pt_helper.entry = entry;
+
+    vfs_poll(f.file, &pt_helper.pt);
+
+    fdput(f);
+
+    entry->active = true;
+    pr_info("Registered IRQ eventfd %d for vector %u (Direct Wakeup)\n", cfg.eventfd, cfg.vector);
+
+    return 0;
+}
+
+static long pciem_ioctl_dma_indirect(struct pciem_userspace_state *us, struct pciem_dma_indirect __user *arg)
+{
+    struct pciem_dma_indirect req;
+    void *data_buf = NULL;
+    uint64_t *list_buf = NULL;
+    uint64_t cur_prp_list;
+    uint32_t page_size;
+    uint32_t offset;
+    uint32_t chunk;
+    uint64_t user_ptr;
+    uint32_t remaining;
+    int list_idx = 0;
+    int ret = 0;
+
+    if (!us->rc || !us->registered)
+        return -EINVAL;
+
+    if (copy_from_user(&req, arg, sizeof(req)))
+        return -EFAULT;
+
+    if (req.length == 0)
+        return 0;
+
+    page_size = req.page_size;
+
+    if (page_size < 4096 || page_size > 65536 || (page_size & (page_size - 1)))
+        return -EINVAL;
+
+    remaining = req.length;
+    user_ptr = req.user_addr;
+
+    list_buf = kmalloc(page_size, GFP_KERNEL);
+    data_buf = kmalloc(page_size, GFP_KERNEL);
+
+    if (!list_buf || !data_buf) {
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    offset = req.prp1 & (page_size - 1);
+    chunk = page_size - offset;
+    if (chunk > remaining) chunk = remaining;
+
+    if (req.flags & PCIEM_DMA_FLAG_WRITE) {
+        if (copy_from_user(data_buf, (void __user *)user_ptr, chunk)) {
+            ret = -EFAULT;
+            goto out;
+        }
+        ret = pciem_dma_write_to_guest(us->rc, req.prp1, data_buf, chunk, req.pasid);
+    } else {
+        ret = pciem_dma_read_from_guest(us->rc, req.prp1, data_buf, chunk, req.pasid);
+        if (ret == 0) {
+            if (copy_to_user((void __user *)user_ptr, data_buf, chunk))
+                ret = -EFAULT;
+        }
+    }
+
+    if (ret) goto out;
+
+    remaining -= chunk;
+    user_ptr += chunk;
+
+    if (remaining == 0) goto out;
+
+    if (remaining <= page_size) {
+        if (req.flags & PCIEM_DMA_FLAG_WRITE) {
+            if (copy_from_user(data_buf, (void __user *)user_ptr, remaining)) {
+                ret = -EFAULT;
+                goto out;
+            }
+            ret = pciem_dma_write_to_guest(us->rc, req.prp2, data_buf, remaining, req.pasid);
+        } else {
+            ret = pciem_dma_read_from_guest(us->rc, req.prp2, data_buf, remaining, req.pasid);
+            if (ret == 0 && copy_to_user((void __user *)user_ptr, data_buf, remaining)) {
+                ret = -EFAULT;
+            }
+        }
+        goto out;
+    }
+
+    cur_prp_list = req.prp2;
+    list_idx = 0;
+
+    uint32_t list_offset = cur_prp_list & (page_size - 1);
+    uint32_t list_bytes = page_size - list_offset;
+    
+    ret = pciem_dma_read_from_guest(us->rc, cur_prp_list, list_buf, list_bytes, req.pasid);
+    if (ret) goto out;
+
+    uint64_t *prps = (uint64_t *)list_buf;
+    uint32_t max_entries = list_bytes / 8;
+
+    while (remaining > 0) {
+        if (list_idx == max_entries - 1 && remaining > page_size) {
+            cur_prp_list = prps[list_idx];
+            
+            list_offset = cur_prp_list & (page_size - 1);
+            list_bytes = page_size - list_offset;
+            max_entries = list_bytes / 8;
+
+            ret = pciem_dma_read_from_guest(us->rc, cur_prp_list, list_buf, list_bytes, req.pasid);
+            if (ret) goto out;
+            
+            prps = (uint64_t *)list_buf;
+            list_idx = 0;
+            continue;
+        }
+
+        uint64_t data_phys = prps[list_idx++];
+        chunk = (remaining < page_size) ? remaining : page_size;
+
+        if (req.flags & PCIEM_DMA_FLAG_WRITE) {
+            if (copy_from_user(data_buf, (void __user *)user_ptr, chunk)) {
+                ret = -EFAULT;
+                goto out;
+            }
+            ret = pciem_dma_write_to_guest(us->rc, data_phys, data_buf, chunk, req.pasid);
+        } else {
+            ret = pciem_dma_read_from_guest(us->rc, data_phys, data_buf, chunk, req.pasid);
+            if (ret == 0 && copy_to_user((void __user *)user_ptr, data_buf, chunk)) {
+                ret = -EFAULT;
+            }
+        }
+
+        if (ret) goto out;
+
+        remaining -= chunk;
+        user_ptr += chunk;
+    }
+
+out:
+    kfree(list_buf);
+    kfree(data_buf);
+    return ret;
+}
+
+static long pciem_device_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+    struct pciem_userspace_state *us = file->private_data;
+
+    switch (cmd)
+    {
+    case PCIEM_IOCTL_CREATE_DEVICE:
+        return pciem_ioctl_create_device(us, (struct pciem_create_device __user *)arg);
+
+    case PCIEM_IOCTL_ADD_BAR:
+        return pciem_ioctl_add_bar(us, (struct pciem_bar_config __user *)arg);
+
+    case PCIEM_IOCTL_ADD_CAPABILITY:
+        return pciem_ioctl_add_capability(us, (struct pciem_cap_config __user *)arg);
+
+    case PCIEM_IOCTL_SET_CONFIG:
+        return pciem_ioctl_set_config(us, (struct pciem_config_space __user *)arg);
+
+    case PCIEM_IOCTL_REGISTER:
+        return pciem_ioctl_register(us);
+
+    case PCIEM_IOCTL_INJECT_IRQ:
+        return pciem_ioctl_inject_irq(us, (struct pciem_irq_inject __user *)arg);
+
+    case PCIEM_IOCTL_DMA:
+        return pciem_ioctl_dma(us, (struct pciem_dma_op __user *)arg);
+
+    case PCIEM_IOCTL_DMA_ATOMIC:
+        return pciem_ioctl_dma_atomic(us, (struct pciem_dma_atomic __user *)arg);
+
+    case PCIEM_IOCTL_P2P:
+        return pciem_ioctl_p2p(us, (struct pciem_p2p_op_user __user *)arg);
+
+    case PCIEM_IOCTL_GET_BAR_INFO:
+        return pciem_ioctl_get_bar_info(us, (struct pciem_bar_info_query __user *)arg);
+
+    case PCIEM_IOCTL_SET_WATCHPOINT:
+        return pciem_ioctl_set_watchpoint(us, (struct pciem_watchpoint_config __user *)arg);
+
+    case PCIEM_IOCTL_SET_EVENTFD:
+        return pciem_ioctl_set_eventfd(us, (struct pciem_eventfd_config __user *)arg);
+
+    case PCIEM_IOCTL_SET_IRQ_EVENTFD:
+        return pciem_ioctl_set_irq_eventfd(us, (struct pciem_irq_eventfd_config __user *)arg);
+
+    case PCIEM_IOCTL_DMA_INDIRECT:
+        return pciem_ioctl_dma_indirect(us, (struct pciem_dma_indirect __user *)arg);
+
+    default:
+        return -ENOTTY;
+    }
+}
+
+int pciem_userspace_init(void)
+{
+    pr_info("Userspace device support initialized\n");
+    return 0;
+}
+
+void pciem_userspace_cleanup(void)
+{
+    pr_info("Userspace device support cleanup\n");
+}
+
+EXPORT_SYMBOL(pciem_userspace_create);
+EXPORT_SYMBOL(pciem_userspace_destroy);
+EXPORT_SYMBOL(pciem_userspace_queue_event);
+EXPORT_SYMBOL(pciem_userspace_wait_response);
+
+```
+
+`qemu/protopciem_backend.c`:
+
+```c
+#include "qemu/osdep.h"
+#include "hw/misc/protopciem_backend.h"
+#include "hw/irq.h"
+#include "hw/qdev-properties-system.h"
+#include "hw/qdev-properties.h"
+#include "hw/sysbus.h"
+#include "qemu/log.h"
+#include "qemu/main-loop.h"
+#include "qemu/module.h"
+#include "qemu/timer.h"
+#include "ui/console.h"
+#include "ui/pixel_ops.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+
+#define QEMU_SOCKET_PATH "/tmp/pciem_qemu.sock"
+
+#define FATAL_ERROR(...)                                                       \
+    do {                                                                       \
+        printf("ProtoPCIem FATAL: " __VA_ARGS__);                             \
+        printf("\n");                                                          \
+        exit(1);                                                               \
+    } while (0)
+
+#define MSG_REGISTER_WRITE 1
+#define MSG_REGISTER_READ  2
+#define MSG_RAISE_IRQ      3
+#define MSG_DMA_READ       4
+#define MSG_DMA_WRITE      5
+
+struct qemu_msg {
+    uint32_t type;
+    uint32_t offset;
+    uint64_t value;
+    uint64_t addr;
+    uint32_t len;
+} __attribute__((packed));
+
+struct qemu_resp {
+    uint32_t status;
+    uint64_t value;
+} __attribute__((packed));
+
+static void gpu_draw_pixel(ProtoPCIemState *s, int x, int y, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (x < 0 || x >= FB_WIDTH || y < 0 || y >= FB_HEIGHT)
+    {
+        return;
+    }
+    int idx = (y * FB_WIDTH + x) * 3;
+    s->framebuffer[idx + 0] = r;
+    s->framebuffer[idx + 1] = g;
+    s->framebuffer[idx + 2] = b;
+}
+
+static void gpu_draw_line(ProtoPCIemState *s, int x0, int y0, int x1, int y1, uint8_t r, uint8_t g, uint8_t b)
+{
+    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+    int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy, e2;
+    for (;;)
+    {
+        gpu_draw_pixel(s, x0, y0, r, g, b);
+        if (x0 == x1 && y0 == y1)
+            break;
+        e2 = 2 * err;
+        if (e2 >= dy)
+        {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx)
+        {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+static void gpu_clear(ProtoPCIemState *s, uint8_t r, uint8_t g, uint8_t b)
+{
+    if (r == g && g == b)
+    {
+        memset(s->framebuffer, r, FB_SIZE);
+    }
+    else
+    {
+        for (int i = 0; i < FB_WIDTH * FB_HEIGHT; i++)
+        {
+            s->framebuffer[i * 3 + 0] = r;
+            s->framebuffer[i * 3 + 1] = g;
+            s->framebuffer[i * 3 + 2] = b;
+        }
+    }
+}
+
+static void gpu_blit_rect(ProtoPCIemState *s, uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+                          const uint8_t *data)
+{
+    for (int j = 0; j < height; j++)
+    {
+        for (int i = 0; i < width; i++)
+        {
+            int src_idx = (j * width + i) * 3;
+            gpu_draw_pixel(s, x + i, y + j, data[src_idx + 0], data[src_idx + 1], data[src_idx + 2]);
+        }
+    }
+}
+
+static void backend_update_display(void *opaque)
+{
+    ProtoPCIemState *s = opaque;
+    DisplaySurface *surface = qemu_console_surface(s->con);
+    if (!surface)
+        return;
+
+    uint8_t *d = surface_data(surface);
+    int stride = surface_stride(surface);
+    uint8_t *src = s->framebuffer;
+
+    for (int y = 0; y < FB_HEIGHT; y++)
+    {
+        uint32_t *dst_row = (uint32_t *)(d + y * stride);
+        uint8_t *src_row = src + y * FB_WIDTH * 3;
+        for (int x = 0; x < FB_WIDTH; x++)
+        {
+            uint8_t r = src_row[x * 3 + 0];
+            uint8_t g = src_row[x * 3 + 1];
+            uint8_t b = src_row[x * 3 + 2];
+            dst_row[x] = rgb_to_pixel32(r, g, b);
+        }
+    }
+    dpy_gfx_update(s->con, 0, 0, FB_WIDTH, FB_HEIGHT);
+}
+
+static void backend_execute_command_buffer(ProtoPCIemState *s)
+{
+    uint8_t *p = s->cmd_buffer;
+    uint8_t *end = p + s->dma_len;
+
+    while (p < end && (p + sizeof(struct cmd_header)) <= end)
+    {
+        if ((uintptr_t)p % _Alignof(struct cmd_header) != 0)
+        {
+            FATAL_ERROR("Misaligned command");
+        }
+
+        struct cmd_header *hdr = (struct cmd_header *)p;
+
+        if (hdr->length == 0 || (p + hdr->length) > end)
+        {
+            FATAL_ERROR("Corrupt command buffer");
+        }
+
+        switch (hdr->opcode)
+        {
+        case CMD_OP_NOP:
+            break;
+        case CMD_OP_CLEAR: {
+            struct cmd_clear *cmd = (struct cmd_clear *)p;
+            gpu_clear(s, cmd->r, cmd->g, cmd->b);
+            break;
+        }
+        case CMD_OP_DRAW_LINE: {
+            struct cmd_draw_line *cmd = (struct cmd_draw_line *)p;
+            gpu_draw_line(s, cmd->x0, cmd->y0, cmd->x1, cmd->y1, cmd->r, cmd->g, cmd->b);
+            break;
+        }
+        case CMD_OP_BLIT_RECT: {
+            struct cmd_blit_rect *cmd = (struct cmd_blit_rect *)p;
+            const uint8_t *data = (const uint8_t *)(cmd + 1);
+            gpu_blit_rect(s, cmd->x, cmd->y, cmd->width, cmd->height, data);
+            break;
+        }
+        default:
+            printf("Unknown opcode 0x%x\n", hdr->opcode);
+            exit(1);
+            break;
+        }
+
+        p += hdr->length;
+    }
+}
+
+static int dma_read_from_guest(ProtoPCIemState *s, uint64_t guest_addr,
+                                void *dst, uint32_t len)
+{
+    struct qemu_msg msg;
+    struct qemu_resp resp;
+
+    msg.type = MSG_DMA_READ;
+    msg.addr = guest_addr;
+    msg.len = len;
+
+    if (write(s->socket_fd, &msg, sizeof(msg)) != sizeof(msg)) {
+        perror("[QEMU] Failed to send DMA read request");
+        return -1;
+    }
+
+    if (read(s->socket_fd, &resp, sizeof(resp)) != sizeof(resp)) {
+        perror("[QEMU] Failed to receive DMA response");
+        return -1;
+    }
+
+    if (resp.status != 0) {
+        fprintf(stderr, "[QEMU] DMA read failed with status %d\n", resp.status);
+        return -1;
+    }
+
+    ssize_t total = 0;
+    while (total < len) {
+        ssize_t n = read(s->socket_fd, (uint8_t *)dst + total, len - total);
+        if (n <= 0) {
+            perror("[QEMU] Failed to read DMA data");
+            return -1;
+        }
+        total += n;
+    }
+
+    return 0;
+}
+
+static void backend_process_complete(void *opaque)
+{
+    ProtoPCIemState *s = opaque;
+
+    switch (s->cmd)
+    {
+    case CMD_DMA_FRAME:
+    case CMD_EXECUTE_CMDBUF: {
+        uint64_t src_addr = ((uint64_t)s->dma_src_hi << 32) | s->dma_src_lo;
+        uint32_t len = s->dma_len;
+
+        if (s->cmd == CMD_EXECUTE_CMDBUF)
+        {
+            if (len > s->cmd_buffer_size)
+                len = s->cmd_buffer_size;
+
+            if (dma_read_from_guest(s, src_addr, s->cmd_buffer, len) == 0)
+            {
+                backend_execute_command_buffer(s);
+            }
+        }
+        else if (s->cmd == CMD_DMA_FRAME)
+        {
+            if (len != FB_SIZE)
+            {
+                FATAL_ERROR("DMA Frame size mismatch");
+            }
+
+            if (dma_read_from_guest(s, src_addr, s->framebuffer, len) == 0)
+            {
+                backend_update_display(s);
+            }
+        }
+
+        s->status |= STATUS_DONE;
+        s->status &= ~STATUS_BUSY;
+
+        struct qemu_msg msg;
+        msg.type = MSG_RAISE_IRQ;
+        msg.offset = s->status;
+        uint64_t result = ((uint64_t)s->result_hi << 32) | s->result_lo;
+        msg.value = result;
+
+        if (write(s->socket_fd, &msg, sizeof(msg)) != sizeof(msg))
+        {
+            perror("[QEMU] Failed to send IRQ notification");
+        }
+        return;
+    }
+    default:
+        FATAL_ERROR("Unknown command");
+    }
+}
+
+static void backend_handle_socket_event(void *opaque)
+{
+    ProtoPCIemState *s = PROTOPCIEM_BACKEND(opaque);
+    struct qemu_msg msg;
+    struct qemu_resp resp;
+
+    ssize_t n = read(s->socket_fd, &msg, sizeof(msg));
+    if (n != sizeof(msg))
+    {
+        if (n <= 0)
+        {
+            printf("[QEMU] Connection closed\n");
+            qemu_set_fd_handler(s->socket_fd, NULL, NULL, NULL);
+            close(s->socket_fd);
+            s->socket_fd = -1;
+        }
+        return;
+    }
+
+    resp.status = 0;
+    resp.value = 0;
+
+    switch (msg.type) {
+    case MSG_REGISTER_READ: {
+        switch (msg.offset) {
+        case REG_CONTROL:  resp.value = s->control; break;
+        case REG_STATUS:   resp.value = s->status; break;
+        case REG_CMD:      resp.value = s->cmd; break;
+        case REG_DATA:     resp.value = s->data; break;
+        case REG_RESULT_LO: resp.value = s->result_lo; break;
+        case REG_RESULT_HI: resp.value = s->result_hi; break;
+        case REG_DMA_SRC_LO: resp.value = s->dma_src_lo; break;
+        case REG_DMA_SRC_HI: resp.value = s->dma_src_hi; break;
+        case REG_DMA_DST_LO: resp.value = s->dma_dst_lo; break;
+        case REG_DMA_DST_HI: resp.value = s->dma_dst_hi; break;
+        case REG_DMA_LEN:  resp.value = s->dma_len; break;
+        default: resp.status = -1; break;
+        }
+        if (write(s->socket_fd, &resp, sizeof(resp)) != sizeof(resp)) {
+            perror("[QEMU] Failed to send register read response");
+            return;
+        }
+
+        break;
+    }
+
+    case MSG_REGISTER_WRITE: {
+        switch (msg.offset) {
+        case REG_CONTROL:
+            s->control = msg.value;
+            if (msg.value & 2) {
+                s->status = 0;
+                s->cmd = 0;
+                s->data = 0;
+                gpu_clear(s, 0, 0, 0);
+                backend_update_display(s);
+            }
+            break;
+        case REG_STATUS:   s->status = msg.value; break;
+        case REG_DATA:     s->data = msg.value; break;
+        case REG_RESULT_LO: s->result_lo = msg.value; break;
+        case REG_RESULT_HI: s->result_hi = msg.value; break;
+        case REG_DMA_SRC_LO: s->dma_src_lo = msg.value; break;
+        case REG_DMA_SRC_HI: s->dma_src_hi = msg.value; break;
+        case REG_DMA_DST_LO: s->dma_dst_lo = msg.value; break;
+        case REG_DMA_DST_HI: s->dma_dst_hi = msg.value; break;
+        case REG_DMA_LEN:  s->dma_len = msg.value; break;
+        case REG_CMD:
+            s->cmd = msg.value;
+            s->status &= ~STATUS_DONE;
+            s->status |= STATUS_BUSY;
+            backend_process_complete(s);
+            break;
+        default:
+            resp.status = -1;
+            break;
+        }
+        if (write(s->socket_fd, &resp, sizeof(resp)) != sizeof(resp)) {
+            perror("[QEMU] Failed to send register write response");
+            return;
+        }
+        break;
+    }
+
+    default:
+        printf("[QEMU] Unknown message type: %d\n", msg.type);
+        resp.status = -1;
+        if (write(s->socket_fd, &resp, sizeof(resp)) != sizeof(resp)) {
+            perror("[QEMU] Failed to send error response");
+            return;
+        }
+        break;
+    }
+}
+
+static uint64_t backend_read(void *opaque, hwaddr offset, unsigned size)
+{
+    return 0;
+}
+static void backend_write(void *opaque, hwaddr offset, uint64_t value, unsigned size)
+{
+}
+static const MemoryRegionOps backend_ops = {
+    .read = backend_read,
+    .write = backend_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid =
+        {
+            .min_access_size = 4,
+            .max_access_size = 8,
+        },
+};
+
+static void backend_invalidate_display(void *opaque)
+{
+    backend_update_display(opaque);
+}
+static const GraphicHwOps backend_gfx_ops = {
+    .invalidate = backend_invalidate_display,
+    .gfx_update = backend_update_display,
+};
+
+static void protopciem_backend_realize(DeviceState *dev, Error **errp)
+{
+    ProtoPCIemState *s = PROTOPCIEM_BACKEND(dev);
+    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
+    struct sockaddr_un addr;
+
+    memory_region_init_io(&s->iomem, OBJECT(s), &backend_ops, s,
+                         "protopciem-backend", 0x1000);
+    sysbus_init_mmio(sbd, &s->iomem);
+    sysbus_init_irq(sbd, &s->irq);
+
+    printf("[QEMU] Connecting to userspace emulator at %s\n", QEMU_SOCKET_PATH);
+
+    s->socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (s->socket_fd < 0) {
+        perror("[QEMU] Failed to create socket");
+        return;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, QEMU_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    int retries = 5;
+    while (retries-- > 0) {
+        if (connect(s->socket_fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+            printf("[QEMU] Connected to userspace emulator!\n");
+            break;
+        }
+        printf("[QEMU] Connection failed, retrying... (%d left)\n", retries);
+        sleep(1);
+    }
+
+    if (retries < 0) {
+        perror("[QEMU] Failed to connect to userspace emulator");
+        close(s->socket_fd);
+        return;
+    }
+
+    qemu_set_fd_handler(s->socket_fd, backend_handle_socket_event, NULL, s);
+
+    s->cmd_buffer_size = CMD_BUFFER_SIZE;
+    s->cmd_buffer = g_malloc0(s->cmd_buffer_size);
+    s->framebuffer = g_malloc0(FB_SIZE);
+
+    s->con = graphic_console_init(dev, 0, &backend_gfx_ops, s);
+    qemu_console_resize(s->con, FB_WIDTH, FB_HEIGHT);
+
+    printf("[QEMU] Backend initialized\n");
+}
+
+static void protopciem_backend_class_init(ObjectClass *klass, const void *data)
+{
+    DeviceClass *dc = DEVICE_CLASS(klass);
+    dc->realize = protopciem_backend_realize;
+    dc->desc = "ProtoPCIem Accelerator Backend";
+}
+
+static const TypeInfo protopciem_backend_info = {
+    .name = TYPE_PROTOPCIEM_BACKEND,
+    .parent = TYPE_SYS_BUS_DEVICE,
+    .instance_size = sizeof(ProtoPCIemState),
+    .class_init = protopciem_backend_class_init,
+};
+
+static void protopciem_backend_register_types(void)
+{
+    type_register_static(&protopciem_backend_info);
+}
+
+type_init(protopciem_backend_register_types)
+```
+
+`qemu/protopciem_backend.h`:
+
+```h
+#ifndef HW_MISC_PROTOPCIEM_BACKEND_H
+#define HW_MISC_PROTOPCIEM_BACKEND_H
+
+#include "hw/sysbus.h"
+#include "protopciem_cmds.h"
+#include "qemu/bitops.h"
+#include "qom/object.h"
+#include "ui/console.h"
+#include <sys/ioctl.h>
+
+#include "pciem_ioctl.h"
+#include "protopciem_device.h"
+
+#define TYPE_PROTOPCIEM_BACKEND "protopciem-backend"
+OBJECT_DECLARE_SIMPLE_TYPE(ProtoPCIemState, PROTOPCIEM_BACKEND)
+
+#define FB_WIDTH 640
+#define FB_HEIGHT 480
+#define FB_SIZE (FB_WIDTH * FB_HEIGHT * 3)
+
+#define CMD_BUFFER_SIZE (4 * 1024 * 1024)
+
+typedef struct ProtoPCIemState
+{
+    SysBusDevice parent_obj;
+
+    MemoryRegion iomem;
+
+    QemuConsole *con;
+    uint8_t *framebuffer;
+
+    uint32_t control;
+    uint32_t status;
+    uint32_t cmd;
+    uint32_t data;
+    uint32_t result_lo;
+    uint32_t result_hi;
+    uint32_t dma_src_lo;
+    uint32_t dma_src_hi;
+    uint32_t dma_dst_lo;
+    uint32_t dma_dst_hi;
+    uint32_t dma_len;
+
+    uint8_t *cmd_buffer;
+    size_t cmd_buffer_size;
+
+    qemu_irq irq;
+
+    int shim_fd;
+    int socket_fd;
+} ProtoPCIemState;
+
+#endif
+```
+
+`qemu/protopciem_cmds.h`:
+
+```h
+#ifndef PROTOPCIEM_CMDS_H
+#define PROTOPCIEM_CMDS_H
+
+#include <stdint.h>
+
+#define CMD_OP_NOP 0x00
+#define CMD_OP_CLEAR 0x01
+#define CMD_OP_DRAW_LINE 0x02
+#define CMD_OP_BLIT_RECT 0x03
+
+struct cmd_header
+{
+    uint16_t opcode;
+    uint16_t reserved;
+    uint32_t length;
+} __attribute__((packed));
+
+struct cmd_clear
+{
+    struct cmd_header hdr;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+} __attribute__((packed));
+
+struct cmd_draw_line
+{
+    struct cmd_header hdr;
+    uint16_t x0;
+    uint16_t y0;
+    uint16_t x1;
+    uint16_t y1;
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+    uint8_t a;
+} __attribute__((packed));
+
+struct cmd_blit_rect
+{
+    struct cmd_header hdr;
+    uint16_t x;
+    uint16_t y;
+    uint16_t width;
+    uint16_t height;
+} __attribute__((packed));
+
+#endif /* PROTOPCIEM_CMDS_H */
+```
+
+`test_system.sh`:
+
+```sh
+#!/bin/bash
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+log_info() {
+echo -e "${GREEN}[INFO]${NC} $1"
+}
+log_warn() {
+echo -e "${YELLOW}[WARN]${NC} $1"
+}
+log_error() {
+echo -e "${RED}[ERROR]${NC} $1"
+}
+check_module() {
+if lsmod | grep -q "$1"; then
+log_info "Module $1 is loaded"
+return 0
+else
+log_warn "Module $1 is not loaded"
+return 1
+fi
+}
+
+log_info "Building kernel modules..."
+make clean
+make all
+
+log_info "Unloading all related modules..."
+sudo rmmod protopciem_driver 2>/dev/null || true
+sudo rmmod pciem 2>/dev/null || true
+sleep 1
+
+log_info "Loading pciem"
+/usr/src/linux-headers-$(uname -r)/scripts/sign-file sha256 ~/signing_key.priv ~/signing_key.x509 kernel/pciem.ko
+sudo insmod kernel/pciem.ko pciem_phys_regions="bar0:0x1bf000000:0x10000,bar2:0x1bf100000:0x100000"
+sleep 1
+
+sudo ./userspace/protopciem_card &
+
+sleep 1
+
+if ! lspci -d 1f0c:0001 &>/dev/null; then
+log_error "Virtual PCI device not found!"
+exit 1
+fi
+
+log_info "Loading ProtoPCIem driver..."
+sudo rmmod protopciem_driver 2>/dev/null || true
+/usr/src/linux-headers-$(uname -r)/scripts/sign-file sha256 ~/signing_key.priv ~/signing_key.x509 kernel/driver/protopciem_driver.ko
+sudo insmod kernel/driver/protopciem_driver.ko
+sleep 1
+if ! check_module protopciem_driver; then
+    log_error "Failed to load ProtoPCIem driver"
+    exit 1
+fi
+
+log_info "Test complete! Check dmesg for results."
+
+```
+
+`userspace/protopciem_card.c`:
+
+```c
+#include <err.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <linux/pci_regs.h>
+#include <poll.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdatomic.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/eventfd.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#include "pciem_userspace.h"
+#include "protopciem_device.h"
+
+#define QEMU_SOCKET_PATH "/tmp/pciem_qemu.sock"
+
+#ifndef BIT
+#define BIT(nr) (1UL << (nr))
+#endif
+
+#define MSG_REGISTER_WRITE 1
+#define MSG_REGISTER_READ 2
+#define MSG_RAISE_IRQ 3
+#define MSG_DMA_READ 4
+#define MSG_DMA_WRITE 5
+
+struct qemu_msg
+{
+    uint32_t type;
+    uint32_t offset;
+    uint64_t value;
+    uint64_t addr;
+    uint32_t len;
+} __attribute__((packed));
+
+struct qemu_resp
+{
+    uint32_t status;
+    uint64_t value;
+} __attribute__((packed));
+
+struct device_state
+{
+    volatile uint32_t *bar0;
+    volatile uint32_t *bar2;
+    size_t bar0_size;
+    size_t bar2_size;
+    int pciem_fd;
+    int instance_fd;
+    int qemu_sock;
+    int event_fd;
+    int irq_eventfd;
+    atomic_t running;
+    int qemu_connected;
+    pthread_t qemu_thread;
+    uint8_t *dma_bounce_buf;
+
+    pthread_mutex_t sock_lock;
+    pthread_cond_t ack_cond;
+    volatile int waiting_for_ack;
+    struct qemu_resp last_resp;
+
+    struct pciem_shared_ring *event_ring;
+};
+
+static struct device_state dev_state;
+
+static int dev_running(struct device_state *st)
+{
+    return atomic_load(&st->running);
+}
+
+static void dev_stop(struct device_state *st)
+{
+    atomic_store(&st->running, 0);
+}
+
+static void signal_handler(int signum)
+{
+    printf("\n[\x1b[31m*\x1b[0m] %d received, trying to exit...\n", signum);
+    dev_stop(&dev_state);
+}
+
+static int create_qemu_socket(void)
+{
+    int sock;
+    struct sockaddr_un addr;
+
+    unlink(QEMU_SOCKET_PATH);
+
+    sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0)
+    {
+        perror("Failed to create socket");
+        return -1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, QEMU_SOCKET_PATH, sizeof(addr.sun_path) - 1);
+
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    {
+        perror("Failed to bind socket");
+        close(sock);
+        return -1;
+    }
+
+    if (listen(sock, 1) < 0)
+    {
+        perror("Failed to listen on socket");
+        close(sock);
+        return -1;
+    }
+
+    printf("[\x1b[32m*\x1b[0m] Socket at: %s\n", QEMU_SOCKET_PATH);
+    printf("[\x1b[33m*\x1b[0m] Waiting for QEMU to connect...\n");
+
+    return sock;
+}
+
+static int wait_for_qemu_connection(int listen_sock)
+{
+    int client_sock;
+    struct sockaddr_un client_addr;
+    socklen_t client_len = sizeof(client_addr);
+
+    client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &client_len);
+    if (client_sock < 0)
+    {
+        perror("Failed to accept connection");
+        return -1;
+    }
+
+    printf("[\x1b[32m*\x1b[0m] QEMU connected!\n");
+    return client_sock;
+}
+
+static int writen(int fd, const void *buf, size_t n)
+{
+    size_t written = 0;
+    while (written < n)
+    {
+        ssize_t r = write(fd, (const char *)buf + written, n - written);
+        if (r <= 0)
+        {
+            if (r < 0 && errno == EINTR) continue;
+            return -1;
+        }
+        written += r;
+    }
+    return 0;
+}
+
+static int send_register_write_sync(uint32_t offset, uint32_t value)
+{
+    struct qemu_msg msg;
+    struct timespec timeout;
+    int ret;
+
+    msg.type = MSG_REGISTER_WRITE;
+    msg.offset = offset;
+    msg.value = value;
+
+    pthread_mutex_lock(&dev_state.sock_lock);
+
+    if (write(dev_state.qemu_sock, &msg, sizeof(msg)) != sizeof(msg))
+    {
+        perror("Socket write failed");
+        pthread_mutex_unlock(&dev_state.sock_lock);
+        return -1;
+    }
+
+    clock_gettime(CLOCK_REALTIME, &timeout);
+    timeout.tv_sec += 10;
+    
+    dev_state.waiting_for_ack = 1;
+    while (dev_state.waiting_for_ack)
+    {
+        ret = pthread_cond_timedwait(&dev_state.ack_cond, &dev_state.sock_lock, &timeout);
+        if (ret == ETIMEDOUT) {
+            printf("[!] QEMU timeout on reg 0x%x, disconnecting\n", offset);
+            dev_state.waiting_for_ack = 0;
+            dev_state.qemu_connected = 0;
+            pthread_mutex_unlock(&dev_state.sock_lock);
+            return -1;
+        }
+    }
+    
+    pthread_mutex_unlock(&dev_state.sock_lock);
+    return 0;
+}
+
+static int forward_command_to_qemu(void)
+{
+    if (send_register_write_sync(REG_CONTROL, dev_state.bar0[REG_CONTROL / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DATA, dev_state.bar0[REG_DATA / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DMA_SRC_LO, dev_state.bar0[REG_DMA_SRC_LO / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DMA_SRC_HI, dev_state.bar0[REG_DMA_SRC_HI / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DMA_DST_LO, dev_state.bar0[REG_DMA_DST_LO / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DMA_DST_HI, dev_state.bar0[REG_DMA_DST_HI / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_DMA_LEN, dev_state.bar0[REG_DMA_LEN / 4]) < 0) return -1;
+    if (send_register_write_sync(REG_CMD, dev_state.bar0[REG_CMD / 4]) < 0) return -1;
+    return 0;
+}
+
+static void inject_irq(uint32_t vector)
+{
+    if (dev_state.irq_eventfd >= 0)
+    {
+        uint64_t val = 1;
+        ssize_t ret = write(dev_state.irq_eventfd, &val, sizeof(val));
+        if (ret != sizeof(val))
+        {
+            struct pciem_irq_inject irq = {.vector = vector};
+            ioctl(dev_state.pciem_fd, PCIEM_IOCTL_INJECT_IRQ, &irq);
+        }
+    }
+    else
+    {
+        struct pciem_irq_inject irq = {.vector = vector};
+        ioctl(dev_state.pciem_fd, PCIEM_IOCTL_INJECT_IRQ, &irq);
+    }
+}
+
+static void *qemu_handler_thread(void *arg)
+{
+    struct qemu_msg msg;
+    struct qemu_resp resp;
+    uint32_t header;
+    (void) arg;
+
+    while (dev_running(&dev_state) && dev_state.qemu_connected)
+    {
+        ssize_t n = read(dev_state.qemu_sock, &header, sizeof(header));
+        if (n != sizeof(header))
+        {
+            if (n == 0)
+                printf("[\x1b[31m!\x1b[0m] QEMU connection closed!\n");
+            else
+                perror("Socket read failed");
+            dev_state.qemu_connected = 0;
+            break;
+        }
+
+        if (header == MSG_DMA_READ || header == MSG_RAISE_IRQ)
+        {
+            msg.type = header;
+            n = read(dev_state.qemu_sock, ((char *)&msg) + 4, sizeof(msg) - 4);
+            if (n != sizeof(msg) - 4)
+                break;
+
+            if (msg.type == MSG_DMA_READ)
+            {
+                struct pciem_dma_op dma_op = {.guest_iova = msg.addr,
+                                              .user_addr = (uint64_t)dev_state.dma_bounce_buf,
+                                              .length = msg.len,
+                                              .flags = PCIEM_DMA_FLAG_READ,
+                                              .pasid = 0};
+
+                if (ioctl(dev_state.pciem_fd, PCIEM_IOCTL_DMA, &dma_op) < 0)
+                {
+                    perror("[X] DMA read failed");
+                    resp.status = -1;
+                }
+                else
+                {
+                    resp.status = 0;
+                }
+
+                pthread_mutex_lock(&dev_state.sock_lock);
+                if (write(dev_state.qemu_sock, &resp, sizeof(resp)) != sizeof(resp))
+                {
+                    perror("Socket write failed");
+                    pthread_mutex_unlock(&dev_state.sock_lock);
+                    break;
+                }
+
+                if (resp.status == 0)
+                {
+                    if (writen(dev_state.qemu_sock, dev_state.dma_bounce_buf, msg.len) < 0) {
+                        perror("Failed to write DMA data to QEMU");
+                        pthread_mutex_unlock(&dev_state.sock_lock);
+                        break;
+                    }
+                }
+                pthread_mutex_unlock(&dev_state.sock_lock);
+            }
+            else if (msg.type == MSG_RAISE_IRQ)
+            {
+                uint32_t status = msg.offset;
+                uint64_t result = msg.value;
+
+                dev_state.bar0[REG_STATUS / 4] = status;
+                dev_state.bar0[REG_RESULT_LO / 4] = (uint32_t)(result & 0xFFFFFFFF);
+                dev_state.bar0[REG_RESULT_HI / 4] = (uint32_t)(result >> 32);
+                dev_state.bar0[REG_CMD / 4] = 0;
+
+                inject_irq(0);
+            }
+        }
+        else
+        {
+            resp.status = header;
+            n = read(dev_state.qemu_sock, ((char *)&resp) + 4, sizeof(resp) - 4);
+            if (n != sizeof(resp) - 4)
+                break;
+
+            pthread_mutex_lock(&dev_state.sock_lock);
+            if (dev_state.waiting_for_ack)
+            {
+                dev_state.last_resp = resp;
+                dev_state.waiting_for_ack = 0;
+                pthread_cond_signal(&dev_state.ack_cond);
+            }
+            pthread_mutex_unlock(&dev_state.sock_lock);
+        }
+    }
+
+    printf("[\x1b[31m!\x1b[0m] QEMU forwarding stopped\n");
+    return NULL;
+}
+
+static void process_command_local(void)
+{
+    uint32_t cmd = dev_state.bar0[REG_CMD / 4];
+    uint32_t data = dev_state.bar0[REG_DATA / 4];
+    uint64_t result = 0;
+    uint32_t status = STATUS_DONE;
+
+    switch (cmd)
+    {
+    case CMD_ADD:
+        result = (uint64_t)data + data;
+        break;
+    case CMD_MULTIPLY:
+        result = (uint64_t)data * data;
+        break;
+    case CMD_XOR:
+        result = data ^ 0xFFFFFFFF;
+        break;
+    default:
+        status |= STATUS_ERROR;
+        break;
+    }
+
+    dev_state.bar0[REG_RESULT_LO / 4] = (uint32_t)(result & 0xFFFFFFFF);
+    dev_state.bar0[REG_RESULT_HI / 4] = (uint32_t)(result >> 32);
+    dev_state.bar0[REG_STATUS / 4] = status;
+    dev_state.bar0[REG_CMD / 4] = 0;
+
+    inject_irq(0);
+}
+
+static int setup_watchpoints(void)
+{
+    struct pciem_watchpoint_config wp;
+    wp.bar_index = 0;
+    wp.offset = REG_CMD;
+    wp.width = 4;
+    wp.flags = 1;
+    int ret = ioctl(dev_state.pciem_fd, PCIEM_IOCTL_SET_WATCHPOINT, &wp);
+    if (ret < 0 && errno == EAGAIN)
+        return -EAGAIN;
+    return ret;
+}
+
+static int setup_eventfd(void)
+{
+    struct pciem_eventfd_config efd_cfg;
+    
+    dev_state.event_fd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (dev_state.event_fd < 0)
+    {
+        perror("Failed to create eventfd");
+        return -1;
+    }
+
+    efd_cfg.eventfd = dev_state.event_fd;
+    efd_cfg.reserved = 0;
+
+    if (ioctl(dev_state.pciem_fd, PCIEM_IOCTL_SET_EVENTFD, &efd_cfg) < 0)
+    {
+        perror("Failed to set eventfd");
+        close(dev_state.event_fd);
+        dev_state.event_fd = -1;
+        return -1;
+    }
+
+    printf("[\x1b[32m*\x1b[0m] Eventfd configured: fd=%d\n", dev_state.event_fd);
+    return 0;
+}
+
+static int setup_irq_eventfd(void)
+{
+    struct pciem_irq_eventfd_config irq_cfg;
+
+    dev_state.irq_eventfd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    if (dev_state.irq_eventfd < 0)
+    {
+        perror("Failed to create IRQ eventfd");
+        return -1;
+    }
+
+    irq_cfg.eventfd = dev_state.irq_eventfd;
+    irq_cfg.vector = 0;
+    irq_cfg.flags = 0;
+    irq_cfg.reserved = 0;
+
+    if (ioctl(dev_state.pciem_fd, PCIEM_IOCTL_SET_IRQ_EVENTFD, &irq_cfg) < 0)
+    {
+        perror("Failed to set IRQ eventfd");
+        close(dev_state.irq_eventfd);
+        dev_state.irq_eventfd = -1;
+        return -1;
+    }
+
+    printf("[\x1b[32m*\x1b[0m] IRQ eventfd configured: fd=%d\n", dev_state.irq_eventfd);
+    return 0;
+}
+
+static void handle_bar0_write(struct device_state *st, struct pciem_event *event)
+{
+    volatile uint32_t *bar0 = st->bar0;
+
+    switch (event->offset)
+    {
+    case REG_CMD: {
+        uint32_t cmd = bar0[REG_CMD / 4];
+
+        if (!cmd)
+            return;
+
+        bar0[REG_STATUS / 4] = STATUS_BUSY;
+        if (st->qemu_connected &&
+            (cmd == CMD_EXECUTE_CMDBUF || cmd == CMD_DMA_FRAME))
+        {
+            if (forward_command_to_qemu() < 0)
+                printf("[!] Failed to forward command to QEMU!\n");
+        } else {
+            process_command_local();
+        }
+        break;
+    }
+    default:
+        return;
+    }
+}
+
+static void handle_event(struct device_state *st, struct pciem_event *event)
+{
+    if (event->type == PCIEM_EVENT_MMIO_WRITE && event->bar == 0)
+        handle_bar0_write(st, event);
+}
+
+static int register_device(struct device_state *st)
+{
+    struct pciem_create_device create = {0};
+    struct pciem_bar_config bar0 = {
+        .bar_index = 0,
+        .size = PCIEM_BAR0_SIZE,
+        .flags = PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64,
+    };
+    struct pciem_bar_config bar2 = {
+        .bar_index = 2,
+        .size = PCIEM_BAR2_SIZE,
+        .flags = PCI_BASE_ADDRESS_SPACE_MEMORY | PCI_BASE_ADDRESS_MEM_TYPE_64 |
+                 PCI_BASE_ADDRESS_MEM_PREFETCH,
+    };
+    struct pciem_config_space cfg = {
+        .vendor_id = PCIEM_PCI_VENDOR_ID,
+        .device_id = PCIEM_PCI_DEVICE_ID,
+        .class_code = {0x00, 0x00, 0x0b}
+    };
+    struct pciem_cap_config cap = {
+        .cap_type = PCIEM_CAP_MSI,
+        .msi = {
+            .has_64bit = 1,
+            .has_masking = 1,
+        },
+    };
+
+    st->pciem_fd = open("/dev/pciem", O_RDWR);
+    if (st->pciem_fd < 0) {
+        warn("open(/dev/pciem)");
+        return -1;
+    }
+
+    ioctl(st->pciem_fd, PCIEM_IOCTL_CREATE_DEVICE, &create);
+    ioctl(st->pciem_fd, PCIEM_IOCTL_ADD_BAR, &bar0);
+    ioctl(st->pciem_fd, PCIEM_IOCTL_ADD_BAR, &bar2);
+    ioctl(st->pciem_fd, PCIEM_IOCTL_ADD_CAPABILITY, &cap);
+    ioctl(st->pciem_fd, PCIEM_IOCTL_SET_CONFIG, &cfg);
+
+    st->instance_fd = ioctl(st->pciem_fd, PCIEM_IOCTL_REGISTER, 0);
+    if (st->instance_fd < 0) {
+        warn("PCIEM_IOCTL_REGISTER");
+        return -1;
+    }
+
+    return 0;
+}
+
+static int map_device(struct device_state *st)
+{
+    st->bar0_size = PCIEM_BAR0_SIZE;
+    st->bar0 = mmap(NULL, dev_state.bar0_size, PROT_READ | PROT_WRITE,
+                    MAP_SHARED, st->instance_fd, 0 * 4096);
+    if (st->bar0 == MAP_FAILED) {
+        warn("mmap BAR0 failed");
+        return -1;
+    }
+
+    st->bar2_size = PCIEM_BAR2_SIZE;
+    st->bar2 = mmap(NULL, dev_state.bar2_size, PROT_READ | PROT_WRITE,
+                    MAP_SHARED, st->instance_fd, 2 * 4096);
+    if (st->bar2 == MAP_FAILED) {
+        warn("mmap BAR2 failed");
+        return -1;
+    }
+
+    printf("[\x1b[32m*\x1b[0m] BARs mapped successfully via Instance FD\n");
+
+    st->event_ring = mmap(NULL, sizeof(struct pciem_shared_ring),
+                          PROT_READ | PROT_WRITE, MAP_SHARED,
+                          st->pciem_fd, 0);
+    if (st->event_ring == MAP_FAILED) {
+        warn("mmap shared event ring failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+static void init_device(struct device_state *st)
+{
+    st->pciem_fd = -1;
+
+    pthread_mutex_init(&st->sock_lock, NULL);
+    pthread_cond_init(&st->ack_cond, NULL);
+
+    st->instance_fd = -1;
+    atomic_store(&st->running, 0);
+    st->qemu_connected = 0;
+
+    st->event_ring = MAP_FAILED;
+    st->bar0 = MAP_FAILED;
+    st->bar2 = MAP_FAILED;
+
+    st->qemu_sock = -1;
+    st->dma_bounce_buf = NULL;
+    st->event_fd = -1;
+    st->irq_eventfd = -1;
+}
+
+static void destroy_device(struct device_state *st)
+{
+    if (st->event_fd >= 0)
+        close(st->event_fd);
+
+    if (st->irq_eventfd >= 0)
+    {
+        struct pciem_irq_eventfd_config irq_cfg;
+        irq_cfg.eventfd = -1;
+        irq_cfg.vector = 0;
+        irq_cfg.flags = 0;
+        irq_cfg.reserved = 0;
+        ioctl(st->pciem_fd, PCIEM_IOCTL_SET_IRQ_EVENTFD, &irq_cfg);
+
+        close(st->irq_eventfd);
+    }
+
+    if (st->dma_bounce_buf)
+        free(st->dma_bounce_buf);
+
+    if (st->qemu_sock >= 0)
+        close(st->qemu_sock);
+
+    if (st->event_ring != MAP_FAILED)
+        munmap(st->event_ring, sizeof(struct pciem_shared_ring));
+    if (st->bar2 != MAP_FAILED)
+        munmap((void *)st->bar2, st->bar2_size);
+    if (st->bar0 != MAP_FAILED)
+        munmap((void *)st->bar0, st->bar0_size);
+
+    if (st->instance_fd >= 0)
+        close(st->instance_fd);
+
+    pthread_mutex_destroy(&st->sock_lock);
+    pthread_cond_destroy(&st->ack_cond);
+
+    if (st->pciem_fd >= 0)
+        close(st->pciem_fd);
+}
+
+int main(void)
+{
+    int listen_sock = -1;
+    struct sigaction sa;
+
+    if (geteuid() != 0)
+    {
+        fprintf(stderr, "ERROR: Must run as root\n");
+        return 1;
+    }
+
+    init_device(&dev_state);
+    atomic_store(&dev_state.running, 1);
+    if (register_device(&dev_state) < 0)
+        goto cleanup;
+
+    printf("[\x1b[32m*\x1b[0m] Device registered, got instance FD: %d\n",
+       dev_state.instance_fd);
+
+    if (map_device(&dev_state) < 0)
+        goto cleanup;
+
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = signal_handler;
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
+
+    listen_sock = create_qemu_socket();
+    if (listen_sock < 0)
+        goto cleanup;
+
+    fd_set readfds;
+    struct timeval timeout = {10, 0};
+    FD_ZERO(&readfds);
+    FD_SET(listen_sock, &readfds);
+
+    if (select(listen_sock + 1, &readfds, NULL, NULL, &timeout) > 0)
+    {
+        dev_state.qemu_sock = wait_for_qemu_connection(listen_sock);
+        if (dev_state.qemu_sock >= 0)
+        {
+            dev_state.qemu_connected = 1;
+            dev_state.dma_bounce_buf = malloc(4 * 1024 * 1024);
+            pthread_create(&dev_state.qemu_thread, NULL, qemu_handler_thread, NULL);
+            printf("[\x1b[32m*\x1b[0m] QEMU forwarding mode\n");
+        }
+    }
+    else
+    {
+        printf("[X] QEMU socket not found, running internal emulation...\n");
+    }
+
+    {
+        int retry_count = 0;
+        while (dev_running(&dev_state) && retry_count < 2000)
+        {
+            int ret = setup_watchpoints();
+            if (ret == 0)
+            {
+                printf("[\x1b[32m*\x1b[0m] Watchpoints enabled successfully\n");
+                break;
+            }
+            if (errno != EAGAIN)
+            {
+                printf("[!] Watchpoint setup failed: %s (continuing without watchpoints)\n", strerror(errno));
+                break;
+            }
+            retry_count++;
+            usleep(100000);
+        }
+    }
+
+    if (setup_eventfd() < 0)
+    {
+        printf("[!] Failed to setup eventfd, falling back to busy polling\n");
+    }
+
+    if (setup_irq_eventfd() < 0)
+    {
+        printf("[!] Failed to setup IRQ eventfd, falling back to ioctl\n");
+    }
+
+    printf("[\x1b[32m*\x1b[0m] Starting event consumer...\n");
+    while (dev_running(&dev_state))
+    {
+        if (dev_state.event_fd >= 0)
+        {
+            fd_set rfds;
+            struct timeval tv;
+            int ret;
+
+            FD_ZERO(&rfds);
+            FD_SET(dev_state.event_fd, &rfds);
+
+            tv.tv_sec = 1;
+            tv.tv_usec = 0;
+
+            ret = select(dev_state.event_fd + 1, &rfds, NULL, NULL, &tv);
+            if (ret < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                perror("select() failed");
+                break;
+            }
+            else if (ret > 0)
+            {
+                uint64_t efd_count;
+                if (read(dev_state.event_fd, &efd_count, sizeof(efd_count)) < 0)
+                {
+                    if (errno != EAGAIN)
+                        perror("eventfd read failed");
+                }
+            }
+        }
+
+        int head = atomic_load(&dev_state.event_ring->head);
+        int tail = atomic_load(&dev_state.event_ring->tail);
+        
+        if (head == tail) {
+            // TODO: Maybe yield?
+            continue;
+        }
+
+        struct pciem_event *event = &dev_state.event_ring->events[head];
+
+        atomic_thread_fence(memory_order_acquire);
+        handle_event(&dev_state, event);
+        atomic_store(&dev_state.event_ring->head, (head + 1) % PCIEM_RING_SIZE);
+    }
+
+cleanup:
+    printf("\n[\x1b[31m*\x1b[0m] Exit\n");
+
+    if (dev_state.qemu_connected)
+    {
+        dev_stop(&dev_state);
+        pthread_join(dev_state.qemu_thread, NULL);
+        if (dev_state.dma_bounce_buf)
+        {
+            free(dev_state.dma_bounce_buf);
+            dev_state.dma_bounce_buf = NULL;
+        }
+    }
+
+    if (listen_sock >= 0)
+        close(listen_sock);
+
+    destroy_device(&dev_state);
+
+    unlink(QEMU_SOCKET_PATH);
+    return 0;
+}
+
+```

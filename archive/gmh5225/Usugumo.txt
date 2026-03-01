@@ -1,0 +1,1874 @@
+Project Path: arc_gmh5225_Usugumo_u3vbmcak
+
+Source Tree:
+
+```txt
+arc_gmh5225_Usugumo_u3vbmcak
+├── Dispatches.c
+├── Dispatches.h
+├── Examples
+│   ├── CallDriver.cc
+│   ├── Target.cc
+│   └── build.bat
+├── Functions.c
+├── Functions.h
+├── LICENSE
+├── README.md
+├── Usugumo C.sln
+├── Usugumo C.vcxproj
+├── Usugumo C.vcxproj.filters
+├── Usugumo.c
+├── UsugumoC.inf
+├── defines.h
+├── imports.h
+└── mouse.asm
+
+```
+
+`Dispatches.c`:
+
+```c
+#include "Dispatches.h"
+#include "Functions.h"
+#include "defines.h"
+NTSTATUS DefaultDispatch(PDEVICE_OBJECT device_obj, PIRP irp){
+  UNREFERENCED_PARAMETER(device_obj);
+  UNREFERENCED_PARAMETER(irp);
+  irp->IoStatus.Status = STATUS_SUCCESS;
+  irp->IoStatus.Information = 0;
+  IoCompleteRequest(irp, IO_NO_INCREMENT);
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS IoctlDispatch(PDEVICE_OBJECT device_obj, PIRP irp) {
+  UNREFERENCED_PARAMETER(device_obj);
+  UNREFERENCED_PARAMETER(irp);
+  irp->IoStatus.Status = STATUS_SUCCESS;
+  irp->IoStatus.Information = 0;
+  PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(irp);
+  PVOID buffer = (Requests*)irp->AssociatedIrp.SystemBuffer;
+  ULONG length = stack->Parameters.DeviceIoControl.InputBufferLength;
+  ULONG ctl_code = stack->Parameters.DeviceIoControl.IoControlCode;
+  if (length >= sizeof(Requests)) {
+    if (ctl_code == kIoctlCallDriver && RequestHandler(buffer)) {
+      irp->IoStatus.Information = sizeof(Requests);
+      irp->IoStatus.Status = STATUS_SUCCESS;
+    } else {
+      irp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
+    }
+  } else {
+    irp->IoStatus.Status = STATUS_BUFFER_TOO_SMALL;
+  }
+  IoCompleteRequest(irp, IO_NO_INCREMENT);
+  return irp->IoStatus.Status;
+}
+```
+
+`Dispatches.h`:
+
+```h
+#pragma once
+#include "imports.h"
+
+NTSTATUS DefaultDispatch(PDEVICE_OBJECT device_obj, PIRP irp);
+
+NTSTATUS IoctlDispatch(PDEVICE_OBJECT device_obj, PIRP irp);
+```
+
+`Examples/CallDriver.cc`:
+
+```cc
+
+#include <Windows.h>
+#include <TlHelp32.h>
+#include <fileapi.h>
+#include <handleapi.h>
+#include <ioapiset.h>
+#include <libloaderapi.h>
+#include <vadefs.h>
+#include <winioctl.h>
+#include <processthreadsapi.h>
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+
+#include <mutex>
+
+constexpr ULONG ioctl_call_driver =
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
+
+class _driver {
+ private:
+  HANDLE _driver_handle;
+  UINT64 _processid;
+  UINT64 _cur_processid;
+  ULONG64 _dlladdress;
+  std::mutex ioctl_mutex_;
+// request codes
+#define DRIVER_READVM 0xCAFE1
+#define DRIVER_WRITEVM 0xCAFE2
+#define HID 0xCAFE3
+#define DLL_BASE 0xCAFE4
+
+#pragma pack(push, 1)
+  typedef struct _FixedStr64 {
+    uint64_t blocks[4];
+  } FixedStr64;
+#pragma pack(pop)
+  inline void encodeFixedStr64(const char* str, FixedStr64* fs) {
+    size_t len = strlen(str);
+    if (len > 32) {
+      len = 32;
+    }
+
+    memset(fs->blocks, 0, sizeof(fs->blocks));
+
+    for (size_t i = 0; i < len; i++) {
+      size_t blockIndex = i / 8;
+      size_t posInBlock = i % 8;
+      int shift = 8 * (7 - posInBlock);
+      fs->blocks[blockIndex] |= ((uint64_t)(unsigned char)str[i]) << shift;
+    }
+  }
+
+  inline void decodeFixedStr64(const FixedStr64* fs, char* output,
+                               size_t origLen) {
+    size_t idx = 0;
+    for (size_t block = 0; block < 4; block++) {
+      for (int i = 0; i < 8; i++) {
+        if (idx >= origLen) break;
+        int shift = 8 * (7 - i);
+        output[idx++] = (char)((fs->blocks[block] >> shift) & 0xFF);
+      }
+    }
+    output[origLen] = '\0';
+  }
+#pragma pack(push, 1)
+  typedef struct _Requests {
+    // function requests
+    int request_key;
+
+    // memory read/write
+    UINT64 src_pid;
+    UINT64 src_addr;
+    UINT64 dst_pid;
+    UINT64 dst_addr;
+    size_t size;
+
+    // mouse_event
+    DWORD dwFlags;
+    DWORD dx;
+    DWORD dy;
+    DWORD dwData;
+    ULONG_PTR dwExtraInfo;
+
+    // return value
+    UINT64 dll_base;
+
+    // dllbase request
+    FixedStr64 dll_name;
+    SIZE_T dll_name_length;
+  } Requests;
+#pragma pack(pop)
+  auto readvm(uint32_t src_pid, uint64_t src_addr, uint64_t dst_addr,
+              size_t size) -> void {
+    if (src_pid == 0 || src_addr == 0) return;
+
+    Requests out = {DRIVER_READVM,         src_pid,  src_addr,
+                      _cur_processid, dst_addr, size};
+    std::lock_guard<std::mutex> lock(ioctl_mutex_);
+    DeviceIoControl(_driver_handle, ioctl_call_driver, &out,
+                              sizeof(out),
+                    nullptr, 0, nullptr, nullptr);
+  }
+  auto writevm(uint32_t src_pid, uint64_t src_addr, uint64_t dst_addr,
+               size_t size) -> void {
+    if (src_pid == 0 || dst_addr == 0) return;
+
+    Requests out = {DRIVER_WRITEVM,        src_pid,  src_addr,
+                      _cur_processid, dst_addr, size};
+    std::lock_guard<std::mutex> lock(ioctl_mutex_);
+    DeviceIoControl(_driver_handle, ioctl_call_driver, &out,
+                              sizeof(out),
+                    nullptr, 0, nullptr, nullptr);
+  }
+
+ public:
+  auto initdriver(UINT64 processid) -> void {
+    _driver_handle = CreateFileA("\\\\.\\Usugum0", GENERIC_READ, 0, nullptr,
+                                 OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL,
+                                 nullptr);  // get a handle to our driver
+    if (_driver_handle != INVALID_HANDLE_VALUE) {
+      _processid = processid;
+      _cur_processid = GetCurrentProcessId();
+    }
+  }
+
+  void readsize(const uintptr_t address, const void* buffer,
+                const size_t size) {
+    readvm(_processid, address, uintptr_t(buffer), size);
+  }
+
+  template <typename T>
+  void write(const uintptr_t address, const T& buffer, int Size) {
+    writevm(_processid, address, (uintptr_t)&buffer, Size);
+  }
+  auto dll_address(const char* dllname) -> ULONG64 {
+    Requests out = {0};
+    out.request_key = DLL_BASE;
+    out.src_pid = _processid;
+
+    size_t originalLen = strlen(dllname);
+    if (originalLen > 32) originalLen = 32;
+    out.dll_name_length = originalLen;
+    FixedStr64 fs;
+    encodeFixedStr64(dllname, &fs);
+    out.dll_name = fs;
+    std::lock_guard<std::mutex> lock(ioctl_mutex_);
+    DeviceIoControl(_driver_handle, ioctl_call_driver, &out,
+                              sizeof(out), &out,
+                    sizeof(out), nullptr, nullptr);
+
+    return out.dll_base;
+  }
+
+  void mouse_event(DWORD dwFlags, DWORD dx, DWORD dy, DWORD dwData,
+                          ULONG_PTR dwExtraInfo) {
+    Requests request = {0};
+    request.request_key = HID;
+    request.dwFlags = dwFlags;
+    request.dx = dx;
+    request.dy = dy;
+    request.dwData = dwData;
+    request.dwExtraInfo = dwExtraInfo;
+
+    DeviceIoControl(_driver_handle, ioctl_call_driver, &request,
+                    sizeof(request), nullptr, 0, nullptr, nullptr);
+  }
+};
+
+inline _driver driver;
+
+DWORD GetProcessIdByName(const wchar_t* processName) {
+    PROCESSENTRY32W pe32;
+    pe32.dwSize = sizeof(PROCESSENTRY32W);
+    
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        return 0;
+    }
+    
+    if (!Process32FirstW(hSnapshot, &pe32)) {
+        CloseHandle(hSnapshot);
+        return 0;
+    }
+    
+    DWORD pid = 0;
+    do {
+        if (_wcsicmp(pe32.szExeFile, processName) == 0) {
+            pid = pe32.th32ProcessID;
+            break;
+        }
+    } while (Process32NextW(hSnapshot, &pe32));
+    
+    CloseHandle(hSnapshot);
+    return pid;
+}
+
+int main(void){
+    driver.initdriver(GetProcessIdByName(L"Target.exe"));
+    if (driver.dll_address("Target.exe") == 0) {
+        printf("Failed init\n");
+        system("pause");
+        return 1;
+    }
+    DWORD64 target_var;
+    driver.readsize(0xDEAD0000, &target_var, sizeof(target_var));
+    printf ("readed target_var = 0x%X at 0x%llX\n", 
+        target_var, 0xDEAD0000);
+    printf ("wait 1s then mouse left down\n");
+    Sleep(1000);
+    driver.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+    printf ("done\n");
+    system("pause");
+    return 0;
+}
+```
+
+`Examples/Target.cc`:
+
+```cc
+#include <windows.h>
+#include <iostream>
+#include <iomanip>
+
+const DWORD64 TARGET_BASE_ADDRESS = 0xDEAD0000;
+
+int main() {
+    LPVOID allocated = VirtualAlloc(
+        (LPVOID)TARGET_BASE_ADDRESS,
+        sizeof(DWORD64),
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE
+    );
+
+    if (!allocated) {
+        return 1;
+    }
+
+    volatile DWORD64* fixedVar = (volatile DWORD64*)allocated;
+    
+    *fixedVar = 0x114514;
+
+    std::cout << "\nTarget var at 0x" << std::hex << (DWORD64)fixedVar 
+              << " = 0x" << std::hex << *fixedVar << std::dec << "\n";
+
+    system("pause");
+
+    VirtualFree(allocated, 0, MEM_RELEASE);
+    return 0;
+}
+```
+
+`Examples/build.bat`:
+
+```bat
+call g++ Target.cc -o Target.exe
+call g++ CallDriver.cc -o CallDriver.exe -pthread
+```
+
+`Functions.c`:
+
+```c
+#include "Functions.h"
+
+inline void DecodeFixedStr64(const FixedStr64* fs, char* output,
+                             size_t origLen) {
+  size_t idx = 0;
+  for (size_t block = 0; block < 4; block++) {
+    for (int i = 0; i < 8; i++) {
+      if (idx >= origLen) {
+        break;
+      }
+      int shift = 8 * (7 - i);
+      output[idx++] = (char)((fs->blocks[block] >> shift) & 0xFF);
+    }
+  }
+  output[origLen] = '\0';
+}
+inline wchar_t* ConvertToPCWSTR(const char* ascii_str) {
+  SIZE_T len = 0;
+
+  while (ascii_str[len] != '\0') {
+    len++;
+  }
+
+  wchar_t* w_str = (wchar_t*)ExAllocatePoolWithTag(
+      NonPagedPool, (len + 1) * sizeof(WCHAR), 'pcwT');
+  if (!w_str) {
+    return NULL;
+  }
+
+  for (SIZE_T i = 0; i < len; i++) {
+    w_str[i] = (WCHAR)ascii_str[i];
+  }
+  w_str[len] = L'\0';
+
+  return w_str;
+}
+inline NTSTATUS KernelReadProcessMemory(PEPROCESS process, PVOID address,
+                           PEPROCESS callprocess,
+                       PVOID buffer, SIZE_T size, SIZE_T* read) {
+  if (!process || !address || !buffer || !read) return STATUS_INVALID_PARAMETER;
+
+  SIZE_T bytes_copied = 0;
+  NTSTATUS status =
+      MmCopyVirtualMemory(process,      // 源进程
+                          address,      // 源地址
+                          callprocess,  // 目标进程（当前进程上下文）
+                          buffer,       // 目标缓冲区
+                          size,         // 要复制的字节数
+                          KernelMode,   // 访问模式
+                          &bytes_copied  // 实际复制的字节数
+      );
+
+  *read = bytes_copied;
+  return status;
+}
+inline NTSTATUS KernelWriteProcessMemory(PEPROCESS process, PVOID address,
+                            PEPROCESS callprocess,
+                        PVOID buffer, SIZE_T size, SIZE_T* written) {
+  if (!process || !address || !buffer || !written)
+    return STATUS_INVALID_PARAMETER;
+
+  SIZE_T bytesCopied = 0;
+  NTSTATUS status =
+      MmCopyVirtualMemory(callprocess,  // 源进程（当前进程上下文）
+                          buffer,       // 源缓冲区
+                          process,      // 目标进程
+                          address,      // 目标地址
+                          size,         // 要复制的字节数
+                          KernelMode,   // 访问模式
+                          &bytesCopied  // 实际复制的字节数
+      );
+
+  *written = bytesCopied;
+  return status;
+}
+BOOL ReadVM(Requests* in) {
+  PEPROCESS source_process = NULL;
+  PEPROCESS dist_process = NULL;
+  if (in->src_pid == 0) return STATUS_UNSUCCESSFUL;
+  if (in->dst_pid == 0) return STATUS_UNSUCCESSFUL;
+  NTSTATUS status =
+      PsLookupProcessByProcessId((HANDLE)in->src_pid, &source_process);
+  if (status != STATUS_SUCCESS) return FALSE;
+
+  NTSTATUS status1 =
+      PsLookupProcessByProcessId((HANDLE)in->dst_pid, &dist_process);
+  if (status1 != STATUS_SUCCESS) return FALSE;
+
+  size_t memsize = 0;
+
+  if (!NT_SUCCESS(KernelReadProcessMemory(source_process, (void*)in->src_addr,
+                                           dist_process, (void*)in->dst_addr,
+                                           in->size, &memsize)))
+    return FALSE;
+
+  ObDereferenceObject(source_process);
+
+  return TRUE;
+}
+UINT64 GetModuleBasex64(PEPROCESS proc, UNICODE_STRING module_name,
+                         BOOL get_size) {
+  PPEB pPeb = (PPEB)PsGetProcessPeb(
+      proc);  // get Process PEB, function is unexported and undoc
+
+  if (!pPeb) {
+    return 0;  // failed
+  }
+
+  KAPC_STATE state;
+
+  KeStackAttachProcess(proc, &state);
+
+  PPEB_LDR_DATA pLdr = (PPEB_LDR_DATA)pPeb->Ldr;
+
+  if (!pLdr) {
+    KeUnstackDetachProcess(&state);
+    return 0;  // failed
+  }
+
+  // loop the linked list
+  for (PLIST_ENTRY list = (PLIST_ENTRY)pLdr->InLoadOrderModuleList.Flink;
+       list != &pLdr->InLoadOrderModuleList; list = (PLIST_ENTRY)list->Flink) {
+    PLDR_DATA_TABLE_ENTRY pEntry =
+        CONTAINING_RECORD(list, LDR_DATA_TABLE_ENTRY, InLoadOrderLinks);
+
+    if (RtlCompareUnicodeString(&pEntry->BaseDllName, &module_name, TRUE) ==
+        0) {
+      ULONG64 baseAddr = (ULONG64)pEntry->DllBase;
+      ULONG64 moduleSize =
+          (ULONG64)pEntry->SizeOfImage;  // get the size of the module
+      KeUnstackDetachProcess(&state);
+      if (get_size) {
+        return moduleSize;  // return the size of the module if get_size is TRUE
+      }
+      return baseAddr;
+    }
+  }
+
+  KeUnstackDetachProcess(&state);
+
+  return 0;  // failed
+}
+BOOL WriteVM(Requests* in){
+  PEPROCESS source_process = NULL;
+  PEPROCESS dist_process = NULL;
+  if (in->src_pid == 0) return STATUS_UNSUCCESSFUL;
+  if (in->dst_pid == 0) return STATUS_UNSUCCESSFUL;
+  NTSTATUS status =
+      PsLookupProcessByProcessId((HANDLE)in->src_pid, &source_process);
+  if (status != STATUS_SUCCESS) return FALSE;
+
+  NTSTATUS status1 =
+      PsLookupProcessByProcessId((HANDLE)in->dst_pid, &dist_process);
+  if (status1 != STATUS_SUCCESS) return FALSE;
+
+  size_t memsize = 0;
+
+  if (!NT_SUCCESS(KernelWriteProcessMemory(source_process, (void*)in->src_addr,
+                                            dist_process, (void*)in->dst_addr,
+                                            in->size, &memsize)))
+    return FALSE;
+
+  ObDereferenceObject(source_process);
+
+  return TRUE;
+}
+UINT64 GetDllAddress(Requests* in) {
+  PEPROCESS source_process = NULL;
+  if (in->src_pid == 0) return 0;
+  NTSTATUS status =
+      PsLookupProcessByProcessId((HANDLE)in->src_pid, &source_process);
+  if (status != STATUS_SUCCESS) return 0;
+  UNICODE_STRING moduleName;
+
+  char decoded[33] = {0};
+  DecodeFixedStr64(&in->dll_name, decoded, in->dll_name_length);
+  wchar_t* wStr = ConvertToPCWSTR(decoded);
+  RtlInitUnicodeString(&moduleName, wStr);
+  ExFreePoolWithTag(wStr, 'pcwT');
+  ULONG64 base_address =
+      GetModuleBasex64(source_process, moduleName, FALSE);
+  return base_address;
+}
+
+MOUSE_OBJECT gMouseObject;
+QWORD _KeAcquireSpinLockAtDpcLevel;
+QWORD _KeReleaseSpinLockFromDpcLevel;
+QWORD _IofCompleteRequest;
+QWORD _IoReleaseRemoveLockEx;
+
+inline BOOL MouseOpen(void) {
+  // https://github.com/nbqofficial/norsefire
+  // https://github.com/ekknod/MouseClassServiceCallbackMeme
+
+  /* Microsoft compiler is sometimes retarded, thats why we have to do this non
+   * sense */
+  /* It would otherwise generate wrapper functions around, and it would cause
+   * system BSOD */
+  _KeAcquireSpinLockAtDpcLevel = (QWORD)KeAcquireSpinLockAtDpcLevel;
+  _KeReleaseSpinLockFromDpcLevel = (QWORD)KeReleaseSpinLockFromDpcLevel;
+  _IofCompleteRequest = (QWORD)IofCompleteRequest;
+  _IoReleaseRemoveLockEx = (QWORD)IoReleaseRemoveLockEx;
+
+  if (gMouseObject.use_mouse == 0) {
+    UNICODE_STRING class_string;
+    RtlInitUnicodeString(&class_string, L"\\Driver\\MouClass");
+
+    PDRIVER_OBJECT class_driver_object = NULL;
+    NTSTATUS status = ObReferenceObjectByName(
+        &class_string, OBJ_CASE_INSENSITIVE, NULL, 0, *IoDriverObjectType,
+        KernelMode, NULL, (PVOID*)&class_driver_object);
+    if (!NT_SUCCESS(status)) {
+      gMouseObject.use_mouse = 0;
+      return 0;
+    }
+
+    UNICODE_STRING hid_string;
+    RtlInitUnicodeString(&hid_string, L"\\Driver\\MouHID");
+
+    PDRIVER_OBJECT hid_driver_object = NULL;
+
+    status = ObReferenceObjectByName(&hid_string, OBJ_CASE_INSENSITIVE, NULL, 0,
+                                     *IoDriverObjectType, KernelMode, NULL,
+                                     (PVOID*)&hid_driver_object);
+    if (!NT_SUCCESS(status)) {
+      if (class_driver_object) {
+        ObfDereferenceObject(class_driver_object);
+      }
+      gMouseObject.use_mouse = 0;
+      return 0;
+    }
+
+    PVOID class_driver_base = NULL;
+
+    PDEVICE_OBJECT hid_device_object = hid_driver_object->DeviceObject;
+    while (hid_device_object && !gMouseObject.service_callback) {
+      PDEVICE_OBJECT class_device_object = class_driver_object->DeviceObject;
+      while (class_device_object && !gMouseObject.service_callback) {
+        if (!class_device_object->NextDevice && !gMouseObject.mouse_device) {
+          gMouseObject.mouse_device = class_device_object;
+        }
+
+        PULONG_PTR device_extension =
+            (PULONG_PTR)hid_device_object->DeviceExtension;
+        ULONG_PTR device_ext_size =
+            ((ULONG_PTR)hid_device_object->DeviceObjectExtension -
+             (ULONG_PTR)hid_device_object->DeviceExtension) /
+            4;
+        class_driver_base = class_driver_object->DriverStart;
+        for (ULONG_PTR i = 0; i < device_ext_size; i++) {
+          if (device_extension[i] == (ULONG_PTR)class_device_object &&
+              device_extension[i + 1] > (ULONG_PTR)class_driver_object) {
+            gMouseObject.service_callback =
+                (MouseClassServiceCallbackFn)(device_extension[i + 1]);
+
+            break;
+          }
+        }
+        class_device_object = class_device_object->NextDevice;
+      }
+      hid_device_object = hid_device_object->AttachedDevice;
+    }
+
+    if (!gMouseObject.mouse_device) {
+      PDEVICE_OBJECT target_device_object = class_driver_object->DeviceObject;
+      while (target_device_object) {
+        if (!target_device_object->NextDevice) {
+          gMouseObject.mouse_device = target_device_object;
+          break;
+        }
+        target_device_object = target_device_object->NextDevice;
+      }
+    }
+
+    ObfDereferenceObject(class_driver_object);
+    ObfDereferenceObject(hid_driver_object);
+
+    if (gMouseObject.mouse_device && gMouseObject.service_callback) {
+      gMouseObject.use_mouse = 1;
+    }
+  }
+
+  return gMouseObject.mouse_device && gMouseObject.service_callback;
+}
+
+inline void MouseMove(long x, long y, unsigned short button_flags) {
+  KIRQL irql;
+  ULONG input_data;
+  MOUSE_INPUT_DATA mid = {0};
+  mid.LastX = x;
+  mid.LastY = y;
+  mid.ButtonFlags = button_flags;
+  if (!MouseOpen()) {
+    return;
+  }
+  mid.UnitId = 1;
+  RAISE_IRQL(DISPATCH_LEVEL, &irql);
+  MouseClassServiceCallback(gMouseObject.mouse_device, &mid,
+                            (PMOUSE_INPUT_DATA)&mid + 1, &input_data);
+  KeLowerIrql(irql);
+}
+
+void KernelMouseEvent(DWORD dwFlags, DWORD dx, DWORD dy, DWORD dwData,
+                        ULONG_PTR dwExtraInfo) {
+  UNREFERENCED_PARAMETER(dwFlags);
+  UNREFERENCED_PARAMETER(dx);
+  UNREFERENCED_PARAMETER(dy);
+  UNREFERENCED_PARAMETER(dwData);
+  UNREFERENCED_PARAMETER(dwExtraInfo);
+
+  long x = 0, y = 0;
+  unsigned short button_flags = 0;
+
+  if (dwFlags & MOUSEEVENTF_MOVE) {
+     /* we cant fetch screen resolution from kernel
+    if (dwFlags & MOUSEEVENTF_ABSOLUTE) {
+      x = (long)dx;
+      y = (long)dy;
+    }
+    else */{
+      x = (long)(short)LOWORD(dx);
+      y = (long)(short)LOWORD(dy);
+    }
+  }
+
+  if (dwFlags & MOUSEEVENTF_LEFTDOWN)
+    button_flags |= 0x0001;  // MOUSE_LEFT_BUTTON_DOWN
+  if (dwFlags & MOUSEEVENTF_LEFTUP)
+    button_flags |= 0x0002;  // MOUSE_LEFT_BUTTON_UP
+  if (dwFlags & MOUSEEVENTF_RIGHTDOWN)
+    button_flags |= 0x0004;  // MOUSE_RIGHT_BUTTON_DOWN
+  if (dwFlags & MOUSEEVENTF_RIGHTUP)
+    button_flags |= 0x0008;  // MOUSE_RIGHT_BUTTON_UP
+  if (dwFlags & MOUSEEVENTF_MIDDLEDOWN)
+    button_flags |= 0x0010;  // MOUSE_MIDDLE_BUTTON_DOWN
+  if (dwFlags & MOUSEEVENTF_MIDDLEUP)
+    button_flags |= 0x0020;  // MOUSE_MIDDLE_BUTTON_UP
+
+  MouseMove(x, y, button_flags);
+}
+
+BOOL RequestHandler(Requests* pstruct) {
+  switch (pstruct->request_key) {
+    case DLL_BASE: {
+      ULONG64 base = GetDllAddress(pstruct);
+      pstruct->dll_base = base;
+      return pstruct->dll_base != 0;
+    }
+    case DRIVER_READVM: {
+      return ReadVM(pstruct);
+    }
+    case DRIVER_WRITEVM: {
+      return WriteVM(pstruct);
+    }
+    case HID: {
+      KernelMouseEvent(pstruct->dwFlags, pstruct->dx, pstruct->dy,
+                       pstruct->dwData, pstruct->dwExtraInfo);
+      return TRUE;
+    }
+  }
+
+  return TRUE;
+}
+```
+
+`Functions.h`:
+
+```h
+#pragma once
+#include "imports.h"
+#include "defines.h"
+BOOL ReadVM(Requests* in);
+
+BOOL WriteVM(Requests* in);
+
+UINT64 GetDllAddress(Requests* in);
+
+void KernelMouseEvent(DWORD dwFlags, DWORD dx, DWORD dy, DWORD dwData,
+                        ULONG_PTR dwExtraInfo);
+
+BOOL RequestHandler(Requests* pstruct);
+```
+
+`LICENSE`:
+
+```
+TOSSUCU License
+
+Copyright (c) 2025 渟雲
+
+Any first-person pronouns (such as "I", "Me"), "right holder", and "Author" in this license refer to the above-mentioned right holder (in this copy of license, specifically 渟雲)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+
+Don’t think of the author as your waifu, otherwise the author has the right to be shy.
+
+YOU MUST NOT CALL ME "33" IF U DO NOT WANT TO CALL ME "33".
+
+You must agree that Ukia is pronounced as "Укия".
+
+You must agree that ptr is pronounced as "Pa To Ra".
+
+WITHOUT THE CONSENT OF YOUR LOCAL GOVERNMENT AND THE RIGHTS HOLDER, YOU MAY NOT PRINT THE CODE OF THIS SOFTWARE ON 80 LB A4 PAPER AND MIX IT WITH PASTA USING NO. 42 CONCRETE AND FEED IT TO MALE UNDERAGE VIETNAMESE CITIZENS UNDER THE AGE OF 3. OTHERWISE, YOU WILL BE RESPONSIBLE FOR THE CONSEQUENCES OF THE EXCAVATOR TORQUE AFFECTED BY THE SCREWS CAUSING THE PRODUCTION OF HIGH-ENERGY PROTEINS, INCLUDING BUT NOT LIMITED TO BEING CAPTURED BY WILD TOJO HIDEKI IN THE SENSE OF THE PYTHAGOREAN THEOREM, THEREBY AFFECTING ECONOMIC DEVELOPMENT, RADIOACTIVE CONTAMINATION CAUSED BY TRUMP'S N-TH POWER CUT SURFACE IN UFOS, AND DEPRIVATION OF THE RIGHT TO WATCH THE CONFLUENCE OF QIN SHIHUANG'S WALMART AND THE PACIFIC MOBILE PHONE CHARGER IN ANTARCTICA.
+
+The right to interpret this license belongs to the right holder.
+
+```
+
+`README.md`:
+
+```md
+# Usugumo
+A Windows kernel-mode driver that proxies RPM/WPM/mouse_event operations, handling user-mode process requests via ioctl
+---
+
+## Features
+
+- Handling user-mode process requests via ioctl
+- Kernel-mode RPM/WPM
+- Kernel-mode mouse input
+  
+## KnownIssues
+
+- Currently only works on x64 processes(?)
+- Current implementation does not take into account CR3 encryption, kernel-mode memory protection, etc., and is only used as a PoC
+
+## License
+
+This project is licensed under [**TOSSRCU**](LICENSE).
+```diff
++ You are free to:
+	• Use: Utilize the software for any purpose not explicitly restricted
+	• Copy: Reproduce the software without limitation
+	• Modify: Create derivative works through remixing/transforming
+	• Merge: Combine with other materials
+	• Publish: Display/communicate the software publicly
+	• Distribute: Share copies of the software
+
++ Under the following terms:
+	• Attribution: Must include copyright notice and this license in all copies
+	• Waifu Clause: Don't consider the author as your waifu
+
+- You are not allowed to:
+	• Sublicense: Cannot grant sublicenses for original/modified material
+
+```
+
+## Credits
+
+- [ekknod/MouseClassServiceCallbackMeme](https://github.com/ekknod/MouseClassServiceCallbackMeme/)
+
+```
+
+`Usugumo C.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36121.58 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Usugumo C", "Usugumo C.vcxproj", "{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|ARM64.Build.0 = Debug|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|ARM64.Deploy.0 = Debug|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|x64.ActiveCfg = Debug|x64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|x64.Build.0 = Debug|x64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Debug|x64.Deploy.0 = Debug|x64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|ARM64.ActiveCfg = Release|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|ARM64.Build.0 = Release|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|ARM64.Deploy.0 = Release|ARM64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|x64.ActiveCfg = Release|x64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|x64.Build.0 = Release|x64
+		{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}.Release|x64.Deploy.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6A686485-8729-425E-94BF-A09822499149}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`Usugumo C.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A760B5B3-9C9E-9B82-35A0-A8F759B87E86}</ProjectGuid>
+    <TemplateGuid>{1bc93793-694f-48fe-9372-81e2b05556fd}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <RootNamespace>Usugumo_C</RootNamespace>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+    <ClCompile>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+    </ClCompile>
+    <ClCompile>
+      <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
+    </ClCompile>
+    <ClCompile>
+      <IntelJCCErratum>true</IntelJCCErratum>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <LargeAddressAware>true</LargeAddressAware>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+    <ClCompile>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+    </ClCompile>
+    <ClCompile>
+      <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
+    </ClCompile>
+    <ClCompile>
+      <IntelJCCErratum>true</IntelJCCErratum>
+      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+    </ClCompile>
+    <Link>
+      <LargeAddressAware>true</LargeAddressAware>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Inf Include="UsugumoC.inf" />
+  </ItemGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Dispatches.c" />
+    <ClCompile Include="Functions.c" />
+    <ClCompile Include="Usugumo.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="defines.h" />
+    <ClInclude Include="Dispatches.h" />
+    <ClInclude Include="Functions.h" />
+    <ClInclude Include="imports.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="mouse.asm" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>
+```
+
+`Usugumo C.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Driver Files">
+      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
+      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Inf Include="UsugumoC.inf">
+      <Filter>Driver Files</Filter>
+    </Inf>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Usugumo.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Dispatches.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Functions.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="defines.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="imports.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Dispatches.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Functions.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
+
+`Usugumo.c`:
+
+```c
+#include "imports.h"
+#include "defines.h"
+#include "Dispatches.h"
+VOID DriverUnload(_In_ struct _DRIVER_OBJECT* DriverObject) {
+  UNREFERENCED_PARAMETER(DriverObject);
+  if (DriverObject->DeviceObject) {
+    UNICODE_STRING symbolic_link_name;
+    RtlInitUnicodeString(&symbolic_link_name, L"\\DosDevices\\Usugum0");
+    IoDeleteSymbolicLink(&symbolic_link_name);
+    IoDeleteDevice(DriverObject->DeviceObject);
+  }
+}
+
+
+
+NTSTATUS DriverInit(_In_ PDRIVER_OBJECT DriverObject,
+                  _In_ PUNICODE_STRING RegistryPath) {
+  UNREFERENCED_PARAMETER(DriverObject);
+  UNREFERENCED_PARAMETER(RegistryPath);
+
+ UNICODE_STRING device_name, symbolic_link_name;
+ PDEVICE_OBJECT device_object;
+
+  RtlInitUnicodeString(&device_name, L"\\Device\\Usugum0");  // die lit
+  NTSTATUS status =
+      IoCreateDevice(DriverObject, 0, &device_name, FILE_DEVICE_UNKNOWN,
+                     FILE_DEVICE_SECURE_OPEN, FALSE, &device_object);
+  if (status != STATUS_SUCCESS) return status;
+
+  RtlInitUnicodeString(&symbolic_link_name, L"\\DosDevices\\Usugum0");
+  status = IoCreateSymbolicLink(&symbolic_link_name, &device_name);
+  if (status != STATUS_SUCCESS) return status;
+
+  SetFlag(device_object->Flags, DO_BUFFERED_IO);
+
+  DriverObject->MajorFunction[IRP_MJ_CREATE] = DefaultDispatch;
+  DriverObject->MajorFunction[IRP_MJ_CLOSE] = DefaultDispatch;
+  DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = IoctlDispatch;
+  DriverObject->DriverUnload = DriverUnload;
+
+  ClearFlag(device_object->Flags, DO_DEVICE_INITIALIZING);
+  return status;
+}
+NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject,
+                     _In_ PUNICODE_STRING RegistryPath) {
+  UNREFERENCED_PARAMETER(DriverObject);
+  UNREFERENCED_PARAMETER(RegistryPath);
+  UNICODE_STRING drv_name;
+  RtlInitUnicodeString(&drv_name, L"\\Driver\\Usugum0");
+  return IoCreateDriver(&drv_name, DriverInit);
+}
+
+
+
+```
+
+`UsugumoC.inf`:
+
+```inf
+;
+; UsugumoC.inf
+;
+
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = UsugumoC ; TODO: specify appropriate Class
+ClassGuid   = {8cd360e0-1b8c-cf3d-8f6c-5fde97e2b9fc}
+Provider    = %ManufacturerName%
+CatalogFile = UsugumoC.cat
+DriverVer   = 1
+PnpLockdown = 1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+UsugumoC.sys = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName% = Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NT$ARCH$.10.0...16299]
+%UsugumoC.DeviceDesc% = UsugumoC_Device, Root\UsugumoC ; TODO: edit hw-id
+
+[UsugumoC_Device.NT]
+CopyFiles = File_Copy
+
+[File_Copy]
+UsugumoC.sys
+
+;-------------- Service installation
+[UsugumoC_Device.NT.Services]
+AddService = UsugumoC,%SPSVCINST_ASSOCSERVICE%, UsugumoC_Service_Inst
+
+; -------------- UsugumoC driver install sections
+[UsugumoC_Service_Inst]
+DisplayName    = %UsugumoC.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\UsugumoC.sys
+
+[UsugumoC_Device.NT.Wdf]
+KmdfService = UsugumoC, UsugumoC_wdfsect
+
+[UsugumoC_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE = 0x00000002
+ManufacturerName = "EURL tkm Mecha"
+DiskName = "UsugumoC Installation Disk"
+UsugumoC.DeviceDesc = "UsugumoC Device"
+UsugumoC.SVCDESC = "UsugumoC Service"
+
+```
+
+`defines.h`:
+
+```h
+#pragma once
+#include <windef.h>
+typedef int BOOL;
+typedef ULONG_PTR QWORD;
+
+#define RAISE_IRQL(a, b) *(b) = KfRaiseIrql(a)
+
+#define DRIVER_READVM 0xCAFE1
+#define DRIVER_WRITEVM 0xCAFE2
+#define HID 0xCAFE3
+#define DLL_BASE 0xCAFE4
+
+#define MOUSEEVENTF_MOVE 0x0001
+#define MOUSEEVENTF_LEFTDOWN 0x0002
+#define MOUSEEVENTF_LEFTUP 0x0004
+#define MOUSEEVENTF_RIGHTDOWN 0x0008
+#define MOUSEEVENTF_RIGHTUP 0x0010
+#define MOUSEEVENTF_MIDDLEDOWN 0x0020
+#define MOUSEEVENTF_MIDDLEUP 0x0040
+#define MOUSEEVENTF_ABSOLUTE 0x8000
+
+static const ULONG kIoctlCallDriver =
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS);
+
+typedef struct _PEB_LDR_DATA {
+  ULONG Length;
+  UCHAR Initialized;
+  PVOID SsHandle;
+  LIST_ENTRY InLoadOrderModuleList;
+  LIST_ENTRY InMemoryOrderModuleList;
+  LIST_ENTRY InInitializationOrderModuleList;
+} PEB_LDR_DATA, *PPEB_LDR_DATA;
+
+typedef struct _RTL_USER_PROCESS_PARAMETERS {
+  BYTE Reserved1[16];
+  PVOID Reserved2[10];
+  UNICODE_STRING ImagePathName;
+  UNICODE_STRING CommandLine;
+} RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
+typedef struct _PEB {
+  UCHAR InheritedAddressSpace;
+  UCHAR ReadImageFileExecOptions;
+  UCHAR BeingDebugged;
+  UCHAR BitField;
+  PVOID Mutant;
+  PVOID ImageBaseAddress;
+  PPEB_LDR_DATA Ldr;
+  PVOID ProcessParameters;
+  PVOID SubSystemData;
+  PVOID ProcessHeap;
+  PVOID FastPebLock;
+  PVOID AtlThunkSListPtr;
+  PVOID IFEOKey;
+  PVOID CrossProcessFlags;
+  PVOID KernelCallbackTable;
+  ULONG SystemReserved;
+  ULONG AtlThunkSListPtr32;
+  PVOID ApiSetMap;
+} PEB, *PPEB;
+
+typedef struct _LDR_DATA_TABLE_ENTRY {
+  LIST_ENTRY InLoadOrderLinks;
+  LIST_ENTRY InMemoryOrderLinks;
+  LIST_ENTRY InInitializationOrderLinks;
+  PVOID DllBase;
+  PVOID EntryPoint;
+  ULONG SizeOfImage;
+  UNICODE_STRING FullDllName;
+  UNICODE_STRING BaseDllName;
+  ULONG Flags;
+  USHORT LoadCount;
+  USHORT TlsIndex;
+  LIST_ENTRY HashLinks;
+  ULONG TimeDateStamp;
+} LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;
+
+#pragma warning(disable : 4201)
+typedef struct _MOUSE_INPUT_DATA {
+  USHORT UnitId;
+  USHORT Flags;
+  union {
+    ULONG Buttons;
+    struct {
+      USHORT ButtonFlags;
+      USHORT ButtonData;
+    };
+  };
+  ULONG RawButtons;
+  LONG LastX;
+  LONG LastY;
+  ULONG ExtraInformation;
+} MOUSE_INPUT_DATA, *PMOUSE_INPUT_DATA;
+
+typedef VOID (*MouseClassServiceCallbackFn)(PDEVICE_OBJECT DeviceObject,
+                                            PMOUSE_INPUT_DATA InputDataStart,
+                                            PMOUSE_INPUT_DATA InputDataEnd,
+                                            PULONG InputDataConsumed);
+
+typedef struct _MOUSE_OBJECT {
+  PDEVICE_OBJECT mouse_device;
+  MouseClassServiceCallbackFn service_callback;
+  BOOL use_mouse;
+} MOUSE_OBJECT, *PMOUSE_OBJECT;
+
+#pragma pack(push, 1)
+typedef struct _FixedStr64 {
+  UINT64 blocks[4];
+} FixedStr64;
+#pragma pack(pop)
+#pragma pack(push, 1)
+typedef struct _Requests {
+  // function requests
+  int request_key;
+
+  // memory read/write
+  UINT64 src_pid;
+  UINT64 src_addr;
+  UINT64 dst_pid;
+  UINT64 dst_addr;
+  size_t size;
+
+  // mouse_event
+  DWORD dwFlags;
+  DWORD dx;
+  DWORD dy;
+  DWORD dwData;
+  ULONG_PTR dwExtraInfo;
+
+  // return value
+  UINT64 dll_base;
+
+  // dllbase request
+  FixedStr64 dll_name;
+  SIZE_T dll_name_length;
+} Requests;
+#pragma pack(pop)
+```
+
+`imports.h`:
+
+```h
+#pragma once
+#include <ntifs.h>
+#include "defines.h"
+
+NTKERNELAPI NTSTATUS
+IoCreateDriver(_In_ PUNICODE_STRING DriverName,
+               _In_ PDRIVER_INITIALIZE InitializationFunction);
+
+__declspec(dllimport) NTSTATUS MmCopyVirtualMemory(
+    IN PEPROCESS FromProcess, IN CONST VOID* FromAddress,
+    IN PEPROCESS ToProcess, OUT PVOID ToAddress, IN SIZE_T BufferSize,
+    IN KPROCESSOR_MODE PreviousMode, OUT PSIZE_T NumberOfBytesCopied);
+
+__declspec(dllimport) PPEB PsGetProcessPeb(PEPROCESS);
+
+NTSYSCALLAPI
+POBJECT_TYPE* IoDriverObjectType;
+
+NTSYSCALLAPI
+NTSTATUS
+ObReferenceObjectByName(__in PUNICODE_STRING ObjectName, __in ULONG Attributes,
+                        __in_opt PACCESS_STATE AccessState,
+                        __in_opt ACCESS_MASK DesiredAccess,
+                        __in POBJECT_TYPE ObjectType,
+                        __in KPROCESSOR_MODE AccessMode,
+                        __inout_opt PVOID ParseContext, __out PVOID* Object);
+
+
+VOID MouseClassServiceCallback(PDEVICE_OBJECT DeviceObject,
+                               PMOUSE_INPUT_DATA InputDataStart,
+                               PMOUSE_INPUT_DATA InputDataEnd,
+                               PULONG InputDataConsumed);
+```
+
+`mouse.asm`:
+
+```asm
+EXTERNDEF _KeAcquireSpinLockAtDpcLevel:PROC
+EXTERNDEF _KeReleaseSpinLockFromDpcLevel:PROC
+EXTERNDEF _IofCompleteRequest:PROC
+EXTERNDEF _IoReleaseRemoveLockEx:PROC
+EXTERNDEF memmove:PROC
+
+.data
+WPP_RECORDER_INITIALIZED dq 0;
+WPP_GLOBAL_Control dq 0;
+.code
+
+WPP_RECORDER_SF proc
+	ret
+WPP_RECORDER_SF endp
+
+MouseClassReadCopyData proc
+	mov    r11,rsp
+	mov    QWORD PTR [r11+8h],rbx
+	mov    QWORD PTR [r11+10h],rbp
+	mov    QWORD PTR [r11+18h],rsi
+	push   rdi
+	push   r12
+	push   r13
+	push   r14
+	push   r15
+	sub    rsp,50h
+	inc    DWORD PTR [rcx+0a8h]
+	mov    rsi,rdx
+	mov    eax,DWORD PTR [rcx+54h]
+	mov    rdi,rcx
+	mov    r13,QWORD PTR [rdx+0b8h]
+	lea    ebp,[rax+rax*2]
+	mov    ebx,DWORD PTR [r13+8h]
+	shl    ebp,3h
+	mov    edx,DWORD PTR [rdi+88h]
+	cmp    ebp,ebx
+	cmovae ebp,ebx
+	sub    edx,DWORD PTR [rdi+78h]
+	add    edx,DWORD PTR [rdi+68h]
+	mov    r12d,ebp
+	cmp    ebp,edx
+	cmovae r12d,edx
+	mov    r14,QWORD PTR [rsi+18h]
+	mov    rdx,QWORD PTR [rdi+78h]
+	mov    rcx,r14
+	mov    r8d,r12d
+	mov    r15d,r12d
+	call   memmove
+	add    r14,r15
+	mov    ebx,ebp
+	sub    ebx,r12d
+	je     J1A5
+	mov    rdx,QWORD PTR [rdi+68h]
+	mov    r8,rbx
+	mov    rcx,r14
+	call   memmove
+	mov    rcx,QWORD PTR [rdi+68h]
+	add    rcx,rbx
+	mov    QWORD PTR [rdi+78h],rcx
+	jmp    J1B0
+J1A5:
+	add    QWORD PTR [rdi+78h],r15
+J1B0:
+	mov    ebx,ebp
+	mov    rax,0aaaaaaaaaaaaaaabh
+	mul    rbx
+	shr    rdx,4h
+	sub    DWORD PTR [rdi+54h],edx
+	jne    J1FF
+	mov    BYTE PTR [rdi+42h],1h
+J1FF:
+	mov    QWORD PTR [rsi+38h],rbx
+	lea    r11,[rsp+50h]
+	mov    rbx,QWORD PTR [r11+30h]
+	xor    eax,eax
+	mov    rsi,QWORD PTR [r11+40h]
+	mov    DWORD PTR [r13+8h],ebp
+	mov    rbp,QWORD PTR [r11+38h]
+	mov    rsp,r11
+	pop    r15
+	pop    r14
+	pop    r13
+	pop    r12
+	pop    rdi
+	ret
+MouseClassReadCopyData endp
+
+
+
+
+MouseClassDequeueRead proc
+	xor    edx,edx
+	lea    r8,[rcx+98h]
+J9:
+	mov    rcx,QWORD PTR [r8]
+	cmp    rcx,r8
+	je     J47
+	cmp    QWORD PTR [rcx+8h],r8
+	jne    J4C
+	mov    rax,QWORD PTR [rcx]
+	cmp    QWORD PTR [rax+8h],rcx
+	jne    J4C
+	mov    QWORD PTR [r8],rax
+	lea    rdx,[rcx-0a8h]
+	mov    QWORD PTR [rax+8h],r8
+	xor    eax,eax
+	xchg   QWORD PTR [rdx+68h],rax
+	test   rax,rax
+	jne    J42
+	mov    QWORD PTR [rcx+8h],rcx
+	xor    edx,edx
+	mov    QWORD PTR [rcx],rcx
+J42:
+	test   rdx,rdx
+	je     J9
+J47:
+	mov    rax,rdx
+	ret
+	int    3
+J4C:
+	mov    ecx,3h
+	int    29h
+MouseClassDequeueRead endp
+
+
+MouseClassServiceCallback proc
+	mov    rax,rsp
+	mov    QWORD PTR [rax+8h],rbx
+	mov    QWORD PTR [rax+10h],rsi
+	mov    QWORD PTR [rax+18h],rdi
+	mov    QWORD PTR [rax+20h],r9
+	push   rbp
+	push   r12
+	push   r13
+	push   r14
+	push   r15
+	mov    rbp,rsp
+	sub    rsp,70h
+	mov    r13,r9
+	mov    rbx,r8
+	mov    r14,rdx
+	mov    r15,rcx
+
+
+
+	
+	lea    rax, WPP_RECORDER_INITIALIZED
+	xor    esi,esi
+	cmp    WPP_RECORDER_INITIALIZED, rax
+	jne    J61
+	mov    rcx,QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J61
+	mov    rcx,QWORD PTR [rcx+40h]
+	lea    r9d,[rsi+32h]
+	lea    r8d,[rsi+3h]
+	mov    dl,5h
+	call   WPP_RECORDER_SF
+
+J61:
+
+
+	mov    rdi,QWORD PTR [r15+40h]
+	sub    ebx,r14d
+	mov    r12d,esi
+	mov    DWORD PTR [r13+0h],esi
+	lea    rcx,[rdi+90h]
+	call   QWORD PTR _KeAcquireSpinLockAtDpcLevel
+	nop    DWORD PTR [rax+rax*1+0h]
+	lea    rax,[rbp-10h]
+	mov    rcx,rdi
+	mov    QWORD PTR [rbp-8h],rax
+	lea    rax,[rbp-10h]
+	mov    QWORD PTR [rbp-10h],rax
+	call   MouseClassDequeueRead
+	mov    rsi,rax
+	xor    r9d,r9d
+	mov    rax,0aaaaaaaaaaaaaaabh
+	test   rsi,rsi
+	je     J1aa
+	mov    r13,QWORD PTR [rsi+0b8h]
+	mov    r12d,ebx
+	mov    r8d,DWORD PTR [r13+8h]
+	cmp    ebx,r8d
+	cmovae r12d,r8d
+	mul    r12
+	mov    rax,QWORD PTR [rbp+48h]
+	shr    rdx,4h
+	add    DWORD PTR [rax],edx
+	lea    rax, WPP_RECORDER_INITIALIZED
+	cmp    WPP_RECORDER_INITIALIZED,rax
+	jne    J11d
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],r9w
+	je     J11d
+	mov    rax,QWORD PTR [rsi+18h]
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    QWORD PTR [rsp+50h],rax
+	mov    QWORD PTR [rsp+48h],r14
+	mov    DWORD PTR [rsp+40h],r8d
+	mov    DWORD PTR [rsp+38h],ebx
+	mov    QWORD PTR [rsp+30h],rsi
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+
+J11d:
+
+	mov    rax,0fffff78000000014h
+	mov    rax,QWORD PTR [rax]
+	lea    rdx,WPP_RECORDER_INITIALIZED
+	cmp    WPP_RECORDER_INITIALIZED,rdx
+	jne    J15e
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	mov    DWORD PTR [rsp+40h],r12d
+	mov    QWORD PTR [rsp+38h],rax
+	mov    QWORD PTR [rsp+30h],rsi
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+
+J15e:
+
+	mov    rcx,QWORD PTR [rsi+18h]
+	mov    r8,r12
+	mov    rdx,r14
+	call   memmove
+	mov    QWORD PTR [rsi+38h],r12
+	lea    rcx,[rbp-10h]
+	xor    r8d,r8d
+	mov    DWORD PTR [rsi+30h],r8d
+	add    rsi,0a8h
+	mov    DWORD PTR [r13+8h],r12d
+	mov    rax,QWORD PTR [rbp-8h]
+	cmp    QWORD PTR [rax],rcx
+	jne    J495
+	mov    r13,QWORD PTR [rbp+48h]
+	lea    rcx,[rbp-10h]
+	mov    QWORD PTR [rsi],rcx
+	mov    QWORD PTR [rsi+8h],rax
+	mov    QWORD PTR [rax],rsi
+	mov    QWORD PTR [rbp-8h],rsi
+
+J1aa:
+
+	mov    eax,r12d
+	add    r14,rax
+	sub    ebx,r12d
+	lea    r12,WPP_RECORDER_INITIALIZED
+	xor    esi,esi
+	cmp    WPP_RECORDER_INITIALIZED,r12
+	jne    J1e4
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J1e4
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    DWORD PTR [rsp+30h],ebx
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+
+J1e4:
+
+	test   ebx,ebx
+	je     J41d
+	cmp    WPP_RECORDER_INITIALIZED,r12
+	jne    J22f
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J22f
+	mov    eax,DWORD PTR [rdi+54h]
+	mov    r9d,36h
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    DWORD PTR [rsp+38h],ebx
+	lea    edx,[rax+rax*2]
+	mov    eax,DWORD PTR [rdi+88h]
+	shl    edx,3h
+	sub    eax,edx
+	mov    DWORD PTR [rsp+30h],eax
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+
+J22f:
+
+	mov    ecx,DWORD PTR [rdi+88h]
+	cmp    ecx,ebx
+	mov    r12d,ecx
+	cmovae r12d,ebx
+	sub    ecx,DWORD PTR [rdi+70h]
+	mov    ebx,DWORD PTR [rdi+68h]
+	add    ebx,ecx
+	lea    rax,WPP_RECORDER_INITIALIZED
+	cmp    WPP_RECORDER_INITIALIZED,rax
+	jne    J287
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J287
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    r9d,38h
+	mov    DWORD PTR [rsp+38h],ebx
+	mov    DWORD PTR [rsp+30h],r12d
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+	lea    rax,WPP_RECORDER_INITIALIZED
+
+J287:
+
+	cmp    r12d,ebx
+	mov    esi,r12d
+	cmovae esi,ebx
+	cmp    WPP_RECORDER_INITIALIZED,rax
+	jne    J2cc
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	xor    eax,eax
+	cmp    WORD PTR [rcx+48h],ax
+	je     J2cc
+	mov    rcx,QWORD PTR [rcx+40h]
+	lea    r9d,[rax+39h]
+	mov    rax,QWORD PTR [rdi+70h]
+	mov    QWORD PTR [rsp+40h],rax
+	mov    QWORD PTR [rsp+38h],r14
+	mov    DWORD PTR [rsp+30h],esi
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+
+J2cc:
+
+	mov    rcx,QWORD PTR [rdi+70h]
+	mov    rdx,r14
+	mov    r8d,esi
+	mov    ebx,esi
+	call   memmove
+	add    QWORD PTR [rdi+70h],rbx
+	add    r14,rbx
+	mov    rdx,QWORD PTR [rdi+68h]
+	mov    eax,DWORD PTR [rdi+88h]
+	mov    rcx,QWORD PTR [rdi+70h]
+	add    rax,rdx
+	cmp    rcx,rax
+	jb     J301
+	mov    QWORD PTR [rdi+70h],rdx
+	mov    rcx,rdx
+
+J301:
+
+	mov    ebx,r12d
+	sub    ebx,esi
+	je     J362
+	lea    rdx,WPP_RECORDER_INITIALIZED
+	mov    rax,rcx
+	cmp    WPP_RECORDER_INITIALIZED,rdx
+	jne    J350
+	mov    rdx, QWORD PTR WPP_GLOBAL_Control
+	xor    r8d,r8d
+	cmp    WORD PTR [rdx+48h],r8w
+	je     J350
+	mov    QWORD PTR [rsp+40h],rcx
+	lea    r9d,[r8+03ah]
+	mov    rcx,QWORD PTR [rdx+40h]
+	mov    QWORD PTR [rsp+38h],r14
+	mov    DWORD PTR [rsp+30h],ebx
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+	mov    rax,QWORD PTR [rdi+70h]
+
+J350:
+
+	mov    r8,rbx
+	mov    rdx,r14
+	mov    rcx,rax
+	call   memmove
+	add    QWORD PTR [rdi+70h],rbx
+
+J362:
+
+	mov    ecx,r12d
+	mov    rax,0aaaaaaaaaaaaaaabh
+	mul    rcx
+	shr    rdx,4h
+	add    DWORD PTR [rdi+54h],edx
+	mov    ecx,DWORD PTR [r13+0h]
+	add    ecx,edx
+	mov    eax,ecx
+	mov    DWORD PTR [r13+0h],ecx
+	lea    r12,WPP_RECORDER_INITIALIZED
+	xor    esi,esi
+	cmp    WPP_RECORDER_INITIALIZED,r12
+	jne    J41d
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J41d
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    DWORD PTR [rsp+48h],eax
+	mov    rax,QWORD PTR [rdi+78h]
+	mov    QWORD PTR [rsp+40h],rax
+	mov    rax,QWORD PTR [rdi+70h]
+	mov    QWORD PTR [rsp+38h],rax
+	mov    eax,DWORD PTR [rdi+54h]
+	mov    DWORD PTR [rsp+30h],eax
+	mov    QWORD PTR [rsp+28h],r15
+	call   WPP_RECORDER_SF
+	jmp    J41d
+
+J3d5:
+
+	mov    rcx,rdi
+	call   MouseClassDequeueRead
+	mov    rbx,rax
+	test   rax,rax
+	je     J422
+	mov    rdx,rax
+	mov    rcx,rdi
+	call   MouseClassReadCopyData
+	mov    DWORD PTR [rbx+30h],eax
+	lea    rcx,[rbp-10h]
+	mov    rdx,QWORD PTR [rbp-8h]
+	lea    rax,[rbx+0a8h]
+	cmp    QWORD PTR [rdx],rcx
+	jne    J495
+	mov    QWORD PTR [rax+8h],rdx
+	lea    rcx,[rbp-10h]
+	mov    QWORD PTR [rax],rcx
+	mov    QWORD PTR [rdx],rax
+	mov    QWORD PTR [rbp-8h],rax
+
+J41d:
+
+	cmp    DWORD PTR [rdi+54h],esi
+
+
+	ja     J3d5
+
+J422:
+
+	lea    rcx,[rdi+90h]
+	call   QWORD PTR _KeReleaseSpinLockFromDpcLevel
+	nop    DWORD PTR [rax+rax*1+0h]
+
+J435:
+
+	mov    rbx,QWORD PTR [rbp-10h]
+	lea    rax,[rbp-10h]
+	cmp    rbx,rax
+	je     J49c
+	lea    rax,[rbp-10h]
+	cmp    QWORD PTR [rbx+8h],rax
+	jne    J495
+	mov    rax,QWORD PTR [rbx]
+	cmp    QWORD PTR [rax+8h],rbx
+	jne    J495
+	lea    rcx,[rbp-10h]
+	mov    QWORD PTR [rbp-10h],rax
+	mov    QWORD PTR [rax+8h],rcx
+	mov    dl,6h
+	lea    rcx,[rbx-0a8h]
+	call   QWORD PTR _IofCompleteRequest
+	nop    DWORD PTR [rax+rax*1+0h]
+	lea    rcx,[rdi+20h]
+	mov    r8d,20h
+	lea    rdx,[rbx-0a8h]
+	call   QWORD PTR _IoReleaseRemoveLockEx
+	nop    DWORD PTR [rax+rax*1+0h]
+	jmp    J435
+
+J495:
+
+	mov    ecx,3h
+	int    29h
+
+J49C:
+
+	cmp    WPP_RECORDER_INITIALIZED,r12
+	jne    J4c7
+	mov    rcx, QWORD PTR WPP_GLOBAL_Control
+	cmp    WORD PTR [rcx+48h],si
+	je     J4c7
+	mov    rcx,QWORD PTR [rcx+40h]
+	mov    r9d,3ch
+	mov    dl,5h
+	lea    r8d,[r9-39h]
+	call   WPP_RECORDER_SF
+
+J4c7:
+
+	lea    r11,[rsp+70h]
+	mov    rbx,QWORD PTR [r11+30h]
+	mov    rsi,QWORD PTR [r11+38h]
+	mov    rdi,QWORD PTR [r11+40h]
+	mov    rsp,r11
+	pop    r15
+	pop    r14
+	pop    r13
+	pop    r12
+	pop    rbp
+	ret
+MouseClassServiceCallback endp
+
+end
+
+
+```
