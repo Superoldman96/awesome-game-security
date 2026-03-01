@@ -1,0 +1,4303 @@
+Project Path: arc_gmh5225_fuzzable_twb0rfgw
+
+Source Tree:
+
+```txt
+arc_gmh5225_fuzzable_twb0rfgw
+├── LICENSE.md
+├── README.md
+├── __init__.py
+├── examples
+│   ├── binaries
+│   │   ├── libbasic-x86_64.so
+│   │   ├── libbasic.so.1
+│   │   └── libyara.so
+│   └── source
+│       ├── libbasic.c
+│       └── libyaml
+├── extras
+│   ├── binja.png
+│   └── cli.png
+├── fuzzable
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── analysis
+│   │   ├── __init__.py
+│   │   ├── angr.py
+│   │   ├── ast.py
+│   │   └── binja.py
+│   ├── cli.py
+│   ├── config.py
+│   ├── generate.py
+│   ├── log.py
+│   └── metrics.py
+├── plugin.json
+├── poetry.lock
+├── pyproject.toml
+├── requirements.txt
+├── templates
+│   ├── linux_closed_source_harness.cpp
+│   └── linux_source_harness.cpp
+├── tests
+│   ├── __init__.py
+│   └── test_fuzzable.py
+└── third_party
+    ├── tree-sitter-c
+    └── tree-sitter-cpp
+
+```
+
+`LICENSE.md`:
+
+```md
+Copyright 2022 ex0dus-0x
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+```
+
+`README.md`:
+
+```md
+# Fuzzable
+
+![ci](https://github.com/ex0dus-0x/fuzzable/actions/workflows/main.yml/badge.svg)
+
+Framework for Automating _Fuzzable_ Target Discovery with Static Analysis
+
+![example](/extras/cli.png "CLI Example")
+
+## Introduction
+
+Vulnerability researchers conducting security assessments on software will often harness the capabilities of coverage-guided fuzzing through powerful tools like AFL++ and libFuzzer. This is important as it automates the bughunting process and reveals exploitable conditions in targets quickly. However, when encountering large and complex codebases or closed-source binaries, researchers have to painstakingly dedicate time to manually audit and reverse engineer them to identify functions where fuzzing-based exploration can be useful.
+
+__Fuzzable__ is a framework that integrates both with C/C++ source code and binaries to assist vulnerability researchers in identifying function targets that are viable for fuzzing. This is done by applying several static analysis-based heuristics to pinpoint risky behaviors in the software and the functions that executes them. Researchers can then utilize the framework to generate basic harness templates, which can then be used to hunt for vulnerabilities, or to be integrated as part of a continuous fuzzing pipeline, such as Google's [oss-fuzz](https://github.com/google/oss-fuzz) project.
+
+In addition to running as a standalone tool, Fuzzable is also integrated as a plugin for the [Binary Ninja ](https://binary.ninja) disassembler, with support for other disassembly backends being developed.
+
+Check out the original blog post detailing the tool [here](https://codemuch.tech/2021/06/07/fuzzabble/), which highlights the technical specifications of the static analysis heuristics and how this tool came about. This tool is also featured at [Black Hat Arsenal USA 2022](https://www.blackhat.com/us-22/arsenal/schedule/index.html#automating-fuzzable-target-discovery-with-static-analysis-26726).
+
+## Features
+
+* Supports analyzing __binaries__ (with [Angr](https://angr.io) and [Binary Ninja](https://binary.ninja)) and
+__source code__ artifacts (with [tree-sitter](https://tree-sitter.github.io/tree-sitter/)).
+* Run static analysis both as a __standalone CLI tool__ or a __Binary Ninja plugin__.
+* __Harness generation__ to ramp up on creating fuzzing campaigns quickly.
+
+## Installation
+
+Some binary targets may require some sanitizing (ie. signature matching, or identifying functions from inlining), and therefore 
+__fuzzable__ primarily uses Binary Ninja as a disassembly backend because of it's ability to effectively solve these problems. Therefore, it can be utilized both as a standalone tool and plugin.
+
+Since Binary Ninja isn't accessible to all and there may be a demand to utilize for security assessments and potentially scaling up in the cloud, an [angr](https://github.com/angr/angr)
+_fallback_ backend is also supported. I anticipate to incorporate other disassemblers down the road as well (priority: Ghidra).
+
+### Command Line (Standalone)
+
+If you have Binary Ninja Commercial, be sure to install the API for standalone headless usage:
+
+```
+$ python3 /Applications/Binary\ Ninja.app/Contents/Resources/scripts/install_api.py
+```
+
+Install with `pip`:
+
+```
+$ pip install fuzzable
+```
+
+### Manual/Development Build
+
+We use [poetry](https://python-poetry.org) for dependency management and building. To do a manual build, clone the repository with the third-party modules:
+
+```
+$ git clone --recursive https://github.com/ex0dus-0x/fuzzable
+```
+
+To install manually:
+
+```
+$ cd fuzzable/
+
+# without poetry
+$ pip install .
+
+# with poetry
+$ poetry install
+
+# with poetry for a development virtualenv
+$ poetry shell
+```
+
+You can now analyze binaries and/or source code with the tool!
+
+```
+# analyzing a single shared object library binary
+$ fuzzable analyze examples/binaries/libsimple.so.1
+
+# analyzing a single C source file
+$ fuzzable analyze examples/source/libsimple.c
+
+# analyzing a workspace with multiple C/C++ files and headers
+$ fuzzable analyze examples/source/source_bundle/
+```
+
+### Binary Ninja Plugin
+
+__fuzzable__ can be easily installed through the Binary Ninja plugin marketplace by going to `Binary Ninja > Manage Plugins` and searching for it. Here is an example of the __fuzzable__ plugin running,
+accuracy identifying targets for fuzzing and further vulnerability assessment:
+
+![binja_example](/extras/binja.png "Binary Ninja Example")
+
+## Usage
+
+__fuzzable__ comes with various options to help better tune your analysis. More will be supported in future plans and any feature requests made. 
+
+### Static Analysis Heuristics
+
+To determine fuzzability, __fuzzable__ utilize several heuristics to determine which targets are the most viable to target for dynamic analysis. These heuristics are all weighted differently using the [scikit-criteria](https://scikit-criteria.quatrope.org/en/latest/tutorial/quickstart.html) library, which utilizes _multi-criteria decision analysis_ to determine the best candidates. These metrics and are there weights can be seen here:
+
+| Heuristic             | Description                                                 | Weight |
+|-----------------------|-------------------------------------------------------------|--------|
+| Fuzz Friendly Name    | Symbol name implies behavior that ingests file/buffer input | 0.3    |
+| Risky Sinks           | Arguments that flow into risky calls (ie memcpy)            | 0.3    |
+| Natural Loops         | Number of loops detected with the dominance frontier        | 0.05   |
+| Cyclomatic Complexity | Complexity of function target based on edges + nodes        | 0.05   |
+| Coverage Depth        | Number of callees the target traverses into                 | 0.3    |
+
+> As mentioned, check out the [technical blog post](https://codemuch.tech/2021/06/07/fuzzabble/) for a more in-depth look into why and how these metrics are utilized.
+
+Many metrics were largely inspired by [Vincenzo Iozzo's original work in 0-knowledge fuzzing](https://resources.sei.cmu.edu/asset_files/WhitePaper/2010_019_001_53555.pdf).
+
+Every targets you want to analyze is diverse, and __fuzzable__ will not be able to account for every edge case behavior in the program target. Thus, it may be important during analysis to _tune_ these weights appropriately to see if different results make more sense for your use case. To tune these weights in the CLI, simply specify the `--score-weights` argument:
+
+```
+$ fuzzable analyze <TARGET> --score-weights=0.2,0.2,0.2,0.2,0.2
+```
+
+### Analysis Mode
+
+By default, __fuzzable__ will utilize the _recommend_ mode, where many function targets will be filtered out
+from analysis and fuzzability consideration. The following criteria are used when filtering:
+
+* __Top-level entry calls__ - functions that aren't called by any other calls in the target. These are ideal entry points that have potentially very high coverage.
+* __Static calls__ - _(source only)_ functions that are `static` and aren't exposed through headers.
+* __Imports__ - _(binary only)_ other library dependencies being used by the target's implementations.
+
+To see calls that got filtered out by __fuzzable__, set the `--list_ignored` flag:
+
+```
+$ fuzzable analyze --list_ignored <TARGET>
+```
+
+In Binary Ninja, you can turn this setting in `Settings > Fuzzable > List Ignored Calls`.
+
+In the case that __fuzzable__ falsely filters out important calls that should be analyzed, it is recommended
+to switching to the more comprehensive _ranking_ mode, where all calls will be considered for analysis indiscriminately. This can be turned on as such:
+
+```
+$ fuzzable analyze --mode=rank <TARGET>
+```
+
+In Binary Ninja, this is supported by selecting `Plugins > Fuzzable > Analysis Mode > Rank all Functions by Fuzzability`.
+
+### Harness Generation
+
+Now that you have found your ideal candidates to fuzz, __fuzzable__ will also help you generate fuzzing harnesses that are (almost) ready to instrument and compile for use with either a file-based fuzzer (ie. AFL++, Honggfuzz) or in-memory fuzzer (libFuzzer). To do so in the CLI:
+
+```
+# generate harness from a candidate
+$ fuzzable create-harness target --symbol-name=some_unsafe_call
+
+# make minimal and necessary modifications to the harness
+$ vim target_some_unsafe_call_harness.cpp
+
+# example compilation for AFL-QEMU, which is specified in the comments of the generated harness
+$ clang target_some_unsafe_call_harness.cpp -no-pie -o target_some_unsafe_call_harness -ldl
+
+# create your base seeds, ideally should be more well-formed for input
+$ mkdir in/
+$ echo "seed" >> in/seed
+
+# start black box fuzzing
+$ afl-fuzz -Q -m none -i in/ -o out/ -- ./target_some_unsafe_call_harness
+```
+
+If this target is a source codebase, the [generic source template](/templates/linux_source_harness.cpp) will be used. 
+
+If the target is a binary, the [generic black-box template](/templates/linux_closed_source_harness.cpp) will be used, which ideally can be used with a fuzzing emulation mode like [AFL-QEMU](https://github.com/mirrorer/afl/blob/master/qemu_mode/README.qemu). A copy of the binary will also be created as a shared object if the symbol isn't exported directly to be `dlopen`ed using [LIEF](https://lief-project.github.io).
+
+At the moment, this feature is quite rudimentary, as it simply will create a standalone C++ harness populated with the appropriate parameters, and will not auto-generate code that is needed for any runtime behaviors (ie. instantiating and freeing structures). However, the templates created for __fuzzable__ should get still get you running quickly. Here are some ambitious features I would like to implement down the road:
+
+* Full harness synthesis - harnesses will work directly with absolutely no manual changes needed.
+* Synthesis from potential unit tests using the [DeepState](https://github.com/trailofbits/deepstate) framework _(Source only)_.
+* Immediate deployment to a managed continuous fuzzing fleet.
+
+### Exporting Reports
+
+__fuzzable__ supports generating reports in various formats. The current ones that are supported are JSON, CSV and Markdown. This can be useful if you are utilizing this as part of automation where you would like to
+ingest the output in a serializable format.
+
+In the CLI, simply pass the `--export` argument with a filename with the appropriate extension:
+
+```
+$ fuzzable analyze --export=report.json <TARGET>
+```
+
+In Binary Ninja, go to `Plugins > Fuzzable > Export Fuzzability Report` and select the format you want to
+export to and the path you want to write it to.
+
+## Contributing
+
+This tool will be continuously developed, and any help from external mantainers are appreciated!
+
+* Create an [issue](https://github.com/ex0dus-0x/fuzzable/issues) for feature requests or bugs that you have come across.
+* Submit a [pull request](https://github.com/ex0dus-0x/fuzzable/pulls) for fixes and enhancements that you would like to see contributed to this tool.
+
+## License
+
+Fuzzable is licensed under the [MIT License](https://codemuch.tech/license.txt).
+
+```
+
+`__init__.py`:
+
+```py
+#!/usr/bin/env python3
+"""
+__init__.py
+
+    Plugin module used for Binary Ninja
+"""
+from binaryninja.plugin import PluginCommand
+from binaryninja.settings import Settings
+
+from .fuzzable.analysis import binja, DEFAULT_SCORE_WEIGHTS
+
+Settings().register_group("fuzzable", "Fuzzable")
+Settings().register_setting(
+    "fuzzable.list_ignored",
+    """
+    {
+        "title"         : "List Ignored Symbols",
+        "description"   : "Include the symbols that we've ignored using `recommend` mode.",
+        "type"          : "boolean",
+        "default"       : false
+    }
+""",
+)
+
+Settings().register_setting(
+    "fuzzable.skip_stripped",
+    """
+    {
+        "title"         : "Skip Stripped Symbols",
+        "description"   : "Ignore stripped symbols",
+        "type"          : "boolean",
+        "default"       : false
+    }
+""",
+)
+
+# TODO: DEFAULT_SCORE_WEIGHTS
+Settings().register_setting(
+    "fuzzable.score_weights",
+    """
+    {
+        "title"         : "Override Score Weights",
+        "description"   : "Reset",
+        "type"          : "array",
+        "elementType"   : "string",
+        "default"       : [0.3, 0.3, 0.05, 0.05, 0.3]
+    }
+""",
+)
+
+PluginCommand.register(
+    "Fuzzable\\Analysis Mode\\Recommend Fuzzable Functions (much faster)",
+    "List out functions we've determined to be the best candidates for fuzzing."
+    "This will exclude functions that is determined to not be directly usable for a harness.",
+    binja.run_fuzzable_recommend,
+)
+
+PluginCommand.register(
+    "Fuzzable\\Analysis Mode\\Rank All Function by Fuzzability (more comprehensive)",
+    "Generate fuzzability scores for all functions and rank. This will not exclude any function.",
+    binja.run_fuzzable_rank,
+)
+
+PluginCommand.register(
+    "Fuzzable\\Export Fuzzability Report\\CSV (.csv)",
+    "Identify and generate targets for fuzzing",
+    binja.run_export_csv,
+)
+
+PluginCommand.register(
+    "Fuzzable\\Export Fuzzability Report\\JSON (.json)",
+    "Identify and generate targets for fuzzing",
+    binja.run_export_json,
+)
+
+PluginCommand.register(
+    "Fuzzable\\Export Fuzzability Report\\Markdown (.md)",
+    "Identify and generate targets for fuzzing",
+    binja.run_export_md,
+)
+
+PluginCommand.register_for_function(
+    "Fuzzable\\Harness Generation\\Generate binary fuzzing harness (Linux ONLY at the moment)",
+    "For a target function, generate a AFL-QEMU/libFuzzer C++ harness",
+    binja.run_harness_generation,
+)
+
+```
+
+`examples/source/libbasic.c`:
+
+```c
+/*
+ * libbasic.c
+ *
+ *      Basic sanity example for identifying fuzzable targets.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define SIZE 2048
+
+typedef struct {
+    int identifier;
+    char contents[SIZE];
+} obj_t;
+
+// 1. We're consuming a buffer
+// 2. That buffer flows into an unsafe call with memcpy
+// 3. We do branch and that attributes to complexity
+obj_t* vulnerable_parse_buf(char* buf, size_t size) {
+    obj_t* obj = (obj_t *) malloc(sizeof(obj_t));
+    if (obj == NULL) {
+        return NULL;
+    }
+    obj->identifier = 100;
+
+    // Hmmm....
+    memcpy(obj->contents, buf, size);
+    return obj;
+}
+
+void free_obj(obj_t* obj) {
+    free(obj);
+}
+
+int not_so_vulnerable(obj_t* obj, int inc) {
+    obj->identifier += inc;
+    return 0;
+}
+
+
+
+```
+
+`fuzzable/__main__.py`:
+
+```py
+#!/usr/bin/env python3
+"""
+__main__.py
+
+    Command line entry point for launching the standalone CLI executable.
+"""
+import os
+import logging
+import typing as t
+import typer
+import lief
+
+from rich import print
+
+from fuzzable import generate
+from fuzzable.config import SOURCE_FILE_EXTS
+from fuzzable.cli import print_table, error, export_results
+from fuzzable.analysis import AnalysisBackend, AnalysisMode, DEFAULT_SCORE_WEIGHTS
+from fuzzable.analysis.ast import AstAnalysis
+from fuzzable.log import log
+
+from pathlib import Path
+
+app = typer.Typer(
+    help="Framework for Automating Fuzzable Target Discovery with Static Analysis"
+)
+
+
+@app.command()
+def analyze(
+    target: Path,
+    mode: t.Optional[str] = typer.Option(
+        "recommend",
+        help="Analysis mode to run under (either `recommend` or `rank`, default is `recommend`)."
+        "See documentation for more details about which to select.",
+    ),
+    export: t.Optional[Path] = typer.Option(
+        None,
+        help="Export the fuzzability report to a path based on the file extension."
+        "Fuzzable supports exporting to `json`, `csv`, or `md`.",
+    ),
+    list_ignored: bool = typer.Option(
+        False,
+        help="If set, will also additionally output and/or export ignored symbols.",
+    ),
+    skip_stripped: bool = typer.Option(
+        False,
+        help="If set, ignore symbols that are stripped in binary analysis."
+        "Will be ignored if fuzzability analysis is done on source code.",
+    ),
+    score_weights: t.Optional[str] = typer.Option(
+        None,
+        help="Reconfigure the weights for MCDA when determining fuzzability.",
+    ),
+    debug: bool = typer.Option(
+        False,
+        help="If set, will be verbose and output debug information.",
+    ),
+):
+    """
+    Run fuzzable analysis on a single or workspace of C/C++ source files, or a compiled binary.
+    """
+    if debug:
+        log.setLevel(logging.DEBUG)
+
+    try:
+        mode = AnalysisMode[mode.upper()]
+    except KeyError:
+        error(f"Invalid analysis mode `{mode}`. Must either be `recommend` or `rank`.")
+
+    if mode == AnalysisMode.RANK and list_ignored:
+        error("--list_ignored is not needed for the `rank` mode.")
+
+    if score_weights:
+        score_weights = [float(weight) for weight in score_weights.split(",")]
+        num_weights = len(DEFAULT_SCORE_WEIGHTS)
+        if len(score_weights) != num_weights:
+            error(f"--score-weights must contain {num_weights}")
+
+        if sum(score_weights) != 1.0:
+            error(f"--score-weights must sum up to 1.0")
+    else:
+        score_weights = DEFAULT_SCORE_WEIGHTS
+
+    if export is not None:
+        ext = export.suffix.lower()
+        if ext not in [".json", ".csv", ".md"]:
+            error("--export value must either have `json`, `csv`, or `md` extensions.")
+
+    log.info(f"Starting fuzzable on {target}")
+    if target.is_file():
+        run_on_file(target, mode, score_weights, export, list_ignored, skip_stripped)
+    elif target.is_dir():
+        run_on_workspace(
+            target, mode, score_weights, export, list_ignored, skip_stripped
+        )
+    else:
+        error(f"Target path `{target}` does not exist")
+
+
+def run_on_file(
+    target: Path,
+    mode: AnalysisMode,
+    score_weights: t.List[float],
+    export: t.Optional[Path],
+    list_ignored: bool,
+    skip_stripped: bool,
+) -> None:
+    """Runs analysis on a single source code file or binary file."""
+    analyzer: t.TypeVar[AnalysisBackend]
+
+    extension = target.suffix
+    if extension in SOURCE_FILE_EXTS:
+        analyzer = AstAnalysis([target], mode, score_weights=score_weights)
+    else:
+
+        # Prioritize loading binja as a backend, this may not
+        # work if the license is personal/student.
+        try:
+            from binaryninja.binaryview import BinaryViewType
+            from fuzzable.analysis.binja import BinjaAnalysis
+
+            bv = BinaryViewType.get_view_of_file(target)
+            bv.update_analysis_and_wait()
+            analyzer = BinjaAnalysis(
+                bv,
+                mode,
+                score_weights=score_weights,
+                skip_stripped=True,
+                headless=True,
+            )
+
+        # didn't work, try to load angr as a fallback instead
+        except (ModuleNotFoundError, RuntimeError):
+            log.warning(
+                f"Cannot load Binary Ninja as a backend. Attempting to load angr instead."
+            )
+            try:
+                from fuzzable.analysis.angr import AngrAnalysis
+
+                analyzer = AngrAnalysis(
+                    target,
+                    mode,
+                    score_weights=score_weights,
+                    skip_stripped=True,
+                )
+            except ModuleNotFoundError as err:
+                error(f"Unsupported target {target}. Reason: {err}")
+
+    log.info(f"Running fuzzable analysis with the {str(analyzer)} analyzer")
+    results = analyzer.run()
+    print_table(target, results, analyzer.skipped, list_ignored)
+    if export:
+        export_results(export, results)
+
+
+def run_on_workspace(
+    target: Path,
+    mode: AnalysisMode,
+    score_weights: t.List[float],
+    export: t.Optional[Path],
+    list_ignored: bool,
+    skip_stripped: bool,
+) -> None:
+    """
+    Given a workspace, recursively iterate and parse out all of the source code files
+    that are present. This is not currently supported on workspaces of binaries/libraries.
+    """
+    source_files = []
+    for subdir, _, files in os.walk(target):
+        for file in files:
+            if Path(file).suffix in SOURCE_FILE_EXTS:
+                log.info(f"Adding {file} to set of source code to analyze")
+                source_files += [Path(os.path.join(subdir, file))]
+
+    if len(source_files) == 0:
+        error(
+            "No C/C++ source code found in the workspace. fuzzable currently does not support parsing on workspaces with multiple binaries."
+        )
+
+    analyzer = AstAnalysis(
+        source_files, mode, score_weights=score_weights, basedir=target
+    )
+    log.info(f"Running fuzzable analysis with the {str(analyzer)} analyzer")
+    results = analyzer.run()
+    print_table(target, results, analyzer.skipped, list_ignored)
+    if export:
+        export_results(export, results)
+
+
+@app.command()
+def create_harness(
+    target: str,
+    symbol_name: str = typer.Option(
+        "",
+        help="Names of function symbol to create a fuzzing harness to target. Source not supported yet.",
+    ),
+    out_so_name: t.Optional[Path] = typer.Option(
+        None,
+        help="Specify to set output `.so` path of a transformed ELF binary for binary targets.",
+    ),
+    out_harness: t.Optional[Path] = typer.Option(
+        None, help="Specify to set output harness template file path."
+    ),
+):
+    """Synthesize a AFL++/libFuzzer harness for a given symbol in a target."""
+    if not symbol_name:
+        error("No --symbol-name specified.")
+
+    # if a binary, check if executable or library. if executable, use LIEF to
+    # copy, export the symbol and transform to shared object.
+    binary = lief.parse(target)
+    if binary is None:
+        error(
+            "Wrong filetype, or does not support synthesizing harnesses for C/C++ source code yet."
+        )
+
+    # resolve paths appropriately
+    target = Path(target)
+    if out_so_name:
+        out_so_name = out_so_name.expanduser()
+
+    if out_harness:
+        out_harness = out_harness.expanduser()
+
+    log.info(f"Running harness generation for `{target}` on symbol `{symbol_name}`.")
+    shared_obj = generate.transform_elf_to_so(target, binary, symbol_name, out_so_name)
+    generate.generate_harness(shared_obj, symbol_name, output=out_harness)
+
+    log.info("Done!")
+
+```
+
+`fuzzable/analysis/__init__.py`:
+
+```py
+"""
+__init__.py
+
+    Implements the base class and exception for different static analysis backends.
+"""
+
+import abc
+import enum
+import typing as t
+
+SCIKIT = True
+try:
+    import skcriteria as skc
+    from skcriteria.madm import simple
+except Exception:
+    SCIKIT = False
+
+from ..metrics import CallScore
+from ..config import INTERESTING_PATTERNS, RISKY_GLIBC_CALL_PATTERNS
+
+# Type sig for a finalized list
+Fuzzability = t.OrderedDict[str, CallScore]
+
+# Default weights for fuzzability
+DEFAULT_SCORE_WEIGHTS: t.List[float] = [0.3, 0.3, 0.05, 0.05, 0.3]
+
+
+class AnalysisException(Exception):
+    """Raised when an analysis fails to succeed."""
+
+
+class AnalysisMode(enum.Enum):
+    """Describes how we should analyze targets and present results."""
+
+    RECOMMEND = 0
+    RANK = 1
+
+
+class AnalysisBackend(abc.ABC):
+    """Base class for analysis backends to implement and detect fuzzable targets."""
+
+    def __init__(
+        self,
+        target: t.Any,
+        mode: AnalysisMode,
+        score_weights: t.List[float] = DEFAULT_SCORE_WEIGHTS,
+    ):
+        self.target = target
+        self.mode = mode
+
+        # weights of each feature for MCDA
+        self.score_weights = score_weights
+
+        # mapping of functions + locations we've chosen to skipped
+        self.skipped: t.Dict[str, str] = {}
+
+        # stores all the scores we've measured from the functions
+        self.scores: t.List[t.Any] = []
+
+        # caches names of calls we've visited already to skip repeats
+        self.visited: t.List[t.Any] = []
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        ...
+
+    @abc.abstractmethod
+    def run(self) -> Fuzzability:
+        """
+        Determine the fuzzability of each function in the binary or source targets.
+        If the mode to recommend targets, determine and statically analyze only top-level calls.
+        If the mode is to rank targets, iterate and analyze over all calls and rank.
+        """
+        ...
+
+    def _rank_fuzzability(self, unranked: t.List[CallScore]) -> Fuzzability:
+        """
+        After analyzing each function call, use scikit-criteria to rank based on the call score
+        using a simple weighted-sum model.
+
+        This should be the tail call for run, as it produces the finalized results
+        """
+
+        # TODO: deprecate this.
+        if not SCIKIT:
+            return self._rank_simple_fuzzability(unranked)
+
+        # normalize
+        nl_normalized = AnalysisBackend._normalize(
+            [score.natural_loops for score in unranked]
+        )
+        for score, new_nl in zip(unranked, nl_normalized):
+            score.natural_loops = new_nl
+
+        cc_normalized = AnalysisBackend._normalize(
+            [score.cyclomatic_complexity for score in unranked]
+        )
+        for score, new_cc in zip(unranked, cc_normalized):
+            score.cyclomatic_complexity = new_cc
+
+        # construct our matrix
+        matrix = [score.matrix_row for score in unranked]
+        names = [score.name for score in unranked]
+
+        objectives = [max, max, max, max, max]
+        decision_matrix = skc.mkdm(
+            matrix,
+            objectives,
+            weights=self.score_weights,
+            alternatives=names,
+            criteria=[
+                "fuzz_friendly",
+                "sinks",
+                "loop",
+                "coverage",
+                "cyclomatic_complexity",
+            ],
+        )
+
+        dec = simple.WeightedSumModel()
+        rank = dec.evaluate(decision_matrix)
+
+        # TODO make this better
+
+        # finalize CallScores by setting scores and ranks
+        scores = rank.e_.score
+        ranks = list(rank.rank_)
+        new_unranked = []
+        for rank, score, entry in zip(ranks, scores, unranked):
+            entry.rank = rank
+            entry.score = score
+            new_unranked += [entry]
+
+        # can sort our unranked list appropriately now
+        sorted_results = [y for _, y in sorted(zip(ranks, new_unranked))]
+        return sorted_results
+
+    def _rank_simple_fuzzability(self, unranked: t.List[CallScore]) -> Fuzzability:
+        nl_normalized = AnalysisBackend._normalize(
+            [score.natural_loops for score in unranked]
+        )
+        for score, new_nl in zip(unranked, nl_normalized):
+            score.natural_loops = new_nl
+
+        cc_normalized = AnalysisBackend._normalize(
+            [score.cyclomatic_complexity for score in unranked]
+        )
+        for score, new_cc in zip(unranked, cc_normalized):
+            score.cyclomatic_complexity = new_cc
+
+        return sorted(unranked, key=lambda obj: obj.simple_fuzzability, reverse=True)
+
+    @staticmethod
+    def _normalize(lst: t.List[int]) -> t.List[int]:
+        """Normalize values in a list based on upper and lower bounds"""
+        xmin = min(lst)
+        xmax = max(lst)
+        for i, val in enumerate(lst):
+            if (xmax - xmin) != 0:
+                lst[i] = (val - xmin) / (xmax - xmin)
+
+        return lst
+
+    @abc.abstractmethod
+    def analyze_call(self, name: str, func: t.Any) -> CallScore:
+        """
+        Runs heuristics we declare below on an individual function call, and
+        return a `CallScore` describing heuristics matched.
+        """
+        ...
+
+    @abc.abstractmethod
+    def skip_analysis(self, func: t.Any) -> bool:
+        """
+        Helper to determine if a parsed function should be skipped
+        for analysis based on certain criteria for the analysis backend.
+        """
+        ...
+
+    @staticmethod
+    def is_fuzz_friendly(symbol_name: str) -> int:
+        """
+        FUZZABILITY HEURISTIC
+
+        Analyze the function's name to see if it is "fuzzer entry friendly". This denotes
+        a function that can easily be called to consume a buffer filled by the fuzzer, or
+        a string pointing to a filename, which can also be supplied through a file fuzzer.
+        """
+        return [
+            pattern in symbol_name.lower() for pattern in INTERESTING_PATTERNS
+        ].count(True)
+
+    @abc.abstractmethod
+    def is_toplevel_call(self, target: t.Any) -> bool:
+        """
+        Checks to see if the function is top-level, aka is not invoked by any other function
+        in the current binary/codebase context.
+        """
+        ...
+
+    @abc.abstractmethod
+    def risky_sinks(self, func: t.Any) -> int:
+        """
+        HEURISTIC
+        Checks to see if one or more of the function's arguments is
+        potentially user-controlled, and flows into an abusable call.
+        """
+        ...
+
+    @staticmethod
+    def _is_risky_call(name: str) -> bool:
+        """Helper to see if a function call deems potentially risky behaviors."""
+        return any([pattern in name.lower() for pattern in RISKY_GLIBC_CALL_PATTERNS])
+
+    @abc.abstractmethod
+    def get_coverage_depth(self, func: t.Any) -> int:
+        """
+        HEURISTIC
+        Calculates and returns a `CoverageReport` that highlights how much
+        a fuzzer would ideally explore at different granularities.
+        """
+        ...
+
+    @abc.abstractmethod
+    def natural_loops(self, func: t.Any) -> int:
+        """
+        HEURISTIC
+        Detection of loops is at a basic block level by checking the dominance frontier,
+        which denotes the next successor the current block node will definitely reach. If the
+        same basic block exists in the dominance frontier set, then that means the block will
+        loop back to itself at some point in execution.
+        """
+        ...
+
+    @abc.abstractmethod
+    def get_cyclomatic_complexity(self) -> int:
+        """
+        HEURISTIC
+        Calculates the complexity of a given function using McCabe's metric. We do not
+        account for connected components since we assume that the target is a singular
+        connected component.
+
+        CC = Edges − Nodes/Blocks + 2
+        """
+        ...
+
+```
+
+`fuzzable/analysis/angr.py`:
+
+```py
+"""
+angr.py
+
+    Fallback disassembly backend, most likely for headless analysis.
+"""
+import typing as t
+
+import angr
+from angr.analyses.reaching_definitions.dep_graph import DepGraph
+from angr.knowledge_plugins.key_definitions.atoms import Atom
+from angr.knowledge_plugins.functions.function import Function
+from angr.procedures.definitions.glibc import _libc_decls
+
+from pathlib import Path
+
+from . import AnalysisBackend, AnalysisMode, Fuzzability, DEFAULT_SCORE_WEIGHTS
+from ..metrics import CallScore
+from ..log import log
+
+# TODO: inherit angr.Analysis
+class AngrAnalysis(AnalysisBackend):
+    def __init__(
+        self,
+        target: Path,
+        mode: AnalysisMode,
+        score_weights: t.List[float] = DEFAULT_SCORE_WEIGHTS,
+        skip_stripped: bool = False,
+    ):
+        project = angr.Project(target, load_options={"auto_load_libs": False})
+        super().__init__(project, mode, score_weights)
+
+        log.debug("Doing initial CFG analysis on target")
+        self.cfg = self.target.analyses.CFGFast()
+        _ = self.target.analyses.CompleteCallingConventions(recover_variables=True)
+
+    def __str__(self) -> str:
+        return "angr"
+
+    def run(self) -> Fuzzability:
+        log.debug("Iterating over functions")
+        for _, func in self.cfg.functions.items():
+            name = func.name
+
+            if name in self.visited:
+                continue
+            self.visited += [name]
+
+            if self.mode == AnalysisMode.RECOMMEND and self.skip_analysis(func):
+                log.warning(f"Skipping {name} from fuzzability analysis.")
+                self.skipped[name] = str(hex(func.addr))
+                continue
+
+            # if recommend mode, filter and run only those that are top-level
+            if self.mode == AnalysisMode.RECOMMEND and not self.is_toplevel_call(func):
+                self.skipped[name] = str(hex(func.addr))
+                continue
+
+            log.info(f"Conducting fuzzability analysis on function symbol '{name}'")
+            score = self.analyze_call(name, func)
+            self.scores += [score]
+
+        return super()._rank_fuzzability(self.scores)
+
+    def analyze_call(self, name: str, func: Function) -> CallScore:
+        stripped = "sub_" in name
+
+        # no need to check if no name available
+        # TODO: maybe we should run this if a signature was recovered
+        fuzz_friendly = 0
+        if not stripped:
+            log.debug(f"{name} - checking if fuzz friendly")
+            fuzz_friendly = AngrAnalysis.is_fuzz_friendly(name)
+
+        return CallScore(
+            name=name,
+            loc=str(hex(func.addr)),
+            toplevel=self.is_toplevel_call(func),
+            fuzz_friendly=fuzz_friendly,
+            risky_sinks=self.risky_sinks(func),
+            natural_loops=self.natural_loops(func),
+            coverage_depth=self.get_coverage_depth(func),
+            cyclomatic_complexity=self.get_cyclomatic_complexity(func),
+            stripped=stripped,
+        )
+
+    def skip_analysis(self, func: Function) -> bool:
+        name = func.name
+
+        # ignore imported functions or syscalls
+        if func.is_syscall:
+            return True
+
+        # ignore common glibc calls
+        if name in _libc_decls:
+            return True
+
+        # ignore instrumentation
+        # if name.startswith("__"):
+        #    return True
+
+        # ignore runtime calls from the binary
+        if name in ["_init", "frame_dummy", "call_weak_fn", "$x", "_fini"]:
+            return True
+
+        # if set, ignore all stripped functions for faster analysis
+        if "Unresolvable" in name:
+            return True
+
+        return False
+
+    def is_toplevel_call(self, target: Function) -> bool:
+        """
+        TODO: make this work with less of a performance downgrade.
+        """
+        cfg_nodes = self.cfg.get_all_nodes(target.addr)
+        if len(cfg_nodes) == 0:
+            return True
+        # return self.cfg.get_predecessors(cfg_nodes[0]) == 0
+        return True
+
+    def risky_sinks(self, func: Function) -> int:
+        """
+        TODO: really slow
+        """
+        log.debug(f"{func.name} - checking for risky sinks")
+
+        target = self.target.kb.functions.function(name=func.name)
+        program_rda = self.target.analyses.ReachingDefinitions(
+            subject=target, dep_graph=DepGraph()
+        )
+
+        """
+        for sink_name in ["memcpy", "strcpy", ""]:
+            sink_function = self.target.kb.functions.function(name=sink_name)
+
+            parameter_position = 1
+            parameter_type = _libc_decls[sink_name].args[parameter_position]
+            parameter_atom = Atom.from_argument(
+                sink_function.calling_convention.arg_locs()[parameter_position],
+                self.target.arch.registers
+            )
+        """
+
+        return len(func.get_call_sites())
+
+    def get_coverage_depth(self, target: Function) -> int:
+        """
+        Calculates coverage depth by doing a depth first search on function call graph,
+        and return a final depth and flag denoting recursive implementation.
+        """
+        log.debug(f"{target.name} - getting coverage depth")
+        depth = 0
+
+        # as we iterate over callees, add to a callstack and iterate over callees
+        # for those as well, adding to the callgraph until we're done with all
+        callstack = [target]
+        while callstack:
+
+            # increase depth as we finish iterating over callees for another func
+            func = callstack.pop()
+            depth += 1
+
+            # add all childs to callgraph, and add those we haven't recursed into callstack
+            for call in func.functions_called():
+                if call.name not in self.visited:
+                    callstack += [call]
+
+                self.visited += [call.name]
+
+        return depth
+
+    def natural_loops(self, func: Function) -> int:
+        log.debug(f"{func.name} - getting number of natural loops")
+        dominance_frontier = self.target.analyses.DominanceFrontier(func)
+        if dominance_frontier.frontiers:
+            return len(dominance_frontier.frontiers)
+
+        return 0
+
+    def get_cyclomatic_complexity(self, func: Function) -> int:
+        log.debug(f"{func.name} - calculating cyclomatic complexity")
+        num_blocks = 0
+        for _ in func.blocks:
+            num_blocks += 1
+
+        # do a CFG analysis starting at the func address
+        cfg = self.target.analyses.CFGFast(
+            force_complete_scan=False, start_at_entry=hex(func.addr)
+        )
+        num_edges = len(cfg.graph.edges())
+        return num_edges - num_blocks + 2
+
+```
+
+`fuzzable/analysis/ast.py`:
+
+```py
+"""
+ast.py
+
+    Fuzzable analysis support for C/C++ code by through query on top of pycparser ASTs.
+
+"""
+import os
+import typing as t
+
+from pathlib import Path
+from tree_sitter import Language, Node, Parser
+
+from . import AnalysisBackend, AnalysisMode, Fuzzability, DEFAULT_SCORE_WEIGHTS
+from ..metrics import CallScore
+from ..log import log
+from ..config import get_project_root, SOURCE_FILE_EXTS
+
+# Compiled shared object for language support
+BUILD_PATH = os.path.join(get_project_root(), "build/lang.so")
+
+
+class AstAnalysis(AnalysisBackend):
+    """Derived class to support parsing C/C++ ASTs with tree-sitter"""
+
+    def __init__(
+        self,
+        target: t.List[str],
+        mode: AnalysisMode,
+        score_weights: t.List[float] = DEFAULT_SCORE_WEIGHTS,
+        basedir: t.Optional[Path] = None,
+    ):
+        super().__init__(target, mode, score_weights)
+
+        log.debug("Building third-party tree-sitter libraries for C/C++ languages")
+        Language.build_library(
+            BUILD_PATH,
+            [
+                os.path.join(get_project_root(), "third_party/tree-sitter-c"),
+                os.path.join(get_project_root(), "third_party/tree-sitter-cpp"),
+            ],
+        )
+        self.language = Language(BUILD_PATH, "c")
+        self.parser = Parser()
+
+        # workplace to eventually strip from location
+        self.basedir: t.Optional[Path] = basedir
+
+        # store mapping between filenames and their raw contents and function AST node
+        self.parsed_symbols: t.Dict[str, t.Tuple[Node, bytes]] = {}
+
+        # cache if top level call
+        self.is_top_level: bool = False
+
+    def __str__(self) -> str:
+        return "tree-sitter"
+
+    def run(self) -> Fuzzability:
+        """
+        This runs on two passes:
+
+            - an initial run to parse and map every single function AST object
+            from the source codebase to their appropriate files
+            - the actual run to conduct static analysis on each function's AST
+        """
+
+        # first collect ASTs for every function
+        log.info("Collecting and parsing ASTs for each function call")
+        for filename in self.target:
+
+            # fix up path if a basedir is present
+            if self.basedir:
+                filepath = filename.relative_to(self.basedir)
+            else:
+                filepath = filename
+
+            # if recommend mode, ignore all unit tests
+            if self.mode == AnalysisMode.RECOMMEND and "test" in str(filepath).lower():
+                log.info(f"{filepath} - skipping as it's a potential unit test file")
+                continue
+
+            # switch over language if different language detected
+            extension = filepath.suffix
+            if extension in SOURCE_FILE_EXTS[1:]:
+                self.language = Language(BUILD_PATH, "cpp")
+            else:
+                self.language = Language(BUILD_PATH, "c")
+
+            self.parser.set_language(self.language)
+
+            with open(filename, "rb") as source_file:
+                contents = source_file.read()
+
+            tree = self.parser.parse(contents)
+            # log.debug(tree.root_node.sexp())
+
+            log.debug(f"{filepath} - grabbing function definitions")
+            query = self.language.query(
+                """
+            (function_definition) @capture
+            """
+            )
+
+            # TODO: skip out on `static` calls if recommend mode
+
+            # store mappings for the file
+            log.debug(f"{filepath} - aggregating definition captures")
+            captures = [node for (node, _) in query.captures(tree.root_node)]
+            self.parsed_symbols[filepath] = (captures, contents)
+
+        # now analyze each function_definition node
+        log.info("Statically analyzing and calculating fuzzability for each call")
+        for filename, entry in self.parsed_symbols.items():
+            nodes = entry[0]
+            contents = entry[1]
+            for node in nodes:
+
+                # first, parse out name to see if we should visit again
+                log.debug(
+                    f"{filename} - attempting to capture function symbol name for the current node AST"
+                )
+                query = self.language.query(
+                    """
+                (identifier) @capture
+                """
+                )
+
+                # TODO make this query better, match more specifically
+                try:
+                    identifier = query.captures(node)[0][0]
+                    name = contents[identifier.start_byte : identifier.end_byte].decode(
+                        "utf8"
+                    )
+                except Exception as err:
+                    log.warning(
+                        f"{filename} - parsing failed for {node}, reason: {err}"
+                    )
+                    self.skipped += 1
+                    continue
+
+                if name in self.visited:
+                    log.debug(f"{node} - already analyzed previously")
+                    continue
+                self.visited += [name]
+
+                log.debug(f"{filename} - checking if we should skip analysis for node")
+                if self.skip_analysis(name):
+                    self.skipped[name] = f"{filename}:{node.start_point[0]}"
+                    log.debug(f"{filename} - skipping over this one")
+                    continue
+
+                # if recommend mode, filter and run only those that are top-level
+                self.is_top_level = self.is_toplevel_call(node)
+                if self.mode == AnalysisMode.RECOMMEND and not self.is_top_level:
+                    log.debug(
+                        f"{filename} - skipping over node, since it's not top-level for recommended mode"
+                    )
+                    self.skipped[name] = f"{filename}:{node.start_point[0]}"
+                    continue
+
+                log.debug(f"{filename} - analyzing function target {name}")
+                self.scores += [self.analyze_call(name, node, filename, contents)]
+
+        return super()._rank_fuzzability(self.scores)
+
+    def analyze_call(
+        self, name: str, func: Node, filename: str, contents: bytes
+    ) -> CallScore:
+        return CallScore(
+            name=name,
+            loc=f"{filename}:{func.start_point[0]}",
+            toplevel=self.is_top_level,
+            fuzz_friendly=self.is_fuzz_friendly(name),
+            risky_sinks=self.risky_sinks(func, contents),
+            natural_loops=self.natural_loops(func),
+            coverage_depth=self.get_coverage_depth(func),
+            cyclomatic_complexity=self.get_cyclomatic_complexity(func),
+            stripped=False,
+        )
+
+    def skip_analysis(self, name: str) -> bool:
+        """
+        WIP
+        """
+
+        # name parsed is primitive type, skip
+        if name in ["void", "int", "char"]:
+            return True
+
+        # TODO: might be type, make this check better tho
+        if name.isupper() or name.endswith("_t") or "*" in name:
+            return True
+
+        return False
+
+    def is_toplevel_call(self, target: str) -> bool:
+        """
+        Check if node is a callee of any other function nodes, and if not is considered
+        a top level call
+
+        TODO: can this be more performant and pythonic?
+        """
+        log.debug(f"{target} - checking if toplevel call")
+
+        # get call_expressions for each function name
+        for _, entry in self.parsed_symbols.items():
+            nodes = entry[0]
+            contents = entry[1]
+            for node in nodes:
+                query = self.language.query(
+                    """
+                (call_expression) @capture
+                """
+                )
+
+                # get captured nodes and retrieve name for calls, determine if our current
+                # target is a top-level call
+                captures = [n for (n, _) in query.captures(node)]
+                for capture in captures:
+                    call_name = contents[capture.start_byte : capture.end_byte].decode(
+                        "utf8"
+                    )
+                    if call_name == target:
+                        return False
+
+        return True
+
+    def risky_sinks(self, func: Node, contents: bytes) -> int:
+        """
+        Parse the parameter list of the function AST, grab the callees, and
+        check to see if the parameters flow into risky callees.
+
+        TODO: this dataflow analysis is quite rudimentary and doesn't account
+        for reassignments
+        """
+        log.debug(f"{func} - checking for risky sinks")
+
+        # number of times an argument flows into a risky call
+        instances = 0
+
+        # grab the parameter list and parse the parameters on our own,
+        # ignore if we don't have any parameters
+        query = self.language.query(
+            """
+        (parameter_list) @capture
+        """
+        )
+        captures = query.captures(func)
+        if len(captures) == 0:
+            return instances
+
+        capture = [n for (n, _) in captures][0]
+        param_list = contents[capture.start_byte + 1 : capture.end_byte - 1].decode(
+            "utf8"
+        )
+
+        # recover only the param name
+        # TODO: include types and make this better
+        params = param_list.split(", ")
+
+        # TODO: deal with no-name arguments betters
+        try:
+            params = [p.split(" ")[1].replace("*", "") for p in params]
+        except IndexError:
+            log.warning(
+                f"{func} - cannot get risky sinks because fuzzable cannot parse the parameters"
+            )
+            return instances
+
+        # TODO: should we add a configuration knob that supports just checking
+        # for risky calls even if no arguments flow through them?
+        if len(params) == 0:
+            return instances
+
+        # now get all callees in the function and check if parameters flow into them
+        query = self.language.query(
+            """
+        (call_expression) @capture
+        """
+        )
+        captures = [n for (n, _) in query.captures(func)]
+        for callee in captures:
+            call_name = contents[callee.start_byte : callee.end_byte].decode("utf8")
+            if not AstAnalysis._is_risky_call(call_name):
+                continue
+
+            # grab and parse the argument list
+            query = self.language.query(
+                """
+            (argument_list) @capture
+            """
+            )
+            capture = [n for (n, _) in query.captures(callee)][0]
+            arg_list = contents[capture.start_byte + 1 : capture.end_byte - 1].decode(
+                "utf8"
+            )
+            args = arg_list.split(", ")
+
+            # this should be unreachable
+            if len(args) == 0:
+                continue
+
+            param_flows_to_arg = all(item in args for item in params)
+            if param_flows_to_arg:
+                instances += 1
+
+        return instances
+
+    def get_coverage_depth(self, func: Node) -> int:
+        """
+        TODO: make this traverse
+        """
+        log.debug(f"{func} - getting callgraph depth")
+        call_query = self.language.query(
+            """
+        (call_expression) @capture
+        """
+        )
+        return len([n for (n, _) in call_query.captures(func)])
+
+    def natural_loops(self, func: Node) -> int:
+        log.debug(f"{func} - getting number of natural loops")
+        looping_nodes = [
+            "do_statement",
+            "for_range_loop",
+            "for_statement",
+            "while_statement",
+        ]
+        return self._visit_node(func, looping_nodes)
+
+    def get_cyclomatic_complexity(self, func: Node) -> int:
+        """
+        M = E − N + 2P
+        """
+        log.debug(f"{func} - getting cyclomatic complexity")
+        branching_nodes = [
+            "if_statement",
+            "case_statement",
+            "do_statement",
+            "for_range_loop",
+            "for_statement",
+            "goto_statement",
+            "function_declarator",
+            "pointer_declarator",
+            "struct_specifier",
+            "preproc_elif",
+            "while_statement",
+            "switch_statement",
+            "&&",
+            "||",
+        ]
+        return self._visit_node(func, branching_nodes)
+
+    def _visit_node(self, node: Node, checklist: t.List[str]) -> int:
+        count = 0
+        if node.type in checklist:
+            count += 1
+        for child in node.children:
+            count += self._visit_node(child, checklist)
+        return count
+
+```
+
+`fuzzable/analysis/binja.py`:
+
+```py
+"""
+binja.py
+
+    Fuzzable analysis support for the Binary Ninja disassembler.
+    Can be invoked both through registered plugin handlers, and through
+    a headless standalone CLI.
+
+"""
+import os
+import typing as t
+import lief
+
+from pathlib import Path
+
+import binaryninja
+import binaryninja.log as log
+import binaryninja.interaction as interaction
+
+from binaryninja import BinaryView
+from binaryninja.function import Function
+from binaryninja.lowlevelil import LowLevelILReg
+from binaryninja.enums import LowLevelILOperation, SymbolType
+from binaryninja.plugin import BackgroundTaskThread
+from binaryninja.settings import Settings
+
+from .. import generate
+from . import AnalysisBackend, AnalysisMode, Fuzzability, DEFAULT_SCORE_WEIGHTS
+from ..metrics import CallScore
+from ..cli import COLUMNS, CSV_HEADER
+
+
+class _BinjaAnalysisMeta(type(AnalysisBackend), type(BackgroundTaskThread)):
+    pass
+
+
+class BinjaAnalysis(
+    AnalysisBackend, BackgroundTaskThread, metaclass=_BinjaAnalysisMeta
+):
+    """Derived class to support Binary Ninja, and can be dispatched as a task from the plugin."""
+
+    def __init__(
+        self,
+        target: BinaryView,
+        mode: AnalysisMode,
+        score_weights: t.List[float] = DEFAULT_SCORE_WEIGHTS,
+        headless: bool = False,
+        skip_stripped: bool = False,
+    ):
+        AnalysisBackend.__init__(self, target, mode, score_weights)
+        BackgroundTaskThread.__init__(
+            self, "Finding fuzzable targets in current binary view"
+        )
+        self.view: BinaryView = target
+        self.headless: bool = headless
+
+    def __str__(self) -> str:
+        return "Binary Ninja"
+
+    def run(self) -> t.Optional[Fuzzability]:
+        self.view.update_analysis_and_wait()
+        funcs = self.view.functions
+
+        log.log_info(f"Starting fuzzable analysis over {len(funcs)} symbols in binary")
+        for func in funcs:
+            name = func.name
+
+            # if name in self.visited:
+            #    continue
+            # self.visited += [name]
+
+            log.log_debug(f"Checking to see if we should ignore {name}")
+            if self.mode == AnalysisMode.RECOMMEND and self.skip_analysis(func):
+                self.skipped[name] = str(hex(func.address_ranges[0].start))
+                continue
+
+            # if recommend mode, filter and run only those that are top-level
+            log.log_debug(f"Checking to see if {name} is a top-level call")
+            if self.mode == AnalysisMode.RECOMMEND and not self.is_toplevel_call(func):
+                self.skipped[name] = str(hex(func.address_ranges[0].start))
+                continue
+
+            log.log_info(f"Starting analysis for function {name}")
+            score = self.analyze_call(name, func)
+            self.scores += [score]
+
+        log.log_info("Done, ranking the analyzed calls for reporting")
+        ranked = super()._rank_fuzzability(self.scores)
+
+        # if headless, handle displaying results back
+        if not self.headless:
+            csv_result = CSV_HEADER
+            csv_result = ", ".join([f'"{column}"' for column in COLUMNS])
+
+            # TODO: reuse rich for markdown
+            markdown_result = f"""# Fuzzable Targets
+
+This is a generated report that ranks fuzzability of every parsed symbol that was recovered in this binary. If you feel that the results
+are incomplete, wait for Binary Ninja's initial analysis to finalize and re-run this feature in the plugin.
+
+__Number of Symbols Analyzed:__ {len(ranked)}
+
+__Number of Symbols Skipped:__ {len(self.skipped)}
+
+__Top Fuzzing Contender:__ [{ranked[0].name}](binaryninja://?expr={ranked[0].name})
+
+## Ranked Table (MODE = {self.mode.name})
+
+| Function Signature | Location          | Fuzzability Score | Fuzz-Friendly Name | Risky Data Sinks | Natural Loops | Cyclomatic Complexity | Coverage Depth |
+|--------------------|-------------------|-------------------|--------------------|------------------|---------------|-----------------------|----------------|
+"""
+
+            for score in ranked:
+                markdown_result += score.binja_markdown_row
+                csv_result += score.csv_row
+
+            # if set include list of ignored symbols
+            if Settings().get_bool("fuzzable.list_ignored"):
+                markdown_result += "\n## Ignored Symbols\n"
+                for name, loc in self.skipped.items():
+                    markdown_result += f"* [{name}](binaryninja://?expr={loc})"
+
+            log.log_info("Saving to memory and displaying finalized results...")
+            self.view.store_metadata("csv", csv_result)
+            self.view.show_markdown_report("Fuzzable targets", markdown_result)
+            return None
+
+        return ranked
+
+    def analyze_call(self, name: str, func: Function) -> CallScore:
+        stripped = "sub_" in name
+
+        # no need to check if no name available
+        # TODO: maybe we should run this if a signature was recovered
+        fuzz_friendly = 0
+        if not stripped:
+            fuzz_friendly = BinjaAnalysis.is_fuzz_friendly(name)
+
+        return CallScore(
+            name=name,
+            loc=str(hex(func.address_ranges[0].start)),
+            toplevel=self.is_toplevel_call(func),
+            fuzz_friendly=fuzz_friendly,
+            risky_sinks=self.risky_sinks(func),
+            natural_loops=self.natural_loops(func),
+            coverage_depth=self.get_coverage_depth(func),
+            cyclomatic_complexity=self.get_cyclomatic_complexity(func),
+            stripped=stripped,
+        )
+
+    def skip_analysis(self, func: Function) -> bool:
+        name = func.name
+        symbol = func.symbol.type
+        log.log_debug(f"{name} - {symbol}")
+
+        # ignore imported functions from other libraries, ie glibc or win32api
+        if symbol in [
+            SymbolType.ImportedFunctionSymbol,
+            SymbolType.LibraryFunctionSymbol,
+            SymbolType.ImportAddressSymbol,
+            SymbolType.ImportedFunctionSymbol,
+            SymbolType.ImportedDataSymbol,
+        ]:
+            log.log_debug(f"{name} is an import, skipping")
+            return True
+
+        # ignore targets with patterns that denote some type of profiling instrumentation, ie stack canary
+        # if name.startswith("__"):
+        #    log.log_debug(f"{name} is potentially instrumentation, skipping")
+        #    return True
+
+        # if set, ignore all stripped functions for faster analysis
+        # if ("sub_" in name) and Settings().get_bool("fuzzable.skip_stripped"):
+        if "sub_" in name and self.mode == AnalysisMode.RECOMMEND:
+            log.log_debug(f"{name} is stripped, skipping")
+            return True
+
+        return False
+
+    def is_toplevel_call(self, target: Function) -> bool:
+        return len(target.callers) == 0
+
+    def risky_sinks(self, func: Function) -> int:
+        """
+        For each parameter in the function, determine if it flows into a known risky
+        function call.
+        """
+
+        risky_sinks = 0
+
+        visited = []
+
+        # visit all other calls with depth-first search until we reach a risky sink
+        callstack = [func]
+        while callstack:
+            func = callstack.pop()
+
+            # Iterate over each argument and check for taint sinks
+            for arg in func.parameter_vars:
+
+                # if arg.type != "char*":
+                #    continue
+
+                arg_refs = func.get_hlil_var_refs(arg)
+
+                log.log_debug(f"{func.name}: {arg_refs}")
+                for ref in arg_refs:
+                    insn = ref.arch.get_instruction_low_level_il_instruction(
+                        self.view, ref.address
+                    )
+
+                    log.log_debug(f"{insn} - {insn.operation}")
+
+                    # if call instruction, check out for risky pattern
+                    if insn.operation in [
+                        LowLevelILOperation.LLIL_CALL,
+                        LowLevelILOperation.LLIL_JUMP,
+                    ]:
+
+                        # TODO deal with registers with addrs
+                        if isinstance(insn.dest, LowLevelILReg):
+                            continue
+
+                        try:
+                            callee = self.view.get_function_at(int(insn.dest))
+                            call = callee.name
+                        except Exception:
+                            continue
+
+                        # TODO: should we traverse further if not a imported func
+                        if BinjaAnalysis._is_risky_call(call):
+                            risky_sinks += 1
+
+                        # otherwise add to callstack and continue to trace arguments
+                        elif callee.name not in visited:
+                            callstack += [callee]
+
+                        visited += [callee.name]
+
+        return risky_sinks
+
+    def get_coverage_depth(self, target: Function) -> int:
+        """
+        Calculates coverage depth by doing a depth first search on function call graph,
+        and return a final depth and flag denoting recursive implementation.
+        """
+
+        depth = 0
+
+        # as we iterate over callees, add to a callstack and iterate over callees
+        # for those as well, adding to the callgraph until we're done with all
+        callstack = [target]
+        while callstack:
+
+            # increase depth as we finish iterating over callees for another func
+            func = callstack.pop()
+            depth += 1
+
+            # add all childs to callgraph, and add those we haven't recursed into callstack
+            for child in func.callees:
+
+                # ignore recursive calls
+                if child.name == target.name:
+                    continue
+
+                # if address attempt to resolve call
+                if child.name not in self.visited:
+                    callstack += [child]
+
+            self.visited += [func.name]
+
+        return depth
+
+    def natural_loops(self, target: Function) -> int:
+        return len([bb in bb.dominance_frontier for bb in target.basic_blocks])
+
+    def get_cyclomatic_complexity(self, func: Function) -> int:
+        num_blocks = len(func.basic_blocks)
+        num_edges = sum([len(b.outgoing_edges) for b in func.basic_blocks])
+        return num_edges - num_blocks + 2
+
+
+def run_fuzzable_recommend(view) -> None:
+    task = BinjaAnalysis(view, AnalysisMode.RECOMMEND)
+    task.start()
+
+
+def run_fuzzable_rank(view) -> None:
+    task = BinjaAnalysis(view, AnalysisMode.RANK)
+    task.start()
+
+
+def run_export_csv(view: BinaryView) -> None:
+    """Generate a CSV report from a previous analysis"""
+    log.log_info("Attempting to export results to CSV")
+    try:
+        csv_output = view.query_metadata("csv")
+    except KeyError:
+        interaction.show_message_box(
+            "Error", "Cannot export without running an analysis first."
+        )
+        return
+
+    csv_file = interaction.get_save_filename_input("Filename to export as CSV?", "csv")
+    csv_file = csv_file.decode("utf-8") + ".csv"
+
+    log.log_info(f"Writing to filepath {csv_file}")
+    with open(csv_file, "w+", encoding="utf-8") as csv_fd:
+        csv_fd.write(csv_output)
+
+    interaction.show_message_box("Success", f"Done, exported to {csv_file}")
+
+
+def run_export_json(view: BinaryView) -> None:
+    """Generate a JSON report from a previous analysis"""
+    log.log_info("Attempting to export results to JSON")
+    try:
+        json_output = view.query_metadata("json")
+    except KeyError:
+        interaction.show_message_box(
+            "Error", "Cannot export without running an analysis first."
+        )
+        return
+
+    json_file = interaction.get_save_filename_input(
+        "Filename to export as JSON?", "json"
+    )
+    json_file = json_file.decode("utf-8") + ".csv"
+
+    log.log_info(f"Writing to filepath {json_file}")
+    with open(json_file, "w+", encoding="utf-8") as json_fd:
+        json_fd.write(json_output)
+
+    interaction.show_message_box("Success", f"Done, exported to {json_file}")
+
+
+def run_export_md(view: BinaryView) -> None:
+    """Generate a markdown report from a previous analysis"""
+    log.log_info("Attempting to export results to markdown")
+    try:
+        markdown_output = view.query_metadata("md")
+    except KeyError:
+        interaction.show_message_box(
+            "Error", "Cannot export without running an analysis first."
+        )
+        return
+
+    md_file = interaction.get_save_filename_input("Filename to export as CSV?", "csv")
+    md_file = md_file.decode("utf-8") + ".md"
+
+    # parse out template based on executable format, and start replacing
+    with open(md_file, "w+", encoding="utf-8") as mkdown:
+        mkdown.write(markdown_output)
+
+    interaction.show_message_box("Success", f"Done, exported to {md_file}")
+
+
+def run_harness_generation(view, func: Function) -> None:
+    """Experimental automatic fuzzer harness generation support"""
+
+    log.log_debug("Grabbing closed-source template from project folder")
+    template_file = os.path.join(
+        binaryninja.user_plugin_path(),
+        "fuzzable/templates/linux_closed_source_harness.cpp",
+    )
+
+    path = view.file.filename
+    binary = lief.parse(path)
+
+    symbol = func.name
+    params: t.List[str] = [f"{param.type}" for param in func.parameter_vars.vars]
+    return_type = str(func.return_type)
+
+    log.log_debug("Getting filename to write to")
+    harness = interaction.get_save_filename_input("Path to write to?", "cpp", "")
+    harness = harness + ".cpp"
+
+    log.log_info("Generating harness from template")
+
+    # if stripped, get the address instead as the symbol
+    if "sub_" in symbol:
+        symbol = hex(func.address_ranges[0].start)
+
+    shared_obj = generate.transform_elf_to_so(Path(path), binary, symbol)
+    generate.generate_harness(
+        shared_obj,
+        symbol,
+        return_type=return_type,
+        params=params,
+        harness_path=template_file,
+        output=harness,
+    )
+
+    interaction.show_message_box("Success", f"Done, wrote fuzzer harness to {harness}")
+
+```
+
+`fuzzable/cli.py`:
+
+```py
+"""
+cli.py
+
+    Utilities for printing things to the UI
+"""
+import sys
+import json
+import typer
+import typing as t
+
+from rich import print
+from rich.console import Console
+from rich.table import Table
+
+from .analysis import Fuzzability
+from .log import log
+
+from pathlib import Path
+
+ERROR_START = typer.style(
+    "fuzzable error:",
+    fg=typer.colors.WHITE,
+    bg=typer.colors.RED,
+)
+
+COLUMNS = [
+    "Function Signature",
+    "Location",
+    "Fuzzability Score",
+    "Fuzz-Friendly Name",
+    "Risky Data Sinks",
+    "Natural Loops",
+    "Cyclomatic Complexity",
+    "Coverage Depth",
+]
+
+# TODO: merge with the one above
+CSV_HEADER = '"name", "loc, "fuzz_friendly", "risky_sinks", "natural_loops", "cyc_complex", "cov_depth", "fuzzability"\n'
+
+
+def error(string: str) -> None:
+    """Pretty-prints an error message and exits"""
+    exception = typer.style(
+        string,
+        fg=typer.colors.RED,
+    )
+    print(f"{ERROR_START} {exception}")
+    sys.exit(1)
+
+
+def print_table(
+    target: Path,
+    fuzzability: Fuzzability,
+    skipped: t.Dict[str, str],
+    list_ignored: bool,
+) -> None:
+    """Pretty-prints fuzzability results for the CLI"""
+    table = Table(title=f"\nFuzzable Report for Target `{target}`")
+    for column in COLUMNS:
+        table.add_column(column, style="magenta")
+
+    for row in fuzzability:
+        table.add_row(
+            row.name,
+            row.loc,
+            str(row.score),
+            str(row.fuzz_friendly),
+            str(row.risky_sinks),
+            str(row.natural_loops),
+            str(row.cyclomatic_complexity),
+            str(row.coverage_depth),
+        )
+
+    console = Console()
+    console.print(table)
+
+    print("\n[bold red]ADDITIONAL METADATA[/bold red]\n")
+    print(f"[underline]Number of Symbols Analyzed[/underline]: \t\t{len(fuzzability)}")
+    print(f"[underline]Number of Symbols Skipped[/underline]: \t\t{len(skipped)}")
+    print(f"[underline]Top Fuzzing Contender[/underline]: \t\t{fuzzability[0].name}\n")
+
+    if list_ignored:
+        print("\n[bold red]SKIPPED SYMBOLS[/bold red]\n")
+        for name, loc in skipped.items():
+            print(f"{name}\t\t{loc}")
+        print("\n")
+
+
+def export_results(export, results) -> None:
+    writer = open(export, "w")
+    ext = export.suffix
+    if ext == ".json":
+        writer.write(json.dumps([res.asdict() for res in results]))
+    elif ext == ".csv":
+        writer.write(CSV_HEADER.replace('"', ""))
+        for res in results:
+            writer.write(res.csv_row)
+    elif ext == ".md":
+        pass
+
+    log.info(f"Written fuzzability results to `{export}`!")
+    writer.close()
+
+```
+
+`fuzzable/config.py`:
+
+```py
+"""
+config.py
+
+    Defines configuration knobs that can be universally configured by
+    any fuzzable client
+"""
+import typing as t
+
+from os.path import dirname, abspath
+from pathlib import Path
+
+
+def get_project_root() -> Path:
+    """Utility for getting root directory of this project"""
+    return Path(__file__).parent.parent
+
+
+# Supported C/C++ source code extensions
+# TODO: we should do a very initial parse on the file to determine if it is C++ source
+SOURCE_FILE_EXTS: t.List[str] = [".c", ".cpp", ".cc", ".cp" ".cxx", ".h", ".hpp", ".hh"]
+
+# Interesting symbol name patterns to check for fuzzable
+INTERESTING_PATTERNS: t.List[str] = [
+    # Consuming Inputs
+    "parse",
+    "read",
+    "buf",
+    "file",
+    "input",
+    "str",
+    # Decryption Routines
+    "encode",
+    "decode",
+]
+
+# Function name patterns that include INTERESTING_PATTERNS but
+# may not be very useful/interesting to us
+FALSE_POSITIVE_SIMILARS: t.List[str] = [
+    # str
+    "destroy"
+]
+
+# Data sink call names that should be deemed risky
+# TODO: dataset of risky function calls
+RISKY_GLIBC_CALL_PATTERNS: t.List[str] = [
+    "cmp",
+    "cpy",
+    "alloc",
+    "create",
+]
+
+```
+
+`fuzzable/generate.py`:
+
+```py
+"""
+generate.py
+
+    Creates template harnesses for a given target.
+"""
+import os
+import typing as t
+
+import lief
+from lief import ELF
+
+from pathlib import Path
+
+from .log import log
+from .config import get_project_root
+
+
+def generate_harness(
+    target_path: str,
+    function_name: str,
+    return_type: t.Optional[str] = None,
+    params: t.Optional[t.List[str]] = None,
+    harness_path: t.Optional[str] = None,
+    output: t.Optional[str] = None,
+) -> None:
+    """
+    Populate a harness template with given parameters and generate harness to path.
+    """
+
+    abspath = os.path.basename(target_path)
+    name = abspath.split(".")[0]
+
+    # override template if set
+    template_path = get_project_root() / "templates" / "linux_closed_source_harness.cpp"
+    if harness_path:
+        template_path = harness_path
+
+    log.debug("Reading harness template")
+    with open(template_path, "r", encoding="utf-8") as template_file:
+        template = template_file.read()
+
+    log.debug("Replacing parameters in template")
+    template = template.replace("{NAME}", name)
+    template = template.replace("{path}", abspath)
+    template = template.replace("{function_name}", function_name)
+
+    # these are optional and can be populated by the user
+    if return_type:
+        template = template.replace("{return_type}", return_type)
+    if params:
+        if len(params) != 0:
+            template = template.replace("{type_args}", ",".join(params))
+
+    # override harness output if set
+    harness = f"{name}_{function_name}_harness.cpp"
+    if output is not None:
+        harness = output
+
+    log.debug(f"Writing harness to path {harness}")
+    with open(harness, "w", encoding="utf-8") as template_file:
+        template_file.write(template)
+
+
+def transform_elf_to_so(
+    path: Path,
+    lib: lief.Binary,
+    export: t.Union[str, int],
+    override_path: t.Optional[Path],
+) -> t.Optional[Path]:
+    """
+    Helper that uses LIEF to check if an ELF executable can be transformed into a shared object
+    with exported symbols for fuzzing.
+    """
+
+    # check if shared object or PIE binary
+    # TODO: stronger checks for shared object
+    log.info(f"Checking if {path} needs to be transformed into a shared object")
+    if lib.header.file_type is not ELF.E_TYPE.DYNAMIC and ".so" in path.suffix:
+        log.info("No need to transform binary into a shared object")
+        return path
+
+    log.info(f"Attempting to export the symbol in binary {export}")
+
+    # if hex addr specified, export address directly and set name
+    if isinstance(export, int):
+        lib.add_exported_function(export, f"sub_{export}")
+
+    # otherwise find the address of the symbol name and export it
+    else:
+        addr = lib.get_function_address(export)
+        lib.add_exported_function(addr, export)
+
+    # override the generated shared object to write to if set
+    path = path.name.split(".")[0] + ".so"
+    if override_path:
+        path = str(override_path)
+
+    log.info(
+        f"Writing the ELF binary into a shared object for harness genaration at {path}"
+    )
+    lib.write(path)
+    return Path(path)
+
+```
+
+`fuzzable/log.py`:
+
+```py
+"""
+log.py
+"""
+import logging
+from rich.logging import RichHandler
+
+# hacky way to turn off angr verbosity
+for log in ["angr", "pyvex", "claripy", "cle"]:
+    logger = logging.getLogger(log)
+    logger.disabled = True
+    logger.propagate = False
+
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
+log = logging.getLogger("fuzzable")
+log.setLevel(logging.INFO)
+
+```
+
+`fuzzable/metrics.py`:
+
+```py
+"""
+metrics.py
+
+    Dataclass definitions for various metrics collected during qthe risk analysis.
+"""
+import json
+import functools
+import typing as t
+
+from dataclasses import dataclass, field, asdict
+
+
+@dataclass
+class CoverageReport:
+    """TODO"""
+
+    bb_depth: int
+    function_depth: int
+    ins_depth: int
+
+
+@dataclass
+class CallScore:
+    """Assigned fuzzability score for an individual function target."""
+
+    name: str
+    loc: str
+
+    # does not attribute to rank, but helps with determining what to filter
+    toplevel: bool
+
+    # does not attribute to rank, but helps with binary analysis
+    stripped: t.Optional[bool]
+
+    # quantifies the number of fuzzer friendly words that exist in the target's name
+    fuzz_friendly: int
+
+    # quantifies the number of fuzzer arguments that flow into
+    risky_sinks: int
+
+    # quantifies the number of natural loops in the BB graph
+    natural_loops: int
+
+    # quantifies complexity based on edges and nodes present
+    cyclomatic_complexity: int
+
+    # represents coverage by different granularities
+    # coverage_depth: CoverageReport
+    coverage_depth: int
+
+    # mutable values that are to be set after analysis
+    _final_rank: int = field(init=False, repr=False)
+    _final_score: float = field(init=False, repr=False)
+
+    """
+    Getters and setters for calculated rank and score
+    """
+
+    @property
+    def rank(self) -> int:
+        """Rank of an individual function in a list of parsed functions"""
+        return self._final_rank
+
+    @rank.setter
+    def rank(self, to_set: int) -> None:
+        """Call to set the rank after analysis and ranking"""
+        self._final_rank = float(to_set)
+
+    @property
+    def score(self) -> float:
+        """Final calculated fuzzability score based on metrics"""
+        return self._final_score
+
+    @score.setter
+    def score(self, to_set: float) -> None:
+        """Call to set the fuzzability score after analysis and calculation"""
+        self._final_score = float(to_set)
+
+    """
+    Overloaded operators for sorting
+    """
+
+    def __eq__(self, other):
+        self._final_rank == other._final_rank
+
+    def __lt__(self, other):
+        self._final_rank < other._final_rank
+
+    def __gt__(self, other):
+        self._final_rank > other._final_rank
+
+    """
+    Properties to export score into flat structures
+    """
+
+    def asdict(self) -> t.Dict[str, t.Any]:
+        return asdict(self)
+
+    @property
+    def matrix_row(self) -> t.List[int]:
+        """Transforms attributes into a list of integers for a matrix"""
+        return [
+            self.fuzz_friendly,
+            self.risky_sinks,
+            self.natural_loops,
+            self.coverage_depth,
+            self.cyclomatic_complexity,
+        ]
+
+    @property
+    def binja_markdown_row(self) -> str:
+        """Output as a markdown/ascii table row when displaying back to user"""
+        return f"| [{self.name}](binaryninja://?expr={self.name}) | {self.loc} | {self.score} | {self.fuzz_friendly} | {self.risky_sinks} | {self.natural_loops} | {self.cyclomatic_complexity} | {self.coverage_depth} | \n"
+
+    @property
+    def csv_row(self) -> str:
+        """Generate a CSV row for exporting to file"""
+        return f"{self.name}, {self.loc}, {self.stripped}, {self.fuzz_friendly}, {self.risky_sinks}, {self.natural_loops}, {self.cyclomatic_complexity}, {self.coverage_depth}, {self.score}\n"
+
+    @functools.cached_property
+    def simple_fuzzability(self) -> int:
+        """Simple fuzzability"""
+        self._final_score = sum(self.matrix_row)
+        return self._final_score
+
+```
+
+`plugin.json`:
+
+```json
+{
+    "pluginmetadataversion": 2,
+    "name": "Fuzzable",
+    "author": "ex0dus-0x",
+    "type": [
+        "ui"
+    ],
+    "api": [
+        "python3"
+    ],
+    "description": "Framework for Automating Fuzzable Target Discovery with Static Analysis",
+    "longdescription": "This is a helper Binary Ninja plugin to assist in identifying functions that are optimal targets for fuzzing and dynamic analysis. This is useful for vulnerability researchers wanting to fuzz executables or libraries without manual reverse engineering, and need some fast insight about what functions are potential targets to extrapolate for their harnesses.",
+    "license": {
+        "name": "MIT",
+        "text": "Copyright 2022 @ex0dus-0x Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions: The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software. THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+    },
+    "platforms": [
+        "Darwin",
+        "Windows",
+        "Linux"
+   ],
+   "installinstructions": {
+       "Darwin": "",
+       "Windows": "",
+       "Linux": ""
+   },
+   "version": "2.0",
+   "minimumbinaryninjaversion": 1500
+}
+
+```
+
+`poetry.lock`:
+
+```lock
+[[package]]
+name = "ailment"
+version = "9.2.12"
+description = "The angr intermediate language."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[[package]]
+name = "angr"
+version = "9.2.12"
+description = "A multi-architecture binary analysis toolkit, with the ability to perform dynamic symbolic execution and various static analyses on binaries"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+ailment = "9.2.12"
+archinfo = "9.2.12"
+cachetools = "*"
+capstone = ">=3.0.5rc2,<5.0.0rc2 || >5.0.0rc2"
+cffi = ">=1.14.0"
+claripy = "9.2.12"
+cle = "9.2.12"
+colorama = {version = "*", markers = "platform_system == \"Windows\""}
+CppHeaderParser = "*"
+dpkt = "*"
+GitPython = "*"
+itanium-demangler = "*"
+mulpyplexer = "*"
+nampa = "*"
+networkx = ">=2.0,<2.8.1 || >2.8.1"
+progressbar2 = ">=3"
+protobuf = ">=3.19.0"
+psutil = "*"
+pycparser = ">=2.18"
+pyvex = "9.2.12"
+rpyc = "*"
+sortedcontainers = "*"
+sympy = "*"
+unicorn = "1.0.2rc4"
+
+[package.extras]
+angrdb = ["sqlalchemy"]
+pcode = ["pypcode (==1.0.5)"]
+
+[[package]]
+name = "archinfo"
+version = "9.2.12"
+description = "Classes with architecture-specific information useful to other projects."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[[package]]
+name = "astroid"
+version = "2.11.7"
+description = "An abstract syntax tree for Python with inference support."
+category = "dev"
+optional = false
+python-versions = ">=3.6.2"
+
+[package.dependencies]
+lazy-object-proxy = ">=1.4.0"
+typing-extensions = {version = ">=3.10", markers = "python_version < \"3.10\""}
+wrapt = ">=1.11,<2"
+
+[[package]]
+name = "atomicwrites"
+version = "1.4.1"
+description = "Atomic file writes."
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[[package]]
+name = "attrs"
+version = "22.1.0"
+description = "Classes Without Boilerplate"
+category = "dev"
+optional = false
+python-versions = ">=3.5"
+
+[package.extras]
+dev = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0)", "mypy (>=0.900,!=0.940)", "pytest-mypy-plugins", "zope.interface", "furo", "sphinx", "sphinx-notfound-page", "pre-commit", "cloudpickle"]
+docs = ["furo", "sphinx", "zope.interface", "sphinx-notfound-page"]
+tests = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0)", "mypy (>=0.900,!=0.940)", "pytest-mypy-plugins", "zope.interface", "cloudpickle"]
+tests_no_zope = ["coverage[toml] (>=5.0.2)", "hypothesis", "pympler", "pytest (>=4.3.0)", "mypy (>=0.900,!=0.940)", "pytest-mypy-plugins", "cloudpickle"]
+
+[[package]]
+name = "bitstring"
+version = "3.1.9"
+description = "Simple construction, analysis and modification of binary data."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "black"
+version = "22.6.0"
+description = "The uncompromising code formatter."
+category = "dev"
+optional = false
+python-versions = ">=3.6.2"
+
+[package.dependencies]
+click = ">=8.0.0"
+mypy-extensions = ">=0.4.3"
+pathspec = ">=0.9.0"
+platformdirs = ">=2"
+tomli = {version = ">=1.1.0", markers = "python_full_version < \"3.11.0a7\""}
+typing-extensions = {version = ">=3.10.0.0", markers = "python_version < \"3.10\""}
+
+[package.extras]
+colorama = ["colorama (>=0.4.3)"]
+d = ["aiohttp (>=3.7.4)"]
+jupyter = ["ipython (>=7.8.0)", "tokenize-rt (>=3.2.0)"]
+uvloop = ["uvloop (>=0.15.2)"]
+
+[[package]]
+name = "cachetools"
+version = "5.2.0"
+description = "Extensible memoizing collections and decorators"
+category = "main"
+optional = false
+python-versions = "~=3.7"
+
+[[package]]
+name = "capstone"
+version = "5.0.0"
+description = "Capstone disassembly engine"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[[package]]
+name = "cffi"
+version = "1.15.1"
+description = "Foreign Function Interface for Python calling C code."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+pycparser = "*"
+
+[[package]]
+name = "claripy"
+version = "9.2.12"
+description = "An abstraction layer for constraint solvers"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+cachetools = "*"
+decorator = "*"
+pysmt = ">=0.9.1.dev119"
+z3-solver = ">=4.8.5.0"
+
+[package.extras]
+cvc4-solver = ["cvc4-solver"]
+
+[[package]]
+name = "cle"
+version = "9.2.12"
+description = "|"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+pefile = "*"
+pyelftools = ">=0.27"
+pyvex = "9.2.12"
+sortedcontainers = ">=2.0"
+
+[package.extras]
+ar = ["arpy (==1.1.1)"]
+minidump = ["minidump (>=0.0.10)"]
+testing = ["cffi"]
+xbe = ["pyxbe (==0.0.4)"]
+
+[[package]]
+name = "click"
+version = "8.1.3"
+description = "Composable command line interface toolkit"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+colorama = {version = "*", markers = "platform_system == \"Windows\""}
+
+[[package]]
+name = "colorama"
+version = "0.4.5"
+description = "Cross-platform colored terminal text."
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+
+[[package]]
+name = "commonmark"
+version = "0.9.1"
+description = "Python parser for the CommonMark Markdown spec"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+test = ["flake8 (==3.7.8)", "hypothesis (==3.55.3)"]
+
+[[package]]
+name = "cppheaderparser"
+version = "2.7.4"
+description = "Parse C++ header files and generate a data structure representing the class"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+ply = "*"
+
+[[package]]
+name = "cssselect"
+version = "1.1.0"
+description = "cssselect parses CSS3 Selectors and translates them to XPath 1.0"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[[package]]
+name = "custom-inherit"
+version = "2.4.0"
+description = "A Python package that provides customized docstring inheritance       schemes between derived classes and their parents."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "cycler"
+version = "0.11.0"
+description = "Composable style cycles"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "decorator"
+version = "5.1.1"
+description = "Decorators for Humans"
+category = "main"
+optional = false
+python-versions = ">=3.5"
+
+[[package]]
+name = "deprecated"
+version = "1.2.13"
+description = "Python @deprecated decorator to deprecate old python classes, functions or methods."
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[package.dependencies]
+wrapt = ">=1.10,<2"
+
+[package.extras]
+dev = ["tox", "bump2version (<1)", "sphinx (<2)", "importlib-metadata (<3)", "importlib-resources (<4)", "configparser (<5)", "sphinxcontrib-websupport (<2)", "zipp (<2)", "PyTest (<5)", "PyTest-Cov (<2.6)", "pytest", "pytest-cov"]
+
+[[package]]
+name = "dill"
+version = "0.3.5.1"
+description = "serialize all of python"
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, !=3.6.*"
+
+[package.extras]
+graph = ["objgraph (>=1.7.2)"]
+
+[[package]]
+name = "dpkt"
+version = "1.9.7.2"
+description = "fast, simple packet creation / parsing, with definitions for the basic TCP/IP protocols"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "fonttools"
+version = "4.34.4"
+description = "Tools to manipulate font files"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.extras]
+all = ["fs (>=2.2.0,<3)", "lxml (>=4.0,<5)", "zopfli (>=0.1.4)", "lz4 (>=1.7.4.2)", "matplotlib", "sympy", "skia-pathops (>=0.5.0)", "uharfbuzz (>=0.23.0)", "brotlicffi (>=0.8.0)", "scipy", "brotli (>=1.0.1)", "munkres", "unicodedata2 (>=14.0.0)", "xattr"]
+graphite = ["lz4 (>=1.7.4.2)"]
+interpolatable = ["scipy", "munkres"]
+lxml = ["lxml (>=4.0,<5)"]
+pathops = ["skia-pathops (>=0.5.0)"]
+plot = ["matplotlib"]
+repacker = ["uharfbuzz (>=0.23.0)"]
+symfont = ["sympy"]
+type1 = ["xattr"]
+ufo = ["fs (>=2.2.0,<3)"]
+unicode = ["unicodedata2 (>=14.0.0)"]
+woff = ["zopfli (>=0.1.4)", "brotlicffi (>=0.8.0)", "brotli (>=1.0.1)"]
+
+[[package]]
+name = "future"
+version = "0.18.2"
+description = "Clean single-source support for Python 3 and 2"
+category = "main"
+optional = false
+python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
+
+[[package]]
+name = "gitdb"
+version = "4.0.9"
+description = "Git Object Database"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+smmap = ">=3.0.1,<6"
+
+[[package]]
+name = "gitpython"
+version = "3.1.27"
+description = "GitPython is a python library used to interact with Git repositories"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+gitdb = ">=4.0.1,<5"
+
+[[package]]
+name = "iniconfig"
+version = "1.1.1"
+description = "iniconfig: brain-dead simple config-ini parsing"
+category = "dev"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "isort"
+version = "5.10.1"
+description = "A Python utility / library to sort Python imports."
+category = "dev"
+optional = false
+python-versions = ">=3.6.1,<4.0"
+
+[package.extras]
+pipfile_deprecated_finder = ["pipreqs", "requirementslib"]
+requirements_deprecated_finder = ["pipreqs", "pip-api"]
+colors = ["colorama (>=0.4.3,<0.5.0)"]
+plugins = ["setuptools"]
+
+[[package]]
+name = "itanium-demangler"
+version = "1.0"
+description = "Pure Python parser for mangled itanium symbols"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "jinja2"
+version = "3.1.2"
+description = "A very fast and expressive template engine."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+MarkupSafe = ">=2.0"
+
+[package.extras]
+i18n = ["Babel (>=2.7)"]
+
+[[package]]
+name = "kiwisolver"
+version = "1.4.4"
+description = "A fast implementation of the Cassowary constraint solver"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "lazy-object-proxy"
+version = "1.7.1"
+description = "A fast and thorough lazy object proxy."
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "lief"
+version = "0.12.1"
+description = "Library to instrument executable formats"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "lxml"
+version = "4.9.1"
+description = "Powerful and Pythonic XML processing library combining libxml2/libxslt with the ElementTree API."
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, != 3.4.*"
+
+[package.extras]
+cssselect = ["cssselect (>=0.7)"]
+html5 = ["html5lib"]
+htmlsoup = ["beautifulsoup4"]
+source = ["Cython (>=0.29.7)"]
+
+[[package]]
+name = "markupsafe"
+version = "2.1.1"
+description = "Safely add untrusted strings to HTML/XML markup."
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "matplotlib"
+version = "3.5.2"
+description = "Python plotting package"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+cycler = ">=0.10"
+fonttools = ">=4.22.0"
+kiwisolver = ">=1.0.1"
+numpy = ">=1.17"
+packaging = ">=20.0"
+pillow = ">=6.2.0"
+pyparsing = ">=2.2.1"
+python-dateutil = ">=2.7"
+setuptools_scm = ">=4"
+
+[[package]]
+name = "mccabe"
+version = "0.7.0"
+description = "McCabe checker, plugin for flake8"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "mpmath"
+version = "1.2.1"
+description = "Python library for arbitrary-precision floating-point arithmetic"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+develop = ["pytest (>=4.6)", "pycodestyle", "pytest-cov", "codecov", "wheel"]
+tests = ["pytest (>=4.6)"]
+
+[[package]]
+name = "mulpyplexer"
+version = "0.09"
+description = "A module that multiplexes interactions with lists of python objects."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "mypy"
+version = "0.961"
+description = "Optional static typing for Python"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+mypy-extensions = ">=0.4.3"
+tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
+typing-extensions = ">=3.10"
+
+[package.extras]
+dmypy = ["psutil (>=4.0)"]
+python2 = ["typed-ast (>=1.4.0,<2)"]
+reports = ["lxml"]
+
+[[package]]
+name = "mypy-extensions"
+version = "0.4.3"
+description = "Experimental type system extensions for programs checked with the mypy typechecker."
+category = "dev"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "nampa"
+version = "0.1.1"
+description = "FLIRT signatures for python"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+future = "*"
+
+[[package]]
+name = "networkx"
+version = "2.8.5"
+description = "Python package for creating and manipulating graphs and networks"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.extras]
+default = ["numpy (>=1.19)", "scipy (>=1.8)", "matplotlib (>=3.4)", "pandas (>=1.3)"]
+developer = ["pre-commit (>=2.19)", "mypy (>=0.960)"]
+doc = ["sphinx (>=5)", "pydata-sphinx-theme (>=0.9)", "sphinx-gallery (>=0.10)", "numpydoc (>=1.4)", "pillow (>=9.1)", "nb2plots (>=0.6)", "texext (>=0.6.6)"]
+extra = ["lxml (>=4.6)", "pygraphviz (>=1.9)", "pydot (>=1.4.2)", "sympy (>=1.10)"]
+test = ["pytest (>=7.1)", "pytest-cov (>=3.0)", "codecov (>=2.1)"]
+
+[[package]]
+name = "numpy"
+version = "1.23.1"
+description = "NumPy is the fundamental package for array computing with Python."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[[package]]
+name = "packaging"
+version = "21.3"
+description = "Core utilities for Python packages"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+pyparsing = ">=2.0.2,<3.0.5 || >3.0.5"
+
+[[package]]
+name = "pandas"
+version = "1.4.3"
+description = "Powerful data structures for data analysis, time series, and statistics"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+numpy = [
+    {version = ">=1.18.5", markers = "platform_machine != \"aarch64\" and platform_machine != \"arm64\" and python_version < \"3.10\""},
+    {version = ">=1.19.2", markers = "platform_machine == \"aarch64\" and python_version < \"3.10\""},
+    {version = ">=1.20.0", markers = "platform_machine == \"arm64\" and python_version < \"3.10\""},
+    {version = ">=1.21.0", markers = "python_version >= \"3.10\""},
+]
+python-dateutil = ">=2.8.1"
+pytz = ">=2020.1"
+
+[package.extras]
+test = ["hypothesis (>=5.5.3)", "pytest (>=6.0)", "pytest-xdist (>=1.31)"]
+
+[[package]]
+name = "pathspec"
+version = "0.9.0"
+description = "Utility library for gitignore style pattern matching of file paths."
+category = "dev"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
+
+[[package]]
+name = "pefile"
+version = "2022.5.30"
+description = "Python PE parsing module"
+category = "main"
+optional = false
+python-versions = ">=3.6.0"
+
+[package.dependencies]
+future = "*"
+
+[[package]]
+name = "pillow"
+version = "9.2.0"
+description = "Python Imaging Library (Fork)"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.extras]
+docs = ["furo", "olefile", "sphinx (>=2.4)", "sphinx-copybutton", "sphinx-issues (>=3.0.1)", "sphinx-removed-in", "sphinxext-opengraph"]
+tests = ["check-manifest", "coverage", "defusedxml", "markdown2", "olefile", "packaging", "pyroma", "pytest", "pytest-cov", "pytest-timeout"]
+
+[[package]]
+name = "platformdirs"
+version = "2.5.2"
+description = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.extras]
+docs = ["furo (>=2021.7.5b38)", "proselint (>=0.10.2)", "sphinx-autodoc-typehints (>=1.12)", "sphinx (>=4)"]
+test = ["appdirs (==1.4.4)", "pytest-cov (>=2.7)", "pytest-mock (>=3.6)", "pytest (>=6)"]
+
+[[package]]
+name = "pluggy"
+version = "1.0.0"
+description = "plugin and hook calling mechanisms for python"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.extras]
+dev = ["pre-commit", "tox"]
+testing = ["pytest", "pytest-benchmark"]
+
+[[package]]
+name = "plumbum"
+version = "1.7.2"
+description = "Plumbum: shell combinators library"
+category = "main"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
+
+[package.dependencies]
+pywin32 = {version = "*", markers = "platform_system == \"Windows\" and platform_python_implementation != \"PyPy\""}
+
+[package.extras]
+dev = ["paramiko", "psutil", "pytest", "pytest-cov", "pytest-mock", "pytest-timeout"]
+docs = ["Sphinx (>=3.0.0)", "sphinx-rtd-theme (>=0.5.0)"]
+ssh = ["paramiko"]
+
+[[package]]
+name = "ply"
+version = "3.11"
+description = "Python Lex & Yacc"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "prettytable"
+version = "3.3.0"
+description = "A simple Python library for easily displaying tabular data in a visually appealing ASCII table format"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+wcwidth = "*"
+
+[package.extras]
+tests = ["pytest", "pytest-cov", "pytest-lazy-fixture"]
+
+[[package]]
+name = "progressbar2"
+version = "4.0.0"
+description = "A Python Progressbar library to provide visual (yet text based) progress to long running operations."
+category = "main"
+optional = false
+python-versions = ">=3.7.0"
+
+[package.dependencies]
+python-utils = ">=3.0.0"
+
+[package.extras]
+docs = ["sphinx (>=1.8.5)"]
+tests = ["flake8 (>=3.7.7)", "pytest (>=4.6.9)", "pytest-cov (>=2.6.1)", "pytest-mypy", "freezegun (>=0.3.11)", "sphinx (>=1.8.5)"]
+
+[[package]]
+name = "protobuf"
+version = "4.21.4"
+description = ""
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "psutil"
+version = "5.9.1"
+description = "Cross-platform lib for process and system monitoring in Python."
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[package.extras]
+test = ["ipaddress", "mock", "enum34", "pywin32", "wmi"]
+
+[[package]]
+name = "pulp"
+version = "2.6.0"
+description = "PuLP is an LP modeler written in python. PuLP can generate MPS or LP files and call GLPK, COIN CLP/CBC, CPLEX, and GUROBI to solve linear problems."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "py"
+version = "1.11.0"
+description = "library with cross-python path, ini-parsing, io, code, log facilities"
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+
+[[package]]
+name = "pycparser"
+version = "2.21"
+description = "C parser in Python"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
+
+[[package]]
+name = "pyelftools"
+version = "0.28"
+description = "Library for analyzing ELF files and DWARF debugging information"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "pygments"
+version = "2.12.0"
+description = "Pygments is a syntax highlighting package written in Python."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "pylint"
+version = "2.14.5"
+description = "python code static checker"
+category = "dev"
+optional = false
+python-versions = ">=3.7.2"
+
+[package.dependencies]
+astroid = ">=2.11.6,<=2.12.0-dev0"
+colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
+dill = ">=0.2"
+isort = ">=4.2.5,<6"
+mccabe = ">=0.6,<0.8"
+platformdirs = ">=2.2.0"
+tomli = {version = ">=1.1.0", markers = "python_version < \"3.11\""}
+tomlkit = ">=0.10.1"
+typing-extensions = {version = ">=3.10.0", markers = "python_version < \"3.10\""}
+
+[package.extras]
+spelling = ["pyenchant (>=3.2,<4.0)"]
+testutils = ["gitpython (>3)"]
+
+[[package]]
+name = "pyparsing"
+version = "3.0.9"
+description = "pyparsing module - Classes and methods to define and execute parsing grammars"
+category = "main"
+optional = false
+python-versions = ">=3.6.8"
+
+[package.extras]
+diagrams = ["railroad-diagrams", "jinja2"]
+
+[[package]]
+name = "pyquery"
+version = "1.4.3"
+description = "A jquery-like library for python"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+cssselect = ">0.7.9"
+lxml = ">=2.1"
+
+[[package]]
+name = "pysmt"
+version = "0.9.6.dev21"
+description = "A solver-agnostic library for SMT Formulae manipulation and solving"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "pytest"
+version = "7.1.2"
+description = "pytest: simple powerful testing with Python"
+category = "dev"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+atomicwrites = {version = ">=1.0", markers = "sys_platform == \"win32\""}
+attrs = ">=19.2.0"
+colorama = {version = "*", markers = "sys_platform == \"win32\""}
+iniconfig = "*"
+packaging = "*"
+pluggy = ">=0.12,<2.0"
+py = ">=1.8.2"
+tomli = ">=1.0.0"
+
+[package.extras]
+testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "xmlschema"]
+
+[[package]]
+name = "python-dateutil"
+version = "2.8.2"
+description = "Extensions to the standard Python datetime module"
+category = "main"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
+
+[package.dependencies]
+six = ">=1.5"
+
+[[package]]
+name = "python-utils"
+version = "3.3.3"
+description = "Python Utils is a module with some convenient utilities not included with the standard Python install"
+category = "main"
+optional = false
+python-versions = ">3.6.0"
+
+[package.extras]
+docs = ["mock", "sphinx", "python-utils"]
+loguru = ["loguru"]
+tests = ["flake8", "pytest", "pytest-cov", "pytest-mypy", "pytest-asyncio", "sphinx", "types-setuptools", "loguru"]
+
+[[package]]
+name = "pytz"
+version = "2022.1"
+description = "World timezone definitions, modern and historical"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "pyvex"
+version = "9.2.12"
+description = "A Python interface to libVEX and VEX IR"
+category = "main"
+optional = false
+python-versions = ">=3.8"
+
+[package.dependencies]
+archinfo = "9.2.12"
+bitstring = "*"
+cffi = {version = ">=1.0.3", markers = "implementation_name == \"cpython\""}
+
+[[package]]
+name = "pywin32"
+version = "304"
+description = "Python for Window Extensions"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "rich"
+version = "12.5.1"
+description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
+category = "main"
+optional = false
+python-versions = ">=3.6.3,<4.0.0"
+
+[package.dependencies]
+commonmark = ">=0.9.0,<0.10.0"
+pygments = ">=2.6.0,<3.0.0"
+
+[package.extras]
+jupyter = ["ipywidgets (>=7.5.1,<8.0.0)"]
+
+[[package]]
+name = "rpyc"
+version = "5.2.3"
+description = "Remote Python Call (RPyC) is a transparent and symmetric distributed computing library"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+plumbum = "*"
+
+[[package]]
+name = "scikit-criteria"
+version = "0.7"
+description = "Scikit-Criteria is a collections of algorithms, methods and techniques for multiple-criteria decision analysis."
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.dependencies]
+custom_inherit = "*"
+Deprecated = "*"
+jinja2 = "*"
+numpy = "*"
+pandas = "*"
+pulp = "*"
+pyquery = "*"
+scipy = "*"
+seaborn = "*"
+
+[[package]]
+name = "scipy"
+version = "1.6.1"
+description = "SciPy: Scientific Library for Python"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+numpy = ">=1.16.5"
+
+[[package]]
+name = "seaborn"
+version = "0.11.2"
+description = "seaborn: statistical data visualization"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+matplotlib = ">=2.2"
+numpy = ">=1.15"
+pandas = ">=0.23"
+scipy = ">=1.0"
+
+[[package]]
+name = "setuptools-scm"
+version = "7.0.5"
+description = "the blessed package to manage your versions by scm tags"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+packaging = ">=20.0"
+tomli = ">=1.0.0"
+typing-extensions = "*"
+
+[package.extras]
+test = ["pytest (>=6.2)", "virtualenv (>20)"]
+toml = ["setuptools (>=42)"]
+
+[[package]]
+name = "shellingham"
+version = "1.5.0"
+description = "Tool to Detect Surrounding Shell"
+category = "main"
+optional = false
+python-versions = ">=3.4"
+
+[[package]]
+name = "six"
+version = "1.16.0"
+description = "Python 2 and 3 compatibility utilities"
+category = "main"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
+
+[[package]]
+name = "smmap"
+version = "5.0.0"
+description = "A pure Python implementation of a sliding window memory map manager"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+description = "Sorted Containers -- Sorted List, Sorted Dict, Sorted Set"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "sympy"
+version = "1.10.1"
+description = "Computer algebra system (CAS) in Python"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+mpmath = ">=0.19"
+
+[[package]]
+name = "tomli"
+version = "2.0.1"
+description = "A lil' TOML parser"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "tomlkit"
+version = "0.11.2"
+description = "Style preserving TOML library"
+category = "dev"
+optional = false
+python-versions = ">=3.6,<4.0"
+
+[[package]]
+name = "tree-sitter"
+version = "0.20.0"
+description = "Python bindings to the Tree-sitter parsing library"
+category = "main"
+optional = false
+python-versions = ">=3.3"
+
+[[package]]
+name = "typer"
+version = "0.6.1"
+description = "Typer, build great CLIs. Easy to code. Based on Python type hints."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+click = ">=7.1.1,<9.0.0"
+colorama = {version = ">=0.4.3,<0.5.0", optional = true, markers = "extra == \"all\""}
+rich = {version = ">=10.11.0,<13.0.0", optional = true, markers = "extra == \"all\""}
+shellingham = {version = ">=1.3.0,<2.0.0", optional = true, markers = "extra == \"all\""}
+
+[package.extras]
+all = ["colorama (>=0.4.3,<0.5.0)", "shellingham (>=1.3.0,<2.0.0)", "rich (>=10.11.0,<13.0.0)"]
+dev = ["autoflake (>=1.3.1,<2.0.0)", "flake8 (>=3.8.3,<4.0.0)", "pre-commit (>=2.17.0,<3.0.0)"]
+doc = ["mkdocs (>=1.1.2,<2.0.0)", "mkdocs-material (>=8.1.4,<9.0.0)", "mdx-include (>=1.4.1,<2.0.0)"]
+test = ["shellingham (>=1.3.0,<2.0.0)", "pytest (>=4.4.0,<5.4.0)", "pytest-cov (>=2.10.0,<3.0.0)", "coverage (>=5.2,<6.0)", "pytest-xdist (>=1.32.0,<2.0.0)", "pytest-sugar (>=0.9.4,<0.10.0)", "mypy (==0.910)", "black (>=22.3.0,<23.0.0)", "isort (>=5.0.6,<6.0.0)", "rich (>=10.11.0,<13.0.0)"]
+
+[[package]]
+name = "typing-extensions"
+version = "4.3.0"
+description = "Backported and Experimental Type Hints for Python 3.7+"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
+name = "unicorn"
+version = "1.0.2rc4"
+description = "Unicorn CPU emulator engine"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "wcwidth"
+version = "0.2.5"
+description = "Measures the displayed width of unicode strings in a terminal"
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
+name = "wrapt"
+version = "1.14.1"
+description = "Module for decorators, wrappers and monkey patching."
+category = "main"
+optional = false
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
+
+[[package]]
+name = "z3-solver"
+version = "4.10.2.0"
+description = "an efficient SMT solver library"
+category = "main"
+optional = false
+python-versions = "*"
+
+[metadata]
+lock-version = "1.1"
+python-versions = "^3.9"
+content-hash = "62ea551e437d0f1f6b41ddf577693fc1ca449921dd6eaed2b18b8a90a98a658b"
+
+[metadata.files]
+ailment = []
+angr = []
+archinfo = []
+astroid = []
+atomicwrites = []
+attrs = []
+bitstring = [
+    {file = "bitstring-3.1.9-py2-none-any.whl", hash = "sha256:e3e340e58900a948787a05e8c08772f1ccbe133f6f41fe3f0fa19a18a22bbf4f"},
+    {file = "bitstring-3.1.9-py3-none-any.whl", hash = "sha256:0de167daa6a00c9386255a7cac931b45e6e24e0ad7ea64f1f92a64ac23ad4578"},
+    {file = "bitstring-3.1.9.tar.gz", hash = "sha256:a5848a3f63111785224dca8bb4c0a75b62ecdef56a042c8d6be74b16f7e860e7"},
+]
+black = [
+    {file = "black-22.6.0-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:f586c26118bc6e714ec58c09df0157fe2d9ee195c764f630eb0d8e7ccce72e69"},
+    {file = "black-22.6.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:b270a168d69edb8b7ed32c193ef10fd27844e5c60852039599f9184460ce0807"},
+    {file = "black-22.6.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:6797f58943fceb1c461fb572edbe828d811e719c24e03375fd25170ada53825e"},
+    {file = "black-22.6.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c85928b9d5f83b23cee7d0efcb310172412fbf7cb9d9ce963bd67fd141781def"},
+    {file = "black-22.6.0-cp310-cp310-win_amd64.whl", hash = "sha256:f6fe02afde060bbeef044af7996f335fbe90b039ccf3f5eb8f16df8b20f77666"},
+    {file = "black-22.6.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:cfaf3895a9634e882bf9d2363fed5af8888802d670f58b279b0bece00e9a872d"},
+    {file = "black-22.6.0-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:94783f636bca89f11eb5d50437e8e17fbc6a929a628d82304c80fa9cd945f256"},
+    {file = "black-22.6.0-cp36-cp36m-win_amd64.whl", hash = "sha256:2ea29072e954a4d55a2ff58971b83365eba5d3d357352a07a7a4df0d95f51c78"},
+    {file = "black-22.6.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:e439798f819d49ba1c0bd9664427a05aab79bfba777a6db94fd4e56fae0cb849"},
+    {file = "black-22.6.0-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:187d96c5e713f441a5829e77120c269b6514418f4513a390b0499b0987f2ff1c"},
+    {file = "black-22.6.0-cp37-cp37m-win_amd64.whl", hash = "sha256:074458dc2f6e0d3dab7928d4417bb6957bb834434516f21514138437accdbe90"},
+    {file = "black-22.6.0-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:a218d7e5856f91d20f04e931b6f16d15356db1c846ee55f01bac297a705ca24f"},
+    {file = "black-22.6.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:568ac3c465b1c8b34b61cd7a4e349e93f91abf0f9371eda1cf87194663ab684e"},
+    {file = "black-22.6.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:6c1734ab264b8f7929cef8ae5f900b85d579e6cbfde09d7387da8f04771b51c6"},
+    {file = "black-22.6.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c9a3ac16efe9ec7d7381ddebcc022119794872abce99475345c5a61aa18c45ad"},
+    {file = "black-22.6.0-cp38-cp38-win_amd64.whl", hash = "sha256:b9fd45787ba8aa3f5e0a0a98920c1012c884622c6c920dbe98dbd05bc7c70fbf"},
+    {file = "black-22.6.0-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:7ba9be198ecca5031cd78745780d65a3f75a34b2ff9be5837045dce55db83d1c"},
+    {file = "black-22.6.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a3db5b6409b96d9bd543323b23ef32a1a2b06416d525d27e0f67e74f1446c8f2"},
+    {file = "black-22.6.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:560558527e52ce8afba936fcce93a7411ab40c7d5fe8c2463e279e843c0328ee"},
+    {file = "black-22.6.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b154e6bbde1e79ea3260c4b40c0b7b3109ffcdf7bc4ebf8859169a6af72cd70b"},
+    {file = "black-22.6.0-cp39-cp39-win_amd64.whl", hash = "sha256:4af5bc0e1f96be5ae9bd7aaec219c901a94d6caa2484c21983d043371c733fc4"},
+    {file = "black-22.6.0-py3-none-any.whl", hash = "sha256:ac609cf8ef5e7115ddd07d85d988d074ed00e10fbc3445aee393e70164a2219c"},
+    {file = "black-22.6.0.tar.gz", hash = "sha256:6c6d39e28aed379aec40da1c65434c77d75e65bb59a1e1c283de545fb4e7c6c9"},
+]
+cachetools = [
+    {file = "cachetools-5.2.0-py3-none-any.whl", hash = "sha256:f9f17d2aec496a9aa6b76f53e3b614c965223c061982d434d160f930c698a9db"},
+    {file = "cachetools-5.2.0.tar.gz", hash = "sha256:6a94c6402995a99c3970cc7e4884bb60b4a8639938157eeed436098bf9831757"},
+]
+capstone = [
+    {file = "capstone-5.0.0-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:4255086c14a98037ae6c1d554f54691e2179b4bb792b23c9811ded2f35807904"},
+    {file = "capstone-5.0.0-py3-none-manylinux1_i686.manylinux_2_5_i686.whl", hash = "sha256:fabca634c49b48cb1aa3c9f8ceb9a0b7919582e34369d228e0d7b00980c7044e"},
+    {file = "capstone-5.0.0-py3-none-manylinux1_i686.whl", hash = "sha256:b63c2c0e4492f3a9ffdaaaf55ceff5fe73e5267244e5cda4095f9e1d9174fa4b"},
+    {file = "capstone-5.0.0-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:50f736353b1983045bd282a0627124600f52aa544c3c21819243522d0540e26a"},
+    {file = "capstone-5.0.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:9717b35221fcc9d8db9240ff6b7b007808805f5e0409daf81c0831c13ff37653"},
+    {file = "capstone-5.0.0-py3-none-win32.whl", hash = "sha256:9ac2ea94a798790c996d8ced727fe9afa92882f7dc04ce423342aeab98ff83d6"},
+    {file = "capstone-5.0.0-py3-none-win_amd64.whl", hash = "sha256:e0c59d401452237a838ad5067eccc4f72a26af4b2b865d166822721de306eba5"},
+    {file = "capstone-5.0.0.tar.gz", hash = "sha256:6e18ee140463881c627b7ff7fd655752ddf37d9036295d3dba7b130408fbabaf"},
+]
+cffi = [
+    {file = "cffi-1.15.1-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:a66d3508133af6e8548451b25058d5812812ec3798c886bf38ed24a98216fab2"},
+    {file = "cffi-1.15.1-cp27-cp27m-manylinux1_i686.whl", hash = "sha256:470c103ae716238bbe698d67ad020e1db9d9dba34fa5a899b5e21577e6d52ed2"},
+    {file = "cffi-1.15.1-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:9ad5db27f9cabae298d151c85cf2bad1d359a1b9c686a275df03385758e2f914"},
+    {file = "cffi-1.15.1-cp27-cp27m-win32.whl", hash = "sha256:b3bbeb01c2b273cca1e1e0c5df57f12dce9a4dd331b4fa1635b8bec26350bde3"},
+    {file = "cffi-1.15.1-cp27-cp27m-win_amd64.whl", hash = "sha256:e00b098126fd45523dd056d2efba6c5a63b71ffe9f2bbe1a4fe1716e1d0c331e"},
+    {file = "cffi-1.15.1-cp27-cp27mu-manylinux1_i686.whl", hash = "sha256:d61f4695e6c866a23a21acab0509af1cdfd2c013cf256bbf5b6b5e2695827162"},
+    {file = "cffi-1.15.1-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:ed9cb427ba5504c1dc15ede7d516b84757c3e3d7868ccc85121d9310d27eed0b"},
+    {file = "cffi-1.15.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:39d39875251ca8f612b6f33e6b1195af86d1b3e60086068be9cc053aa4376e21"},
+    {file = "cffi-1.15.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:285d29981935eb726a4399badae8f0ffdff4f5050eaa6d0cfc3f64b857b77185"},
+    {file = "cffi-1.15.1-cp310-cp310-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:3eb6971dcff08619f8d91607cfc726518b6fa2a9eba42856be181c6d0d9515fd"},
+    {file = "cffi-1.15.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:21157295583fe8943475029ed5abdcf71eb3911894724e360acff1d61c1d54bc"},
+    {file = "cffi-1.15.1-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:5635bd9cb9731e6d4a1132a498dd34f764034a8ce60cef4f5319c0541159392f"},
+    {file = "cffi-1.15.1-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:2012c72d854c2d03e45d06ae57f40d78e5770d252f195b93f581acf3ba44496e"},
+    {file = "cffi-1.15.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dd86c085fae2efd48ac91dd7ccffcfc0571387fe1193d33b6394db7ef31fe2a4"},
+    {file = "cffi-1.15.1-cp310-cp310-musllinux_1_1_i686.whl", hash = "sha256:fa6693661a4c91757f4412306191b6dc88c1703f780c8234035eac011922bc01"},
+    {file = "cffi-1.15.1-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:59c0b02d0a6c384d453fece7566d1c7e6b7bae4fc5874ef2ef46d56776d61c9e"},
+    {file = "cffi-1.15.1-cp310-cp310-win32.whl", hash = "sha256:cba9d6b9a7d64d4bd46167096fc9d2f835e25d7e4c121fb2ddfc6528fb0413b2"},
+    {file = "cffi-1.15.1-cp310-cp310-win_amd64.whl", hash = "sha256:ce4bcc037df4fc5e3d184794f27bdaab018943698f4ca31630bc7f84a7b69c6d"},
+    {file = "cffi-1.15.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:3d08afd128ddaa624a48cf2b859afef385b720bb4b43df214f85616922e6a5ac"},
+    {file = "cffi-1.15.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:3799aecf2e17cf585d977b780ce79ff0dc9b78d799fc694221ce814c2c19db83"},
+    {file = "cffi-1.15.1-cp311-cp311-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:a591fe9e525846e4d154205572a029f653ada1a78b93697f3b5a8f1f2bc055b9"},
+    {file = "cffi-1.15.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:3548db281cd7d2561c9ad9984681c95f7b0e38881201e157833a2342c30d5e8c"},
+    {file = "cffi-1.15.1-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:91fc98adde3d7881af9b59ed0294046f3806221863722ba7d8d120c575314325"},
+    {file = "cffi-1.15.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:94411f22c3985acaec6f83c6df553f2dbe17b698cc7f8ae751ff2237d96b9e3c"},
+    {file = "cffi-1.15.1-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:03425bdae262c76aad70202debd780501fabeaca237cdfddc008987c0e0f59ef"},
+    {file = "cffi-1.15.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:cc4d65aeeaa04136a12677d3dd0b1c0c94dc43abac5860ab33cceb42b801c1e8"},
+    {file = "cffi-1.15.1-cp311-cp311-win32.whl", hash = "sha256:a0f100c8912c114ff53e1202d0078b425bee3649ae34d7b070e9697f93c5d52d"},
+    {file = "cffi-1.15.1-cp311-cp311-win_amd64.whl", hash = "sha256:04ed324bda3cda42b9b695d51bb7d54b680b9719cfab04227cdd1e04e5de3104"},
+    {file = "cffi-1.15.1-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:50a74364d85fd319352182ef59c5c790484a336f6db772c1a9231f1c3ed0cbd7"},
+    {file = "cffi-1.15.1-cp36-cp36m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e263d77ee3dd201c3a142934a086a4450861778baaeeb45db4591ef65550b0a6"},
+    {file = "cffi-1.15.1-cp36-cp36m-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:cec7d9412a9102bdc577382c3929b337320c4c4c4849f2c5cdd14d7368c5562d"},
+    {file = "cffi-1.15.1-cp36-cp36m-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:4289fc34b2f5316fbb762d75362931e351941fa95fa18789191b33fc4cf9504a"},
+    {file = "cffi-1.15.1-cp36-cp36m-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:173379135477dc8cac4bc58f45db08ab45d228b3363adb7af79436135d028405"},
+    {file = "cffi-1.15.1-cp36-cp36m-manylinux_2_5_x86_64.manylinux1_x86_64.whl", hash = "sha256:6975a3fac6bc83c4a65c9f9fcab9e47019a11d3d2cf7f3c0d03431bf145a941e"},
+    {file = "cffi-1.15.1-cp36-cp36m-win32.whl", hash = "sha256:2470043b93ff09bf8fb1d46d1cb756ce6132c54826661a32d4e4d132e1977adf"},
+    {file = "cffi-1.15.1-cp36-cp36m-win_amd64.whl", hash = "sha256:30d78fbc8ebf9c92c9b7823ee18eb92f2e6ef79b45ac84db507f52fbe3ec4497"},
+    {file = "cffi-1.15.1-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:198caafb44239b60e252492445da556afafc7d1e3ab7a1fb3f0584ef6d742375"},
+    {file = "cffi-1.15.1-cp37-cp37m-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5ef34d190326c3b1f822a5b7a45f6c4535e2f47ed06fec77d3d799c450b2651e"},
+    {file = "cffi-1.15.1-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8102eaf27e1e448db915d08afa8b41d6c7ca7a04b7d73af6514df10a3e74bd82"},
+    {file = "cffi-1.15.1-cp37-cp37m-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:5df2768244d19ab7f60546d0c7c63ce1581f7af8b5de3eb3004b9b6fc8a9f84b"},
+    {file = "cffi-1.15.1-cp37-cp37m-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:a8c4917bd7ad33e8eb21e9a5bbba979b49d9a97acb3a803092cbc1133e20343c"},
+    {file = "cffi-1.15.1-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0e2642fe3142e4cc4af0799748233ad6da94c62a8bec3a6648bf8ee68b1c7426"},
+    {file = "cffi-1.15.1-cp37-cp37m-win32.whl", hash = "sha256:e229a521186c75c8ad9490854fd8bbdd9a0c9aa3a524326b55be83b54d4e0ad9"},
+    {file = "cffi-1.15.1-cp37-cp37m-win_amd64.whl", hash = "sha256:a0b71b1b8fbf2b96e41c4d990244165e2c9be83d54962a9a1d118fd8657d2045"},
+    {file = "cffi-1.15.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:320dab6e7cb2eacdf0e658569d2575c4dad258c0fcc794f46215e1e39f90f2c3"},
+    {file = "cffi-1.15.1-cp38-cp38-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1e74c6b51a9ed6589199c787bf5f9875612ca4a8a0785fb2d4a84429badaf22a"},
+    {file = "cffi-1.15.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:a5c84c68147988265e60416b57fc83425a78058853509c1b0629c180094904a5"},
+    {file = "cffi-1.15.1-cp38-cp38-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:3b926aa83d1edb5aa5b427b4053dc420ec295a08e40911296b9eb1b6170f6cca"},
+    {file = "cffi-1.15.1-cp38-cp38-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:87c450779d0914f2861b8526e035c5e6da0a3199d8f1add1a665e1cbc6fc6d02"},
+    {file = "cffi-1.15.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4f2c9f67e9821cad2e5f480bc8d83b8742896f1242dba247911072d4fa94c192"},
+    {file = "cffi-1.15.1-cp38-cp38-win32.whl", hash = "sha256:8b7ee99e510d7b66cdb6c593f21c043c248537a32e0bedf02e01e9553a172314"},
+    {file = "cffi-1.15.1-cp38-cp38-win_amd64.whl", hash = "sha256:00a9ed42e88df81ffae7a8ab6d9356b371399b91dbdf0c3cb1e84c03a13aceb5"},
+    {file = "cffi-1.15.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:54a2db7b78338edd780e7ef7f9f6c442500fb0d41a5a4ea24fff1c929d5af585"},
+    {file = "cffi-1.15.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:fcd131dd944808b5bdb38e6f5b53013c5aa4f334c5cad0c72742f6eba4b73db0"},
+    {file = "cffi-1.15.1-cp39-cp39-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7473e861101c9e72452f9bf8acb984947aa1661a7704553a9f6e4baa5ba64415"},
+    {file = "cffi-1.15.1-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6c9a799e985904922a4d207a94eae35c78ebae90e128f0c4e521ce339396be9d"},
+    {file = "cffi-1.15.1-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:3bcde07039e586f91b45c88f8583ea7cf7a0770df3a1649627bf598332cb6984"},
+    {file = "cffi-1.15.1-cp39-cp39-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:33ab79603146aace82c2427da5ca6e58f2b3f2fb5da893ceac0c42218a40be35"},
+    {file = "cffi-1.15.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5d598b938678ebf3c67377cdd45e09d431369c3b1a5b331058c338e201f12b27"},
+    {file = "cffi-1.15.1-cp39-cp39-musllinux_1_1_i686.whl", hash = "sha256:db0fbb9c62743ce59a9ff687eb5f4afbe77e5e8403d6697f7446e5f609976f76"},
+    {file = "cffi-1.15.1-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:98d85c6a2bef81588d9227dde12db8a7f47f639f4a17c9ae08e773aa9c697bf3"},
+    {file = "cffi-1.15.1-cp39-cp39-win32.whl", hash = "sha256:40f4774f5a9d4f5e344f31a32b5096977b5d48560c5592e2f3d2c4374bd543ee"},
+    {file = "cffi-1.15.1-cp39-cp39-win_amd64.whl", hash = "sha256:70df4e3b545a17496c9b3f41f5115e69a4f2e77e94e1d2a8e1070bc0c38c8a3c"},
+    {file = "cffi-1.15.1.tar.gz", hash = "sha256:d400bfb9a37b1351253cb402671cea7e89bdecc294e8016a707f6d1d8ac934f9"},
+]
+claripy = []
+cle = []
+click = [
+    {file = "click-8.1.3-py3-none-any.whl", hash = "sha256:bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48"},
+    {file = "click-8.1.3.tar.gz", hash = "sha256:7682dc8afb30297001674575ea00d1814d808d6a36af415a82bd481d37ba7b8e"},
+]
+colorama = [
+    {file = "colorama-0.4.5-py2.py3-none-any.whl", hash = "sha256:854bf444933e37f5824ae7bfc1e98d5bce2ebe4160d46b5edf346a89358e99da"},
+    {file = "colorama-0.4.5.tar.gz", hash = "sha256:e6c6b4334fc50988a639d9b98aa429a0b57da6e17b9a44f0451f930b6967b7a4"},
+]
+commonmark = []
+cppheaderparser = [
+    {file = "CppHeaderParser-2.7.4.tar.gz", hash = "sha256:382b30416d95b0a5e8502b214810dcac2a56432917e2651447d3abe253e3cc42"},
+]
+cssselect = []
+custom-inherit = []
+cycler = []
+decorator = [
+    {file = "decorator-5.1.1-py3-none-any.whl", hash = "sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186"},
+    {file = "decorator-5.1.1.tar.gz", hash = "sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330"},
+]
+deprecated = []
+dill = []
+dpkt = [
+    {file = "dpkt-1.9.7.2-py3-none-any.whl", hash = "sha256:d7e9ae552d0c44f339b7ca4db728c7202c32cc718cef12dbb8703539b840bb78"},
+    {file = "dpkt-1.9.7.2.tar.gz", hash = "sha256:80f977667ebbad2b5c4f7b7f45ee8bea6622fb71723f68a9a8fe6274520c853b"},
+]
+fonttools = []
+future = [
+    {file = "future-0.18.2.tar.gz", hash = "sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d"},
+]
+gitdb = [
+    {file = "gitdb-4.0.9-py3-none-any.whl", hash = "sha256:8033ad4e853066ba6ca92050b9df2f89301b8fc8bf7e9324d412a63f8bf1a8fd"},
+    {file = "gitdb-4.0.9.tar.gz", hash = "sha256:bac2fd45c0a1c9cf619e63a90d62bdc63892ef92387424b855792a6cabe789aa"},
+]
+gitpython = [
+    {file = "GitPython-3.1.27-py3-none-any.whl", hash = "sha256:5b68b000463593e05ff2b261acff0ff0972df8ab1b70d3cdbd41b546c8b8fc3d"},
+    {file = "GitPython-3.1.27.tar.gz", hash = "sha256:1c885ce809e8ba2d88a29befeb385fcea06338d3640712b59ca623c220bb5704"},
+]
+iniconfig = [
+    {file = "iniconfig-1.1.1-py2.py3-none-any.whl", hash = "sha256:011e24c64b7f47f6ebd835bb12a743f2fbe9a26d4cecaa7f53bc4f35ee9da8b3"},
+    {file = "iniconfig-1.1.1.tar.gz", hash = "sha256:bc3af051d7d14b2ee5ef9969666def0cd1a000e121eaea580d4a313df4b37f32"},
+]
+isort = []
+itanium-demangler = [
+    {file = "itanium_demangler-1.0.tar.gz", hash = "sha256:bca0fae4cb0ad582a3c7ede97d66b325d13445fdf87c28947233d8559430967c"},
+]
+jinja2 = []
+kiwisolver = []
+lazy-object-proxy = []
+lief = [
+    {file = "lief-0.12.1-cp310-cp310-macosx_10_14_x86_64.whl", hash = "sha256:4fbbc9d520de87ac22210c62d22a9b088e5460f9a028741311e6f68ef8877ddd"},
+    {file = "lief-0.12.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:443e4494df448ea1a021976258c7a6aca27d81b0612783fa3a84fab196fb9fcb"},
+    {file = "lief-0.12.1-cp310-cp310-win32.whl", hash = "sha256:1c4019dddf03a5185462fb5ea04327cee08d40f46777b02f0773c7dc294552ea"},
+    {file = "lief-0.12.1-cp310-cp310-win_amd64.whl", hash = "sha256:d7e09968f99ddf1e3983d3bcc16c62d1b6635a345fee8d8139f82b31bad457d6"},
+    {file = "lief-0.12.1-cp36-cp36m-macosx_10_14_x86_64.whl", hash = "sha256:9fa6269ec4fa3f874b807fbba3c48a46af30df2497723f6966080e3eb630cb26"},
+    {file = "lief-0.12.1-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a78b05cac5fa491e01e1819573bbbbcaea0a4229f4aa3a2edb231b5695ddaf2d"},
+    {file = "lief-0.12.1-cp36-cp36m-win32.whl", hash = "sha256:f1292bff96579c18e01e20b7a14043052379fe6e9a476c1d6d88aca43e5f9ac7"},
+    {file = "lief-0.12.1-cp36-cp36m-win_amd64.whl", hash = "sha256:dab63876113bd573d64ce043f50153f6e2810e5e78256397aa0fe1fedf82ab84"},
+    {file = "lief-0.12.1-cp37-cp37m-macosx_10_14_x86_64.whl", hash = "sha256:5771f5226b62c885a7aa30c1b98040d39229a1dab889d03155e5538e57d0054b"},
+    {file = "lief-0.12.1-cp37-cp37m-manylinux2014_aarch64.whl", hash = "sha256:8ec307a762505076a6d31566225a231c44ec7063c0e7d751ac4654c674454c47"},
+    {file = "lief-0.12.1-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a755f6088d3b2041e4402adf917ac87e5ad9d1c5278973f48a29a5631fe393eb"},
+    {file = "lief-0.12.1-cp37-cp37m-win32.whl", hash = "sha256:5d746f7eb6d3bf35a0230c7184aaaf434cb1ea89d7e7c8e8fe14a49cf2bb17a0"},
+    {file = "lief-0.12.1-cp37-cp37m-win_amd64.whl", hash = "sha256:2d3ab7212da696bcbe5ca9dd78ceaa32dfb8a0e85e18001793b4441ef4624561"},
+    {file = "lief-0.12.1-cp38-cp38-macosx_10_14_x86_64.whl", hash = "sha256:4360b0acd525ba77777cc38f0e5128c90c93cc4e91ab566ef3aa45b7f8a8c57e"},
+    {file = "lief-0.12.1-cp38-cp38-manylinux2014_aarch64.whl", hash = "sha256:5e82e466d36cbabb28cc1a787b554d2feae5ab55c39cab58ef64fb6513bad92a"},
+    {file = "lief-0.12.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:efa0022a3bf70ef46335639e61b946cc2d9cf012d60e263c215e3e64b1ce38b4"},
+    {file = "lief-0.12.1-cp38-cp38-win32.whl", hash = "sha256:d29f91d9f64f67d3ada5b7e0e48ab084d825fb4601d32d9fecdd2bdf23cdad23"},
+    {file = "lief-0.12.1-cp38-cp38-win_amd64.whl", hash = "sha256:7dea6b3f17d362f93165379c46dadb012c73b1f751c8ceac256e5f43842cd86d"},
+    {file = "lief-0.12.1-cp39-cp39-macosx_10_14_x86_64.whl", hash = "sha256:44012da4c32c670a97bb8a055a4ff16168cfaa757d03986f319aa3329a43e343"},
+    {file = "lief-0.12.1-cp39-cp39-manylinux2014_aarch64.whl", hash = "sha256:e1d23997b0a71d34e766ff183be07854c6f698fd3d6aa44bf30b6b7f4f77ef55"},
+    {file = "lief-0.12.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b845eca79c772041efb38b50cfaf951e24bc047ec462450b7e54e75b7e2bee0d"},
+    {file = "lief-0.12.1-cp39-cp39-win32.whl", hash = "sha256:0df84ac2df20b14db12e69442d39b0e8cd89428ba3b131995e0570bcd3725460"},
+    {file = "lief-0.12.1-cp39-cp39-win_amd64.whl", hash = "sha256:960a2da9f28c8d5dba753bb9ab77e26b3c6ff9b9658918be95650ceb8ee91e68"},
+    {file = "lief-0.12.1.zip", hash = "sha256:4ff4ccfae2e1ee4ccba2b5556027dbb56282b8a973c5835c5b597e8b7b664416"},
+]
+lxml = []
+markupsafe = []
+matplotlib = []
+mccabe = []
+mpmath = [
+    {file = "mpmath-1.2.1-py3-none-any.whl", hash = "sha256:604bc21bd22d2322a177c73bdb573994ef76e62edd595d17e00aff24b0667e5c"},
+    {file = "mpmath-1.2.1.tar.gz", hash = "sha256:79ffb45cf9f4b101a807595bcb3e72e0396202e0b1d25d689134b48c4216a81a"},
+]
+mulpyplexer = [
+    {file = "mulpyplexer-0.09.tar.gz", hash = "sha256:144e9e9bf66d3988f60542c9d3d4c94857438f7908f60e53f4c1cb1622fbbd30"},
+]
+mypy = []
+mypy-extensions = [
+    {file = "mypy_extensions-0.4.3-py2.py3-none-any.whl", hash = "sha256:090fedd75945a69ae91ce1303b5824f428daf5a028d2f6ab8a299250a846f15d"},
+    {file = "mypy_extensions-0.4.3.tar.gz", hash = "sha256:2d82818f5bb3e369420cb3c4060a7970edba416647068eb4c5343488a6c604a8"},
+]
+nampa = [
+    {file = "nampa-0.1.1-py2.py3-none-any.whl", hash = "sha256:4f7abaa5f9187019117090faf539f128e5fd4f8e021f16f67a22c75afea24e21"},
+    {file = "nampa-0.1.1.tar.gz", hash = "sha256:6d436100026d408f8f29b3ae12584205d382ab646be1073120755eea9ec0cc4c"},
+]
+networkx = []
+numpy = []
+packaging = [
+    {file = "packaging-21.3-py3-none-any.whl", hash = "sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522"},
+    {file = "packaging-21.3.tar.gz", hash = "sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb"},
+]
+pandas = []
+pathspec = [
+    {file = "pathspec-0.9.0-py2.py3-none-any.whl", hash = "sha256:7d15c4ddb0b5c802d161efc417ec1a2558ea2653c2e8ad9c19098201dc1c993a"},
+    {file = "pathspec-0.9.0.tar.gz", hash = "sha256:e564499435a2673d586f6b2130bb5b95f04a3ba06f81b8f895b651a3c76aabb1"},
+]
+pefile = [
+    {file = "pefile-2022.5.30.tar.gz", hash = "sha256:a5488a3dd1fd021ce33f969780b88fe0f7eebb76eb20996d7318f307612a045b"},
+]
+pillow = []
+platformdirs = [
+    {file = "platformdirs-2.5.2-py3-none-any.whl", hash = "sha256:027d8e83a2d7de06bbac4e5ef7e023c02b863d7ea5d079477e722bb41ab25788"},
+    {file = "platformdirs-2.5.2.tar.gz", hash = "sha256:58c8abb07dcb441e6ee4b11d8df0ac856038f944ab98b7be6b27b2a3c7feef19"},
+]
+pluggy = []
+plumbum = [
+    {file = "plumbum-1.7.2-py2.py3-none-any.whl", hash = "sha256:0bbf431e31da988405de2fb36c3226f09c0c9cdf69c8480f8997f4b94b7370a1"},
+    {file = "plumbum-1.7.2.tar.gz", hash = "sha256:0d1bf908076bbd0484d16412479cb97d6843069ee19f99e267e11dd980040523"},
+]
+ply = [
+    {file = "ply-3.11-py2.py3-none-any.whl", hash = "sha256:096f9b8350b65ebd2fd1346b12452efe5b9607f7482813ffca50c22722a807ce"},
+    {file = "ply-3.11.tar.gz", hash = "sha256:00c7c1aaa88358b9c765b6d3000c6eec0ba42abca5351b095321aef446081da3"},
+]
+prettytable = [
+    {file = "prettytable-3.3.0-py3-none-any.whl", hash = "sha256:d1c34d72ea2c0ffd6ce5958e71c428eb21a3d40bf3133afe319b24aeed5af407"},
+    {file = "prettytable-3.3.0.tar.gz", hash = "sha256:118eb54fd2794049b810893653b20952349df6d3bc1764e7facd8a18064fa9b0"},
+]
+progressbar2 = [
+    {file = "progressbar2-4.0.0-py2.py3-none-any.whl", hash = "sha256:2562ba3e554433f08e81fb7b786208b19de135f3ca1c5da1787d9b05558e6247"},
+    {file = "progressbar2-4.0.0.tar.gz", hash = "sha256:14d3165a1781d053ffaa117daf27cc706128d2ec1d2977fdb05b6bb079888013"},
+]
+protobuf = []
+psutil = [
+    {file = "psutil-5.9.1-cp27-cp27m-manylinux2010_i686.whl", hash = "sha256:799759d809c31aab5fe4579e50addf84565e71c1dc9f1c31258f159ff70d3f87"},
+    {file = "psutil-5.9.1-cp27-cp27m-manylinux2010_x86_64.whl", hash = "sha256:9272167b5f5fbfe16945be3db475b3ce8d792386907e673a209da686176552af"},
+    {file = "psutil-5.9.1-cp27-cp27m-win32.whl", hash = "sha256:0904727e0b0a038830b019551cf3204dd48ef5c6868adc776e06e93d615fc5fc"},
+    {file = "psutil-5.9.1-cp27-cp27m-win_amd64.whl", hash = "sha256:e7e10454cb1ab62cc6ce776e1c135a64045a11ec4c6d254d3f7689c16eb3efd2"},
+    {file = "psutil-5.9.1-cp27-cp27mu-manylinux2010_i686.whl", hash = "sha256:56960b9e8edcca1456f8c86a196f0c3d8e3e361320071c93378d41445ffd28b0"},
+    {file = "psutil-5.9.1-cp27-cp27mu-manylinux2010_x86_64.whl", hash = "sha256:44d1826150d49ffd62035785a9e2c56afcea66e55b43b8b630d7706276e87f22"},
+    {file = "psutil-5.9.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c7be9d7f5b0d206f0bbc3794b8e16fb7dbc53ec9e40bbe8787c6f2d38efcf6c9"},
+    {file = "psutil-5.9.1-cp310-cp310-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:abd9246e4cdd5b554a2ddd97c157e292ac11ef3e7af25ac56b08b455c829dca8"},
+    {file = "psutil-5.9.1-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:29a442e25fab1f4d05e2655bb1b8ab6887981838d22effa2396d584b740194de"},
+    {file = "psutil-5.9.1-cp310-cp310-win32.whl", hash = "sha256:20b27771b077dcaa0de1de3ad52d22538fe101f9946d6dc7869e6f694f079329"},
+    {file = "psutil-5.9.1-cp310-cp310-win_amd64.whl", hash = "sha256:58678bbadae12e0db55186dc58f2888839228ac9f41cc7848853539b70490021"},
+    {file = "psutil-5.9.1-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:3a76ad658641172d9c6e593de6fe248ddde825b5866464c3b2ee26c35da9d237"},
+    {file = "psutil-5.9.1-cp36-cp36m-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:a6a11e48cb93a5fa606306493f439b4aa7c56cb03fc9ace7f6bfa21aaf07c453"},
+    {file = "psutil-5.9.1-cp36-cp36m-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:068935df39055bf27a29824b95c801c7a5130f118b806eee663cad28dca97685"},
+    {file = "psutil-5.9.1-cp36-cp36m-win32.whl", hash = "sha256:0f15a19a05f39a09327345bc279c1ba4a8cfb0172cc0d3c7f7d16c813b2e7d36"},
+    {file = "psutil-5.9.1-cp36-cp36m-win_amd64.whl", hash = "sha256:db417f0865f90bdc07fa30e1aadc69b6f4cad7f86324b02aa842034efe8d8c4d"},
+    {file = "psutil-5.9.1-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:91c7ff2a40c373d0cc9121d54bc5f31c4fa09c346528e6a08d1845bce5771ffc"},
+    {file = "psutil-5.9.1-cp37-cp37m-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fea896b54f3a4ae6f790ac1d017101252c93f6fe075d0e7571543510f11d2676"},
+    {file = "psutil-5.9.1-cp37-cp37m-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3054e923204b8e9c23a55b23b6df73a8089ae1d075cb0bf711d3e9da1724ded4"},
+    {file = "psutil-5.9.1-cp37-cp37m-win32.whl", hash = "sha256:d2d006286fbcb60f0b391741f520862e9b69f4019b4d738a2a45728c7e952f1b"},
+    {file = "psutil-5.9.1-cp37-cp37m-win_amd64.whl", hash = "sha256:b14ee12da9338f5e5b3a3ef7ca58b3cba30f5b66f7662159762932e6d0b8f680"},
+    {file = "psutil-5.9.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:19f36c16012ba9cfc742604df189f2f28d2720e23ff7d1e81602dbe066be9fd1"},
+    {file = "psutil-5.9.1-cp38-cp38-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:944c4b4b82dc4a1b805329c980f270f170fdc9945464223f2ec8e57563139cf4"},
+    {file = "psutil-5.9.1-cp38-cp38-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4b6750a73a9c4a4e689490ccb862d53c7b976a2a35c4e1846d049dcc3f17d83b"},
+    {file = "psutil-5.9.1-cp38-cp38-win32.whl", hash = "sha256:a8746bfe4e8f659528c5c7e9af5090c5a7d252f32b2e859c584ef7d8efb1e689"},
+    {file = "psutil-5.9.1-cp38-cp38-win_amd64.whl", hash = "sha256:79c9108d9aa7fa6fba6e668b61b82facc067a6b81517cab34d07a84aa89f3df0"},
+    {file = "psutil-5.9.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:28976df6c64ddd6320d281128817f32c29b539a52bdae5e192537bc338a9ec81"},
+    {file = "psutil-5.9.1-cp39-cp39-manylinux_2_12_i686.manylinux2010_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b88f75005586131276634027f4219d06e0561292be8bd6bc7f2f00bdabd63c4e"},
+    {file = "psutil-5.9.1-cp39-cp39-manylinux_2_12_x86_64.manylinux2010_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:645bd4f7bb5b8633803e0b6746ff1628724668681a434482546887d22c7a9537"},
+    {file = "psutil-5.9.1-cp39-cp39-win32.whl", hash = "sha256:32c52611756096ae91f5d1499fe6c53b86f4a9ada147ee42db4991ba1520e574"},
+    {file = "psutil-5.9.1-cp39-cp39-win_amd64.whl", hash = "sha256:f65f9a46d984b8cd9b3750c2bdb419b2996895b005aefa6cbaba9a143b1ce2c5"},
+    {file = "psutil-5.9.1.tar.gz", hash = "sha256:57f1819b5d9e95cdfb0c881a8a5b7d542ed0b7c522d575706a80bedc848c8954"},
+]
+pulp = []
+py = [
+    {file = "py-1.11.0-py2.py3-none-any.whl", hash = "sha256:607c53218732647dff4acdfcd50cb62615cedf612e72d1724fb1a0cc6405b378"},
+    {file = "py-1.11.0.tar.gz", hash = "sha256:51c75c4126074b472f746a24399ad32f6053d1b34b68d2fa41e558e6f4a98719"},
+]
+pycparser = [
+    {file = "pycparser-2.21-py2.py3-none-any.whl", hash = "sha256:8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9"},
+    {file = "pycparser-2.21.tar.gz", hash = "sha256:e644fdec12f7872f86c58ff790da456218b10f863970249516d60a5eaca77206"},
+]
+pyelftools = [
+    {file = "pyelftools-0.28-py2.py3-none-any.whl", hash = "sha256:1509d30756a14a8c9a6670778144fb9a04b311751ddac019dcc0c2f28da03ccc"},
+    {file = "pyelftools-0.28.tar.gz", hash = "sha256:53e5609cac016471d40bd88dc410cd90755942c25e58a61021cfdf7abdfeacff"},
+]
+pygments = []
+pylint = []
+pyparsing = [
+    {file = "pyparsing-3.0.9-py3-none-any.whl", hash = "sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc"},
+    {file = "pyparsing-3.0.9.tar.gz", hash = "sha256:2b020ecf7d21b687f219b71ecad3631f644a47f01403fa1d1036b0c6416d70fb"},
+]
+pyquery = []
+pysmt = []
+pytest = [
+    {file = "pytest-7.1.2-py3-none-any.whl", hash = "sha256:13d0e3ccfc2b6e26be000cb6568c832ba67ba32e719443bfe725814d3c42433c"},
+    {file = "pytest-7.1.2.tar.gz", hash = "sha256:a06a0425453864a270bc45e71f783330a7428defb4230fb5e6a731fde06ecd45"},
+]
+python-dateutil = []
+python-utils = [
+    {file = "python-utils-3.3.3.tar.gz", hash = "sha256:3b1c8b706e40e91280eec5fa72ea730880a166cee99afa5555b863d55664478d"},
+    {file = "python_utils-3.3.3-py2.py3-none-any.whl", hash = "sha256:5cb9cf295018202fb4d6abdd694a33a7f08bc0ce1bf1eab8cce80ab2cde35c07"},
+]
+pytz = []
+pyvex = []
+pywin32 = [
+    {file = "pywin32-304-cp310-cp310-win32.whl", hash = "sha256:3c7bacf5e24298c86314f03fa20e16558a4e4138fc34615d7de4070c23e65af3"},
+    {file = "pywin32-304-cp310-cp310-win_amd64.whl", hash = "sha256:4f32145913a2447736dad62495199a8e280a77a0ca662daa2332acf849f0be48"},
+    {file = "pywin32-304-cp310-cp310-win_arm64.whl", hash = "sha256:d3ee45adff48e0551d1aa60d2ec066fec006083b791f5c3527c40cd8aefac71f"},
+    {file = "pywin32-304-cp311-cp311-win32.whl", hash = "sha256:30c53d6ce44c12a316a06c153ea74152d3b1342610f1b99d40ba2795e5af0269"},
+    {file = "pywin32-304-cp311-cp311-win_amd64.whl", hash = "sha256:7ffa0c0fa4ae4077e8b8aa73800540ef8c24530057768c3ac57c609f99a14fd4"},
+    {file = "pywin32-304-cp311-cp311-win_arm64.whl", hash = "sha256:cbbe34dad39bdbaa2889a424d28752f1b4971939b14b1bb48cbf0182a3bcfc43"},
+    {file = "pywin32-304-cp36-cp36m-win32.whl", hash = "sha256:be253e7b14bc601718f014d2832e4c18a5b023cbe72db826da63df76b77507a1"},
+    {file = "pywin32-304-cp36-cp36m-win_amd64.whl", hash = "sha256:de9827c23321dcf43d2f288f09f3b6d772fee11e809015bdae9e69fe13213988"},
+    {file = "pywin32-304-cp37-cp37m-win32.whl", hash = "sha256:f64c0377cf01b61bd5e76c25e1480ca8ab3b73f0c4add50538d332afdf8f69c5"},
+    {file = "pywin32-304-cp37-cp37m-win_amd64.whl", hash = "sha256:bb2ea2aa81e96eee6a6b79d87e1d1648d3f8b87f9a64499e0b92b30d141e76df"},
+    {file = "pywin32-304-cp38-cp38-win32.whl", hash = "sha256:94037b5259701988954931333aafd39cf897e990852115656b014ce72e052e96"},
+    {file = "pywin32-304-cp38-cp38-win_amd64.whl", hash = "sha256:ead865a2e179b30fb717831f73cf4373401fc62fbc3455a0889a7ddac848f83e"},
+    {file = "pywin32-304-cp39-cp39-win32.whl", hash = "sha256:25746d841201fd9f96b648a248f731c1dec851c9a08b8e33da8b56148e4c65cc"},
+    {file = "pywin32-304-cp39-cp39-win_amd64.whl", hash = "sha256:d24a3382f013b21aa24a5cfbfad5a2cd9926610c0affde3e8ab5b3d7dbcf4ac9"},
+]
+rich = []
+rpyc = []
+scikit-criteria = []
+scipy = []
+seaborn = []
+setuptools-scm = []
+shellingham = []
+six = []
+smmap = [
+    {file = "smmap-5.0.0-py3-none-any.whl", hash = "sha256:2aba19d6a040e78d8b09de5c57e96207b09ed71d8e55ce0959eeee6c8e190d94"},
+    {file = "smmap-5.0.0.tar.gz", hash = "sha256:c840e62059cd3be204b0c9c9f74be2c09d5648eddd4580d9314c3ecde0b30936"},
+]
+sortedcontainers = [
+    {file = "sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0"},
+    {file = "sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88"},
+]
+sympy = [
+    {file = "sympy-1.10.1-py3-none-any.whl", hash = "sha256:df75d738930f6fe9ebe7034e59d56698f29e85f443f743e51e47df0caccc2130"},
+    {file = "sympy-1.10.1.tar.gz", hash = "sha256:5939eeffdf9e152172601463626c022a2c27e75cf6278de8d401d50c9d58787b"},
+]
+tomli = [
+    {file = "tomli-2.0.1-py3-none-any.whl", hash = "sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc"},
+    {file = "tomli-2.0.1.tar.gz", hash = "sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f"},
+]
+tomlkit = []
+tree-sitter = [
+    {file = "tree_sitter-0.20.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:51a609a7c1bd9d9e75d92ee128c12c7852ae70a482900fbbccf3d13a79e0378c"},
+    {file = "tree_sitter-0.20.0.tar.gz", hash = "sha256:1940f64be1e8c9c3c0e34a2258f1e4c324207534d5b1eefc5ab2960a9d98f668"},
+]
+typer = []
+typing-extensions = [
+    {file = "typing_extensions-4.3.0-py3-none-any.whl", hash = "sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02"},
+    {file = "typing_extensions-4.3.0.tar.gz", hash = "sha256:e6d2677a32f47fc7eb2795db1dd15c1f34eff616bcaf2cfb5e997f854fa1c4a6"},
+]
+unicorn = [
+    {file = "unicorn-1.0.2rc4-py2.py3-none-manylinux1_i686.whl", hash = "sha256:e96f1cc524c94d14efdb2aa18fc144b890ec2515774962be29497e0e1ad7cfd8"},
+    {file = "unicorn-1.0.2rc4-py2.py3-none-manylinux1_x86_64.whl", hash = "sha256:ce999c66ada653052ee92329e68a4a797ee26ea1e503fa3f572dff9aee2c6ca2"},
+    {file = "unicorn-1.0.2rc4-py2.py3-none-win32.whl", hash = "sha256:0f9abf8a0aefe7505cf15e4700c542916d5aa435dc6b12408b3ddcb06f3cb846"},
+    {file = "unicorn-1.0.2rc4-py2.py3-none-win_amd64.whl", hash = "sha256:3bc85f19e4eb828e1b0b640d27f1b84ab341505fc57b4955fca8d2847a561a36"},
+    {file = "unicorn-1.0.2rc4.tar.gz", hash = "sha256:ed2a4960f2760e49e61108478f019f5bf065a342fa506523c69398f2d2bd4781"},
+]
+wcwidth = [
+    {file = "wcwidth-0.2.5-py2.py3-none-any.whl", hash = "sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784"},
+    {file = "wcwidth-0.2.5.tar.gz", hash = "sha256:c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83"},
+]
+wrapt = []
+z3-solver = []
+
+```
+
+`pyproject.toml`:
+
+```toml
+[tool.poetry]
+name = "fuzzable"
+version = "2.0.0"
+description = "Framework for Automating Fuzzable Target Discovery with Static Analysis"
+authors = [
+    "ex0dus <ex0dus@codemuch.tech>"
+]
+license = "MIT"
+readme = "README.md"
+
+homepage = "https://codemuch.tech/fuzzable"
+repository = "https://github.com/ex0dus-0x/fuzzable"
+documentation = "https://github.com/ex0dus-0x/fuzzable/wiki"
+
+keywords = ["security", "fuzzing", "vulnerability-research", "binary-analysis"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+typer = {extras = ["all"], version = "^0.6.1"}
+angr = "^9.2.8"
+prettytable = "^3.3.0"
+lief = "^0.12.1"
+tree-sitter = "^0.20.0"
+scikit-criteria = "^0.7"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.2"
+black = { version = "^22.6.0", python = "^3.9" }
+mypy = "^0.961"
+pylint = "^2.14.5"
+
+[tool.poetry.scripts]
+fuzzable = "fuzzable.__main__:app"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target_version = ['py39']
+include = '\.pyi?$'
+exclude = '''
+
+(
+  /(
+      \.eggs         # exclude a few common directories in the
+    | \.git          # root of the project
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+  | foo.py           # also separately exclude a file named foo.py in
+                     # the root of the project
+)
+'''
+
+```
+
+`requirements.txt`:
+
+```txt
+ailment==9.2.12; python_version >= "3.8"
+angr==9.2.12; python_version >= "3.8"
+archinfo==9.2.12; python_version >= "3.8"
+bitstring==3.1.9; python_version >= "3.8" \
+    --hash=sha256:e3e340e58900a948787a05e8c08772f1ccbe133f6f41fe3f0fa19a18a22bbf4f \
+    --hash=sha256:0de167daa6a00c9386255a7cac931b45e6e24e0ad7ea64f1f92a64ac23ad4578 \
+    --hash=sha256:a5848a3f63111785224dca8bb4c0a75b62ecdef56a042c8d6be74b16f7e860e7
+cachetools==5.2.0; python_version >= "3.8" and python_version < "4.0" \
+    --hash=sha256:f9f17d2aec496a9aa6b76f53e3b614c965223c061982d434d160f930c698a9db \
+    --hash=sha256:6a94c6402995a99c3970cc7e4884bb60b4a8639938157eeed436098bf9831757
+capstone==5.0.0; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.8" \
+    --hash=sha256:4255086c14a98037ae6c1d554f54691e2179b4bb792b23c9811ded2f35807904 \
+    --hash=sha256:fabca634c49b48cb1aa3c9f8ceb9a0b7919582e34369d228e0d7b00980c7044e \
+    --hash=sha256:b63c2c0e4492f3a9ffdaaaf55ceff5fe73e5267244e5cda4095f9e1d9174fa4b \
+    --hash=sha256:50f736353b1983045bd282a0627124600f52aa544c3c21819243522d0540e26a \
+    --hash=sha256:9717b35221fcc9d8db9240ff6b7b007808805f5e0409daf81c0831c13ff37653 \
+    --hash=sha256:9ac2ea94a798790c996d8ced727fe9afa92882f7dc04ce423342aeab98ff83d6 \
+    --hash=sha256:e0c59d401452237a838ad5067eccc4f72a26af4b2b865d166822721de306eba5 \
+    --hash=sha256:6e18ee140463881c627b7ff7fd655752ddf37d9036295d3dba7b130408fbabaf
+cffi==1.15.1; implementation_name == "cpython" and python_version >= "3.8" \
+    --hash=sha256:a66d3508133af6e8548451b25058d5812812ec3798c886bf38ed24a98216fab2 \
+    --hash=sha256:470c103ae716238bbe698d67ad020e1db9d9dba34fa5a899b5e21577e6d52ed2 \
+    --hash=sha256:9ad5db27f9cabae298d151c85cf2bad1d359a1b9c686a275df03385758e2f914 \
+    --hash=sha256:b3bbeb01c2b273cca1e1e0c5df57f12dce9a4dd331b4fa1635b8bec26350bde3 \
+    --hash=sha256:e00b098126fd45523dd056d2efba6c5a63b71ffe9f2bbe1a4fe1716e1d0c331e \
+    --hash=sha256:d61f4695e6c866a23a21acab0509af1cdfd2c013cf256bbf5b6b5e2695827162 \
+    --hash=sha256:ed9cb427ba5504c1dc15ede7d516b84757c3e3d7868ccc85121d9310d27eed0b \
+    --hash=sha256:39d39875251ca8f612b6f33e6b1195af86d1b3e60086068be9cc053aa4376e21 \
+    --hash=sha256:285d29981935eb726a4399badae8f0ffdff4f5050eaa6d0cfc3f64b857b77185 \
+    --hash=sha256:3eb6971dcff08619f8d91607cfc726518b6fa2a9eba42856be181c6d0d9515fd \
+    --hash=sha256:21157295583fe8943475029ed5abdcf71eb3911894724e360acff1d61c1d54bc \
+    --hash=sha256:5635bd9cb9731e6d4a1132a498dd34f764034a8ce60cef4f5319c0541159392f \
+    --hash=sha256:2012c72d854c2d03e45d06ae57f40d78e5770d252f195b93f581acf3ba44496e \
+    --hash=sha256:dd86c085fae2efd48ac91dd7ccffcfc0571387fe1193d33b6394db7ef31fe2a4 \
+    --hash=sha256:fa6693661a4c91757f4412306191b6dc88c1703f780c8234035eac011922bc01 \
+    --hash=sha256:59c0b02d0a6c384d453fece7566d1c7e6b7bae4fc5874ef2ef46d56776d61c9e \
+    --hash=sha256:cba9d6b9a7d64d4bd46167096fc9d2f835e25d7e4c121fb2ddfc6528fb0413b2 \
+    --hash=sha256:ce4bcc037df4fc5e3d184794f27bdaab018943698f4ca31630bc7f84a7b69c6d \
+    --hash=sha256:3d08afd128ddaa624a48cf2b859afef385b720bb4b43df214f85616922e6a5ac \
+    --hash=sha256:3799aecf2e17cf585d977b780ce79ff0dc9b78d799fc694221ce814c2c19db83 \
+    --hash=sha256:a591fe9e525846e4d154205572a029f653ada1a78b93697f3b5a8f1f2bc055b9 \
+    --hash=sha256:3548db281cd7d2561c9ad9984681c95f7b0e38881201e157833a2342c30d5e8c \
+    --hash=sha256:91fc98adde3d7881af9b59ed0294046f3806221863722ba7d8d120c575314325 \
+    --hash=sha256:94411f22c3985acaec6f83c6df553f2dbe17b698cc7f8ae751ff2237d96b9e3c \
+    --hash=sha256:03425bdae262c76aad70202debd780501fabeaca237cdfddc008987c0e0f59ef \
+    --hash=sha256:cc4d65aeeaa04136a12677d3dd0b1c0c94dc43abac5860ab33cceb42b801c1e8 \
+    --hash=sha256:a0f100c8912c114ff53e1202d0078b425bee3649ae34d7b070e9697f93c5d52d \
+    --hash=sha256:04ed324bda3cda42b9b695d51bb7d54b680b9719cfab04227cdd1e04e5de3104 \
+    --hash=sha256:50a74364d85fd319352182ef59c5c790484a336f6db772c1a9231f1c3ed0cbd7 \
+    --hash=sha256:e263d77ee3dd201c3a142934a086a4450861778baaeeb45db4591ef65550b0a6 \
+    --hash=sha256:cec7d9412a9102bdc577382c3929b337320c4c4c4849f2c5cdd14d7368c5562d \
+    --hash=sha256:4289fc34b2f5316fbb762d75362931e351941fa95fa18789191b33fc4cf9504a \
+    --hash=sha256:173379135477dc8cac4bc58f45db08ab45d228b3363adb7af79436135d028405 \
+    --hash=sha256:6975a3fac6bc83c4a65c9f9fcab9e47019a11d3d2cf7f3c0d03431bf145a941e \
+    --hash=sha256:2470043b93ff09bf8fb1d46d1cb756ce6132c54826661a32d4e4d132e1977adf \
+    --hash=sha256:30d78fbc8ebf9c92c9b7823ee18eb92f2e6ef79b45ac84db507f52fbe3ec4497 \
+    --hash=sha256:198caafb44239b60e252492445da556afafc7d1e3ab7a1fb3f0584ef6d742375 \
+    --hash=sha256:5ef34d190326c3b1f822a5b7a45f6c4535e2f47ed06fec77d3d799c450b2651e \
+    --hash=sha256:8102eaf27e1e448db915d08afa8b41d6c7ca7a04b7d73af6514df10a3e74bd82 \
+    --hash=sha256:5df2768244d19ab7f60546d0c7c63ce1581f7af8b5de3eb3004b9b6fc8a9f84b \
+    --hash=sha256:a8c4917bd7ad33e8eb21e9a5bbba979b49d9a97acb3a803092cbc1133e20343c \
+    --hash=sha256:0e2642fe3142e4cc4af0799748233ad6da94c62a8bec3a6648bf8ee68b1c7426 \
+    --hash=sha256:e229a521186c75c8ad9490854fd8bbdd9a0c9aa3a524326b55be83b54d4e0ad9 \
+    --hash=sha256:a0b71b1b8fbf2b96e41c4d990244165e2c9be83d54962a9a1d118fd8657d2045 \
+    --hash=sha256:320dab6e7cb2eacdf0e658569d2575c4dad258c0fcc794f46215e1e39f90f2c3 \
+    --hash=sha256:1e74c6b51a9ed6589199c787bf5f9875612ca4a8a0785fb2d4a84429badaf22a \
+    --hash=sha256:a5c84c68147988265e60416b57fc83425a78058853509c1b0629c180094904a5 \
+    --hash=sha256:3b926aa83d1edb5aa5b427b4053dc420ec295a08e40911296b9eb1b6170f6cca \
+    --hash=sha256:87c450779d0914f2861b8526e035c5e6da0a3199d8f1add1a665e1cbc6fc6d02 \
+    --hash=sha256:4f2c9f67e9821cad2e5f480bc8d83b8742896f1242dba247911072d4fa94c192 \
+    --hash=sha256:8b7ee99e510d7b66cdb6c593f21c043c248537a32e0bedf02e01e9553a172314 \
+    --hash=sha256:00a9ed42e88df81ffae7a8ab6d9356b371399b91dbdf0c3cb1e84c03a13aceb5 \
+    --hash=sha256:54a2db7b78338edd780e7ef7f9f6c442500fb0d41a5a4ea24fff1c929d5af585 \
+    --hash=sha256:fcd131dd944808b5bdb38e6f5b53013c5aa4f334c5cad0c72742f6eba4b73db0 \
+    --hash=sha256:7473e861101c9e72452f9bf8acb984947aa1661a7704553a9f6e4baa5ba64415 \
+    --hash=sha256:6c9a799e985904922a4d207a94eae35c78ebae90e128f0c4e521ce339396be9d \
+    --hash=sha256:3bcde07039e586f91b45c88f8583ea7cf7a0770df3a1649627bf598332cb6984 \
+    --hash=sha256:33ab79603146aace82c2427da5ca6e58f2b3f2fb5da893ceac0c42218a40be35 \
+    --hash=sha256:5d598b938678ebf3c67377cdd45e09d431369c3b1a5b331058c338e201f12b27 \
+    --hash=sha256:db0fbb9c62743ce59a9ff687eb5f4afbe77e5e8403d6697f7446e5f609976f76 \
+    --hash=sha256:98d85c6a2bef81588d9227dde12db8a7f47f639f4a17c9ae08e773aa9c697bf3 \
+    --hash=sha256:40f4774f5a9d4f5e344f31a32b5096977b5d48560c5592e2f3d2c4374bd543ee \
+    --hash=sha256:70df4e3b545a17496c9b3f41f5115e69a4f2e77e94e1d2a8e1070bc0c38c8a3c \
+    --hash=sha256:d400bfb9a37b1351253cb402671cea7e89bdecc294e8016a707f6d1d8ac934f9
+claripy==9.2.12; python_version >= "3.8"
+cle==9.2.12; python_version >= "3.8"
+click==8.1.3; python_version >= "3.7" \
+    --hash=sha256:bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48 \
+    --hash=sha256:7682dc8afb30297001674575ea00d1814d808d6a36af415a82bd481d37ba7b8e
+colorama==0.4.5; python_version >= "3.8" and python_full_version < "3.0.0" and platform_system == "Windows" or python_version >= "3.8" and python_full_version >= "3.5.0" and platform_system == "Windows" \
+    --hash=sha256:854bf444933e37f5824ae7bfc1e98d5bce2ebe4160d46b5edf346a89358e99da \
+    --hash=sha256:e6c6b4334fc50988a639d9b98aa429a0b57da6e17b9a44f0451f930b6967b7a4
+commonmark==0.9.1; python_full_version >= "3.6.3" and python_full_version < "4.0.0" and python_version >= "3.6"
+cppheaderparser==2.7.4; python_version >= "3.8" \
+    --hash=sha256:382b30416d95b0a5e8502b214810dcac2a56432917e2651447d3abe253e3cc42
+cssselect==1.1.0; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.4.0"
+custom-inherit==2.4.0
+cycler==0.11.0; python_version >= "3.7"
+decorator==5.1.1; python_version >= "3.8" \
+    --hash=sha256:b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186 \
+    --hash=sha256:637996211036b6385ef91435e4fae22989472f9d571faba8927ba8253acbc330
+deprecated==1.2.13; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.4.0"
+dpkt==1.9.7.2; python_version >= "3.8" \
+    --hash=sha256:d7e9ae552d0c44f339b7ca4db728c7202c32cc718cef12dbb8703539b840bb78 \
+    --hash=sha256:80f977667ebbad2b5c4f7b7f45ee8bea6622fb71723f68a9a8fe6274520c853b
+fonttools==4.34.4; python_version >= "3.7"
+future==0.18.2; python_full_version >= "3.6.0" and python_version >= "3.8" \
+    --hash=sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d
+gitdb==4.0.9; python_version >= "3.8" \
+    --hash=sha256:8033ad4e853066ba6ca92050b9df2f89301b8fc8bf7e9324d412a63f8bf1a8fd \
+    --hash=sha256:bac2fd45c0a1c9cf619e63a90d62bdc63892ef92387424b855792a6cabe789aa
+gitpython==3.1.27; python_version >= "3.8" \
+    --hash=sha256:5b68b000463593e05ff2b261acff0ff0972df8ab1b70d3cdbd41b546c8b8fc3d \
+    --hash=sha256:1c885ce809e8ba2d88a29befeb385fcea06338d3640712b59ca623c220bb5704
+itanium-demangler==1.0; python_version >= "3.8" \
+    --hash=sha256:bca0fae4cb0ad582a3c7ede97d66b325d13445fdf87c28947233d8559430967c
+jinja2==3.1.2; python_version >= "3.7"
+kiwisolver==1.4.4; python_version >= "3.7"
+lief==0.12.1; python_version >= "3.6" \
+    --hash=sha256:4fbbc9d520de87ac22210c62d22a9b088e5460f9a028741311e6f68ef8877ddd \
+    --hash=sha256:443e4494df448ea1a021976258c7a6aca27d81b0612783fa3a84fab196fb9fcb \
+    --hash=sha256:1c4019dddf03a5185462fb5ea04327cee08d40f46777b02f0773c7dc294552ea \
+    --hash=sha256:d7e09968f99ddf1e3983d3bcc16c62d1b6635a345fee8d8139f82b31bad457d6 \
+    --hash=sha256:9fa6269ec4fa3f874b807fbba3c48a46af30df2497723f6966080e3eb630cb26 \
+    --hash=sha256:a78b05cac5fa491e01e1819573bbbbcaea0a4229f4aa3a2edb231b5695ddaf2d \
+    --hash=sha256:f1292bff96579c18e01e20b7a14043052379fe6e9a476c1d6d88aca43e5f9ac7 \
+    --hash=sha256:dab63876113bd573d64ce043f50153f6e2810e5e78256397aa0fe1fedf82ab84 \
+    --hash=sha256:5771f5226b62c885a7aa30c1b98040d39229a1dab889d03155e5538e57d0054b \
+    --hash=sha256:8ec307a762505076a6d31566225a231c44ec7063c0e7d751ac4654c674454c47 \
+    --hash=sha256:a755f6088d3b2041e4402adf917ac87e5ad9d1c5278973f48a29a5631fe393eb \
+    --hash=sha256:5d746f7eb6d3bf35a0230c7184aaaf434cb1ea89d7e7c8e8fe14a49cf2bb17a0 \
+    --hash=sha256:2d3ab7212da696bcbe5ca9dd78ceaa32dfb8a0e85e18001793b4441ef4624561 \
+    --hash=sha256:4360b0acd525ba77777cc38f0e5128c90c93cc4e91ab566ef3aa45b7f8a8c57e \
+    --hash=sha256:5e82e466d36cbabb28cc1a787b554d2feae5ab55c39cab58ef64fb6513bad92a \
+    --hash=sha256:efa0022a3bf70ef46335639e61b946cc2d9cf012d60e263c215e3e64b1ce38b4 \
+    --hash=sha256:d29f91d9f64f67d3ada5b7e0e48ab084d825fb4601d32d9fecdd2bdf23cdad23 \
+    --hash=sha256:7dea6b3f17d362f93165379c46dadb012c73b1f751c8ceac256e5f43842cd86d \
+    --hash=sha256:44012da4c32c670a97bb8a055a4ff16168cfaa757d03986f319aa3329a43e343 \
+    --hash=sha256:e1d23997b0a71d34e766ff183be07854c6f698fd3d6aa44bf30b6b7f4f77ef55 \
+    --hash=sha256:b845eca79c772041efb38b50cfaf951e24bc047ec462450b7e54e75b7e2bee0d \
+    --hash=sha256:0df84ac2df20b14db12e69442d39b0e8cd89428ba3b131995e0570bcd3725460 \
+    --hash=sha256:960a2da9f28c8d5dba753bb9ab77e26b3c6ff9b9658918be95650ceb8ee91e68 \
+    --hash=sha256:4ff4ccfae2e1ee4ccba2b5556027dbb56282b8a973c5835c5b597e8b7b664416
+lxml==4.9.1; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.5.0"
+markupsafe==2.1.1; python_version >= "3.7"
+matplotlib==3.5.2; python_version >= "3.7"
+mpmath==1.2.1; python_version >= "3.8" \
+    --hash=sha256:604bc21bd22d2322a177c73bdb573994ef76e62edd595d17e00aff24b0667e5c \
+    --hash=sha256:79ffb45cf9f4b101a807595bcb3e72e0396202e0b1d25d689134b48c4216a81a
+mulpyplexer==0.09; python_version >= "3.8" \
+    --hash=sha256:144e9e9bf66d3988f60542c9d3d4c94857438f7908f60e53f4c1cb1622fbbd30
+nampa==0.1.1; python_version >= "3.8" \
+    --hash=sha256:4f7abaa5f9187019117090faf539f128e5fd4f8e021f16f67a22c75afea24e21 \
+    --hash=sha256:6d436100026d408f8f29b3ae12584205d382ab646be1073120755eea9ec0cc4c
+networkx==2.8.5; python_version >= "3.8"
+numpy==1.23.1
+packaging==21.3; python_version >= "3.7" \
+    --hash=sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522 \
+    --hash=sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb
+pandas==1.4.3; python_version >= "3.8"
+pefile==2022.5.30; python_full_version >= "3.6.0" and python_version >= "3.8" \
+    --hash=sha256:a5488a3dd1fd021ce33f969780b88fe0f7eebb76eb20996d7318f307612a045b
+pillow==9.2.0; python_version >= "3.7"
+plumbum==1.7.2; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.8" \
+    --hash=sha256:0bbf431e31da988405de2fb36c3226f09c0c9cdf69c8480f8997f4b94b7370a1 \
+    --hash=sha256:0d1bf908076bbd0484d16412479cb97d6843069ee19f99e267e11dd980040523
+ply==3.11; python_version >= "3.8" \
+    --hash=sha256:096f9b8350b65ebd2fd1346b12452efe5b9607f7482813ffca50c22722a807ce \
+    --hash=sha256:00c7c1aaa88358b9c765b6d3000c6eec0ba42abca5351b095321aef446081da3
+prettytable==3.3.0; python_version >= "3.7" \
+    --hash=sha256:d1c34d72ea2c0ffd6ce5958e71c428eb21a3d40bf3133afe319b24aeed5af407 \
+    --hash=sha256:118eb54fd2794049b810893653b20952349df6d3bc1764e7facd8a18064fa9b0
+progressbar2==4.0.0; python_full_version >= "3.7.0" and python_version >= "3.8" \
+    --hash=sha256:2562ba3e554433f08e81fb7b786208b19de135f3ca1c5da1787d9b05558e6247 \
+    --hash=sha256:14d3165a1781d053ffaa117daf27cc706128d2ec1d2977fdb05b6bb079888013
+protobuf==4.21.4; python_version >= "3.8"
+psutil==5.9.1; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.8" \
+    --hash=sha256:799759d809c31aab5fe4579e50addf84565e71c1dc9f1c31258f159ff70d3f87 \
+    --hash=sha256:9272167b5f5fbfe16945be3db475b3ce8d792386907e673a209da686176552af \
+    --hash=sha256:0904727e0b0a038830b019551cf3204dd48ef5c6868adc776e06e93d615fc5fc \
+    --hash=sha256:e7e10454cb1ab62cc6ce776e1c135a64045a11ec4c6d254d3f7689c16eb3efd2 \
+    --hash=sha256:56960b9e8edcca1456f8c86a196f0c3d8e3e361320071c93378d41445ffd28b0 \
+    --hash=sha256:44d1826150d49ffd62035785a9e2c56afcea66e55b43b8b630d7706276e87f22 \
+    --hash=sha256:c7be9d7f5b0d206f0bbc3794b8e16fb7dbc53ec9e40bbe8787c6f2d38efcf6c9 \
+    --hash=sha256:abd9246e4cdd5b554a2ddd97c157e292ac11ef3e7af25ac56b08b455c829dca8 \
+    --hash=sha256:29a442e25fab1f4d05e2655bb1b8ab6887981838d22effa2396d584b740194de \
+    --hash=sha256:20b27771b077dcaa0de1de3ad52d22538fe101f9946d6dc7869e6f694f079329 \
+    --hash=sha256:58678bbadae12e0db55186dc58f2888839228ac9f41cc7848853539b70490021 \
+    --hash=sha256:3a76ad658641172d9c6e593de6fe248ddde825b5866464c3b2ee26c35da9d237 \
+    --hash=sha256:a6a11e48cb93a5fa606306493f439b4aa7c56cb03fc9ace7f6bfa21aaf07c453 \
+    --hash=sha256:068935df39055bf27a29824b95c801c7a5130f118b806eee663cad28dca97685 \
+    --hash=sha256:0f15a19a05f39a09327345bc279c1ba4a8cfb0172cc0d3c7f7d16c813b2e7d36 \
+    --hash=sha256:db417f0865f90bdc07fa30e1aadc69b6f4cad7f86324b02aa842034efe8d8c4d \
+    --hash=sha256:91c7ff2a40c373d0cc9121d54bc5f31c4fa09c346528e6a08d1845bce5771ffc \
+    --hash=sha256:fea896b54f3a4ae6f790ac1d017101252c93f6fe075d0e7571543510f11d2676 \
+    --hash=sha256:3054e923204b8e9c23a55b23b6df73a8089ae1d075cb0bf711d3e9da1724ded4 \
+    --hash=sha256:d2d006286fbcb60f0b391741f520862e9b69f4019b4d738a2a45728c7e952f1b \
+    --hash=sha256:b14ee12da9338f5e5b3a3ef7ca58b3cba30f5b66f7662159762932e6d0b8f680 \
+    --hash=sha256:19f36c16012ba9cfc742604df189f2f28d2720e23ff7d1e81602dbe066be9fd1 \
+    --hash=sha256:944c4b4b82dc4a1b805329c980f270f170fdc9945464223f2ec8e57563139cf4 \
+    --hash=sha256:4b6750a73a9c4a4e689490ccb862d53c7b976a2a35c4e1846d049dcc3f17d83b \
+    --hash=sha256:a8746bfe4e8f659528c5c7e9af5090c5a7d252f32b2e859c584ef7d8efb1e689 \
+    --hash=sha256:79c9108d9aa7fa6fba6e668b61b82facc067a6b81517cab34d07a84aa89f3df0 \
+    --hash=sha256:28976df6c64ddd6320d281128817f32c29b539a52bdae5e192537bc338a9ec81 \
+    --hash=sha256:b88f75005586131276634027f4219d06e0561292be8bd6bc7f2f00bdabd63c4e \
+    --hash=sha256:645bd4f7bb5b8633803e0b6746ff1628724668681a434482546887d22c7a9537 \
+    --hash=sha256:32c52611756096ae91f5d1499fe6c53b86f4a9ada147ee42db4991ba1520e574 \
+    --hash=sha256:f65f9a46d984b8cd9b3750c2bdb419b2996895b005aefa6cbaba9a143b1ce2c5 \
+    --hash=sha256:57f1819b5d9e95cdfb0c881a8a5b7d542ed0b7c522d575706a80bedc848c8954
+pulp==2.6.0
+pycparser==2.21; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.4.0" and python_version >= "3.8" \
+    --hash=sha256:8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9 \
+    --hash=sha256:e644fdec12f7872f86c58ff790da456218b10f863970249516d60a5eaca77206
+pyelftools==0.28; python_version >= "3.8" \
+    --hash=sha256:1509d30756a14a8c9a6670778144fb9a04b311751ddac019dcc0c2f28da03ccc \
+    --hash=sha256:53e5609cac016471d40bd88dc410cd90755942c25e58a61021cfdf7abdfeacff
+pygments==2.12.0; python_full_version >= "3.6.3" and python_full_version < "4.0.0" and python_version >= "3.6"
+pyparsing==3.0.9; python_full_version >= "3.6.8" and python_version >= "3.7" \
+    --hash=sha256:5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc \
+    --hash=sha256:2b020ecf7d21b687f219b71ecad3631f644a47f01403fa1d1036b0c6416d70fb
+pyquery==1.4.3
+pysmt==0.9.6.dev21; python_version >= "3.8"
+python-dateutil==2.8.2; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.8"
+python-utils==3.3.3; python_full_version >= "3.7.0" and python_version >= "3.8" \
+    --hash=sha256:3b1c8b706e40e91280eec5fa72ea730880a166cee99afa5555b863d55664478d \
+    --hash=sha256:5cb9cf295018202fb4d6abdd694a33a7f08bc0ce1bf1eab8cce80ab2cde35c07
+pytz==2022.1; python_version >= "3.8"
+pyvex==9.2.12; python_version >= "3.8"
+pywin32==304; platform_system == "Windows" and platform_python_implementation != "PyPy" and (python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.5.0" and python_version >= "3.8") \
+    --hash=sha256:3c7bacf5e24298c86314f03fa20e16558a4e4138fc34615d7de4070c23e65af3 \
+    --hash=sha256:4f32145913a2447736dad62495199a8e280a77a0ca662daa2332acf849f0be48 \
+    --hash=sha256:d3ee45adff48e0551d1aa60d2ec066fec006083b791f5c3527c40cd8aefac71f \
+    --hash=sha256:30c53d6ce44c12a316a06c153ea74152d3b1342610f1b99d40ba2795e5af0269 \
+    --hash=sha256:7ffa0c0fa4ae4077e8b8aa73800540ef8c24530057768c3ac57c609f99a14fd4 \
+    --hash=sha256:cbbe34dad39bdbaa2889a424d28752f1b4971939b14b1bb48cbf0182a3bcfc43 \
+    --hash=sha256:be253e7b14bc601718f014d2832e4c18a5b023cbe72db826da63df76b77507a1 \
+    --hash=sha256:de9827c23321dcf43d2f288f09f3b6d772fee11e809015bdae9e69fe13213988 \
+    --hash=sha256:f64c0377cf01b61bd5e76c25e1480ca8ab3b73f0c4add50538d332afdf8f69c5 \
+    --hash=sha256:bb2ea2aa81e96eee6a6b79d87e1d1648d3f8b87f9a64499e0b92b30d141e76df \
+    --hash=sha256:94037b5259701988954931333aafd39cf897e990852115656b014ce72e052e96 \
+    --hash=sha256:ead865a2e179b30fb717831f73cf4373401fc62fbc3455a0889a7ddac848f83e \
+    --hash=sha256:25746d841201fd9f96b648a248f731c1dec851c9a08b8e33da8b56148e4c65cc \
+    --hash=sha256:d24a3382f013b21aa24a5cfbfad5a2cd9926610c0affde3e8ab5b3d7dbcf4ac9
+rich==12.5.1; python_full_version >= "3.6.3" and python_full_version < "4.0.0" and python_version >= "3.6"
+rpyc==5.2.3; python_version >= "3.8"
+scikit-criteria==0.7
+scipy==1.6.1; python_version >= "3.7"
+seaborn==0.11.2; python_version >= "3.6"
+setuptools-scm==7.0.5; python_version >= "3.7"
+shellingham==1.5.0; python_version >= "3.6"
+six==1.16.0; python_version >= "3.8" and python_full_version < "3.0.0" or python_full_version >= "3.3.0" and python_version >= "3.8"
+smmap==5.0.0; python_version >= "3.8" \
+    --hash=sha256:2aba19d6a040e78d8b09de5c57e96207b09ed71d8e55ce0959eeee6c8e190d94 \
+    --hash=sha256:c840e62059cd3be204b0c9c9f74be2c09d5648eddd4580d9314c3ecde0b30936
+sortedcontainers==2.4.0; python_version >= "3.8" \
+    --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0 \
+    --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88
+sympy==1.10.1; python_version >= "3.8" \
+    --hash=sha256:df75d738930f6fe9ebe7034e59d56698f29e85f443f743e51e47df0caccc2130 \
+    --hash=sha256:5939eeffdf9e152172601463626c022a2c27e75cf6278de8d401d50c9d58787b
+tomli==2.0.1; python_version >= "3.7" \
+    --hash=sha256:939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc \
+    --hash=sha256:de526c12914f0c550d15924c62d72abc48d6fe7364aa87328337a31007fe8a4f
+tree-sitter==0.20.0; python_version >= "3.3" \
+    --hash=sha256:51a609a7c1bd9d9e75d92ee128c12c7852ae70a482900fbbccf3d13a79e0378c \
+    --hash=sha256:1940f64be1e8c9c3c0e34a2258f1e4c324207534d5b1eefc5ab2960a9d98f668
+typer==0.6.1; python_version >= "3.6"
+typing-extensions==4.3.0; python_version >= "3.7" \
+    --hash=sha256:25642c956049920a5aa49edcdd6ab1e06d7e5d467fc00e0506c44ac86fbfca02 \
+    --hash=sha256:e6d2677a32f47fc7eb2795db1dd15c1f34eff616bcaf2cfb5e997f854fa1c4a6
+unicorn==1.0.2rc4; python_version >= "3.8" \
+    --hash=sha256:e96f1cc524c94d14efdb2aa18fc144b890ec2515774962be29497e0e1ad7cfd8 \
+    --hash=sha256:ce999c66ada653052ee92329e68a4a797ee26ea1e503fa3f572dff9aee2c6ca2 \
+    --hash=sha256:0f9abf8a0aefe7505cf15e4700c542916d5aa435dc6b12408b3ddcb06f3cb846 \
+    --hash=sha256:3bc85f19e4eb828e1b0b640d27f1b84ab341505fc57b4955fca8d2847a561a36 \
+    --hash=sha256:ed2a4960f2760e49e61108478f019f5bf065a342fa506523c69398f2d2bd4781
+wcwidth==0.2.5; python_version >= "3.7" \
+    --hash=sha256:beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784 \
+    --hash=sha256:c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83
+wrapt==1.14.1; python_version >= "2.7" and python_full_version < "3.0.0" or python_full_version >= "3.5.0"
+z3-solver==4.10.2.0; python_version >= "3.8"
+
+```
+
+`templates/linux_closed_source_harness.cpp`:
+
+```cpp
+/* 
+ * {NAME}_{function_name}_harness.cpp
+ * 
+ *      Automatically generated fuzzer harness for `{function_name}` in `{NAME}`. Make sure to add in implementation
+ *      for any other necessary functionality to make this work.
+ * 
+ *      Make sure the target binary/shared object is in the same directory!
+ *
+ *      To build for AFL-QEMU, optimal for black-box and file-based fuzzing:
+ *
+ *          $ gcc {NAME}_{function_name}_harness.cpp -no-pie -o {NAME}_{function_name}_harness -ldl
+ * 
+ *          # check out more binary fuzzing strategies at https://aflplus.plus/docs/binaryonly_fuzzing/
+ *          $ afl-fuzz -Q -m none -i <SEEDS> -o out/ -- ./{NAME}_{function_name}_harness
+ *
+ *      To build for libFuzzer, optimal for generative buffer fuzzing:
+ *
+ *          $ clang -DLIBFUZZER -g -fsanitize=fuzzer,address {NAME}_{function_name}_harness -no-pie -o {NAME}_{function_name}_harness -ldl
+ *          $ ./{NAME}_{function_name}_harness
+ *
+ */
+
+#include <dlfcn.h>
+#include <alloca.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+
+#define FUZZER_BUF 1024 * 1024
+#define TARGET_NAME "{function_name}"
+
+// TODO: Uncomment this if you want to pass files in as inputs to the target
+//#define FILE_FUZZING 1
+
+// TODO: Uncomment this if you want to switch on using libFuzzer instead
+//#define LIBFUZZER 1
+
+/* alias for function pointer to the target function */
+typedef {return_type} (*{function_name})({type_args});
+
+// TODO: Manually add any other aliases here, such as pointers responsible for freeing up resources
+
+void* handle = NULL;
+
+void CloseLibrary(void)
+{{
+    if (handle)
+        dlclose(handle);
+    handle = NULL;
+}}
+
+
+#ifdef LIBFUZZER
+extern "C"
+#endif
+int LoadLibrary(void)
+{{
+    handle = dlopen("./{path}", RTLD_LAZY);
+    atexit(CloseLibrary);
+    return handle != NULL;
+}}
+
+static uint8_t fuzzBuffer[FUZZER_BUF];
+
+#ifdef LIBFUZZER
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
+#else
+int main (int argc, char** argv)
+#endif
+{{
+    if (!LoadLibrary()) {{
+        printf("%s\n", dlerror());
+        return -1;
+    }}
+
+    int read_fd = 0;
+
+#ifndef LIBFUZZER
+  #ifdef FILE_FUZZING
+    if (argc != 2)
+        return -1;
+
+    const char* filepath = argv[1];
+    read_fd = open(filepath, O_RDONLY);
+    if (read_fd < 0)
+        return -1;
+  #endif
+
+    ssize_t Size = read(read_fd, fuzzBuffer, FUZZER_BUF);
+    if (Size < 0)
+        return -1;
+#endif
+
+    {function_name} target = ({function_name}) dlsym(handle, TARGET_NAME);
+    printf("%s=%p\n", TARGET_NAME, target);
+
+    ////////////////////////////
+    // FUZZER ENTRY HERE
+    ////////////////////////////
+
+    // Harness generation currently assumes that the only arguments
+    // are a pointer to the buffer and the size. Make necessary modifications
+    // here to ensure the function being called has the right arguments.
+    //void *res = target(fuzzBuffer, Size);
+
+    // Introduce other functionality, ie. freeing objects, checking return values.
+
+    return 0;
+}}
+
+```
+
+`templates/linux_source_harness.cpp`:
+
+```cpp
+/* 
+ * {NAME}_{function_name}_harness.cpp
+ * 
+ *      Automatically generated fuzzer harness for `{function_name}` in `{NAME}`. Make sure to add in implementation
+ *      for any other necessary functionality to make this work.
+ * 
+ *      Make sure the target binary/shared object is in the same directory!
+ *
+ *      To build for AFL, optimal for black-box and file-based fuzzing:
+ *
+ *          $ clang {NAME}_{function_name}_harness.cpp -no-pie -o {NAME}_{function_name}_harness -ldl
+ * 
+ *          # check out more binary fuzzing strategies at https://aflplus.plus/docs/binaryonly_fuzzing/
+ *          $ afl-fuzz -Q -m none -i <SEEDS> -o out/ -- ./{NAME}_{function_name}_harness
+ *
+ *      To build for libFuzzer, optimal for generative buffer fuzzing:
+ *
+ *          $ clang -DLIBFUZZER -g -fsanitize=fuzzer,address {NAME}_{function_name}_harness -no-pie -o {NAME}_{function_name}_harness -ldl
+ *          $ ./{NAME}_{function_name}_harness
+ *
+ */
+#include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <stdio.h>
+
+/* DEPENDENCIES HERE */
+
+#define FUZZER_BUF 1024 * 1024
+
+static uint8_t fuzzBuffer[FUZZER_BUF];
+
+int main(int argc, char** argv) 
+{
+    ssize_t read_bytes = read(stdin, fuzzBuffer, FUZZER_BUF);
+
+    // setup and initialization calls
+
+    // free memory and close file handles
+}
+```
