@@ -1,0 +1,2109 @@
+Project Path: arc_gmh5225_pubg-internal_en2onxhl
+
+Source Tree:
+
+```txt
+arc_gmh5225_pubg-internal_en2onxhl
+├── README.md
+└── src
+    ├── DXStateSaver.cpp
+    ├── DXStateSaver.h
+    ├── aimbot.cpp
+    ├── aimbot.h
+    ├── colors.cpp
+    ├── colors.h
+    ├── definitions.h
+    ├── dllmain.cpp
+    ├── engine.cpp
+    ├── engine.h
+    ├── esp.cpp
+    ├── esp.h
+    ├── globals.cpp
+    ├── globals.h
+    ├── hooks.cpp
+    ├── hooks.h
+    ├── offsys.h
+    ├── render.cpp
+    ├── render.h
+    ├── utilities.cpp
+    ├── utilities.h
+    └── vmt.h
+
+```
+
+`README.md`:
+
+```md
+# ugly-pubg-internal
+Demo internal ESP and Aimbot for PUBG.
+
+Code is by no means pretty.
+This is a reference to learn about the game.
+Please don't ask how to use this code.
+
+```
+
+`src/DXStateSaver.cpp`:
+
+```cpp
+// Credit to Tonyx97 @ unknowncheats.me
+
+#include "DXStateSaver.h"
+
+DXTKStateSaver::DXTKStateSaver() : m_savedState(false), m_featureLevel(D3D_FEATURE_LEVEL_11_0), m_pContext(NULL), m_primitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED), m_pInputLayout(NULL), m_pBlendState(NULL),
+m_sampleMask(0xFFFFFFFF), m_pDepthStencilState(NULL), m_stencilRef(0), m_pRasterizerState(NULL), m_pPSSRV(NULL), m_pSamplerState(NULL), m_pVS(NULL), m_numVSClassInstances(0), m_pVSConstantBuffer(NULL), m_pGS(NULL),
+m_numGSClassInstances(0), m_pGSConstantBuffer(NULL), m_pGSSRV(NULL), m_pPS(NULL), m_numPSClassInstances(0), m_pHS(NULL), m_numHSClassInstances(0), m_pDS(NULL), m_numDSClassInstances(0), m_pVB(NULL), m_vertexStride(0),
+m_vertexOffset(0), m_pIndexBuffer(NULL), m_indexFormat(DXGI_FORMAT_UNKNOWN), m_indexOffset(0)
+{
+	for (int i = 0; i < 4; ++i)
+	{
+		m_blendFactor[i] = 0.0f;
+	}
+	for (int i = 0; i < 256; ++i)
+	{
+		m_pVSClassInstances[i] = NULL;
+		m_pGSClassInstances[i] = NULL;
+		m_pPSClassInstances[i] = NULL;
+		m_pHSClassInstances[i] = NULL;
+		m_pDSClassInstances[i] = NULL;
+	}
+}
+
+DXTKStateSaver::~DXTKStateSaver()
+{
+	releaseSavedState();
+}
+
+HRESULT DXTKStateSaver::saveCurrentState(ID3D11DeviceContext* pContext)
+{
+	if (m_savedState) releaseSavedState();
+	if (pContext == NULL) return E_INVALIDARG;
+
+	ID3D11Device* pDevice;
+	pContext->GetDevice(&pDevice);
+	if (pDevice != NULL)
+	{
+		m_featureLevel = pDevice->GetFeatureLevel();
+		pDevice->Release();
+	}
+
+	pContext->AddRef();
+	m_pContext = pContext;
+	m_pContext->IAGetPrimitiveTopology(&m_primitiveTopology);
+	m_pContext->IAGetInputLayout(&m_pInputLayout);
+	m_pContext->OMGetBlendState(&m_pBlendState, m_blendFactor, &m_sampleMask);
+	m_pContext->OMGetDepthStencilState(&m_pDepthStencilState, &m_stencilRef);
+	m_pContext->RSGetState(&m_pRasterizerState);
+	m_numVSClassInstances = 256;
+	m_pContext->VSGetShader(&m_pVS, m_pVSClassInstances, &m_numVSClassInstances);
+	m_pContext->VSGetConstantBuffers(0, 1, &m_pVSConstantBuffer);
+	m_numPSClassInstances = 256;
+	m_pContext->PSGetShader(&m_pPS, m_pPSClassInstances, &m_numPSClassInstances);
+	m_pContext->PSGetShaderResources(0, 1, &m_pPSSRV);
+	pContext->PSGetSamplers(0, 1, &m_pSamplerState);
+
+	if (m_featureLevel >= D3D_FEATURE_LEVEL_10_0)
+	{
+		m_numGSClassInstances = 256;
+		m_pContext->GSGetShader(&m_pGS, m_pGSClassInstances, &m_numGSClassInstances);
+		m_pContext->GSGetConstantBuffers(0, 1, &m_pGSConstantBuffer);
+
+		m_pContext->GSGetShaderResources(0, 1, &m_pGSSRV);
+
+		if (m_featureLevel >= D3D_FEATURE_LEVEL_11_0)
+		{
+			m_numHSClassInstances = 256;
+			m_pContext->HSGetShader(&m_pHS, m_pHSClassInstances, &m_numHSClassInstances);
+
+			m_numDSClassInstances = 256;
+			m_pContext->DSGetShader(&m_pDS, m_pDSClassInstances, &m_numDSClassInstances);
+		}
+	}
+
+	m_pContext->IAGetVertexBuffers(0, 1, &m_pVB, &m_vertexStride, &m_vertexOffset);
+	m_pContext->IAGetIndexBuffer(&m_pIndexBuffer, &m_indexFormat, &m_indexOffset);
+	m_savedState = true;
+
+	return S_OK;
+}
+
+HRESULT DXTKStateSaver::restoreSavedState()
+{
+	if (!m_savedState) return E_FAIL;
+
+	m_pContext->IASetPrimitiveTopology(m_primitiveTopology);
+	m_pContext->IASetInputLayout(m_pInputLayout);
+
+	m_pContext->OMSetBlendState(m_pBlendState, m_blendFactor, m_sampleMask);
+	m_pContext->OMSetDepthStencilState(m_pDepthStencilState, m_stencilRef);
+
+	m_pContext->RSSetState(m_pRasterizerState);
+
+	m_pContext->VSSetShader(m_pVS, m_pVSClassInstances, m_numVSClassInstances);
+	m_pContext->VSSetConstantBuffers(0, 1, &m_pVSConstantBuffer);
+
+	m_pContext->PSSetShader(m_pPS, m_pPSClassInstances, m_numPSClassInstances);
+	m_pContext->PSSetShaderResources(0, 1, &m_pPSSRV);
+	m_pContext->PSSetSamplers(0, 1, &m_pSamplerState);
+
+	if (m_featureLevel >= D3D_FEATURE_LEVEL_10_0)
+	{
+		m_pContext->GSSetShader(m_pGS, m_pGSClassInstances, m_numGSClassInstances);
+		m_pContext->GSSetConstantBuffers(0, 1, &m_pGSConstantBuffer);
+
+		m_pContext->GSSetShaderResources(0, 1, &m_pGSSRV);
+
+		if (m_featureLevel >= D3D_FEATURE_LEVEL_11_0)
+		{
+			m_pContext->HSSetShader(m_pHS, m_pHSClassInstances, m_numHSClassInstances);
+
+			m_pContext->DSSetShader(m_pDS, m_pDSClassInstances, m_numDSClassInstances);
+		}
+	}
+
+	m_pContext->IASetVertexBuffers(0, 1, &m_pVB, &m_vertexStride, &m_vertexOffset);
+
+	m_pContext->IASetIndexBuffer(m_pIndexBuffer, m_indexFormat, m_indexOffset);
+
+	return S_OK;
+}
+
+void DXTKStateSaver::ZeroShaders(ID3D11DeviceContext* pContext)
+{
+	pContext->VSSetShader(NULL, NULL, 0);
+	pContext->PSSetShader(NULL, NULL, 0);
+	pContext->HSSetShader(NULL, NULL, 0);
+	pContext->DSSetShader(NULL, NULL, 0);
+	pContext->GSSetShader(NULL, NULL, 0);
+}
+
+void DXTKStateSaver::releaseSavedState()
+{
+	m_primitiveTopology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+	SAFE_RELEASE(m_pInputLayout);
+	SAFE_RELEASE(m_pBlendState);
+	for (int i = 0; i < 4; ++i)
+		m_blendFactor[i] = 0.0f;
+	m_sampleMask = 0xffffffff;
+	SAFE_RELEASE(m_pDepthStencilState);
+	m_stencilRef = 0;
+	SAFE_RELEASE(m_pRasterizerState);
+	SAFE_RELEASE(m_pPSSRV);
+	SAFE_RELEASE(m_pSamplerState);
+	SAFE_RELEASE(m_pVS);
+	for (UINT i = 0; i < m_numVSClassInstances; ++i)
+		SAFE_RELEASE(m_pVSClassInstances[i]);
+	m_numVSClassInstances = 0;
+	SAFE_RELEASE(m_pVSConstantBuffer);
+	SAFE_RELEASE(m_pGS);
+	for (UINT i = 0; i < m_numGSClassInstances; ++i)
+		SAFE_RELEASE(m_pGSClassInstances[i]);
+	m_numGSClassInstances = 0;
+	SAFE_RELEASE(m_pGSConstantBuffer);
+	SAFE_RELEASE(m_pGSSRV);
+	SAFE_RELEASE(m_pPS);
+	for (UINT i = 0; i < m_numPSClassInstances; ++i)
+		SAFE_RELEASE(m_pPSClassInstances[i]);
+	m_numPSClassInstances = 0;
+	SAFE_RELEASE(m_pHS);
+	for (UINT i = 0; i < m_numHSClassInstances; ++i)
+		SAFE_RELEASE(m_pHSClassInstances[i]);
+	m_numHSClassInstances = 0;
+	SAFE_RELEASE(m_pDS);
+	for (UINT i = 0; i < m_numDSClassInstances; ++i)
+		SAFE_RELEASE(m_pDSClassInstances[i]);
+	m_numDSClassInstances = 0;
+	SAFE_RELEASE(m_pVB);
+	m_vertexStride = 0;
+	m_vertexOffset = 0;
+	SAFE_RELEASE(m_pIndexBuffer);
+	m_indexFormat = DXGI_FORMAT_UNKNOWN;
+	m_indexOffset = 0;
+
+	SAFE_RELEASE(m_pContext);
+	m_featureLevel = D3D_FEATURE_LEVEL_11_0;
+
+	m_savedState = false;
+}
+```
+
+`src/DXStateSaver.h`:
+
+```h
+#pragma once
+
+#include <d3d11.h>
+
+class DXTKStateSaver
+{
+private:
+	bool m_savedState;
+	D3D_FEATURE_LEVEL m_featureLevel;
+	ID3D11DeviceContext* m_pContext;
+	D3D11_PRIMITIVE_TOPOLOGY m_primitiveTopology;
+	ID3D11InputLayout* m_pInputLayout;
+	ID3D11BlendState* m_pBlendState;
+	float m_blendFactor[4];
+	UINT m_sampleMask;
+	ID3D11DepthStencilState* m_pDepthStencilState;
+	UINT m_stencilRef;
+	ID3D11RasterizerState* m_pRasterizerState;
+	ID3D11ShaderResourceView* m_pPSSRV;
+	ID3D11SamplerState* m_pSamplerState;
+	ID3D11VertexShader* m_pVS;
+	ID3D11ClassInstance* m_pVSClassInstances[256];
+	UINT m_numVSClassInstances;
+	ID3D11Buffer* m_pVSConstantBuffer;
+	ID3D11GeometryShader* m_pGS;
+	ID3D11ClassInstance* m_pGSClassInstances[256];
+	UINT m_numGSClassInstances;
+	ID3D11Buffer* m_pGSConstantBuffer;
+	ID3D11ShaderResourceView* m_pGSSRV;
+	ID3D11PixelShader* m_pPS;
+	ID3D11ClassInstance* m_pPSClassInstances[256];
+	UINT m_numPSClassInstances;
+	ID3D11HullShader* m_pHS;
+	ID3D11ClassInstance* m_pHSClassInstances[256];
+	UINT m_numHSClassInstances;
+	ID3D11DomainShader* m_pDS;
+	ID3D11ClassInstance* m_pDSClassInstances[256];
+	UINT m_numDSClassInstances;
+	ID3D11Buffer* m_pVB;
+	UINT m_vertexStride;
+	UINT m_vertexOffset;
+	ID3D11Buffer* m_pIndexBuffer;
+	DXGI_FORMAT m_indexFormat;
+	UINT m_indexOffset;
+
+	DXTKStateSaver(const DXTKStateSaver&);
+	//DXTKStateSaver& operator=(const DXTKStateSaver&);
+
+public:
+	DXTKStateSaver();
+	~DXTKStateSaver();
+
+	HRESULT saveCurrentState(ID3D11DeviceContext* pContext);
+	HRESULT restoreSavedState();
+	void ZeroShaders(ID3D11DeviceContext* pContext);
+	void releaseSavedState();
+};
+
+template<class T> inline void SAFE_DELETE(T *&p)
+{
+	if (p)
+	{
+		delete p;
+		p = NULL;
+	}
+}
+
+template<class T> inline void SAFE_DELETE_ARRAY(T *&p)
+{
+	if (p)
+	{
+		delete[] p;
+		p = NULL;
+	}
+}
+
+template<class T> inline void SAFE_RELEASE(T *&p)
+{
+	if (p)
+	{
+		p->Release();
+		p = NULL;
+	}
+}
+```
+
+`src/aimbot.cpp`:
+
+```cpp
+#include "aimbot.h"
+#include "globals.h"
+#include "SDK.hpp"
+
+#include "engine.h"
+
+#define M_PI		3.14159265358979323846
+#define M_PI_F		((float)(M_PI))
+#define DEG2RAD(x)  ( (float)(x) * (float)(M_PI_F / 180.f) )
+#define RAD2DEG(x)  ( (float)(x) * (float)(180.f / M_PI_F) )
+
+namespace Aimbot
+{
+	float bestFOV = 0.f;
+	Classes::FRotator idealAngDelta;
+
+	const float AimbotFOV = 15.f;
+
+	void BeginFrame()
+	{
+		bestFOV = AimbotFOV;
+		idealAngDelta = { 0,0,0 };
+	}
+
+	Classes::FRotator Clamp(Classes::FRotator r)
+	{
+		if (r.Yaw > 180.f)
+			r.Yaw -= 360.f;
+		else if (r.Yaw < -180.f)
+			r.Yaw += 360.f;
+
+		if (r.Pitch > 180.f)
+			r.Pitch -= 360.f;
+		else if (r.Pitch < -180.f)
+			r.Pitch += 360.f;
+
+		if (r.Pitch < -89.f)
+			r.Pitch = -89.f;
+		else if (r.Pitch > 89.f)
+			r.Pitch = 89.f;
+
+		r.Roll = 0.f;
+
+		return r;
+	}
+
+	Classes::FRotator Vec2Rot(Classes::FVector vec)
+	{
+		Classes::FRotator rot;
+
+		rot.Yaw = RAD2DEG(std::atan2f(vec.Y, vec.X));
+		rot.Pitch = RAD2DEG(std::atan2f(vec.Z, std::sqrtf(vec.X * vec.X + vec.Y * vec.Y)));
+		rot.Roll = 0.f;
+
+		return rot;
+	}
+
+	Classes::FVector GetPlayerVelocity(Classes::ATslCharacter* p)
+	{
+		/*if (p->VehicleRiderComponent && p->VehicleRiderComponent->SeatIndex >= 0)
+			if (p->VehicleRiderComponent->LastVehiclePawn)
+				return p->VehicleRiderComponent->LastVehiclePawn->GetVelocity();*/
+
+		if (p->RootComponent)
+			return p->RootComponent->ComponentVelocity;
+
+		return { 0.f, 0.f, 0.f };
+	}
+
+	void EvaluateTarget(Classes::ATslCharacter * p)
+	{
+		if (p->Team)
+			return;
+
+		if (!Engine::IsVisible(p))
+			return;
+
+		auto pos = Engine::GetBonePosition(p, 15);
+		auto delta = (pos - G::localPos);
+		auto dist = delta.Size();
+
+		if (p->Health < 1.f)
+			return;
+
+		/*if (G::localWeapon && G::localWeapon->IsA(Classes::ATslWeapon_Trajectory::StaticClass()))
+		{
+			auto traj = reinterpret_cast<Classes::ATslWeapon_Trajectory*>(G::localWeapon)->TrajectoryConfig;
+			float bulletspeed = traj.InitialSpeed * 100.f;
+
+			float airtime = dist / bulletspeed;
+
+			auto velocity = GetPlayerVelocity(p);
+			if (velocity.X > 0.0001f)
+				delta += velocity * airtime;
+		}*/
+
+		Classes::FRotator ideal = Clamp(Vec2Rot(delta));
+		auto angDelta = Clamp(ideal - G::localRot);
+		float angFOV = angDelta.Size();
+
+		if (angFOV < bestFOV)
+		{
+			bestFOV = angFOV;
+			idealAngDelta = angDelta;
+		}
+	}
+
+	void SetViewAngles(Classes::FRotator ang)
+	{
+		G::localChar->Controller->ControlRotation = Clamp(ang);
+	}
+
+	void AimToTarget()
+	{
+		if (bestFOV >= AimbotFOV)
+			return;
+
+		// nosway (should be always on, not jsut when aimbotting)
+		/*if (G::localWeapon)
+		{
+			auto sway = G::localWeapon->GetSwayModifier();
+			G::localRot.Yaw -= sway.X;
+			G::localRot.Pitch -= sway.Y;
+		}*/
+
+		SetViewAngles(G::localRot + idealAngDelta * 0.4f);
+	}
+}
+```
+
+`src/aimbot.h`:
+
+```h
+#pragma once
+
+namespace Classes
+{
+	class ATslCharacter;
+}
+
+namespace Aimbot
+{
+	void BeginFrame();
+	void EvaluateTarget(Classes::ATslCharacter* p);
+	void AimToTarget();
+}
+```
+
+`src/colors.cpp`:
+
+```cpp
+#include "colors.h"
+
+namespace Colors
+{
+	Color Players = DirectX::Colors::Cyan;
+	Color Vehicles = DirectX::Colors::Green;
+}
+
+```
+
+`src/colors.h`:
+
+```h
+#pragma once
+
+#include <DirectXColors.h>
+
+using Color = DirectX::XMVECTORF32;
+
+namespace Colors
+{
+	extern Color Players;
+	extern Color Vehicles;
+}
+```
+
+`src/definitions.h`:
+
+```h
+#pragma once
+
+enum Bone : int
+{
+	Root = 0,
+	pelvis = 1,
+	spine_01 = 2,
+	spine_02 = 3,
+	spine_03 = 4,
+	neck_01 = 5,
+	Head = 6,
+	face_root = 7,
+	eyebrows_pos_root = 8,
+	eyebrows_root = 9,
+	eyebrows_r = 10,
+	eyebrows_l = 11,
+	eyebrow_l = 12,
+	eyebrow_r = 13,
+	forehead_root = 14,
+	forehead = 15,
+	jaw_pos_root = 16,
+	jaw_root = 17,
+	jaw = 18,
+	mouth_down_pos_root = 19,
+	mouth_down_root = 20,
+	lip_bm_01 = 21,
+	lip_bm_02 = 22,
+	lip_br = 23,
+	lip_bl = 24,
+	jaw_01 = 25,
+	jaw_02 = 26,
+	cheek_pos_root = 27,
+	cheek_root = 28,
+	cheek_r = 29,
+	cheek_l = 30,
+	nose_side_root = 31,
+	nose_side_r_01 = 32,
+	nose_side_r_02 = 33,
+	nose_side_l_01 = 34,
+	nose_side_l_02 = 35,
+	eye_pos_r_root = 36,
+	eye_r_root = 37,
+	eye_rot_r_root = 38,
+	eye_lid_u_r = 39,
+	eye_r = 40,
+	eye_lid_b_r = 41,
+	eye_pos_l_root = 42,
+	eye_l_root = 43,
+	eye_rot_l_root = 44,
+	eye_lid_u_l = 45,
+	eye_l = 46,
+	eye_lid_b_l = 47,
+	nose_pos_root = 48,
+	nose = 49,
+	mouth_up_pos_root = 50,
+	mouth_up_root = 51,
+	lip_ul = 52,
+	lip_um_01 = 53,
+	lip_um_02 = 54,
+	lip_ur = 55,
+	lip_l = 56,
+	lip_r = 57,
+	hair_root = 58,
+	hair_b_01 = 59,
+	hair_b_02 = 60,
+	hair_l_01 = 61,
+	hair_l_02 = 62,
+	hair_r_01 = 63,
+	hair_r_02 = 64,
+	hair_f_02 = 65,
+	hair_f_01 = 66,
+	hair_b_pt_01 = 67,
+	hair_b_pt_02 = 68,
+	hair_b_pt_03 = 69,
+	hair_b_pt_04 = 70,
+	hair_b_pt_05 = 71,
+	camera_fpp = 72,
+	GunReferencePoint = 73,
+	GunRef = 74,
+	breast_l = 75,
+	breast_r = 76,
+	clavicle_l = 77,
+	upperarm_l = 78,
+	lowerarm_l = 79,
+	hand_l = 80,
+	thumb_01_l = 81,
+	thumb_02_l = 82,
+	thumb_03_l = 83,
+	thumb_04_l_MBONLY = 84,
+	index_01_l = 85,
+	index_02_l = 86,
+	index_03_l = 87,
+	index_04_l_MBONLY = 88,
+	middle_01_l = 89,
+	middle_02_l = 90,
+	middle_03_l = 91,
+	middle_04_l_MBONLY = 92,
+	ring_01_l = 93,
+	ring_02_l = 94,
+	ring_03_l = 95,
+	ring_04_l_MBONLY = 96,
+	pinky_01_l = 97,
+	pinky_02_l = 98,
+	pinky_03_l = 99,
+	pinky_04_l_MBONLY = 100,
+	item_l = 101,
+	lowerarm_twist_01_l = 102,
+	upperarm_twist_01_l = 103,
+	clavicle_r = 104,
+	upperarm_r = 105,
+	lowerarm_r = 106,
+	hand_r = 107,
+	thumb_01_r = 108,
+	thumb_02_r = 109,
+	thumb_03_r = 110,
+	thumb_04_r_MBONLY = 111,
+	index_01_r = 112,
+	index_02_r = 113,
+	index_03_r = 114,
+	index_04_r_MBONLY = 115,
+	middle_01_r = 116,
+	middle_02_r = 117,
+	middle_03_r = 118,
+	middle_04_r_MBONLY = 119,
+	ring_01_r = 120,
+	ring_02_r = 121,
+	ring_03_r = 122,
+	ring_04_r_MBONLY = 123,
+	pinky_01_r = 124,
+	pinky_02_r = 125,
+	pinky_03_r = 126,
+	pinky_04_r_MBONLY = 127,
+	item_r = 128,
+	lowerarm_twist_01_r = 129,
+	upperarm_twist_01_r = 130,
+	BackPack = 131,
+	backpack_01 = 132,
+	backpack_02 = 133,
+	Slot_Primary = 134,
+	Slot_Secondary = 135,
+	Slot_Melee = 136,
+	slot_throwable = 137,
+	coat_l_01 = 138,
+	coat_l_02 = 139,
+	coat_l_03 = 140,
+	coat_l_04 = 141,
+	coat_fl_01 = 142,
+	coat_fl_02 = 143,
+	coat_fl_03 = 144,
+	coat_fl_04 = 145,
+	coat_b_01 = 146,
+	coat_b_02 = 147,
+	coat_b_03 = 148,
+	coat_b_04 = 149,
+	coat_r_01 = 150,
+	coat_r_02 = 151,
+	coat_r_03 = 152,
+	coat_r_04 = 153,
+	coat_fr_01 = 154,
+	coat_fr_02 = 155,
+	coat_fr_03 = 156,
+	coat_fr_04 = 157,
+	thigh_l = 158,
+	calf_l = 159,
+	foot_l = 160,
+	ball_l = 161,
+	calf_twist_01_l = 162,
+	thigh_twist_01_l = 163,
+	thigh_r = 164,
+	calf_r = 165,
+	foot_r = 166,
+	ball_r = 167,
+	calf_twist_01_r = 168,
+	thigh_twist_01_r = 169,
+	Slot_SideArm = 170,
+	skirt_l_01 = 171,
+	skirt_l_02 = 172,
+	skirt_l_03 = 173,
+	skirt_f_01 = 174,
+	skirt_f_02 = 175,
+	skirt_f_03 = 176,
+	skirt_b_01 = 177,
+	skirt_b_02 = 178,
+	skirt_b_03 = 179,
+	skirt_r_01 = 180,
+	skirt_r_02 = 181,
+	skirt_r_03 = 182,
+	ik_hand_root = 183,
+	ik_hand_gun = 184,
+	ik_hand_r = 185,
+	ik_hand_l = 186,
+	ik_aim_root = 187,
+	ik_aim_l = 188,
+	ik_aim_r = 189,
+	ik_foot_root = 190,
+	ik_foot_l = 191,
+	ik_foot_r = 192,
+	camera_tpp = 193,
+	ik_target_root = 194,
+	ik_target_l = 195,
+	ik_target_r = 196,
+	VB_spine_03_spine_03 = 197,
+	VB_upperarm_r_lowerarm_r = 198
+};
+```
+
+`src/dllmain.cpp`:
+
+```cpp
+#include "hooks.h"
+#include "utilities.h"
+
+HANDLE Utilities::curProcess = (HANDLE)0xFFFFFFFFFFFFFFFF;
+HINSTANCE Utilities::hAppInstance = 0;
+
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD dwReason, LPVOID lpReserved)
+{
+	switch (dwReason)
+	{
+	case DLL_PROCESS_ATTACH:
+		Utilities::curProcess = GetCurrentProcess();
+		Utilities::hAppInstance = hinstDLL;
+		CreateThread(NULL, NULL, (LPTHREAD_START_ROUTINE)Hooks::Initialize, NULL, NULL, NULL);
+		break;
+	}
+	return TRUE;
+}
+```
+
+`src/engine.cpp`:
+
+```cpp
+#include "engine.h"
+
+#include "globals.h"
+#include "offsys.h"
+
+Classes::FVector Engine::GetBonePosition(Classes::ATslCharacter* p, int boneIndex)
+{
+	Classes::FMatrix m;
+	reinterpret_cast<Classes::FMatrix* (__fastcall*)(Classes::USkeletalMeshComponent*, Classes::FMatrix*, int)>(offsys->GetBonePos)(p->Mesh, &m, boneIndex);
+	return m.WPlane;
+}
+
+bool Engine::GetBoneScreenPosition(Classes::ATslCharacter* p, Classes::FVector2D* result, int boneIndex)
+{
+	return W2S(GetBonePosition(p, boneIndex), result);
+}
+
+bool Engine::W2S(Classes::FVector worldPos, Classes::FVector2D* screenPos)
+{
+	if (!reinterpret_cast<char(__fastcall*)(Classes::APlayerController*, Classes::FVector, Classes::FVector2D *, char)>(offsys->WorldToScreen)(G::PlayerController, worldPos, screenPos, 0)) // return G::PlayerController->ProjectWorldLocationToScreen(worldPos, true, screenPos);
+		return false;
+
+	return screenPos->X > 0.5f && screenPos->Y > 0.5f && screenPos->X < G::Draw->mViewport.Width && screenPos->Y < G::Draw->mViewport.Height;
+}
+
+bool Engine::IsVisible(Classes::AActor* p, Classes::FVector viewPoint)
+{
+	return G::PlayerController->LineOfSightTo(p, viewPoint, false);
+}
+```
+
+`src/engine.h`:
+
+```h
+#pragma once
+
+#include "SDK.hpp"
+
+namespace Engine
+{
+	Classes::FVector GetBonePosition(Classes::ATslCharacter* p, int boneIndex);
+	bool GetBoneScreenPosition(Classes::ATslCharacter* p, Classes::FVector2D* result, int boneIndex);
+	bool W2S(Classes::FVector worldPos, Classes::FVector2D* screenPos);
+	bool IsVisible(Classes::AActor* p, Classes::FVector viewPoint = Classes::FVector());
+}
+```
+
+`src/esp.cpp`:
+
+```cpp
+#include "esp.h"
+
+#include "engine.h"
+#include "offsys.h"
+#include "definitions.h"
+
+// Credit daemonium @ unknowncheats.me
+#define IS_BIT_SET(var,pos) ((var) & (1<<(pos)))
+
+// Credit daemonium @ unknowncheats.me
+class TBitArray
+{
+public:
+	uint32_t AllocatorInstanceData[6];
+	int32_t NumBits;
+	int32_t MaxBits;
+};
+
+namespace ESP
+{
+	void DrawActorBoundingBox(Classes::AActor* actor, Color color)
+	{
+		Classes::FVector bbOrigin;
+		Classes::FVector bbExtends;
+		G::Lib::Sys->STATIC_GetActorBounds(actor, &bbOrigin, &bbExtends);
+
+		G::Draw->Box3D(bbOrigin, bbExtends, color);
+	}
+
+	void DrawAirdrop(Classes::AActor * actor)
+	{
+		ESP::DrawActorBoundingBox(actor, DirectX::Colors::Red);
+
+		if (!actor->RootComponent)
+			return;
+
+		auto loc = actor->RootComponent->Location;
+
+		Classes::FVector2D sOrigin;
+		if (!Engine::W2S(loc, &sOrigin))
+			return;
+
+		//float dist = (loc - G::localPos).Size() / 100.f;
+
+		//auto temp = std::wstring(L"Airdrop: " + std::to_wstring((int)dist) + L"m");
+
+		auto itempackage = reinterpret_cast<Classes::AItemPackage*>(actor);
+		for (size_t i = 0; i < itempackage->Items.Num(); i++)
+		{
+			if (!itempackage->Items.IsValidIndex(i))
+				continue;
+
+			auto item = itempackage->Items[i];
+
+			if (!item) continue;
+
+			std::wstring name = item->ItemName.Get();
+
+			if (name == L"AWM" || name == L"Mk14")
+				G::Draw->Plus(sOrigin.X, sOrigin.Y, 10.f, DirectX::Colors::OrangeRed);
+
+			//temp += L"\n";
+			//temp += item->ItemName.Get();
+		}
+
+		//G::Draw->Text(sOrigin.X, sOrigin.Y, temp, DirectX::Colors::Red, 0, 8.f);
+	}
+
+	void DrawDeathDrop(Classes::AActor * actor)
+	{
+		ESP::DrawActorBoundingBox(actor, DirectX::Colors::RoyalBlue);
+
+		if (!actor->RootComponent)
+			return;
+
+		auto loc = actor->RootComponent->Location;
+
+		Classes::FVector2D sOrigin;
+		if (!Engine::W2S(loc, &sOrigin))
+			return;
+
+		float dist = (loc - G::localPos).Size() / 100.f;
+
+		//G::Draw->Text(sOrigin.X, sOrigin.Y, std::wstring(L"Death Drop: " + std::to_wstring((int)dist) + L"m"), DirectX::Colors::Red, 0, 8.f);
+	}
+
+	void DrawPlayerSkeleton(Classes::ATslCharacter* player)
+	{
+		// hand - lowerarm - upperarm
+		// foot - calf - thigh
+		// neck - spine2 - thigh1 & thigh2
+		std::vector<std::vector<int>> boneVec =
+		{
+		{ Bone::hand_l, Bone::lowerarm_l, Bone::upperarm_l, Bone::neck_01 },
+		{ Bone::hand_r, Bone::lowerarm_r, Bone::upperarm_r, Bone::neck_01 },
+		{ Bone::foot_l, Bone::calf_l, Bone::thigh_l, Bone::spine_01 },
+		{ Bone::foot_r, Bone::calf_r, Bone::thigh_r, Bone::spine_01 },
+		{ Bone::spine_01, Bone::spine_02, Bone::neck_01, Bone::Head }
+		};
+
+		for (auto limb : boneVec)
+		{
+			Classes::FVector2D prev, cur;
+			if (!Engine::GetBoneScreenPosition(player, &prev, limb.at(0)))
+				break;
+
+			for (size_t bone = 1; bone < limb.size(); bone++)
+			{
+				if (!Engine::GetBoneScreenPosition(player, &cur, limb.at(bone)))
+					break;
+
+				G::Draw->Line(prev.X, prev.Y, cur.X, cur.Y, Colors::Players);
+
+				prev = cur;
+			}
+		}
+	}
+
+	void DrawActorOnRadar(Classes::FVector deltaFromLocal, Color col)
+	{
+		// Radar X Max : 1882
+		// Radar X Min : 1630
+
+		// Radar Y Max : 1050
+		// Radar Y Min : 798
+
+		// Radar Top Left : 1630,798
+		// Radar Bottom Right : 1882,1050
+		// Radar Center : 1756,924
+
+		// Radar Size : 252
+
+		// Radar Radius : 200.f
+
+		if (deltaFromLocal.X > 20000.f || deltaFromLocal.X < -20000.f)
+			return;
+
+		if (deltaFromLocal.Y > 20000.f || deltaFromLocal.Y < -20000.f)
+			return;
+
+		float X = deltaFromLocal.X / 20000.f * 126;
+		float Y = deltaFromLocal.Y / 20000.f * 126;
+
+		// minus 2 because draw clear starts at corner
+		G::Draw->Clear({ 5, 1754 + X, 922 + Y, 5 }, col);
+	}
+
+	void DrawPlayer(Classes::ATslCharacter* player)
+	{
+		if (player->Team)
+			return;
+
+		auto origin = player->RootComponent->Location;
+		auto delta = origin - G::localPos;
+		int dist = (int)delta.Size() / 100;
+
+		DrawActorOnRadar(delta, DirectX::Colors::Red);
+
+		if (dist < 128)
+			DrawPlayerSkeleton(player);
+
+		Classes::FVector2D s15;
+		if (!Engine::W2S(Engine::GetBonePosition(player, 15), &s15))
+			return;
+
+		Color col = Colors::Players;
+		col.f[3] = (float)dist / 100.f;
+		G::Draw->Clear({ 4, s15.X - 2, s15.Y - 2, 4 }, col);
+
+		//std::wstring ws(std::to_wstring(dist) + L"m\nHP: " + std::to_wstring((int)player->Health));
+		//G::Draw->Text(s15.X + 20, s15.Y, ws, DirectX::Colors::Magenta, 0, 10.f);
+
+		// Line ESP
+
+		//Classes::FVector2D sOrigin;
+		//if (!Engine::W2S(origin, &sOrigin))
+		//	return;
+
+		//G::Draw->Line(G::Draw->mViewport.Width / 2, G::Draw->mViewport.Height, sOrigin.X, sOrigin.Y, DirectX::Colors::Cyan);
+	}
+
+	std::wstring GetVehicleName(Classes::ATslWheeledVehicle* vehicle)
+	{
+		if (vehicle->IsA(Classes::ADacia_C::StaticClass())) return L"Dacia";
+		if (vehicle->IsA(Classes::AUaz_C::StaticClass())) return L"UAZ";
+		if (vehicle->IsA(Classes::ABuggy_C::StaticClass())) return L"Buggy";
+		if (vehicle->IsA(Classes::ATslMotorbikeVehicle_Sidecar::StaticClass())) return L"Chariot";
+		if (vehicle->IsA(Classes::ATslMotorbikeVehicle::StaticClass())) return L"Motorbike";
+		
+		return L"Unknown";
+	}
+
+	void DrawWheeledVehicle(Classes::ATslWheeledVehicle* vehicle)
+	{
+		if (!vehicle->RootComponent)
+			return;
+
+		Classes::FVector2D v;
+		Classes::FVector pos = vehicle->RootComponent->Location;
+		if (!Engine::W2S(pos, &v))
+			return;
+
+		DrawActorBoundingBox(vehicle, Colors::Vehicles);
+
+		/*float dist = (pos - G::localPos).Size() / 100.f;
+		if (dist > 400.f || !vehicle->VehicleCommonComponent)
+		{
+			std::wstring temp = GetVehicleName(vehicle) + L" " + std::to_wstring((int)dist) + L"m";
+			G::Draw->Text(v.X, v.Y, temp, Colors::Vehicles, 0, 8.f);
+
+			return;
+		}
+
+		std::wstring temp = GetVehicleName(vehicle) + L" " + std::to_wstring((int)dist) + L"m\n" + 
+			std::to_wstring((int)(100 * vehicle->VehicleCommonComponent->Health / vehicle->VehicleCommonComponent->HealthMax)) + L" HP\n" + 
+			std::to_wstring((int)(100 * vehicle->VehicleCommonComponent->Fuel / vehicle->VehicleCommonComponent->FuelMax)) + L" Fuel";
+
+		G::Draw->Text(v.X, v.Y, temp, Colors::Vehicles, 0, 8.f);*/
+	}
+
+	std::vector<std::wstring> ARs = { L"AKM", L"M16A4" };
+	std::vector<std::wstring> SRs = { L"Kar98k", L"Mini14", L"SKS" };
+	std::vector<std::wstring> ARAttachments = { L"Ext. QuickDraw Mag (AR, S12K)", L"Suppressor (AR, S12K)", L"Compensator (AR, S12K)" };
+	std::vector<std::wstring> SRAttachments = { L"Ext. QuickDraw Mag (SR)", L"Suppressor (SR)", L"Compensator (SR)" };
+	std::vector<std::wstring> Scopes = { L"4x Scope", L"8x Scope" };
+	std::vector<std::wstring> Lv3 = { L"Helmet (Lv.3)", L"Backpack (Lv.3)", L"Military Vest (Level 3)" };
+	std::vector<std::wstring> Meds = { L"First Aid Kit", L"Med Kit", L"Painkiller", L"Energy Drink" };
+
+	void DrawLootItem(std::wstring name, Classes::FVector absolutePos)
+	{
+		if (name == L"")
+			return;
+
+		Color col = DirectX::Colors::WhiteSmoke;
+
+		if (std::find(ARs.begin(), ARs.end(), name) != ARs.end() || std::find(SRs.begin(), SRs.end(), name) != SRs.end())
+			col = DirectX::Colors::Black;
+		else if (std::find(ARAttachments.begin(), ARAttachments.end(), name) != ARAttachments.end() || std::find(SRAttachments.begin(), SRAttachments.end(), name) != SRAttachments.end())
+			col = DirectX::Colors::Gold;
+		else if (std::find(Scopes.begin(), Scopes.end(), name) != Scopes.end())
+			col = DirectX::Colors::RoyalBlue;
+		else if (std::find(Lv3.begin(), Lv3.end(), name) != Lv3.end())
+			col = DirectX::Colors::LimeGreen;
+		else if (std::find(Meds.begin(), Meds.end(), name) != Meds.end())
+			col = DirectX::Colors::Magenta;
+		else
+			return;
+
+		Classes::FVector2D sLoot;
+		if (!Engine::W2S(absolutePos, &sLoot))
+			return;
+		
+		G::Draw->Clear({ 5, sLoot.X, sLoot.Y, 5 }, col);
+
+		/*int distance = ((absolutePos - G::localPos).Size() / 100.f);
+
+		name += L" ";
+		name += std::to_wstring(distance);
+		name += L"m";
+
+		G::Draw->Text(sLoot.X, sLoot.Y, name, col, 0, 8.f);*/
+	}
+
+	void DrawLootGroup(Classes::AActor* actor)
+	{
+		if (!actor->RootComponent)
+			return;
+
+		Classes::FVector actorPos = actor->RootComponent->Location;
+
+		//if ((actorPos - G::localPos).Size() > 80000.f)
+			//return;
+		
+		uintptr_t diga = *(uintptr_t*)((uintptr_t)actor + 0x2D8);
+		int32_t count = *(int32_t*)((uintptr_t)actor + 0x2E0);
+		
+		TBitArray OwnedComponentsBitArray = *(TBitArray*)((uintptr_t)actor + 0x2E8); // Credit daemonium @ unknowncheats.me
+
+		if (!diga)
+			return;
+
+		for (uint32_t i = 1; i < count; i++)
+		{
+			if (!IS_BIT_SET(OwnedComponentsBitArray.AllocatorInstanceData[i / 32], i % 32)) // Credit daemonium @ unknowncheats.me
+				continue;
+
+			auto droppedItem = *(Classes::UDroppedItemInteractionComponent**)(diga + i * 0x10);
+
+			if (!droppedItem || !droppedItem->Item || !droppedItem->IsA(Classes::UDroppedItemInteractionComponent::StaticClass()))
+				continue;
+
+			auto item = droppedItem->Item;
+
+			if (!item)
+				continue;
+
+			DrawLootItem(item->ItemName.Get(), actorPos + droppedItem->RelativeLocation);
+		}
+	}
+}
+```
+
+`src/esp.h`:
+
+```h
+#pragma once
+
+#include "globals.h"
+
+namespace Classes
+{
+	class ATslCharacter;
+	class ATslWheeledVehicle;
+	class AActor;
+	class UItem;
+	struct FVector;
+}
+
+namespace ESP
+{
+	void DrawPlayerSkeleton(Classes::ATslCharacter* player);
+	void DrawPlayer(Classes::ATslCharacter*);
+	void DrawWheeledVehicle(Classes::ATslWheeledVehicle*);
+	void DrawLootGroup(Classes::AActor*);
+	void DrawLootItem(std::wstring name, Classes::FVector absolutePos);
+	void DrawActorBoundingBox(Classes::AActor* actor, Color color);
+	void DrawAirdrop(Classes::AActor* actor);
+	void DrawDeathDrop(Classes::AActor* actor);
+	void DrawActorOnRadar(Classes::FVector deltaFromLocal, Color col);
+
+	std::wstring GetVehicleName(Classes::ATslWheeledVehicle* vehicle);
+}
+
+
+```
+
+`src/globals.cpp`:
+
+```cpp
+#include "globals.h"
+
+#define FNameCompareFn(name, fnames) bool name(Classes::FName other) { for (auto fn : fnames) { if (other == fn) return true; } return false; }
+
+namespace G
+{
+	Classes::UWorld* UWorld;
+	Classes::UWorld* PWorld;
+	Classes::FVector localPos;
+	Classes::FRotator localRot;
+	Classes::ATslCharacter* localChar;
+	Classes::ATslWeapon* localWeapon;
+	Classes::APlayerController* PlayerController;
+	
+	namespace Lib
+	{
+		Classes::UKismetSystemLibrary* Sys;
+	}
+}
+```
+
+`src/globals.h`:
+
+```h
+#pragma once
+
+#include "SDK.hpp"
+
+#include "render.h"
+
+namespace G
+{
+	extern Classes::UWorld* UWorld;
+	extern Classes::UWorld* PWorld;
+	extern Classes::FVector localPos;
+	extern Classes::FRotator localRot;
+	extern Classes::ATslCharacter* localChar;
+	extern Classes::ATslWeapon* localWeapon;
+	extern Classes::APlayerController* PlayerController;
+
+	extern class Render* Draw;
+
+	namespace Lib
+	{
+		extern Classes::UKismetSystemLibrary* Sys;
+	}
+}
+```
+
+`src/hooks.cpp`:
+
+```cpp
+#include "hooks.h"
+
+#include "offsys.h"
+#include "esp.h"
+#include "globals.h"
+#include "aimbot.h"
+#include "vmt.h"
+#include "engine.h"
+
+namespace Hooks
+{
+	tD3D11Present Present = nullptr;
+
+	ID3D11Device *pDevice = nullptr;
+	ID3D11DeviceContext *pContext = nullptr;
+	IDXGISwapChain* pSwapChain = nullptr;
+
+	DWORD_PTR* pSwapChainVtable = nullptr;
+
+	ID3D11Texture2D* RenderTargetTexture = nullptr;
+	ID3D11RenderTargetView* RenderTargetView = nullptr;
+}
+
+Render* G::Draw = nullptr;
+std::unique_ptr<OffsetSystem> offsys = nullptr;
+
+HRESULT Hooks::PresentHooked(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT flags)
+{
+	static bool bRunning = false;
+	static bool bOnce = true;
+
+	if (bOnce)
+	{
+		if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void **)&pDevice)))
+		{
+			pSwapChain->GetDevice(__uuidof(pDevice), (void**)&pDevice);
+			pDevice->GetImmediateContext(&pContext);
+		}
+
+		G::Draw = new Render(pDevice);
+		offsys = std::make_unique<OffsetSystem>();
+
+		if (SUCCEEDED(pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&RenderTargetTexture)))
+		{
+			pDevice->CreateRenderTargetView(RenderTargetTexture, NULL, &RenderTargetView);
+			RenderTargetTexture->Release();
+		}
+
+		bOnce = false;
+	}
+
+	if (!bRunning && GetAsyncKeyState(VK_INSERT) & 0x8000)
+	{
+		bRunning = true;
+
+		Classes::FName::GNames = *reinterpret_cast<Classes::TNameEntryArray**>(offsys->GNamesAddress);
+		Classes::UObject::GObjects = reinterpret_cast<Classes::FUObjectArray*>(offsys->GObjsAddress);
+		G::Lib::Sys = reinterpret_cast<Classes::UKismetSystemLibrary*>(Classes::UKismetSystemLibrary::StaticClass());
+		G::UWorld = *reinterpret_cast<Classes::UWorld**>(offsys->UWorldAddress);
+		G::PWorld = G::UWorld->OwningGameInstance->LocalPlayers[0]->ViewportClient->World;
+	}
+
+	// begin
+	pContext->OMSetRenderTargets(1, &RenderTargetView, NULL);
+	G::Draw->Begin();
+
+	if (bRunning)
+	{
+		Aimbot::BeginFrame();
+
+		G::localPos = G::PWorld->OwningGameInstance->LocalPlayers[0]->PlayerController->PlayerCameraManager->CameraCache.POV.Location;
+		G::localRot = G::PWorld->OwningGameInstance->LocalPlayers[0]->PlayerController->PlayerCameraManager->CameraCache.POV.Rotation;
+		G::localChar = reinterpret_cast<Classes::ATslCharacter*>(G::UWorld->OwningGameInstance->LocalPlayers[0]->PlayerController->AcknowledgedPawn);
+		G::PlayerController = G::PWorld->OwningGameInstance->LocalPlayers[0]->PlayerController;
+		//G::localWeapon = G::localChar ? G::localChar->GetWeapon() : nullptr;
+
+		/*if (G::localChar && G::localChar->WeaponProcessor)
+		{
+			uint32_t weaponIndex = G::localChar->WeaponProcessor->CurrentWeaponIndex;
+			if (0 <= weaponIndex && 2 >= weaponIndex && G::localChar->WeaponProcessor->EquippedWeapons.IsValidIndex(weaponIndex))
+			{
+				G::Draw->Text(10, 45, L"weap valid", DirectX::Colors::Magenta);
+				G::localWeapon = G::localChar->WeaponProcessor->EquippedWeapons[weaponIndex];
+			}
+		}*/
+		// crashing when jump out of plane
+
+		for (size_t i = 0; i < G::PWorld->PersistentLevel->AActors.Num(); i++)
+		{
+			if (!G::PWorld->PersistentLevel->AActors.IsValidIndex(i))
+				continue;
+
+			Classes::AActor* actor = G::PWorld->PersistentLevel->AActors[i];
+
+			if (!actor)
+				continue;
+
+			if ((uintptr_t)actor == (uintptr_t)G::PlayerController->AcknowledgedPawn)
+				continue;
+
+			if (actor->IsA(Classes::ATslCharacter::StaticClass()))
+			{
+				ESP::DrawPlayer(reinterpret_cast<Classes::ATslCharacter*>(actor));
+				Aimbot::EvaluateTarget(reinterpret_cast<Classes::ATslCharacter*>(actor));
+			}
+			else if (actor->IsA(Classes::ATslWheeledVehicle::StaticClass()))
+			{
+				ESP::DrawWheeledVehicle(reinterpret_cast<Classes::ATslWheeledVehicle*>(actor));
+			}
+			else if (actor->IsA(Classes::ADroppedItemGroup::StaticClass()))
+			{
+				ESP::DrawLootGroup(actor);
+			}
+			else if (actor->IsA(Classes::ACarePackageItem::StaticClass()))
+			{
+				ESP::DrawAirdrop(actor);
+			}
+			else if (actor->IsA(Classes::ADeathDropItemPackage_C::StaticClass()))
+			{
+				ESP::DrawDeathDrop(actor);
+			}
+		}
+
+		if ((GetAsyncKeyState(VK_XBUTTON1) & 0x8000) || (GetAsyncKeyState(VK_XBUTTON2) & 0x8000) || (GetAsyncKeyState(VK_RBUTTON) & 0x8000))
+			Aimbot::AimToTarget();
+	}
+
+	G::Draw->Draw();
+
+	// end
+	G::Draw->End();
+
+	return Present(pSwapChain, SyncInterval, flags);
+}
+
+LRESULT CALLBACK DXGIMsgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+#pragma warning(default:4996)
+DWORD WINAPI Hooks::Initialize(LPVOID lpParam)
+{
+	//AllocConsole();
+	//freopen("CONOUT$", "w", stdout);
+
+	//printf("Initializing Hook\n");
+
+	//Sleep(1000);
+
+	HMODULE hDXGIDLL = 0;
+	do
+	{
+		hDXGIDLL = GetModuleHandle(rxorc("dxgi.dll"));
+		Sleep(100);
+	} while (!hDXGIDLL);
+	Sleep(100);
+
+	IDXGISwapChain* pSwapChain;
+
+	WNDCLASSEXA wc = { sizeof(WNDCLASSEX), CS_CLASSDC, DXGIMsgProc, 0L, 0L, GetModuleHandleA(NULL), NULL, NULL, NULL, NULL, " ", NULL };
+	RegisterClassExA(&wc);
+
+	D3D_FEATURE_LEVEL requestedLevels[] = { D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1 };
+	D3D_FEATURE_LEVEL obtainedLevel;
+
+	HWND hWnd = CreateWindowA(" ", NULL, WS_OVERLAPPEDWINDOW, 5, 5, 7, 8, NULL, NULL, wc.hInstance, NULL);
+
+	DXGI_SWAP_CHAIN_DESC scd;
+	ZeroMemory(&scd, sizeof(scd));
+
+	scd.BufferCount = 1;
+	scd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	scd.BufferDesc.RefreshRate.Denominator = 1;
+	scd.OutputWindow = hWnd;
+	scd.BufferDesc.Width = 1;
+	scd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+	scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+	scd.OutputWindow = hWnd;
+	scd.SampleDesc.Count = 1;
+	scd.Windowed = true;
+	scd.BufferDesc.Height = 1;
+	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	scd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+	scd.BufferDesc.RefreshRate.Numerator = 0;
+
+#ifdef _DEBUG
+	// You have to plug thiss into D3DCreate if you want to use the flag.
+	UINT createFlags = D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+	HRESULT hr = D3D11CreateDeviceAndSwapChain(
+		nullptr,
+		D3D_DRIVER_TYPE_HARDWARE,
+		nullptr,
+		0,
+		requestedLevels,
+		sizeof(requestedLevels) / sizeof(D3D_FEATURE_LEVEL),
+		D3D11_SDK_VERSION,
+		&scd,
+		&pSwapChain,
+		&pDevice,
+		&obtainedLevel,
+		&pContext);
+
+	if (FAILED(hr))
+	{
+		//MsgBoxA
+		return 0xC0000005;
+	}
+
+	pSwapChainVtable = (DWORD_PTR*)pSwapChain;
+	pSwapChainVtable = (DWORD_PTR*)pSwapChainVtable[0];
+
+	Hooks::Present = HookVirtual((void*)&pSwapChainVtable[8], PresentHooked);
+
+	return 0;
+}
+#pragma warning(default:4996)
+
+```
+
+`src/hooks.h`:
+
+```h
+#pragma once
+
+#include "render.h"
+
+typedef HRESULT(__stdcall *tD3D11Present)(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
+
+namespace Hooks
+{
+	HRESULT PresentHooked(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT flags);
+
+	DWORD WINAPI Initialize(LPVOID lpParam);
+}
+```
+
+`src/offsys.h`:
+
+```h
+#pragma once
+
+#include "utilities.h"
+
+class OffsetSystem
+{
+public:
+	uintptr_t GNamesAddress;
+	uintptr_t GObjsAddress;
+	uintptr_t UWorldAddress;
+	uintptr_t GetBonePos;
+	uintptr_t WorldToScreen;
+	uintptr_t GetBoundingBox;
+
+	uintptr_t Add3(const char* sig)
+	{
+		uintptr_t _sig = Utilities::FindPattern(sig);
+
+		if (!_sig) return _sig;
+
+		uintptr_t _off = *(uint32_t*)(_sig + 3);
+
+		return _sig + _off + 7;
+	}
+
+	OffsetSystem()
+	{
+		Utilities::LoadModule();
+
+		GNamesAddress = Add3(rxorc("48 89 1D ? ? ? ? 48 8B 5C 24 ? 48 83 C4 28 C3 48 8B 5C 24 ? 48 89 05 ? ? ? ? 48 83 C4 28 C3"));
+
+		GObjsAddress = Add3(rxorc("48 8D 0D ? ? ? ? E8 ? ? ? ? E8 ? ? ? ? 48 8B D6"));
+
+		UWorldAddress = Add3(rxorc("48 8B 1D ? ? ? ? 74 40"));
+
+		GetBonePos = Utilities::FindPattern(rxorc("48 89 5C 24 ? 48 89 74 24 ? 57 48 81 EC ? ? ? ? F6 81"));
+
+		WorldToScreen = Utilities::FindPattern(rxorc("48 89 5C 24 ? 48 89 74 24 ? 57 48 81 EC ? ? ? ? 41 0F B6 F9"));
+
+		GetBoundingBox = Utilities::FindPattern(rxorc("48 8B C4 48 89 58 10 48 89 70 18 55 57 41 54 41 55"));
+	}
+};
+
+extern std::unique_ptr<OffsetSystem> offsys;
+
+```
+
+`src/render.cpp`:
+
+```cpp
+#include "render.h"
+
+#include "engine.h"
+#include "SDK.hpp"
+
+#define MAX_VERTICIES 16384 * 8 * 4 * 3
+
+struct XMCOLOR {
+	union {
+		struct {
+			uint32_t b;
+			uint32_t g;
+			uint32_t r;
+			uint32_t a;
+		};
+		uint32_t c;
+	};
+
+	XMCOLOR(float r, float g, float b, float a)
+	{
+		uint32_t abyte = (uint32_t)(a * 255.f) << 24;
+		uint32_t rbyte = (uint32_t)(r * 255.f) << 16;
+		uint32_t gbyte = (uint32_t)(g * 255.f) << 8;
+		uint32_t bbyte = (uint32_t)(b * 255.f);
+
+		c = abyte | rbyte | gbyte | bbyte;
+	}
+};
+
+Render::Render(ID3D11Device * device) : mDevice(device)
+{
+	mDevice->GetImmediateContext(&mContext);
+
+	/*if (!FAILED(FW1CreateFactory(FW1_VERSION, &mFontFactory)))
+	{
+		mFontFactory->CreateFontWrapper(mDevice, L"Verdana", &mFontWrapper);
+		mFontFactory->CreateTextGeometry(&mTextGeometry);
+	}*/
+
+	D3D11_INPUT_ELEMENT_DESC layout[] =
+	{
+		{ ("POSITION"),	0, DXGI_FORMAT_R32G32B32_FLOAT,		0, (size_t)(&((Vertex*)0)->pos),	D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ ("COLOR"),	0, DXGI_FORMAT_R32G32B32A32_FLOAT,	0, (size_t)(&((Vertex*)0)->col),	D3D11_INPUT_PER_VERTEX_DATA, 0 },
+	};
+
+	/*
+	LPCSTR SemanticName;
+    UINT SemanticIndex;
+    DXGI_FORMAT Format;
+    UINT InputSlot;
+    UINT AlignedByteOffset;
+    D3D11_INPUT_CLASSIFICATION InputSlotClass;
+    UINT InstanceDataStepRate;
+	*/
+
+	ID3D10Blob* vsBlob;
+	GenerateShader(&mPixelShader, 0.8f, 0.2f, 0.2f);
+	GenerateShader(&mVertexShader, 0.2f, 0.2f, 0.8f, &vsBlob);
+
+	HRESULT hr = mDevice->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &mInputLayout);
+
+	if (FAILED(hr))
+		return;
+
+	D3D11_BUFFER_DESC vertex = {};
+	vertex.Usage = D3D11_USAGE_DYNAMIC;
+	vertex.ByteWidth = sizeof(Vertex) * static_cast<UINT>(MAX_VERTICIES);
+	vertex.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vertex.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	vertex.MiscFlags = 0;
+	mDevice->CreateBuffer(&vertex, nullptr, &mVertexBuffer);
+
+	D3D11_BLEND_DESC blend = {};
+	blend.RenderTarget->BlendEnable = TRUE;
+	blend.RenderTarget->SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blend.RenderTarget->DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	blend.RenderTarget->SrcBlendAlpha = D3D11_BLEND_ONE;
+	blend.RenderTarget->DestBlendAlpha = D3D11_BLEND_ZERO;
+	blend.RenderTarget->BlendOp = D3D11_BLEND_OP_ADD;
+	blend.RenderTarget->BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blend.RenderTarget->RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+	mDevice->CreateBlendState(&blend, &mBlendState);
+
+	D3D11_BUFFER_DESC screen = {};
+	screen.Usage = D3D11_USAGE_DYNAMIC;
+	screen.ByteWidth = sizeof(DirectX::XMMATRIX);
+	screen.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	screen.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	screen.MiscFlags = 0;
+	mDevice->CreateBuffer(&screen, nullptr, &mScreenBuffer);
+
+	UINT numViewports = 1;
+
+	mContext->RSGetViewports(&numViewports, &mViewport);
+
+	DirectX::XMMATRIX proj = DirectX::XMMatrixOrthographicOffCenterLH(0.f, mViewport.Width, mViewport.Height, 0.f, -100.f, 100.f);
+
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	mContext->Map(mScreenBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	
+	std::memcpy(mappedResource.pData, &proj, sizeof(DirectX::XMMATRIX));
+
+	mContext->Unmap(mScreenBuffer, 0);
+}
+
+Render::~Render()
+{
+	mVertexShader->Release();
+	mPixelShader->Release();
+	mVertexBuffer->Release();
+	mScreenBuffer->Release();
+	if (mInputLayout) mInputLayout->Release();
+	mBlendState->Release();
+}
+
+char d3dcode[] =
+"cbuffer spb : register(b0)"
+"{"
+"matrix proj;"
+"};"
+
+"struct V_O"
+"{"
+"float4 p : SV_POSITION;"
+"float4 c : COLOR;"
+"};"
+
+"struct V_I"
+"{"
+"float4 p : POSITION;"
+"float4 c : COLOR;"
+"};"
+
+"V_O VS(V_I extremelylonginputnamedontsigmepls)"
+"{"
+"V_O yesimtheoutputandimlongdontjudgeme;"
+
+"yesimtheoutputandimlongdontjudgeme.p = mul(proj, float4(extremelylonginputnamedontsigmepls.p.xy, 0.f, 1.f));"
+"yesimtheoutputandimlongdontjudgeme.c = extremelylonginputnamedontsigmepls.c;"
+
+"return yesimtheoutputandimlongdontjudgeme;"
+"}"
+
+"float4 PS(V_O extremelylonginputnamedontsigmepls) : SV_TARGET"
+"{"
+"return extremelylonginputnamedontsigmepls.c;"
+"}";
+
+HRESULT Render::GenerateShader(ID3D11PixelShader** pS, float r, float g, float b, ID3D10Blob** outBlob)
+{
+	ID3D10Blob* pBlob;
+	char szPixelShader[1000];
+	sprintf_s(szPixelShader, d3dcode, r, g, b);
+
+	ID3DBlob* d3dErrorMsgBlob;
+
+	auto hr = D3DCompile(szPixelShader, sizeof(szPixelShader), rxorc("shader"), NULL, NULL, "PS", rxorc("ps_4_0"), NULL, NULL, &pBlob, &d3dErrorMsgBlob);
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = mDevice->CreatePixelShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, pS);
+
+	if (FAILED(hr))
+		return hr;
+
+	if (outBlob)
+		*outBlob = pBlob;
+
+	return S_OK;
+}
+
+HRESULT Render::GenerateShader(ID3D11VertexShader** vS, float r, float g, float b, ID3D10Blob** outBlob)
+{
+	ID3D10Blob* pBlob;
+	char szPixelShader[1000];
+	sprintf_s(szPixelShader, d3dcode, r, g, b);
+
+	ID3DBlob* d3dErrorMsgBlob;
+
+	HRESULT hr = D3DCompile(szPixelShader, sizeof(szPixelShader), rxorc("shader"), NULL, NULL, "VS", rxorc("vs_4_0"), NULL, NULL, &pBlob, &d3dErrorMsgBlob);
+
+	if (FAILED(hr))
+		return hr;
+
+	hr = mDevice->CreateVertexShader(pBlob->GetBufferPointer(), pBlob->GetBufferSize(), NULL, vS);
+
+	if (FAILED(hr))
+		return hr;
+
+	if (outBlob)
+		*outBlob = pBlob;
+
+	return S_OK;
+}
+
+void Render::Begin()
+{
+	mRestoreState = false;
+	mStateManager.saveCurrentState(mContext);
+	mRestoreState = true;
+
+	mContext->VSSetShader(mVertexShader, nullptr, 0);
+	mContext->PSSetShader(mPixelShader, nullptr, 0);
+
+	mContext->OMSetBlendState(mBlendState, nullptr, 0xffffffff);
+	mContext->VSSetConstantBuffers(0, 1, &mScreenBuffer);
+	mContext->IASetInputLayout(mInputLayout);
+
+	UINT stride = sizeof(Vertex);
+	UINT offset = 0;
+	mContext->IASetVertexBuffers(0, 1, &mVertexBuffer, &stride, &offset);
+
+	//mFontWrapper->DrawString(mContext, L"", 0.f, 0.f, 0.f, 0xff000000, FW1_RESTORESTATE | FW1_NOFLUSH);
+}
+
+void Render::Draw()
+{
+	if (mList.verticies.size() > 0)
+	{
+		D3D11_MAPPED_SUBRESOURCE res;
+		mContext->Map(mVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
+		std::memcpy(res.pData, mList.verticies.data(), sizeof(Vertex) * mList.verticies.size());
+		mContext->Unmap(mVertexBuffer, 0);
+	}
+
+	size_t pos = 0;
+
+	for (const auto& batch : mList.batches)
+	{
+		mContext->IASetPrimitiveTopology(batch.topology);
+		mContext->Draw(batch.count, pos);
+		pos += batch.count;
+	}
+
+	//mFontWrapper->Flush(mContext);
+	//mFontWrapper->DrawGeometry(mContext, mTextGeometry, nullptr, nullptr, FW1_RESTORESTATE);
+}
+
+void Render::End()
+{
+	mList.batches.clear();
+	mList.verticies.clear();
+	//mTextGeometry->Clear();
+
+	if (mRestoreState) mStateManager.restoreSavedState();
+}
+
+void Render::AddVertex(Vertex& v, D3D11_PRIMITIVE_TOPOLOGY topology)
+{
+	if (mList.verticies.size() >= MAX_VERTICIES)
+		return;
+
+	if (mList.batches.empty() || mList.batches.back().topology != topology)
+		mList.batches.emplace_back(0, topology);
+
+	mList.batches.back().count += 1;
+	mList.verticies.push_back(v);
+}
+
+void Render::AddVerticies(std::vector<Vertex> v, D3D11_PRIMITIVE_TOPOLOGY topology)
+{
+	size_t endSize = mList.verticies.size() + v.size();
+	if (endSize >= MAX_VERTICIES)
+		return;
+
+	if (mList.batches.empty() || mList.batches.back().topology != topology)
+		mList.batches.emplace_back(0, topology);
+
+	mList.batches.back().count += v.size();
+
+	mList.verticies.resize(endSize);
+	std::memcpy(&mList.verticies[mList.verticies.size() - v.size()], &v[0], v.size() * sizeof(Vertex));
+
+	switch (topology)
+	{
+	case D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP:
+	case D3D11_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ:
+	case D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP:
+	case D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ:
+	{
+		Vertex seperator{};
+		AddVertex(seperator, D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED);
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void Render::Line(float x, float y, float j, float k, const Color &color)
+{
+	std::vector<Vertex> v
+	{
+		{ x, y, 0.0f, color },
+		{ j, k, 0.0f, color }
+	};
+
+	AddVerticies(v, D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+}
+
+
+void Render::Line(Classes::FVector2D origin, Classes::FVector2D dest, Color col)
+{
+	Line(origin.X, origin.Y, dest.X, dest.Y, col);
+}
+
+void Render::Box(float x, float y, float j, float k, const Color& color)
+{
+	Line( x,y, j, y, color);
+	Line( j, y, j, k, color);
+	Line( j,k, x, k, color);
+	Line( x, k, x, y, color);
+}
+
+void Render::Clear(const Vec4& rect, const Color& color)
+{
+	std::vector<Vertex> v
+	{
+		{ rect.x,			rect.y,				0.f, color },
+		{ rect.x + rect.z,	rect.y,				0.f, color },
+		{ rect.x,			rect.y + rect.w,	0.f, color },
+
+		{ rect.x + rect.z,	rect.y,				0.f, color },
+		{ rect.x + rect.z,	rect.y + rect.w,	0.f, color },
+		{ rect.x,			rect.y + rect.w,	0.f, color }
+	};
+
+	AddVerticies(v, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
+void Render::Text(int x, int y, const std::wstring& text, const Color& color, uint32_t flags, float fontSize)
+{
+	//auto shadowColor = XMCOLOR(0.1f, 0.1f, 0.1f, 0.85f);
+	//FW1_RECTF shadowRect = { x + 1.0f, y + 1.0f, x + 1.0f, y + 1.0f };
+
+	//mFontWrapper->AnalyzeString(nullptr, text.c_str(), L"Verdana", fontSize, &shadowRect, shadowColor.c, flags | FW1_NOFLUSH | FW1_NOWORDWRAP, mTextGeometry);
+
+	//auto realColor = XMCOLOR(color.f[0], color.f[1], color.f[2], color.f[3]);
+	//FW1_RECTF realRect = { x, y, x, y };
+
+	//mFontWrapper->AnalyzeString(nullptr, text.c_str(), L"Verdana", fontSize, &realRect, realColor.c, flags | FW1_NOFLUSH | FW1_NOWORDWRAP, mTextGeometry);
+}
+
+void Render::WorldLine(Classes::FVector origin, Classes::FVector dest, Color col)
+{
+	Classes::FVector2D sOrigin;
+	Classes::FVector2D sDest;
+
+	if (!Engine::W2S(origin, &sOrigin) || !Engine::W2S(dest, &sDest))
+		return;
+
+	Line(sOrigin.X, sOrigin.Y, sDest.X, sDest.Y, col);
+}
+
+void Render::Box3D(Classes::FVector origin, Classes::FVector extends, Color col)
+{
+	origin -= extends / 2.f;
+
+	// bottom plane
+	Classes::FVector one = origin;
+	Classes::FVector two = origin; two.X += extends.X;
+	Classes::FVector three = origin; three.X += extends.X; three.Y += extends.Y;
+	Classes::FVector four = origin; four.Y += extends.Y;
+
+	Classes::FVector five = one; five.Z += extends.Z;
+	Classes::FVector six = two; six.Z += extends.Z;
+	Classes::FVector seven = three; seven.Z += extends.Z;
+	Classes::FVector eight = four; eight.Z += extends.Z;
+
+	Classes::FVector2D s1, s2, s3, s4, s5, s6, s7, s8;
+	if (!Engine::W2S(one, &s1) || !Engine::W2S(two, &s2) || !Engine::W2S(three, &s3) || !Engine::W2S(four, &s4))
+		return;
+
+	if (!Engine::W2S(five, &s5) || !Engine::W2S(six, &s6) || !Engine::W2S(seven, &s7) || !Engine::W2S(eight, &s8))
+		return;
+
+	// 3 copies of each vertex? trash
+	Line(s1, s2, col);
+	Line(s2, s3, col);
+	Line(s3, s4, col);
+	Line(s4, s1, col);
+
+	Line(s5, s6, col);
+	Line(s6, s7, col);
+	Line(s7, s8, col);
+	Line(s8, s5, col);
+
+	Line(s1, s5, col);
+	Line(s2, s6, col);
+	Line(s3, s7, col);
+	Line(s4, s8, col);
+}
+
+void Render::Plus(float x, float y, float size, Color col)
+{
+	Line(x - size, y, x + size, y, col);
+	Line(x, y - size, x, y + size, col);
+}
+
+```
+
+`src/render.h`:
+
+```h
+#pragma once
+
+#include "DXStateSaver.h"
+
+#include <string>
+
+#include <d3dcompiler.h>
+
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "D3DCompiler.lib")
+
+#include <vector>
+#include "colors.h"
+
+#define rxorc(s) s
+
+//#include "FW1/FW1FontWrapper.h"
+
+struct Vertex;
+struct Batch;
+struct Vec2;
+struct Vec3;
+struct Vec4;
+
+namespace Classes
+{
+	struct FVector;
+	struct FVector2D;
+}
+
+class Render
+{
+public:
+	struct List
+	{
+		std::vector<Vertex> verticies;
+		std::vector<Batch> batches;
+	};
+
+	Render(ID3D11Device* device);
+	~Render();
+
+	void Begin();
+	void Draw();
+	void End();
+
+	void Line(float x, float y, float j, float k, const Color &color);
+	void Line(Classes::FVector2D origin, Classes::FVector2D dest, Color col);
+	void WorldLine(Classes::FVector origin, Classes::FVector dest, Color col);
+	// rect: w x y h
+	void Clear(const Vec4& rect, const Color& col);
+	void Box(float x, float y, float j, float k, const Color& color);
+	void Box3D(Classes::FVector origin, Classes::FVector extends, Color col);
+	void Plus(float x, float y, float size, Color col);
+
+	void Text(int x, int y, const std::wstring& text, const Color& color, uint32_t flags = 1, float fontSize = 12.f);
+
+	D3D11_VIEWPORT mViewport;
+
+protected:
+	HRESULT GenerateShader(ID3D11PixelShader** pS, float r, float g, float b, ID3D10Blob** outBlob = nullptr);
+	HRESULT GenerateShader(ID3D11VertexShader** vS, float r, float g, float b, ID3D10Blob** outBlob = nullptr);
+
+	void AddVertex(Vertex& v, D3D11_PRIMITIVE_TOPOLOGY topology);
+	void AddVerticies(std::vector<Vertex> v, D3D11_PRIMITIVE_TOPOLOGY topology);
+
+private:
+	ID3D11Device* mDevice = nullptr;
+	ID3D11DeviceContext* mContext = nullptr;
+	ID3D11InputLayout* mInputLayout = nullptr;
+	ID3D11BlendState* mBlendState = nullptr;
+	ID3D11VertexShader* mVertexShader = nullptr;
+	ID3D11PixelShader* mPixelShader = nullptr;
+	ID3D11Buffer* mVertexBuffer = nullptr;
+	ID3D11Buffer* mScreenBuffer = nullptr;
+
+	//IFW1Factory* mFontFactory;
+	//IFW1FontWrapper* mFontWrapper;
+	//IFW1TextGeometry* mTextGeometry;
+
+	List mList;
+
+	bool mRestoreState = false;
+	DXTKStateSaver mStateManager;
+};
+
+struct Vec2
+{
+	float x;
+	float y;
+}; 
+
+struct Vec3
+{
+	float x;
+	float y;
+	float z;
+	Vec3(float i, float j, float k) : x(i), y(j), z(k) {}
+};
+
+struct Vec4
+{
+	float w;
+	float x;
+	float y;
+	float z;
+};
+
+struct Vertex
+{
+	Vertex() : pos(0.f, 0.f, 0.f) {}
+	Vertex(float x, float y, float z, Color color) : pos(x, y, z), col(color) {}
+
+	Vec3 pos;
+	Color col = {0.f, 0.f, 0.f, 0.f};
+};
+
+struct Batch
+{
+	Batch(size_t i, D3D11_PRIMITIVE_TOPOLOGY t) : count(i), topology(t) {}
+
+	size_t count;
+	D3D11_PRIMITIVE_TOPOLOGY topology;
+};
+```
+
+`src/utilities.cpp`:
+
+```cpp
+#include "utilities.h"
+
+#include "Psapi.h"
+#include <stdio.h>
+
+#include "globals.h"
+
+#define INRANGE(x,a,b)    (x >= a && x <= b) 
+#define getBits( x )    (INRANGE((x&(~0x20)),'A','F') ? ((x&(~0x20)) - 'A' + 0xA) : (INRANGE(x,'0','9') ? x - '0' : 0))
+#define getByte( x )    (getBits(x[0]) << 4 | getBits(x[1]))
+
+namespace Utilities
+{
+	HMODULE Tsl = 0;
+	MODULEINFO TslInfo;
+
+	uintptr_t GetBase() { return (uintptr_t)Tsl; }
+	uintptr_t GetEnd() { return GetBase() + TslInfo.SizeOfImage; }
+
+	uintptr_t FindPattern(const char* pattern)
+	{
+		char* pat = const_cast<char*>(pattern);
+		uintptr_t firstMatch = 0;
+		uintptr_t rangeEnd = GetEnd();
+
+		for (auto pCur = GetBase(); pCur < rangeEnd; pCur++)
+		{
+			if (!*pat)
+				return firstMatch;
+
+			if (*(BYTE*)pat == '\?' || *(BYTE*)pCur == getByte(pat))
+			{
+				if (!firstMatch)
+					firstMatch = pCur;
+
+				if (!pat[2])
+					return firstMatch;
+
+				if (*(BYTE*)pat == '\?')
+					pat += 2;
+				else
+					pat += 3;
+			}
+			else
+			{
+				pat = const_cast<char*>(pattern);
+				firstMatch = 0;
+			}
+		}
+
+		return 0;
+	}
+
+	void LoadModule()
+	{
+		HMODULE hMods[1024];
+		DWORD cb;
+
+		if (EnumProcessModulesEx(curProcess, hMods, sizeof(hMods), &cb, LIST_MODULES_64BIT))
+		{
+			Tsl = hMods[0];
+			GetModuleInformation(curProcess, Tsl, &TslInfo, sizeof(MODULEINFO));
+		}
+	}
+}
+```
+
+`src/utilities.h`:
+
+```h
+#pragma once
+
+#include <memory>
+#include <Windows.h>
+
+namespace Utilities
+{
+	extern HANDLE curProcess;
+	extern HINSTANCE hAppInstance;
+
+	void LoadModule();
+
+	uintptr_t GetBase();
+	uintptr_t GetEnd();
+
+	uintptr_t FindPattern(const char* pattern);
+}
+```
+
+`src/vmt.h`:
+
+```h
+#pragma once
+
+// simple as fuck
+template <typename T> T HookVirtual(void* func, T Hook)
+{
+	DWORD oldProtect = 0;
+	VirtualProtectEx(Utilities::curProcess, func, 4, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+	T original = *(T*)func;
+	*(T*)func = Hook;
+
+	VirtualProtectEx(Utilities::curProcess, func, 4, oldProtect, &oldProtect);
+
+	return original;
+}
+```
