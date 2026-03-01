@@ -1,0 +1,2154 @@
+Project Path: arc_gmh5225_syscalls-cpp_nz8uyiax
+
+Source Tree:
+
+```txt
+arc_gmh5225_syscalls-cpp_nz8uyiax
+├── CMakeLists.txt
+├── LICENSE
+├── docs
+│   └── images
+│       └── protection_demo.gif
+├── examples
+│   ├── basic-usage.cpp
+│   └── custom-generator.cpp
+├── include
+│   ├── crt.hpp
+│   ├── hash.hpp
+│   ├── native_api.hpp
+│   ├── platform.hpp
+│   ├── shared.hpp
+│   └── syscall.hpp
+└── readme.md
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.15)
+project(syscalls-cpp VERSION 1.0.0 LANGUAGES CXX)
+
+include(GNUInstallDirs)
+
+add_library(syscalls-cpp INTERFACE)
+add_library(sapdragon::syscalls-cpp ALIAS syscalls-cpp)
+
+target_include_directories(syscalls-cpp INTERFACE
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+file(GLOB HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp")
+
+install(
+    FILES ${HEADER_FILES}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(
+    TARGETS syscalls-cpp
+    EXPORT syscalls-cpp-targets
+)
+
+install(
+    EXPORT syscalls-cpp-targets
+    FILE syscalls-cpp-config.cmake
+    NAMESPACE sapdragon::
+    DESTINATION share/syscalls-cpp
+)
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2025 Ivan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`examples/basic-usage.cpp`:
+
+```cpp
+#include <iostream>
+#include <syscalls-cpp/syscall.hpp>
+
+int main() 
+{
+    syscall::Manager<syscall::policies::allocator::section, syscall::policies::generator::direct> syscallManager;
+    if (!syscallManager.initialize())
+    {
+        std::cerr << "initialization failed!\n";
+        return 1;
+    }
+
+    PVOID pBaseAddress = nullptr;
+    SIZE_T uSize = 0x1000;
+
+    syscallManager.invoke<NTSTATUS>(
+        SYSCALL_ID("NtAllocateVirtualMemory"),
+        syscall::native::getCurrentProcess(),
+        &pBaseAddress,
+        0, &uSize,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE
+    );
+
+    if (pBaseAddress)
+        std::cout << "allocation successful at 0x" << pBaseAddress << std::endl;
+
+    return 0;
+}
+```
+
+`examples/custom-generator.cpp`:
+
+```cpp
+#pragma warning(disable : 4146) // neg for unsigned
+
+#include <syscalls-cpp/syscall.hpp>
+
+#include <iostream>
+#include <cstdint>
+#include <array>
+#include <vector>
+#include <random>
+#include <functional>
+#include <chrono>
+#include <initializer_list>
+#include <cstring> 
+
+class CBufferWriter 
+{
+public:
+    CBufferWriter(uint8_t* buffer, size_t size) : m_pStart(buffer), m_pCurrent(buffer), m_pEnd(buffer + size) 
+    {
+
+    }
+
+    template<typename T>
+    void write(T value) 
+    {
+        if (m_pCurrent + sizeof(T) <= m_pEnd)
+        {
+            *reinterpret_cast<T*>(m_pCurrent) = value;
+            m_pCurrent += sizeof(T);
+        }
+    }
+
+    void writeBytes(std::initializer_list<uint8_t> listBytes) {
+        if (m_pCurrent + listBytes.size() <= m_pEnd) 
+        {
+            memcpy(m_pCurrent, listBytes.begin(), listBytes.size());
+            m_pCurrent += listBytes.size();
+        }
+    }
+
+    size_t getCurrentSize() const {
+        return m_pCurrent - m_pStart;
+    }
+
+    void fillRest(uint8_t uValue) 
+    {
+        if (m_pCurrent < m_pEnd) {
+            memset(m_pCurrent, uValue, m_pEnd - m_pCurrent);
+        }
+    }
+
+private:
+    uint8_t* m_pStart;
+    uint8_t* m_pCurrent;
+    const uint8_t* m_pEnd;
+};
+
+
+struct EncryptedShellGenerator
+{
+    static constexpr bool bRequiresGadget = false;
+    static constexpr size_t kMaxStubSize = 128;
+
+private:
+    enum class EOperationType { ADD, SUB, XOR, NOT, NEG, ROL, ROR };
+
+    struct ObfuscationLayer_t
+    {
+        EOperationType m_eType;
+        uint32_t m_uKey;
+    };
+
+    inline static std::mt19937 randEngine{ static_cast<unsigned int>(std::chrono::high_resolution_clock::now().time_since_epoch().count()) };
+
+public:
+    static void generate(uint8_t* pBuffer, uint32_t uSyscallNumber, void* /*pGadgetAddress*/)
+    {
+        CBufferWriter writer(pBuffer, kMaxStubSize);
+
+        std::uniform_int_distribution<> operationDist(0, 6);
+        std::uniform_int_distribution<uint32_t> keyDist(1, 0xFFFFFFFF);
+        std::uniform_int_distribution<> layersDist(4, 8);
+
+        const int iAmountOfLayers = layersDist(randEngine);
+        std::vector<ObfuscationLayer_t> vecLayers;
+        vecLayers.reserve(iAmountOfLayers);
+
+        for (int i = 0; i < iAmountOfLayers; ++i)
+        {
+            EOperationType operationType = static_cast<EOperationType>(operationDist(randEngine));
+            uint32_t uKey = 0;
+
+            if (operationType == EOperationType::ROL || operationType == EOperationType::ROR)
+                uKey = keyDist(randEngine) % 31 + 1;
+            else if (operationType != EOperationType::NOT && operationType != EOperationType::NEG)
+            {
+                uKey = keyDist(randEngine);
+
+                if (uKey == 0)
+                    uKey = 1;
+            }
+
+            vecLayers.push_back({ operationType, uKey });
+        }
+        uint32_t uEncryptedValue = uSyscallNumber;
+        for (auto it = vecLayers.rbegin(); it != vecLayers.rend(); ++it)
+        {
+            const auto& layer = *it;
+            switch (layer.m_eType)
+            {
+                case EOperationType::ADD: uEncryptedValue -= layer.m_uKey; break;
+                case EOperationType::SUB: uEncryptedValue += layer.m_uKey; break;
+                case EOperationType::XOR: uEncryptedValue ^= layer.m_uKey; break;
+                case EOperationType::NOT: uEncryptedValue = ~uEncryptedValue; break;
+                case EOperationType::NEG: uEncryptedValue = -uEncryptedValue; break;
+                case EOperationType::ROL: uEncryptedValue = (uEncryptedValue >> layer.m_uKey) | (uEncryptedValue << (32 - layer.m_uKey)); break; // ROR
+                case EOperationType::ROR: uEncryptedValue = (uEncryptedValue << layer.m_uKey) | (uEncryptedValue >> (32 - layer.m_uKey)); break; // ROL
+            }
+        }
+
+        writer.writeBytes({ 0x51, 0x41, 0x5A });     // push rcx; pop r10
+
+        writer.write<uint8_t>(0xB8);                // mov eax, ...
+        writer.write<uint32_t>(uEncryptedValue);    // ... encryptedValue
+
+        emitJunk(writer);
+
+        for (const auto& layer : vecLayers)
+        {
+            switch (layer.m_eType) {
+            case EOperationType::ADD:
+                writer.write<uint8_t>(0x05);    // add eax, key
+                writer.write<uint32_t>(layer.m_uKey);
+                break;
+            case EOperationType::SUB:
+                writer.write<uint8_t>(0x2D);    // sub eax, key
+                writer.write<uint32_t>(layer.m_uKey);
+                break;
+            case EOperationType::XOR:
+                writer.write<uint8_t>(0x35);    // xor eax, key
+                writer.write<uint32_t>(layer.m_uKey);
+                break;
+            case EOperationType::NOT:
+                writer.writeBytes({ 0xF7, 0xD0 }); // not eax
+                break;
+            case EOperationType::NEG:
+                writer.writeBytes({ 0xF7, 0xD8 }); // neg eax
+                break;
+            case EOperationType::ROL:
+                writer.writeBytes({ 0xC1, 0xC0 }); // rol eax, key
+                writer.write<uint8_t>(static_cast<uint8_t>(layer.m_uKey));
+                break;
+            case EOperationType::ROR:
+                writer.writeBytes({ 0xC1, 0xC8 }); // ror eax, key
+                writer.write<uint8_t>(static_cast<uint8_t>(layer.m_uKey));
+                break;
+            }
+
+            emitJunk(writer);
+        }
+
+        writer.writeBytes({ 0x0F, 0x05 });                  // syscall
+        writer.writeBytes({ 0x48, 0x83, 0xC4, 0x08 });     // add rsp 8
+        writer.writeBytes({ 0xFF, 0x64, 0x24, 0xF8 });     // jmp qword ptr [rsp-8]
+
+        writer.fillRest(0xCC); // int3
+    }
+
+    static constexpr size_t getStubSize() { return kMaxStubSize; }
+private:
+    static void emitJunk(CBufferWriter& writer)
+    {
+        std::uniform_int_distribution<> junkDist(0, 5);
+        int iJunkType = junkDist(randEngine);
+
+        const uint8_t uREXW = 0x48;
+        const std::array<uint8_t, 6> arrPushOpcodes = { 0x50, 0x51, 0x52, 0x53, 0x56, 0x57 };
+        const std::array<uint8_t, 6> arrPopOpcodes = { 0x58, 0x59, 0x5A, 0x5B, 0x5E, 0x5F };
+
+        const std::array<uint8_t, 6> arrIncDecNegModRM = { 0xC0, 0xC1, 0xC2, 0xC3, 0xC6, 0xC7 };
+        const std::array<uint8_t, 6> arrLeaModRM = { 0x40, 0x49, 0x52, 0x5B, 0x76, 0x7F };
+        std::uniform_int_distribution<> regDist(0, arrPushOpcodes.size() - 1);
+        int iRegIdx = regDist(randEngine);
+
+        switch (iJunkType)
+        {
+            case 0:
+                // nop
+                writer.write<uint8_t>(0x90);
+                break;
+
+            case 1:
+                // push rXX; pop rXX
+                writer.write<uint8_t>(arrPushOpcodes[iRegIdx]);
+                writer.write<uint8_t>(arrPopOpcodes[iRegIdx]);
+                break;
+
+            case 2:
+                // pushfq
+                writer.write<uint8_t>(0x9C);
+                // inc rXX
+                writer.writeBytes({ uREXW, 0xFF, arrIncDecNegModRM[iRegIdx] });
+                // dec rXX
+                writer.writeBytes({ uREXW, 0xFF, (uint8_t)(arrIncDecNegModRM[iRegIdx] + 0x08) });
+                // popfq
+                writer.write<uint8_t>(0x9D);
+                break;
+
+            case 3:
+                // lea rXX, [rXX + 0x00]
+                writer.writeBytes({ uREXW, 0x8D, arrLeaModRM[iRegIdx], 0x00 });
+                break;
+
+            case 4:
+            {
+                // pushfq
+                writer.write<uint8_t>(0x9C);
+
+                std::uniform_int_distribution<uint32_t> valDist;
+                uint32_t uRandomVal = valDist(randEngine);
+
+                // xor rXX, imm32
+                writer.writeBytes({ uREXW, 0x81, (uint8_t)(0xF0 + iRegIdx) });
+                writer.write<uint32_t>(uRandomVal);
+
+                // xor rXX, imm32 
+                writer.writeBytes({ uREXW, 0x81, (uint8_t)(0xF0 + iRegIdx) });
+                writer.write<uint32_t>(uRandomVal);
+
+                // popfq
+                writer.write<uint8_t>(0x9D);
+            }
+            break;
+
+            case 5:
+                break;
+        }
+    }
+};
+
+int main() 
+{
+    syscall::Manager < syscall::policies::allocator::section, EncryptedShellGenerator> syscallManager;
+    if (!syscallManager.initialize()) 
+    {
+        std::cerr << "failed to initialize syscall manager" << std::endl;
+        return 1;
+    }
+
+    std::cout << "syscall manager initialized successfully" << std::endl;
+
+    NTSTATUS status;
+    PVOID pBaseAddress = nullptr;
+    SIZE_T uSize = 0x1000;
+
+    status = syscallManager.invoke<NTSTATUS>(
+        SYSCALL_ID("NtAllocateVirtualMemory"),
+        syscall::native::getCurrentProcess(),
+        &pBaseAddress,
+        0,
+        &uSize,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE
+    );
+
+    if(pBaseAddress)
+        std::cout << "memory allocated: " << pBaseAddress;
+    else
+        std::cout << "failed to allocate, status:" << status;
+
+    return 0;
+}
+```
+
+`include/crt.hpp`:
+
+```hpp
+#ifndef SYSCALL_CRT_HPP
+#define SYSCALL_CRT_HPP
+
+#include <cstdint>
+#include <cwchar>
+
+namespace syscall::crt
+{
+    template<typename T, size_t N>
+    [[nodiscard]] constexpr size_t getCountOf(T(&)[N]) noexcept
+    {
+        return N;
+    }
+
+    namespace memory
+    {
+        inline void* copy(void* pDest, const void* pSource, size_t uCount) noexcept
+        {
+            auto* d = static_cast<unsigned char*>(pDest);
+            const auto* s = static_cast<const unsigned char*>(pSource);
+            for (size_t i = 0; i < uCount; ++i)
+                d[i] = s[i];
+
+            return pDest;
+        }
+
+        inline void* set(void* pDest, int iValue, size_t uCount) noexcept
+        {
+            auto* d = static_cast<unsigned char*>(pDest);
+            const unsigned char ucByteValue = static_cast<unsigned char>(iValue);
+            for (size_t i = 0; i < uCount; ++i)
+                d[i] = ucByteValue;
+
+            return pDest;
+        }
+
+        inline int compare(const void* pBuffer1, const void* pBuffer2, size_t uCount) noexcept
+        {
+            const auto* s1 = static_cast<const unsigned char*>(pBuffer1);
+            const auto* s2 = static_cast<const unsigned char*>(pBuffer2);
+
+            for (size_t i = 0; i < uCount; ++i)
+            {
+                if (s1[i] != s2[i])
+                    return s1[i] - s2[i];
+            }
+
+            return 0;
+        }
+    }
+
+    namespace string
+    {
+        constexpr char toLower(char c) noexcept 
+        {
+            return (c >= 'A' && c <= 'Z') ? (c + ('a' - 'A')) : c; 
+        }
+        constexpr wchar_t toLower(wchar_t c) noexcept 
+        { 
+            return (c >= L'A' && c <= L'Z') ? (c + (L'a' - L'A')) : c; 
+        }
+
+        constexpr size_t getLength(const char* szStr) noexcept
+        {
+            const char* s = szStr;
+            while (*s) 
+                ++s;
+
+            return s - szStr;
+        }
+
+        constexpr size_t getLength(const wchar_t* wzStr) noexcept
+        {
+            const wchar_t* s = wzStr;
+            while (*s) 
+                ++s;
+
+            return s - wzStr;
+        }
+
+        [[nodiscard]] constexpr int compare(const char* szFirst, const char* szSecond) noexcept
+        {
+            while (*szFirst && (*szFirst == *szSecond)) 
+            {
+                szFirst++; 
+                szSecond++; 
+            }
+
+            return *(const unsigned char*)szFirst - *(const unsigned char*)szSecond;
+        }
+
+        [[nodiscard]] constexpr int compareIgnoreCase(const wchar_t* szFirst, const wchar_t* szSecond) noexcept
+        {
+            wchar_t c1, c2;
+            do {
+                c1 = toLower(*szFirst++);
+                c2 = toLower(*szSecond++);
+
+                if (c1 == L'\0') 
+                    return c1 - c2;
+            } while (c1 == c2);
+
+            return c1 - c2;
+        }
+
+        [[nodiscard]] constexpr const char* findChar(const char* str, int character) noexcept
+        {
+            while (*str != '\0') 
+            {
+                if (*str == static_cast<char>(character)) 
+                    return str;
+
+                str++;
+            }
+            return nullptr;
+        }
+
+        [[nodiscard]] inline char* findChar(char* str, int character) noexcept
+        {
+            return const_cast<char*>(findChar(static_cast<const char*>(str), character));
+        }
+
+        inline void copy(char* szDest, size_t uDestLength, const char* src) noexcept
+        {
+            if (!szDest || !uDestLength)
+                return;
+
+            const size_t uSourceLength = getLength(src);
+
+            const size_t uCount = (uSourceLength < uDestLength) ? uSourceLength : (uDestLength - 1);
+            memory::copy(szDest, src, uCount);
+            szDest[uCount] = '\0';
+        }
+
+        inline void concat(wchar_t* pDest, size_t uSizeInElements, const wchar_t* pSource) noexcept
+        {
+            if (!pDest || uSizeInElements == 0)
+                return;
+
+            const size_t uDestLength = getLength(pDest);
+            if (uDestLength >= uSizeInElements - 1)
+                return;
+
+
+            const size_t uSourceLength = getLength(pSource);
+            const size_t uRemainingSpace = uSizeInElements - uDestLength - 1;
+            const size_t uCount = (uSourceLength < uRemainingSpace) ? uSourceLength : uRemainingSpace;
+
+            memory::copy(pDest + uDestLength, pSource, uCount * sizeof(wchar_t));
+            pDest[uDestLength + uCount] = L'\0';
+        }
+
+        inline void mbToWcs(wchar_t* pDest, size_t uSizeInElements, const char* pSource) noexcept
+        {
+            if (!pDest || uSizeInElements)
+                return;
+
+            const size_t uSourceLength = getLength(pSource);
+            const size_t uCount = (uSourceLength < uSizeInElements) ? uSourceLength : (uSizeInElements - 1);
+            for (size_t i = 0; i < uCount; ++i)
+                pDest[i] = static_cast<wchar_t>(static_cast<unsigned char>(pSource[i]));
+
+            pDest[uCount] = L'\0';
+        }
+    }
+}
+
+#endif
+```
+
+`include/hash.hpp`:
+
+```hpp
+#ifndef HASHING_HPP
+#define HASHING_HPP
+
+#include <cstdint>
+#include <string>
+#include <bit>
+
+namespace syscall::hashing
+{
+    using Hash_t = uint64_t;
+
+    constexpr Hash_t getCompileTimeSeed()
+    {
+        Hash_t seed = 0;
+        const char* szCurrentTime = __TIME__;
+        const char* szCurrentDate = __DATE__;
+
+        for (int i = 0; szCurrentTime[i] != '\0'; ++i) 
+            seed = std::rotr(seed, 3) + szCurrentTime[i];
+
+        for (int i = 0; szCurrentDate[i] != '\0'; ++i) 
+            seed = std::rotr(seed, 5) + szCurrentDate[i];
+
+        return seed;
+    }
+
+    constexpr Hash_t currentSeed = getCompileTimeSeed();
+    constexpr Hash_t polyKey1 = 0xAF6F01BD5B2D7583ULL ^ currentSeed;
+    constexpr Hash_t polyKey2 = 0xB4F281729182741DULL ^ std::rotr(currentSeed, 7);
+
+    consteval Hash_t calculateHash(const char* szData)
+    {
+        Hash_t hash = polyKey1;
+        while (*szData)
+        {
+            hash ^= static_cast<Hash_t>(*szData++);
+            hash += std::rotr(hash, 11) + polyKey2;
+        }
+        return hash;
+    }
+
+    consteval Hash_t calculateHash(const char* szData, size_t uLength)
+    {
+        Hash_t hash = polyKey1;
+        for (size_t i = 0; i < uLength && szData[i]; ++i)
+        {
+            hash ^= static_cast<Hash_t>(szData[i]);
+            hash += std::rotr(hash, 11) + polyKey2;
+        }
+        return hash;
+    }
+
+
+    inline Hash_t calculateHashRuntime(const char* szData)
+    {
+        Hash_t hash = polyKey1;
+        while (*szData)
+        {
+            hash ^= static_cast<Hash_t>(*szData++);
+            hash += std::rotr(hash, 11) + polyKey2;
+        }
+        return hash;
+    }
+
+    inline Hash_t calculateHashRuntime(const char* szData, size_t uLength)
+    {
+        Hash_t hash = polyKey1;
+        for (size_t i = 0; i < uLength && szData[i]; ++i)
+        {
+            hash ^= static_cast<Hash_t>(szData[i]);
+            hash += std::rotr(hash, 11) + polyKey2;
+        }
+        return hash;
+    }
+}
+
+#ifdef SYSCALLS_NO_HASH
+#define SYSCALL_ID(str) (str)
+#define SYSCALL_ID_RT(str) (str)
+#else
+#define SYSCALL_ID(str) (syscall::hashing::calculateHash(str))
+#define SYSCALL_ID_RT(str) (syscall::hashing::calculateHashRuntime(str))
+
+#endif
+
+#endif
+```
+
+`include/native_api.hpp`:
+
+```hpp
+#ifndef NATIVE_API_HPP
+#define NATIVE_API_HPP
+
+#include "shared.hpp"
+#include "hash.hpp"
+#include "crt.hpp"
+#include <cstdint>
+#include <cwchar>
+
+namespace syscall::native
+{
+    inline PPEB getCurrentPEB()
+    {
+#if SYSCALL_PLATFORM_WINDOWS_64
+        return (PEB*)(__readgsqword(0x60));
+#elif SYSCALL_PLATFORM_WINDOWS_32
+        return (PEB*)(__readfsdword(0x30));
+#endif
+    }
+
+    inline hashing::Hash_t calculateHashRuntimeCi(const wchar_t* wzData)
+    {
+        if (!wzData)
+            return 0;
+
+        hashing::Hash_t hash = hashing::polyKey1;
+        wchar_t wcCurrent = 0;
+
+        while ((wcCurrent = *wzData++))
+        {
+            char cAnsiChar = static_cast<char>(crt::string::toLower(wcCurrent));
+            hash ^= static_cast<hashing::Hash_t>(cAnsiChar);
+            hash += std::rotr(hash, 11) + hashing::polyKey2;
+        }
+        return hash;
+    }
+
+    inline HMODULE getModuleBase(const wchar_t* wzModuleName)
+    {
+        auto pPeb = getCurrentPEB();
+        if (!pPeb || !pPeb->Ldr)
+            return nullptr;
+
+        auto pLdrData = pPeb->Ldr;
+        auto pListHead = &pLdrData->InMemoryOrderModuleList;
+        auto pCurrentEntry = pListHead->Flink;
+
+        while (pCurrentEntry != pListHead)
+        {
+            auto pEntry = CONTAINING_RECORD(pCurrentEntry, native::LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+            if (pEntry->BaseDllName.Buffer && crt::string::compareIgnoreCase(pEntry->BaseDllName.Buffer, wzModuleName) == 0)
+                return reinterpret_cast<HMODULE>(pEntry->DllBase);
+
+            pCurrentEntry = pCurrentEntry->Flink;
+        }
+        return nullptr;
+    }
+
+    inline HMODULE getModuleBase(hashing::Hash_t uModuleHash)
+    {
+        auto pPeb = getCurrentPEB();
+        if (!pPeb || !pPeb->Ldr)
+            return nullptr;
+
+        auto pLdrData = pPeb->Ldr;
+        auto pListHead = &pLdrData->InMemoryOrderModuleList;
+        auto pCurrentEntry = pListHead->Flink;
+
+        while (pCurrentEntry != pListHead)
+        {
+            auto pEntry = CONTAINING_RECORD(pCurrentEntry, native::LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+            if (pEntry->BaseDllName.Buffer && calculateHashRuntimeCi(pEntry->BaseDllName.Buffer) == uModuleHash)
+                return reinterpret_cast<HMODULE>(pEntry->DllBase);
+
+            pCurrentEntry = pCurrentEntry->Flink;
+        }
+        return nullptr;
+    }
+
+    inline void* getExportAddress(HMODULE hModuleBase, const char* szExportName)
+    {
+        if (!hModuleBase || !szExportName)
+            return nullptr;
+
+        auto pBase = reinterpret_cast<uint8_t*>(hModuleBase);
+        auto pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(pBase);
+        if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+            return nullptr;
+
+        auto pNtHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(pBase + pDosHeader->e_lfanew);
+        if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE)
+            return nullptr;
+
+        auto uExportDirRva = pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+        if (!uExportDirRva) return nullptr;
+
+        auto pExportDir = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(pBase + uExportDirRva);
+        auto pNamesRVA = reinterpret_cast<uint32_t*>(pBase + pExportDir->AddressOfNames);
+        auto pOrdinalsRVA = reinterpret_cast<uint16_t*>(pBase + pExportDir->AddressOfNameOrdinals);
+        auto pFunctionsRVA = reinterpret_cast<uint32_t*>(pBase + pExportDir->AddressOfFunctions);
+
+        for (uint32_t i = 0; i < pExportDir->NumberOfNames; ++i)
+        {
+            const char* szCurrentProcName = reinterpret_cast<const char*>(pBase + pNamesRVA[i]);
+
+            if (crt::string::compare(szCurrentProcName, szExportName) == 0)
+            {
+                uint16_t usOrdinal = pOrdinalsRVA[i];
+                uint32_t uFunctionRva = pFunctionsRVA[usOrdinal];
+                auto uExportSectionStart = uExportDirRva;
+                auto uExportSectionEnd = uExportSectionStart + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
+
+                if (uFunctionRva >= uExportSectionStart && uFunctionRva < uExportSectionEnd)
+                {
+                    char szForwarderString[256];
+                    crt::string::copy(szForwarderString, sizeof(szForwarderString), reinterpret_cast<const char*>(pBase + uFunctionRva));
+
+                    char* szSeparator = crt::string::findChar(szForwarderString, '.');
+                    if (!szSeparator)
+                        return nullptr;
+
+                    *szSeparator = '\0';
+                    char* szForwarderFuncName = szSeparator + 1;
+                    char* szForwarderDllName = szForwarderString;
+
+                    wchar_t wzWideDllName[260];
+
+                    crt::string::mbToWcs(wzWideDllName, crt::getCountOf(wzWideDllName), szForwarderDllName);
+                    crt::string::concat(wzWideDllName, crt::getCountOf(wzWideDllName), L".dll");
+
+                    HMODULE hForwarderModuleBase = getModuleBase(wzWideDllName);
+                    if (!hForwarderModuleBase)
+                        return nullptr;
+
+                    return getExportAddress(hForwarderModuleBase, szForwarderFuncName);
+                }
+                else
+                    return pBase + uFunctionRva;
+            }
+        }
+        return nullptr;
+    }
+
+    inline void* getExportAddress(HMODULE hModuleBase, hashing::Hash_t uExportHash)
+    {
+        if (!hModuleBase)
+            return nullptr;
+
+        auto pBase = reinterpret_cast<uint8_t*>(hModuleBase);
+        auto pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(pBase);
+        if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+            return nullptr;
+
+        auto pNtHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(pBase + pDosHeader->e_lfanew);
+        if (pNtHeaders->Signature != IMAGE_NT_SIGNATURE)
+            return nullptr;
+
+        auto uExportDirRva = pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+        if (!uExportDirRva)
+            return nullptr;
+
+        auto pExportDir = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(pBase + uExportDirRva);
+        auto pNamesRVA = reinterpret_cast<uint32_t*>(pBase + pExportDir->AddressOfNames);
+        auto pOrdinalsRVA = reinterpret_cast<uint16_t*>(pBase + pExportDir->AddressOfNameOrdinals);
+        auto pFunctionsRVA = reinterpret_cast<uint32_t*>(pBase + pExportDir->AddressOfFunctions);
+
+        for (uint32_t i = 0; i < pExportDir->NumberOfNames; ++i)
+        {
+            const char* szCurrentProcName = reinterpret_cast<const char*>(pBase + pNamesRVA[i]);
+
+            if (hashing::calculateHashRuntime(szCurrentProcName) == uExportHash)
+            {
+                uint16_t usOrdinal = pOrdinalsRVA[i];
+                uint32_t uFunctionRva = pFunctionsRVA[usOrdinal];
+                auto uExportSectionStart = uExportDirRva;
+                auto uExportSectionEnd = uExportSectionStart + pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
+
+                if (uFunctionRva >= uExportSectionStart && uFunctionRva < uExportSectionEnd)
+                {
+                    char szForwarderString[256];
+                    crt::string::copy(szForwarderString, sizeof(szForwarderString), reinterpret_cast<const char*>(pBase + uFunctionRva));
+
+                    char* szSeparator = crt::string::findChar(szForwarderString, '.');
+                    if (!szSeparator)
+                        return nullptr;
+
+                    *szSeparator = '\0';
+                    char* szForwarderFuncName = szSeparator + 1;
+                    char* szForwarderDllName = szForwarderString;
+
+                    wchar_t wzWideDllName[260];
+                    crt::string::mbToWcs(wzWideDllName, crt::getCountOf(wzWideDllName), szForwarderDllName);
+                    hashing::Hash_t uForwarderDllHash = calculateHashRuntimeCi(wzWideDllName);
+                    if (!uForwarderDllHash)
+                        return nullptr;
+
+                    uForwarderDllHash ^= static_cast<hashing::Hash_t>('.');
+                    uForwarderDllHash += std::rotr(uForwarderDllHash, 11) + hashing::polyKey2;
+
+                    uForwarderDllHash ^= static_cast<hashing::Hash_t>('d');
+                    uForwarderDllHash += std::rotr(uForwarderDllHash, 11) + hashing::polyKey2;
+
+                    uForwarderDllHash ^= static_cast<hashing::Hash_t>('l');
+                    uForwarderDllHash += std::rotr(uForwarderDllHash, 11) + hashing::polyKey2;
+
+                    uForwarderDllHash ^= static_cast<hashing::Hash_t>('l');
+                    uForwarderDllHash += std::rotr(uForwarderDllHash, 11) + hashing::polyKey2;
+
+                    HMODULE hForwarderModuleBase = getModuleBase(uForwarderDllHash);
+                    if (!hForwarderModuleBase)
+                        return nullptr;
+
+                    hashing::Hash_t uForwarderFuncHash = hashing::calculateHashRuntime(szForwarderFuncName);
+                    return getExportAddress(hForwarderModuleBase, uForwarderFuncHash);
+                }
+                else
+                    return pBase + uFunctionRva;
+            }
+        }
+        return nullptr;
+    }
+
+    SYSCALL_FORCE_INLINE uint64_t rdtscp()
+    {
+        unsigned int uProcessorId;
+#if SYSCALL_COMPILER_MSVC
+        return __rdtscp(&uProcessorId);
+#elif SYSCALL_COMPILER_GCC || SYSCALL_COMPILER_CLANG
+        return __builtin_ia32_rdtscp(&uProcessorId);
+#else
+#error "Compiler not supported for RDTSCP intrinsic"
+#endif
+    }
+}
+
+#endif
+```
+
+`include/platform.hpp`:
+
+```hpp
+#ifndef _SYSCALL_PLATFORM_HPP_
+#define _SYSCALL_PLATFORM_HPP_
+
+#if defined(_WIN64)
+#define SYSCALL_PLATFORM_WINDOWS 1
+#define SYSCALL_PLATFORM_WINDOWS_64 1
+#define SYSCALL_PLATFORM_WINDOWS_32 0
+#elif defined(_WIN32)
+#define SYSCALL_PLATFORM_WINDOWS 1
+#define SYSCALL_PLATFORM_WINDOWS_64 0
+#define SYSCALL_PLATFORM_WINDOWS_32 1
+#else
+#define SYSCALL_PLATFORM_WINDOWS 0
+#endif
+
+#if defined(__linux__)
+#define SYSCALL_PLATFORM_LINUX 1
+#else
+#define SYSCALL_PLATFORM_LINUX 0
+#endif
+
+#if defined(_MSC_VER)
+#define SYSCALL_COMPILER_MSVC 1
+#else
+#define SYSCALL_COMPILER_MSVC 0
+#endif
+
+#if defined(__clang__)
+#define SYSCALL_COMPILER_CLANG 1
+#else
+#define SYSCALL_COMPILER_CLANG 0
+#endif
+
+#if defined(__GNUC__) && !SYSCALL_COMPILER_CLANG
+#define SYSCALL_COMPILER_GCC 1
+#else
+#define SYSCALL_COMPILER_GCC 0
+#endif
+
+#if SYSCALL_PLATFORM_WINDOWS_64
+#define SYSCALL_API __stdcall
+#else
+#define SYSCALL_API __cdecl
+#endif
+
+#if SYSCALL_COMPILER_MSVC
+#define SYSCALL_FORCE_INLINE __forceinline
+#elif SYSCALL_COMPILER_GCC || SYSCALL_COMPILER_CLANG
+#define SYSCALL_FORCE_INLINE inline __attribute__((always_inline))
+#else
+#define SYSCALL_FORCE_INLINE inline
+#endif
+
+namespace syscall::platform
+{
+    constexpr bool isWindows = (SYSCALL_PLATFORM_WINDOWS == 1);
+    constexpr bool isWindows64 = (SYSCALL_PLATFORM_WINDOWS_64 == 1);
+    constexpr bool isWindows32 = (SYSCALL_PLATFORM_WINDOWS_32 == 1);
+    constexpr bool isLinux = (SYSCALL_PLATFORM_LINUX == 1);
+
+    constexpr bool isMSVC = (SYSCALL_COMPILER_MSVC == 1);
+    constexpr bool IsClang = (SYSCALL_COMPILER_CLANG == 1);
+    constexpr bool IsGCC = (SYSCALL_COMPILER_GCC == 1);
+
+    static_assert(isWindows, "Unsupported OS");
+    static_assert(isMSVC || IsClang || IsGCC, "Unsupported compiler");
+}
+
+#endif
+```
+
+`include/shared.hpp`:
+
+```hpp
+#ifndef _SYSCALL_SHARED_HPP_
+#define _SYSCALL_SHARED_HPP_
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#include <winternl.h>
+
+#include "platform.hpp"
+
+namespace syscall::native
+{
+
+    [[nodiscard]] inline constexpr bool isSuccess(NTSTATUS status) noexcept 
+    {
+        return status >= 0;
+    }
+    constexpr NTSTATUS STATUS_SUCCESS = 0x00000000L;
+    constexpr NTSTATUS STATUS_UNSUCCESSFUL = 0xC0000001L;
+    constexpr NTSTATUS STATUS_PROCEDURE_NOT_FOUND = 0xC000007A;
+
+    inline constexpr HANDLE getCurrentProcess() noexcept 
+    {
+        return reinterpret_cast<HANDLE>(-1);
+    }
+
+    enum class ESectionInherit : DWORD 
+    {
+        VIEW_SHARE = 1,
+        VIEW_UNMAP = 2
+    };
+
+    enum class ESectionAllocAttributes : ULONG 
+    {
+        SECTION_COMMIT = SEC_COMMIT,
+        SECTION_IMAGE = SEC_IMAGE,
+        SECTION_IMAGE_NO_EXECUTE = SEC_IMAGE_NO_EXECUTE,
+        SECTION_LARGE_PAGES = SEC_LARGE_PAGES,
+        SECTION_NO_CHANGE = 0x00400000, 
+        SECTION_RESERVE = SEC_RESERVE,
+    };
+
+    struct LDR_DATA_TABLE_ENTRY
+    {
+        LIST_ENTRY InLoadOrderLinks;
+        LIST_ENTRY InMemoryOrderLinks;
+        LIST_ENTRY InInitializationOrderLinks;
+        PVOID DllBase;
+        PVOID EntryPoint;
+        ULONG SizeOfImage;
+        UNICODE_STRING FullDllName;
+        UNICODE_STRING BaseDllName;
+        ULONG Flags;
+        USHORT LoadCount;
+        USHORT TlsIndex;
+        union {
+            LIST_ENTRY HashLinks;
+            struct {
+                PVOID SectionPointer;
+                ULONG CheckSum;
+            };
+        };
+        union {
+            ULONG TimeDateStamp;
+            PVOID LoadedImports;
+        };
+        _ACTIVATION_CONTEXT* EntryPointActivationContext;
+        PVOID PatchInformation;
+        LIST_ENTRY ForwarderLinks;
+        LIST_ENTRY ServiceTagLinks;
+        LIST_ENTRY StaticLinks;
+        PVOID ContextInformation;
+        ULONG_PTR OriginalBase;
+        LARGE_INTEGER LoadTime;
+    };
+
+    using NtCreateSection_t = NTSTATUS(NTAPI*)(
+        PHANDLE SectionHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
+        PLARGE_INTEGER MaximumSize, ULONG SectionPageProtection, ULONG AllocationAttributes, HANDLE FileHandle
+        );
+
+    using NtMapViewOfSection_t = NTSTATUS(NTAPI*)(
+        HANDLE SectionHandle, HANDLE ProcessHandle, PVOID* BaseAddress,
+        ULONG_PTR ZeroBits, SIZE_T CommitSize, PLARGE_INTEGER SectionOffset,
+        PSIZE_T ViewSize, ESectionInherit InheritDisposition, ULONG AllocationType, ULONG Win32Protect
+        );
+
+    using NtUnmapViewOfSection_t = NTSTATUS(NTAPI*)(HANDLE ProcessHandle, PVOID BaseAddress);
+
+    using NtAllocateVirtualMemory_t = NTSTATUS(NTAPI*)(
+        HANDLE ProcessHandle, PVOID* BaseAddress, ULONG_PTR ZeroBits,
+        PSIZE_T RegionSize, ULONG AllocationType, ULONG Protect
+        );
+
+    using NtProtectVirtualMemory_t = NTSTATUS(NTAPI*)(
+        HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize,
+        ULONG NewProtect, PULONG OldProtect
+        );
+
+    using NtFreeVirtualMemory_t = NTSTATUS(NTAPI*)(
+        HANDLE ProcessHandle, PVOID* BaseAddress, PSIZE_T RegionSize, ULONG FreeType
+        );
+
+    using NtClose_t = NTSTATUS(NTAPI*)(HANDLE Handle);
+    using RtlCreateHeap_t = PVOID(NTAPI*)(ULONG Flags, PVOID HeapBase, SIZE_T ReserveSize, SIZE_T CommitSize, PVOID Lock, PVOID Parameters);
+    using RtlAllocateHeap_t = PVOID(NTAPI*)(PVOID HeapHandle, ULONG Flags, SIZE_T Size);
+    using RtlDestroyHeap_t = PVOID(NTAPI*)(PVOID HeapHandle);
+
+} // syscall::native
+
+#endif
+```
+
+`include/syscall.hpp`:
+
+```hpp
+#ifndef SYSCALL_HPP
+#define SYSCALL_HPP
+
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <optional>
+#include <fstream>
+#include <mutex>
+#include <cstring>
+#include <utility>
+#include <concepts> 
+#include <array>
+#include <random>
+#include <algorithm>
+#include <span>
+
+#include "shared.hpp"
+#include "hash.hpp"
+#include "native_api.hpp"
+
+
+namespace syscall
+{
+
+    struct ModuleInfo_t
+    {
+        uint8_t* m_pModuleBase = nullptr;
+        IMAGE_NT_HEADERS* m_pNtHeaders = nullptr;
+        IMAGE_EXPORT_DIRECTORY* m_pExportDir = nullptr;
+    };
+
+#ifdef SYSCALLS_NO_HASH
+    using SyscallKey_t = std::string;
+#else
+    using SyscallKey_t = hashing::Hash_t;
+#endif
+
+    struct SyscallEntry_t
+    {
+        SyscallKey_t m_key;
+        uint32_t m_uSyscallNumber;
+        uint32_t m_uOffset;
+    };
+
+
+    thread_local struct ExceptionContext_t
+    {
+        bool m_bShouldHandle = false;
+        const void* m_pExpectedExceptionAddress = nullptr;
+        void* m_pSyscallGadget = nullptr;
+        uint32_t m_uSyscallNumber = 0;
+    } pExceptionContext;
+
+    class CExceptionContextGuard
+    {
+    public:
+        CExceptionContextGuard(const void* pExpectedAddress, void* pSyscallGadget, uint32_t uSyscallNumber)
+        {
+            pExceptionContext.m_bShouldHandle = true;
+            pExceptionContext.m_pExpectedExceptionAddress = pExpectedAddress;
+            pExceptionContext.m_pSyscallGadget = pSyscallGadget;
+            pExceptionContext.m_uSyscallNumber = uSyscallNumber;
+        }
+
+        ~CExceptionContextGuard()
+        {
+            pExceptionContext.m_bShouldHandle = false;
+        }
+
+        CExceptionContextGuard(const CExceptionContextGuard&) = delete;
+        CExceptionContextGuard& operator=(const CExceptionContextGuard&) = delete;
+    };
+
+#if SYSCALL_PLATFORM_WINDOWS_64
+    LONG NTAPI VectoredExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo)
+    {
+        if (!pExceptionContext.m_bShouldHandle)
+            return EXCEPTION_CONTINUE_SEARCH;
+
+        if (pExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION &&
+            pExceptionInfo->ExceptionRecord->ExceptionAddress == pExceptionContext.m_pExpectedExceptionAddress)
+        {
+            pExceptionContext.m_bShouldHandle = false;
+
+            pExceptionInfo->ContextRecord->R10 = pExceptionInfo->ContextRecord->Rcx;
+            pExceptionInfo->ContextRecord->Rax = pExceptionContext.m_uSyscallNumber;
+            pExceptionInfo->ContextRecord->Rip = reinterpret_cast<uintptr_t>(pExceptionContext.m_pSyscallGadget);
+
+            return EXCEPTION_CONTINUE_EXECUTION;
+        }
+
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+#endif
+
+    namespace policies
+    {
+        namespace allocator
+        {
+            struct section
+            {
+                static bool allocate(size_t uRegionSize, const std::span<const uint8_t> vecBuffer, void*& pOutRegion, HANDLE& /*unused*/)
+                {
+                    HMODULE hNtDll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+
+                    auto fNtCreateSection = reinterpret_cast<native::NtCreateSection_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtCreateSection")));
+                    auto fNtMapView = reinterpret_cast<native::NtMapViewOfSection_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtMapViewOfSection")));
+                    auto fNtUnmapView = reinterpret_cast<native::NtUnmapViewOfSection_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtUnmapViewOfSection")));
+                    auto fNtClose = reinterpret_cast<native::NtClose_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtClose")));
+                    if (!fNtCreateSection || !fNtMapView || !fNtUnmapView || !fNtClose)
+                        return false;
+
+                    HANDLE hSectionHandle = nullptr;
+                    LARGE_INTEGER sectionSize;
+                    sectionSize.QuadPart = uRegionSize;
+
+                    NTSTATUS status = fNtCreateSection(&hSectionHandle, SECTION_ALL_ACCESS, nullptr, &sectionSize, PAGE_EXECUTE_READWRITE, SEC_COMMIT | static_cast<ULONG>(native::ESectionAllocAttributes::SECTION_NO_CHANGE), nullptr);
+                    if (!NT_SUCCESS(status))
+                        return false;
+
+                    void* pTempView = nullptr;
+                    SIZE_T uViewSize = uRegionSize;
+                    status = fNtMapView(hSectionHandle, native::getCurrentProcess(), &pTempView, 0, 0, nullptr, &uViewSize, native::ESectionInherit::VIEW_SHARE, 0, PAGE_READWRITE);
+                    if (!NT_SUCCESS(status))
+                    {
+                        fNtClose(hSectionHandle);
+                        return false;
+                    }
+
+                    crt::memory::copy(pTempView, vecBuffer.data(), uRegionSize);
+                    fNtUnmapView(native::getCurrentProcess(), pTempView);
+                    uViewSize = uRegionSize;
+                    status = fNtMapView(hSectionHandle, native::getCurrentProcess(), &pOutRegion, 0, 0, nullptr, &uViewSize, native::ESectionInherit::VIEW_SHARE, 0, PAGE_EXECUTE_READ);
+                    fNtClose(hSectionHandle);
+                    return NT_SUCCESS(status) && pOutRegion;
+                }
+                static void release(void* pRegion, HANDLE /*hHeapHandle*/)
+                {
+                    HMODULE hNtDll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+                    if (pRegion)
+                    {
+                        auto fNtUnmapView = reinterpret_cast<native::NtUnmapViewOfSection_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtUnmapViewOfSection")));
+                        if (fNtUnmapView)
+                            fNtUnmapView(native::getCurrentProcess(), pRegion);
+                    }
+                }
+            };
+
+            struct heap
+            {
+                static bool allocate(size_t uRegionSize, const std::span<const uint8_t> vecBuffer, void*& pOutRegion, HANDLE& hOutHeapHandle)
+                {
+                    using RtlGetLastNtStatus_t = NTSTATUS(NTAPI*)();
+                    HMODULE hNtdll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+                    if (!hNtdll)
+                        return false;
+
+                    auto fRtlCreateHeap = reinterpret_cast<native::RtlCreateHeap_t>(native::getExportAddress(hNtdll, SYSCALL_ID("RtlCreateHeap")));
+                    auto fRtlAllocateHeap = reinterpret_cast<native::RtlAllocateHeap_t>(native::getExportAddress(hNtdll, SYSCALL_ID("RtlAllocateHeap")));
+                    auto fRtlGetLastNtStatus = reinterpret_cast<RtlGetLastNtStatus_t>(native::getExportAddress(hNtdll, SYSCALL_ID("RtlGetLastNtStatus")));
+                    if (!fRtlCreateHeap || !fRtlAllocateHeap)
+                        return false;
+
+                    hOutHeapHandle = fRtlCreateHeap(HEAP_CREATE_ENABLE_EXECUTE | HEAP_GROWABLE, nullptr, 0, 0, nullptr, nullptr);
+                    if (!hOutHeapHandle)
+                        return false;
+
+                    pOutRegion = fRtlAllocateHeap(hOutHeapHandle, 0, uRegionSize);
+                    if (!pOutRegion)
+                    {
+                        release(nullptr, hOutHeapHandle);
+                        hOutHeapHandle = nullptr;
+                        return false;
+                    }
+
+                    crt::memory::copy(pOutRegion, vecBuffer.data(), uRegionSize);
+                    return true;
+                }
+
+                static void release(void* /*region*/, HANDLE hHeapHandle)
+                {
+                    if (hHeapHandle)
+                    {
+                        HMODULE hNtdll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+                        if (!hNtdll)
+                            return;
+
+                        auto fRtlDestroyHeap = reinterpret_cast<native::RtlDestroyHeap_t>(native::getExportAddress(hNtdll, SYSCALL_ID("RtlDestroyHeap")));
+                        if (fRtlDestroyHeap)
+                            fRtlDestroyHeap(hHeapHandle);
+                    }
+                }
+            };
+
+            struct memory
+            {
+                static bool allocate(size_t uRegionSize, const std::span<const uint8_t> vecBuffer, void*& pOutRegion, HANDLE& /*unused*/)
+                {
+                    HMODULE hNtDll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+
+                    auto fNtAllocate = reinterpret_cast<native::NtAllocateVirtualMemory_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtAllocateVirtualMemory")));
+                    auto fNtProtect = reinterpret_cast<native::NtProtectVirtualMemory_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtProtectVirtualMemory")));
+                    if (!fNtAllocate || !fNtProtect)
+                        return false;
+
+                    pOutRegion = nullptr;
+                    SIZE_T uSize = uRegionSize;
+                    NTSTATUS status = fNtAllocate(native::getCurrentProcess(), &pOutRegion, 0, &uSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+                    if (!NT_SUCCESS(status) || !pOutRegion)
+                        return false;
+
+                    crt::memory::copy(pOutRegion, vecBuffer.data(), uRegionSize);
+
+                    ULONG oldProtection = 0;
+                    uSize = uRegionSize;
+                    status = fNtProtect(native::getCurrentProcess(), &pOutRegion, &uSize, PAGE_EXECUTE_READ, &oldProtection);
+
+                    if (!NT_SUCCESS(status))
+                    {
+                        uSize = 0;
+                        fNtAllocate(native::getCurrentProcess(), &pOutRegion, 0, &uSize, MEM_RELEASE, 0);
+                        pOutRegion = nullptr;
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                static void release(void* pRegion, HANDLE /*heapHandle*/)
+                {
+                    HMODULE hNtDll = native::getModuleBase(hashing::calculateHash("ntdll.dll"));
+
+                    if (pRegion)
+                    {
+                        auto fNtFree = reinterpret_cast<native::NtFreeVirtualMemory_t>(native::getExportAddress(hNtDll, SYSCALL_ID("NtFreeVirtualMemory")));
+                        if (fNtFree)
+                        {
+                            SIZE_T uSize = 0;
+                            fNtFree(native::getCurrentProcess(), &pRegion, &uSize, MEM_RELEASE);
+                        }
+                    }
+                }
+            };
+        } // allocator
+        namespace generator
+        {
+#if SYSCALL_PLATFORM_WINDOWS_64
+            // @note / SapDragon: supports only on x64 now
+            struct gadget
+            {
+                static constexpr bool bRequiresGadget = true;
+                static constexpr size_t getStubSize() { return 32; }
+                static void generate(uint8_t* pBuffer, uint32_t uSyscallNumber, void* pGadgetAddress)
+                {
+                    // @note / SapDragon: mov r10, rcx
+                    pBuffer[0] = 0x49;
+                    pBuffer[1] = 0x89;
+                    pBuffer[2] = 0xCA;
+
+                    // @note / SapDragon: mov eax, syscallNumber
+                    pBuffer[3] = 0xB8;
+                    *reinterpret_cast<uint32_t*>(&pBuffer[4]) = uSyscallNumber;
+
+                    // @note / SapDragon: mov r11, gadgetAddress
+                    pBuffer[8] = 0x49;
+                    pBuffer[9] = 0xBB;
+                    *reinterpret_cast<uint64_t*>(&pBuffer[10]) = reinterpret_cast<uint64_t>(pGadgetAddress);
+
+                    // @note / SapDragon: push r11
+                    pBuffer[18] = 0x41;
+                    pBuffer[19] = 0x53;
+
+                    // @note / SapDragon: ret
+                    pBuffer[20] = 0xC3;
+                }
+            };
+
+            struct exception
+            {
+                static constexpr bool bRequiresGadget = true;
+                static constexpr size_t getStubSize() { return 8; }
+                static void generate(uint8_t* pBuffer, uint32_t /*uSyscallNumber*/, void* /*pGadgetAddress*/)
+                {
+                    pBuffer[0] = 0x0F;
+                    pBuffer[1] = 0x0B;
+                    pBuffer[2] = 0xC3;
+                    crt::memory::set(pBuffer + 2, 0x90, getStubSize() - 3);
+                }
+            };
+#endif
+            struct direct
+            {
+                static constexpr bool bRequiresGadget = false;
+
+#if SYSCALL_PLATFORM_WINDOWS_64
+                inline static constinit std::array<uint8_t, 18> arrShellcode =
+                {
+                    0x51,                               // push rcx
+                    0x41, 0x5A,                         // pop r10
+                    0xB8, 0x00, 0x00, 0x00, 0x00,       // mov eax, 0x00000000 (syscall number placeholder)
+                    0x0F, 0x05,                         // syscall
+                    0x48, 0x83, 0xC4, 0x08,             // add rsp, 8
+                    0xFF, 0x64, 0x24, 0xF8              // jmp qword ptr [rsp-8]
+                };
+#elif SYSCALL_PLATFORM_WINDOWS_32
+                inline static constinit std::array<uint8_t, 15> arrShellcode =
+                {
+                    0xB8, 0x00, 0x00, 0x00, 0x00,       // mov eax, 0x00000000 (syscall number placeholder)
+                    0x89, 0xE2,                         // mov edx, esp
+                    0x64, 0xFF, 0x15, 0xC0, 0x00, 0x00, 0x00, // call dword ptr fs:[0xC0]
+                    0xC3                                // ret
+                };
+#endif
+                static void generate(uint8_t* pBuffer, uint32_t uSyscallNumber, void* /*pGadgetAddress*/)
+                {
+                    crt::memory::copy(pBuffer, arrShellcode.data(), arrShellcode.size());
+
+                    if constexpr (platform::isWindows64)
+                        *reinterpret_cast<uint32_t*>(pBuffer + 4) = uSyscallNumber;
+                    else
+                        *reinterpret_cast<uint32_t*>(pBuffer + 1) = uSyscallNumber;
+                }
+                static constexpr size_t getStubSize() { return arrShellcode.size(); }
+            };
+
+        }
+        namespace parser
+        {
+            struct directory
+            {
+                static std::vector<SyscallEntry_t> parse(const ModuleInfo_t& module)
+                {
+                    std::vector<SyscallEntry_t> vecFoundSyscalls;
+                    // @note / sapdragon: exception parser on x64
+                    if constexpr (platform::isWindows64)
+                    {
+                        auto uExceptionDirRva = module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].VirtualAddress;
+                        if (!uExceptionDirRva)
+                            return vecFoundSyscalls;
+
+                        auto pRuntimeFunctions = reinterpret_cast<PIMAGE_RUNTIME_FUNCTION_ENTRY>(module.m_pModuleBase + uExceptionDirRva);
+                        auto uExceptionDirSize = module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION].Size;
+                        auto uFunctionCount = uExceptionDirSize / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
+
+                        auto pFunctionsRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfFunctions);
+                        auto pNamesRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNames);
+                        auto pOrdinalsRva = reinterpret_cast<uint16_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNameOrdinals);
+
+                        std::unordered_map<uint32_t, const char*> mapRvaToName;
+                        for (uint32_t i = 0; i < module.m_pExportDir->NumberOfNames; ++i)
+                        {
+                            const char* szName = reinterpret_cast<const char*>(module.m_pModuleBase + pNamesRVA[i]);
+                            uint16_t uOrdinal = pOrdinalsRva[i];
+                            uint32_t uFunctionRva = pFunctionsRVA[uOrdinal];
+                            mapRvaToName[uFunctionRva] = szName;
+                        }
+
+                        uint32_t uSyscallNumber = 0;
+                        for (DWORD i = 0; i < uFunctionCount; ++i)
+                        {
+                            auto pFunction = &pRuntimeFunctions[i];
+                            if (pFunction->BeginAddress == 0)
+                                break;
+
+                            auto it = mapRvaToName.find(pFunction->BeginAddress);
+                            if (it != mapRvaToName.end())
+                            {
+                                const char* szName = it->second;
+
+                                if (hashing::calculateHashRuntime(szName, 2) == hashing::calculateHash("Zw"))
+                                {
+                                    char szNtName[128];
+                                    crt::string::copy(szNtName, 128, szName);
+                                    szNtName[0] = 'N';
+                                    szNtName[1] = 't';
+
+                                    const SyscallKey_t key = SYSCALL_ID_RT(szNtName);
+
+                                    vecFoundSyscalls.push_back(SyscallEntry_t{ key, uSyscallNumber, 0 });
+                                    uSyscallNumber++;
+                                }
+                            }
+                        }
+                    }
+                    // @note / sapdragon: sorting zw exports
+                    else 
+                    {
+                        auto pFunctionsRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfFunctions);
+                        auto pNamesRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNames);
+                        auto pOrdinalsRva = reinterpret_cast<uint16_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNameOrdinals);
+
+                        std::vector<std::pair<uintptr_t, const char*>> vecZwFunctions;
+                        for (uint32_t i = 0; i < module.m_pExportDir->NumberOfNames; ++i)
+                        {
+                            const char* szName = reinterpret_cast<const char*>(module.m_pModuleBase + pNamesRVA[i]);
+
+                            if (szName[0] == 'Z' && szName[1] == 'w')
+                            {
+                                uint16_t uOrdinal = pOrdinalsRva[i];
+                                uint32_t uFunctionRva = pFunctionsRVA[uOrdinal];
+
+                                auto pExportSectionStart = module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+                                auto pExportSectionEnd = pExportSectionStart + module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
+                                if (uFunctionRva >= pExportSectionStart && uFunctionRva < pExportSectionEnd)
+                                    continue;
+
+                                uintptr_t uFunctionAddress = reinterpret_cast<uintptr_t>(module.m_pModuleBase + uFunctionRva);
+                                vecZwFunctions.push_back({ uFunctionAddress, szName });
+                            }
+                        }
+
+                        if (vecZwFunctions.empty())
+                            return vecFoundSyscalls;
+
+                        std::sort(vecZwFunctions.begin(), vecZwFunctions.end(),
+                            [](const auto& a, const auto& b) {
+                                return a.first < b.first;
+                            });
+
+                        for (size_t i = 0; i < vecZwFunctions.size(); ++i)
+                        {
+                            const char* szZwName = vecZwFunctions[i].second;
+
+                            char szNtName[128];
+                            crt::string::copy(szNtName, 128, szZwName);
+                            szNtName[0] = 'N';
+                            szNtName[1] = 't';
+
+                            const SyscallKey_t key = SYSCALL_ID_RT(szNtName);
+                            const uint32_t uSyscallNumber = static_cast<uint32_t>(i);
+
+                            vecFoundSyscalls.push_back(SyscallEntry_t{ key, uSyscallNumber, 0 });
+                        }
+                    }
+                    
+                    return vecFoundSyscalls;
+                }
+            };
+
+            struct signature
+            {
+                static std::vector<SyscallEntry_t> parse(const ModuleInfo_t& module)
+                {
+                    std::vector<SyscallEntry_t> vecFoundSyscalls;
+
+                    auto pFunctionsRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfFunctions);
+                    auto pNamesRVA = reinterpret_cast<uint32_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNames);
+                    auto pOrdinalsRva = reinterpret_cast<uint16_t*>(module.m_pModuleBase + module.m_pExportDir->AddressOfNameOrdinals);
+
+                    for (uint32_t i = 0; i < module.m_pExportDir->NumberOfNames; i++)
+                    {
+                        const char* szName = reinterpret_cast<const char*>(module.m_pModuleBase + pNamesRVA[i]);
+
+                        if (hashing::calculateHashRuntime(szName, 2) != hashing::calculateHash("Nt"))
+                            continue;
+
+                        uint16_t uOrdinal = pOrdinalsRva[i];
+                        uint32_t uFunctionRva = pFunctionsRVA[uOrdinal];
+
+                        auto pExportSectionStart = module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+                        auto pExportSectionEnd = pExportSectionStart + module.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].Size;
+                        if (uFunctionRva >= pExportSectionStart && uFunctionRva < pExportSectionEnd)
+                            continue;
+
+                        uint8_t* pFunctionStart = module.m_pModuleBase + uFunctionRva;
+                        uint32_t uSyscallNumber = 0;
+
+                        if constexpr (platform::isWindows64) 
+                            if (*reinterpret_cast<uint32_t*>(pFunctionStart) == 0xB8D18B4C)
+                                uSyscallNumber = *reinterpret_cast<uint32_t*>(pFunctionStart + 4);
+                                
+                        if constexpr (platform::isWindows32) 
+                            if (*pFunctionStart == 0xB8)
+                                uSyscallNumber = *reinterpret_cast<uint32_t*>(pFunctionStart + 1);
+
+                        // @note / SapDragon: checks hooks on x64
+                        if constexpr (platform::isWindows64)
+                        {
+                            if (isFunctionHooked(pFunctionStart) && !uSyscallNumber)
+                            {
+                                // @note / SapDragon: stable only on x64
+
+                                // @note / SapDragon: search up
+                                for (int j = 1; j < 20; ++j)
+                                {
+                                    uint8_t* pNeighborFunc = pFunctionStart - (j * 0x20);
+                                    if (reinterpret_cast<uintptr_t>(pNeighborFunc) < reinterpret_cast<uintptr_t>(module.m_pModuleBase)) break;
+                                    if (*reinterpret_cast<uint32_t*>(pNeighborFunc) == 0xB8D18B4C)
+                                    {
+                                        uint32_t uNeighborSyscall = *reinterpret_cast<uint32_t*>(pNeighborFunc + 4);
+                                        uSyscallNumber = uNeighborSyscall + j;
+                                        break;
+                                    }
+                                }
+
+                                // @note / SapDragon: search down
+                                if (!uSyscallNumber)
+                                {
+                                    for (int j = 1; j < 20; ++j)
+                                    {
+                                        uint8_t* pNeighborFunc = pFunctionStart + (j * 0x20);
+                                        if (reinterpret_cast<uintptr_t>(pNeighborFunc) > (reinterpret_cast<uintptr_t>(module.m_pModuleBase) + module.m_pNtHeaders->OptionalHeader.SizeOfImage)) break;
+                                        if (*reinterpret_cast<uint32_t*>(pNeighborFunc) == 0xB8D18B4C)
+                                        {
+                                            uint32_t uNeighborSyscall = *reinterpret_cast<uint32_t*>(pNeighborFunc + 4);
+                                            uSyscallNumber = uNeighborSyscall - j;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (uSyscallNumber)
+                        {
+                            const SyscallKey_t key = SYSCALL_ID_RT(szName);
+                            vecFoundSyscalls.push_back(SyscallEntry_t{
+                                        key,
+                                        uSyscallNumber,
+                                        0
+                                });
+                        }
+                    }
+                    return vecFoundSyscalls;
+                }
+            private:
+                static bool isFunctionHooked(const uint8_t* pFunctionStart)
+                {
+                    const uint8_t* pCurrent = pFunctionStart;
+                        
+                    while (*pCurrent == 0x90)
+                        pCurrent++;
+
+                    switch (pCurrent[0])
+                    {
+                        // @note / SapDragon: JMP rel32
+                    case 0xE9:
+                        // @note / SapDragon: JMP rel8
+                    case 0xEB:
+                        // @note / SapDragon: push imm32
+                    case 0x68:
+                        return true;
+
+                        // @note / SapDragon: jmp [mem] / jmp [rip + offset]
+                    case 0xFF:
+                        if (pCurrent[1] == 0x25)
+                            return true;
+                        break;
+
+                        // @note / SapDragon: int3...
+                    case 0xCC:
+                        return true;
+
+                        // @note / SapDragon: ud2
+                    case 0x0F:
+                        if (pCurrent[1] == 0x0B)
+                            return true;
+                        break;
+
+                        // @note / SapDragon: int 0x3
+                    case 0xCD:
+                        if (pCurrent[1] == 0x03)
+                            return true;
+                        break;
+
+                    default:
+                        break;
+                    }
+
+                    return false;
+                }
+            };
+        } // parsing
+    } // policies
+
+
+    template<typename T>
+    concept IsIAllocationPolicy = requires(size_t uSize, const std::span<const uint8_t>vecBuffer, void*& pRegion, HANDLE & hObject)
+    {
+        { T::allocate(uSize, vecBuffer, pRegion, hObject) } -> std::convertible_to<bool>;
+        { T::release(pRegion, hObject) } -> std::same_as<void>;
+    };
+
+    template<typename T>
+    concept IsStubGenerationPolicy = requires(uint8_t * pBuffer, uint32_t uSyscallNumber, void* pGadget)
+    {
+        { T::bRequiresGadget } -> std::same_as<const bool&>;
+        { T::getStubSize() } -> std::convertible_to<size_t>;
+        { T::generate(pBuffer, uSyscallNumber, pGadget) } -> std::same_as<void>;
+    };
+
+    template<typename T>
+    concept IsSyscallParsingPolicy = requires(const ModuleInfo_t & module)
+    {
+        { T::parse(module) } -> std::convertible_to<std::vector<SyscallEntry_t>>;
+    };
+
+    template<IsSyscallParsingPolicy... IParsers>
+    struct ParserChain_t
+    {
+        static_assert(sizeof...(IParsers) > 0, "Parsedchain_t cannot be empty.");
+    };
+
+    template<
+        IsIAllocationPolicy IAllocationPolicy,
+        IsStubGenerationPolicy IStubGenerationPolicy,
+        IsSyscallParsingPolicy IFirstParser,
+        IsSyscallParsingPolicy... IFallbackParsers
+    >
+    class ManagerImpl
+    {
+    private:
+        std::mutex m_mutex;
+        std::vector<SyscallEntry_t> m_vecParsedSyscalls;
+        void* m_pSyscallRegion = nullptr;
+        std::vector<void*> m_vecSyscallGadgets;
+        size_t m_uRegionSize = 0;
+        bool m_bInitialized = false;
+        HANDLE m_hObjectHandle = nullptr;
+        void* m_pVehHandle = nullptr;
+    public:
+        ManagerImpl() = default;
+        ~ManagerImpl()
+        {
+            if constexpr (platform::isWindows64)
+                if (m_pVehHandle)
+                    RemoveVectoredExceptionHandler(m_pVehHandle);
+
+            IAllocationPolicy::release(m_pSyscallRegion, m_hObjectHandle);
+        }
+
+        ManagerImpl(const ManagerImpl&) = delete;
+        ManagerImpl& operator=(const ManagerImpl&) = delete;
+        ManagerImpl(ManagerImpl&& other) noexcept
+        {
+            std::lock_guard<std::mutex> lock(other.m_mutex);
+            m_vecParsedSyscalls = std::move(other.m_vecParsedSyscalls);
+            m_pSyscallRegion = other.m_pSyscallRegion;
+            m_vecSyscallGadgets = std::move(other.m_vecSyscallGadgets);
+            m_uRegionSize = other.m_uRegionSize;
+            m_bInitialized = other.m_bInitialized;
+            m_hObjectHandle = other.m_hObjectHandle;
+            other.m_pSyscallRegion = nullptr;
+            other.m_hObjectHandle = nullptr;
+        }
+
+        ManagerImpl& operator=(ManagerImpl&& other) noexcept
+        {
+            if (this != &other)
+            {
+                std::scoped_lock lock(m_mutex, other.m_mutex);
+                IAllocationPolicy::release(m_pSyscallRegion, m_hObjectHandle);
+                m_vecParsedSyscalls = std::move(other.m_vecParsedSyscalls);
+                m_pSyscallRegion = other.m_pSyscallRegion;
+                m_vecSyscallGadgets = std::move(other.m_vecSyscallGadgets);
+                m_uRegionSize = other.m_uRegionSize;
+                m_bInitialized = other.m_bInitialized;
+                m_hObjectHandle = other.m_hObjectHandle;
+                other.m_pSyscallRegion = nullptr;
+                other.m_hObjectHandle = nullptr;
+            }
+
+            return *this;
+        }
+
+        bool initialize(const std::vector<SyscallKey_t>& vecModuleKeys = { SYSCALL_ID("ntdll.dll") })
+        {
+            if (m_bInitialized)
+                return true;
+
+            std::lock_guard<std::mutex> lock(m_mutex);
+
+            if (m_bInitialized)
+                return true;
+#if SYSCALL_PLATFORM_WINDOWS_64
+            if constexpr (IStubGenerationPolicy::bRequiresGadget)
+                if (!findSyscallGadgets())
+                    return false;
+#endif
+            m_vecParsedSyscalls.clear();
+            for (const auto& moduleKey : vecModuleKeys)
+            {
+                ModuleInfo_t moduleInfo;
+                if (!getModuleInfo(moduleKey, moduleInfo))
+                    continue;
+
+                std::vector<SyscallEntry_t> moduleSyscalls = tryParseSyscalls<IFirstParser, IFallbackParsers...>(moduleInfo);
+
+                m_vecParsedSyscalls.insert(m_vecParsedSyscalls.end(), moduleSyscalls.begin(), moduleSyscalls.end());
+            }
+
+            if (m_vecParsedSyscalls.empty())
+                return false;
+
+            if (m_vecParsedSyscalls.size() > 1)
+                for (size_t i = m_vecParsedSyscalls.size() - 1; i > 0; --i)
+                    std::swap(m_vecParsedSyscalls[i], m_vecParsedSyscalls[native::rdtscp() % (i + 1)]);
+
+            for (size_t i = 0; i < m_vecParsedSyscalls.size(); ++i)
+                m_vecParsedSyscalls[i].m_uOffset = static_cast<uint32_t>(i * IStubGenerationPolicy::getStubSize());
+
+
+            std::sort(m_vecParsedSyscalls.begin(), m_vecParsedSyscalls.end(),
+                [](const SyscallEntry_t& a, const SyscallEntry_t& b) {
+                    return a.m_key < b.m_key;
+                });
+
+            m_bInitialized = createSyscalls();
+            if (m_bInitialized)
+            {
+#if SYSCALL_PLATFORM_WINDOWS_64
+                if constexpr (std::is_same_v<IStubGenerationPolicy, policies::generator::exception>)
+                {
+                    m_pVehHandle = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
+                    if (!m_pVehHandle)
+                    {
+                        IAllocationPolicy::release(m_pSyscallRegion, m_hObjectHandle);
+                        m_pSyscallRegion = nullptr;
+                        m_bInitialized = false;
+                    }
+                }
+#endif
+            }
+
+            return m_bInitialized;
+        }
+        template<typename Ret = uintptr_t, typename... Args>
+        SYSCALL_FORCE_INLINE Ret invoke(const SyscallKey_t& syscallId, Args... args)
+        {
+            if (!m_bInitialized)
+            {
+                if (!initialize())
+                {
+                    if constexpr (std::is_same_v<Ret, NTSTATUS>)
+                        return native::STATUS_UNSUCCESSFUL;
+
+                    return Ret{};
+                }
+            }
+            auto it = std::lower_bound(m_vecParsedSyscalls.begin(), m_vecParsedSyscalls.end(), syscallId,
+                [](const SyscallEntry_t& entry, const SyscallKey_t& id) {
+                    return entry.m_key < id;
+                });
+
+            if (it == m_vecParsedSyscalls.end() || it->m_key != syscallId)
+            {
+                if constexpr (std::is_same_v<Ret, NTSTATUS>)
+                    return native::STATUS_PROCEDURE_NOT_FOUND;
+
+                return Ret{};
+            }
+
+            using Function_t = Ret(SYSCALL_API*)(Args...);
+
+            uint8_t* pStubAddress = reinterpret_cast<uint8_t*>(m_pSyscallRegion) + it->m_uOffset;
+#if SYSCALL_PLATFORM_WINDOWS_64
+            if constexpr (std::is_same_v<IStubGenerationPolicy, policies::generator::exception>)
+            {
+                const size_t uGadgetCount = m_vecSyscallGadgets.size();
+
+                if (!uGadgetCount)
+                {
+                    if constexpr (std::is_same_v<Ret, NTSTATUS>)
+                        return native::STATUS_UNSUCCESSFUL;
+                    return Ret{};
+                }
+
+                const size_t uRandomIndex = native::rdtscp() % uGadgetCount;
+                void* pRandomGadget = m_vecSyscallGadgets[uRandomIndex];
+
+                CExceptionContextGuard contextGuard(pStubAddress, pRandomGadget, it->m_uSyscallNumber);
+                return reinterpret_cast<Function_t>(pStubAddress)(std::forward<Args>(args)...);
+            }
+#endif
+            return reinterpret_cast<Function_t>(pStubAddress)(std::forward<Args>(args)...);
+        }
+    private:
+        template<IsSyscallParsingPolicy CurrentParser, IsSyscallParsingPolicy... OtherParsers>
+        std::vector<SyscallEntry_t> tryParseSyscalls(const ModuleInfo_t& moduleInfo)
+        {
+            auto vecSyscalls = CurrentParser::parse(moduleInfo);
+
+            if (!vecSyscalls.empty())
+                return vecSyscalls;
+
+            if constexpr (sizeof...(OtherParsers) > 0)
+                return tryParseSyscalls<OtherParsers...>(moduleInfo);
+
+            return vecSyscalls;
+        }
+
+
+        bool createSyscalls()
+        {
+            if (m_vecParsedSyscalls.empty())
+                return false;
+
+            if constexpr (IStubGenerationPolicy::bRequiresGadget)
+                if (m_vecSyscallGadgets.empty())
+                    return false;
+
+            m_uRegionSize = m_vecParsedSyscalls.size() * IStubGenerationPolicy::getStubSize();
+            std::vector<uint8_t> vecTempBuffer(m_uRegionSize);
+
+            const size_t uGadgetsCount = m_vecSyscallGadgets.size();
+
+            for (const SyscallEntry_t& entry : m_vecParsedSyscalls)
+            {
+                uint8_t* pStubLocation = vecTempBuffer.data() + entry.m_uOffset;
+                void* pGadgetForStub = nullptr;
+
+                if constexpr (IStubGenerationPolicy::bRequiresGadget)
+                {
+                    const size_t uRandomIndex = native::rdtscp() % uGadgetsCount;
+                    pGadgetForStub = m_vecSyscallGadgets[uRandomIndex];
+                }
+
+                IStubGenerationPolicy::generate(pStubLocation, entry.m_uSyscallNumber, pGadgetForStub);
+            }
+
+            return IAllocationPolicy::allocate(m_uRegionSize, vecTempBuffer, m_pSyscallRegion, m_hObjectHandle);
+        }
+
+        bool getModuleInfo(SyscallKey_t moduleKey, ModuleInfo_t& info)
+        {
+            HMODULE hModule = native::getModuleBase(moduleKey);
+            if (!hModule)
+                return false;
+
+            info.m_pModuleBase = reinterpret_cast<uint8_t*>(hModule);
+
+            auto pDosHeader = reinterpret_cast<PIMAGE_DOS_HEADER>(info.m_pModuleBase);
+            if (pDosHeader->e_magic != IMAGE_DOS_SIGNATURE)
+                return false;
+
+            info.m_pNtHeaders = reinterpret_cast<PIMAGE_NT_HEADERS>(info.m_pModuleBase + pDosHeader->e_lfanew);
+            if (info.m_pNtHeaders->Signature != IMAGE_NT_SIGNATURE)
+                return false;
+
+            auto uExportRva = info.m_pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+            if (!uExportRva)
+                return false;
+
+            info.m_pExportDir = reinterpret_cast<PIMAGE_EXPORT_DIRECTORY>(info.m_pModuleBase + uExportRva);
+
+            return true;
+        }
+
+#if SYSCALL_PLATFORM_WINDOWS_64
+        bool findSyscallGadgets()
+        {
+            ModuleInfo_t ntdll;
+            if (!getModuleInfo(SYSCALL_ID("ntdll.dll"), ntdll))
+                return false;
+
+            IMAGE_SECTION_HEADER* pSections = IMAGE_FIRST_SECTION(ntdll.m_pNtHeaders);
+            uint8_t* pTextSection = nullptr;
+            uint32_t uTextSectionSize = 0;
+            for (int i = 0; i < ntdll.m_pNtHeaders->FileHeader.NumberOfSections; ++i)
+            {
+                if (hashing::calculateHashRuntime(reinterpret_cast<const char*>(pSections[i].Name)) == hashing::calculateHash(".text"))
+                {
+                    pTextSection = ntdll.m_pModuleBase + pSections[i].VirtualAddress;
+                    uTextSectionSize = pSections[i].Misc.VirtualSize;
+                    break;
+                }
+            }
+
+            if (!pTextSection || !uTextSectionSize)
+                return false;
+
+            m_vecSyscallGadgets.clear();
+            for (DWORD i = 0; i < uTextSectionSize - 2; ++i)
+                if (pTextSection[i] == 0x0F && pTextSection[i + 1] == 0x05 && pTextSection[i + 2] == 0xC3)
+                    m_vecSyscallGadgets.push_back(&pTextSection[i]);
+
+            return !m_vecSyscallGadgets.empty();
+        }
+#endif
+
+    };
+
+    using DefaultParserChain = syscall::ParserChain_t<
+        syscall::policies::parser::directory,
+        syscall::policies::parser::signature
+    >;
+
+    // @note / sapdragon: fucking templates, is that a legal cpp hack? unpack overloads...
+    template<IsIAllocationPolicy AllocPolicy, IsStubGenerationPolicy StubPolicy, typename... ParserArgs>
+    class Manager : public Manager<AllocPolicy, StubPolicy, DefaultParserChain>
+    {
+    };
+
+    template< IsIAllocationPolicy AllocPolicy, IsStubGenerationPolicy StubPolicy, IsSyscallParsingPolicy... ParsersInChain >
+    class Manager<AllocPolicy, StubPolicy, ParserChain_t<ParsersInChain...>> : public ManagerImpl<AllocPolicy, StubPolicy, ParsersInChain...>
+    {
+    };
+
+
+    template< IsIAllocationPolicy AllocPolicy, IsStubGenerationPolicy StubPolicy, IsSyscallParsingPolicy FirstParser, IsSyscallParsingPolicy... FallbackParsers>
+    class Manager<AllocPolicy, StubPolicy, FirstParser, FallbackParsers...> : public ManagerImpl<AllocPolicy, StubPolicy, FirstParser, FallbackParsers...>
+    {
+    };
+}
+#if SYSCALL_PLATFORM_WINDOWS_64
+using SyscallSectionGadget = syscall::Manager<syscall::policies::allocator::section, syscall::policies::generator::gadget>;
+using SyscallHeapGadget = syscall::Manager<syscall::policies::allocator::heap, syscall::policies::generator::gadget>;
+#endif
+using SyscallSectionDirect = syscall::Manager<syscall::policies::allocator::section, syscall::policies::generator::direct>;
+
+#endif  
+```
+
+`readme.md`:
+
+```md
+# syscalls-cpp
+
+syscalls-cpp is a C++20 policy-based framework for crafting undetectable/protected syscalls (x86 / x64). It leverages a policy-based design to let you mix and match different strategies for memory allocation and stub generation at compile-time, giving you full control over your operational security tradeoffs.
+
+The core principle is **modularity**. You are not given a black box; you are given building blocks.
+
+**The library automatically resolves system call numbers by directly parsing ntdll.dll's metadata. This method is resilient to user-mode hooks by leveraging the PE's structure—the exception directory on x64 and sorted export addresses on x86—and can find adjacent syscalls if a target is patched.**
+
+[![SEC_NO_CHANGE](https://raw.githubusercontent.com/sapdragon/syscalls-cpp/refs/heads/main/docs/images/protection_demo.gif)](https://raw.githubusercontent.com/sapdragon/syscalls-cpp/refs/heads/main/docs/images/protection_demo.gif)
+
+*Allocation demonstration: an attempt to patch a system call located in a section with the `SEC_NO_CHANGE` flag fails.
+
+## The Building Blocks: Provided Policies
+
+You can combine any allocation policy with any stub generation policy.
+
+#### Allocation Policies (`IsAllocationPolicy`)
+
+| Policy             | Method                                                |
+| ------------------ | ----------------------------------------------------- | 
+| `allocator::section` | `NtCreateSection` with `SEC_NO_CHANGE` flag           | 
+| `allocator::heap`    | `HeapCreate` with `HEAP_CREATE_ENABLE_EXECUTE`        |
+| `allocator::memory`    | `NtAllocateVirtualMemory` (`RW` -> `RX`)       |
+
+    
+
+#### Stub Generation Policies (`IsStubGenerationPolicy`)
+
+| Policy                | Method                                              |
+| --------------------- | ----------------------------------------------------|
+| `generator::direct` | Uses a classic, self-contained `syscall` instruction|
+| `generator::gadget` only | (Only x64) Jumps to a `syscall; ret` gadget found in `ntdll.dll|
+| `generator::exception` | (Only x64) Triggers a breakpoint (`ud2`) to perform the syscall via a custom Vectored Exception Handler (VEH). |
+
+#### Parsing Policies (`IsSyscallParsingPolicy`)
+| Policy | Method |
+| :--- | :--- |
+| `parser::directory` | On x64, maps the exception directory (.pdata) to the export table to determine the order of syscalls. On x86, it sorts exported Zw* functions by their memory addresses to calculate their numbers. |
+| `parser::signature` | Scans function prologues for the `mov r10, rcx; mov eax, syscall_id` signature with hooks detection. |
+
+
+## Installation
+
+The recommended way to install and manage the library is through the C++ package manager [vcpkg](https://vcpkg.io/).
+
+```sh
+vcpkg install syscalls-cpp
+```
+
+This command will download, build, and install `syscalls-cpp`, making it easily accessible for your projects with automatic MSBuild and CMake integration.
+
+For manual setup, you can clone this repository and add the `include` directory to your project's include paths.
+
+## Example: Crafting Your Strategy
+
+The power is in the combination. Here is how you build and use a syscall manager.
+
+### Standard Usage
+```cpp
+#include <iostream>
+#include "syscall.hpp"
+
+int main() {
+    SyscallSectionDirect syscallManager;
+    // you can add your own modules for parsing syscalls, by default only ntdll is parsed
+    if (!syscallManager.initialize(/* SYSCALL_ID("ntdll.dll"),  SYSCALL_ID("win32u.dll")*/))
+    {
+        std::cerr << "initialization failed!\n";
+        return 1;
+    }
+
+    PVOID pBaseAddress = nullptr;
+    SIZE_T uSize = 0x1000;
+
+    syscallManager.invoke<NTSTATUS>(
+        SYSCALL_ID("NtAllocateVirtualMemory"),
+        NtCurrentProcess(),
+        &pBaseAddress,
+        0, &uSize,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE
+    );
+
+    if (pBaseAddress)
+        std::cout << "allocation successful at 0x" << pBaseAddress << std::endl;
+
+    return 0;
+}
+```
+
+### Advanced Usage
+
+For more control, you can specify your own policy or build a custom allocators / generators / parsers
+
+```cpp
+#include "syscall.hpp"
+
+using UniqueSecretOwnPolicyManager = syscall::Manager<
+        syscall::policies::allocator::heap, // heap allocator
+        syscall::policies::generator::direct, // direct!!
+        DefaultParserChain  // default exception/sort directory + improved halo gates as a fallback is used
+>;
+
+// or, let's build a custom parser chain using the ParserChain_t helper
+// imagine you wrote a MyCustomParser policy
+/*
+using MyParserChain = syscall::ParserChain_t<
+    MyCustomParser,
+    syscall::policies::SignatureScanningParser
+>;
+
+using SuperCustomManager = syscall::Manager<
+    syscall::policies::HeapAllocator,
+    syscall::policies::GadgetStubGenerator,
+    MyParserChain // own custom chain!!!
+>;
+*/
+```
+
+## Extensibility
+
+The true power of the framework is its extensibility. You can easily write your own policies. Simply create a class that satisfies the required `concept` (`IsAllocationPolicy`, `IsStubGenerationPolicy`, or `IsSyscallParsingPolicy`), and it will be seamlessly compatible with the `Manager`.
+
+## Configuration
+
+For easier debugging, you can disable the compile-time hashing mechanism by defining the `SYSCALLS_NO_HASH` macro. This will cause the manager to use `std::string` for syscall names instead of integer hashes.
+
+-   **MSVC:** `/DSYSCALLS_NO_HASH`
+-   **GCC/Clang:** `-DSYSCALLS_NO_HASH`
+
+## Requirements
+
+-   A C++20 compatible compiler (MSVC, Clang, GCC).
+-   Windows targets (x86/x64)
+
+## LICENSE
+MIT
+```
