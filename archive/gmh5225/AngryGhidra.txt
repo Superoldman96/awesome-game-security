@@ -1,0 +1,2483 @@
+Project Path: arc_gmh5225_AngryGhidra_40tzw2hu
+
+Source Tree:
+
+```txt
+arc_gmh5225_AngryGhidra_40tzw2hu
+├── LICENSE.md
+├── Module.manifest
+├── README.md
+├── angryghidra_script
+│   └── angryghidra.py
+├── build.gradle
+├── extension.properties
+├── images
+│   ├── AngryGhidraPlugin.gif
+│   ├── AngryGhidraView.png
+│   ├── ApplyPatchedBytes.png
+│   ├── Trace.png
+│   └── angryGhidraIcon.png
+└── src
+    └── main
+        ├── java
+        │   └── angryghidra
+        │       ├── AngryGhidraPlugin.java
+        │       ├── AngryGhidraPopupMenu.java
+        │       ├── AngryGhidraProvider.java
+        │       └── HookCreation.java
+        └── resources
+            └── images
+                ├── Ico.png
+                ├── add.png
+                ├── edit-delete.png
+                ├── flag.png
+                └── process-stop.png
+
+```
+
+`LICENSE.md`:
+
+```md
+MIT License
+
+Copyright (c) 2020 Nalen98
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# AngryGhidra
+
+<p align="center"><img src="./images/angryGhidraIcon.png" width="360" height="250">
+
+The plugin allows you to use [angr](https://github.com/angr/angr) for binary analysis and symbolic execution from Ghidra interface.
+
+Solving [CTF challenge from SecurityFest 2016 "fairlight"](https://github.com/angr/angr-doc/blob/master/examples/securityfest_fairlight/fairlight) with AngryGhidra plugin:
+
+![AngryGhidra Plugin](./images/AngryGhidraPlugin.gif)
+
+# Screenshots
+
+![AngryGhidraView](./images/AngryGhidraView.png)
+
+Apply patched bytes to write them to the memory of angr project:
+
+![ApplyPatchedBytes](./images/ApplyPatchedBytes.png)
+
+# Installation
+  
+- `pip3 install angr` at first
+- Make sure that python3 directory added to the `PATH` (required, `python3` only)
+- Download Release version of extension and install it in Ghidra `File → Install Extensions...` 
+- Use gradle to build extension: `GHIDRA_INSTALL_DIR=${GHIDRA_HOME} gradle` and use Ghidra to install it: `File → Install Extensions...` 
+
+
+
+
+
+
+
+
+
+```
+
+`angryghidra_script/angryghidra.py`:
+
+```py
+import sys
+import angr
+import claripy
+import json
+import time
+
+EXPLORE_OPT = {}  # Explore options
+REGISTERS = []  # Main registers of your binary
+SYMVECTORS = []
+
+
+def hook_function(state):
+    for object in EXPLORE_OPT["Hooks"]:
+        for frame in object.items():
+            if frame[0] == str(hex(state.solver.eval(state.regs.ip))):
+                for option, data in frame[1].items():
+                    if "sv" in data:
+                        symbvector_length = int(data[2:], 0)
+                        symbvector = claripy.BVS('symvector', symbvector_length * 8)
+                        SYMVECTORS.append(symbvector)
+                        data = symbvector
+                    else:
+                        data = int(str(data), 0)
+                    for REG in REGISTERS:
+                        if REG == option:
+                            setattr(state.regs, option, data)
+                            break
+
+
+def main(file):
+    with open(file, encoding='utf-8') as json_file:
+        global EXPLORE_OPT
+        EXPLORE_OPT = json.load(json_file)
+
+    # Options parser
+    # JSON can't handle with hex values, so we need to do it manually
+    if "blank_state" in EXPLORE_OPT:
+        blank_state = int(EXPLORE_OPT["blank_state"], 16)
+
+    find = int(EXPLORE_OPT["find"], 16)
+
+    if "avoid" in EXPLORE_OPT:
+        avoid = [int(x, 16) for x in EXPLORE_OPT["avoid"].split(',')]
+
+    # User can input hex or decimal value (argv length / symbolic memory length)
+    argv = [EXPLORE_OPT["binary_file"]]
+    if "Arguments" in EXPLORE_OPT:
+        index = 1
+        for arg, length in EXPLORE_OPT["Arguments"].items():
+            argv.append(claripy.BVS("argv" + str(index), int(str(length), 0) * 8))
+            index += 1
+            
+    if "Raw Binary" in EXPLORE_OPT:
+        for bin_option, data in EXPLORE_OPT["Raw Binary"].items():
+            if bin_option == "Arch":
+                arch = data
+            if bin_option == "Base":
+                base_address = int(str(data), 0)
+        p = angr.Project(EXPLORE_OPT["binary_file"],
+                         load_options={'main_opts': {'backend': 'blob', 'arch': arch,
+                                                     'base_addr': base_address}, 'auto_load_libs': EXPLORE_OPT["auto_load_libs"]})
+    else:
+        p = angr.Project(EXPLORE_OPT["binary_file"], load_options={"auto_load_libs": EXPLORE_OPT["auto_load_libs"]})
+
+    global REGISTERS
+    REGISTERS = p.arch.default_symbolic_registers
+
+    if len(argv) > 1:
+        state = p.factory.entry_state(args=argv)
+    elif "blank_state" in locals():
+        state = p.factory.blank_state(addr=blank_state)
+    else:
+        state = p.factory.entry_state()
+
+    # Store symbolic vectors in memory
+    if "Memory" in EXPLORE_OPT:
+        Memory = {}
+        for addr, length in EXPLORE_OPT["Memory"].items():
+            symbmem_addr = int(addr, 16)
+            symbmem_len = int(length, 0)
+            Memory.update({symbmem_addr: symbmem_len})
+            symb_vector = claripy.BVS('input', symbmem_len * 8)
+            state.memory.store(symbmem_addr, symb_vector)
+
+    # Write to memory
+    if "Store" in EXPLORE_OPT:
+        for addr, value in EXPLORE_OPT["Store"].items():
+            store_addr = int(addr, 16)
+            store_value = int(value, 16)
+            store_length = len(value) - 2
+            state.memory.store(store_addr, state.solver.BVV(store_value, 4 * store_length))
+
+    # Handle Symbolic Registers
+    if "Registers" in EXPLORE_OPT:
+        for register, data in EXPLORE_OPT["Registers"].items():
+            if "sv" in data:
+                symbvector_length = int(data[2:], 0)
+                symbvector = claripy.BVS('symvector', symbvector_length * 8)
+                SYMVECTORS.append(symbvector)
+                data = symbvector
+            else:
+                data = int(str(data), 0)
+            for REG in REGISTERS:
+                if REG == register:
+                    setattr(state.regs, register, data)
+                    break
+
+    # Handle Hooks
+    if "Hooks" in EXPLORE_OPT:
+        for object in EXPLORE_OPT["Hooks"]:
+            for frame in object.items():
+                hook_address = frame[0]
+                for option, data in frame[1].items():
+                    data = int(str(data), 0)
+                    if option == "Length":
+                        hook_length = data
+                        break
+                p.hook(int(hook_address, 16), hook_function, length=hook_length)
+
+    simgr = p.factory.simulation_manager(state)
+    if "avoid" in locals():
+        simgr.use_technique(angr.exploration_techniques.Explorer(find=find, avoid=avoid))
+    else:
+        simgr.use_technique(angr.exploration_techniques.Explorer(find=find))
+
+    simgr.run()
+
+    if simgr.found:
+        found_path = simgr.found[0]
+
+        win_sequence = ""
+        for win_block in found_path.history.bbl_addrs.hardcopy:
+            win_block = p.factory.block(win_block)
+            addresses = win_block.instruction_addrs
+            for address in addresses:
+                win_sequence += hex(address) + ","
+        win_sequence = win_sequence[:-1]
+        print("Trace:" + win_sequence)
+
+        if len(argv) > 1:
+            for i in range(1, len(argv)):
+                print("argv[{id}] = {solution}".format(id=i, solution=found_path.solver.eval(argv[i], cast_to=bytes)))
+
+        if "Memory" in locals() and len(Memory) != 0:
+            for address, length in Memory.items():
+                print("{addr} = {value}".format(addr=hex(address),
+                                                value=found_path.solver.eval(found_path.memory.load(address, length),
+                                                                             cast_to=bytes)))
+
+        if len(SYMVECTORS) > 0:
+            for SV in SYMVECTORS:
+                print(found_path.solver.eval(SV, cast_to=bytes))
+
+        found_stdins = found_path.posix.stdin.content
+        if len(found_stdins) > 0:
+            std_id = 1
+            for stdin in found_stdins:
+                print(
+                    "stdin[{id}] = {solution}".format(id=std_id,
+                                                      solution=found_path.solver.eval(stdin[0], cast_to=bytes)))
+                std_id += 1
+    else:
+        print("")
+    return
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2:
+        print("Usage: *thisScript.py* angr_options.json")
+        exit()
+    file = sys.argv[1]
+    main(file)
+
+```
+
+`build.gradle`:
+
+```gradle
+// Builds a Ghidra Extension for a given Ghidra installation.
+//
+// An absolute path to the Ghidra installation directory must be supplied either by setting the 
+// GHIDRA_INSTALL_DIR environment variable or Gradle project property:
+//
+//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra> 
+//     > gradle
+//
+//         or
+//
+//     > gradle -PGHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
+//
+// Gradle should be invoked from the directory of the project to build.  Please see the
+// application.gradle.version property in <GHIDRA_INSTALL_DIR>/Ghidra/application.properties
+// for the correction version of Gradle to use for the Ghidra installation you specify.
+
+//----------------------START "DO NOT MODIFY" SECTION------------------------------
+def ghidraInstallDir
+
+if (System.env.GHIDRA_INSTALL_DIR) {
+	ghidraInstallDir = System.env.GHIDRA_INSTALL_DIR
+}
+else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
+	ghidraInstallDir = project.getProperty("GHIDRA_INSTALL_DIR")
+}
+
+if (ghidraInstallDir) {
+	apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
+}
+else {
+	throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
+}
+//----------------------END "DO NOT MODIFY" SECTION-------------------------------
+
+apply plugin: 'base'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+   implementation 'org.json:json:20200518'
+}
+
+task copyLib(type: Copy) {
+    from configurations.runtimeOnly
+    into "lib"
+}
+
+tasks.assemble.dependsOn copyLib
+
+
+
+```
+
+`extension.properties`:
+
+```properties
+name=AngryGhidra
+description=One click symbolic execution using Angr from Your Ghidra
+author=Nalen98
+createdOn=
+version=@extversion@
+
+```
+
+`src/main/java/angryghidra/AngryGhidraPlugin.java`:
+
+```java
+/* ###
+ * IP: GHIDRA
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package angryghidra;
+
+import ghidra.app.ExamplesPluginPackage;
+import ghidra.app.plugin.PluginCategoryNames;
+import ghidra.app.plugin.ProgramPlugin;
+import ghidra.framework.plugintool.PluginInfo;
+import ghidra.framework.plugintool.PluginTool;
+import ghidra.framework.plugintool.util.PluginStatus;
+import ghidra.program.model.listing.Program;
+
+
+/**
+ * TODO: Provide class-level documentation that describes what this plugin does.
+ */
+//@formatter:off
+@PluginInfo(
+    status = PluginStatus.STABLE,
+    packageName = ExamplesPluginPackage.NAME,
+    category = PluginCategoryNames.ANALYSIS,
+    shortDescription = "Use Angr from Ghidra.",
+    description = "One click symbolic execution using Angr from Your Ghidra."
+)
+//@formatter:on
+public class AngryGhidraPlugin extends ProgramPlugin {
+
+    AngryGhidraProvider provider;
+    Program program;
+    AngryGhidraPopupMenu popup;        
+
+    public AngryGhidraPlugin(PluginTool tool) {
+        super(tool);       
+        String pluginName = getName();
+        provider = new AngryGhidraProvider(this, pluginName, this.getCurrentProgram());
+        createActions();
+    }
+
+    @Override
+    public void init() {
+        super.init();
+    }
+
+    @Override
+    protected void programActivated(Program p) {
+        program = p;
+        provider.setProgram(p);
+        popup.setProgram(p);
+    }
+
+    private void createActions() {    	
+        popup = new AngryGhidraPopupMenu(this, program);
+    }
+}
+
+```
+
+`src/main/java/angryghidra/AngryGhidraPopupMenu.java`:
+
+```java
+package angryghidra;
+
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import docking.action.MenuData;
+import docking.widgets.textfield.IntegerTextField;
+import ghidra.app.context.ListingActionContext;
+import ghidra.app.context.ListingContextAction;
+import ghidra.app.plugin.core.colorizer.ColorizingService;
+import ghidra.framework.plugintool.PluginTool;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressIterator;
+import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryAccessException;
+
+public class AngryGhidraPopupMenu extends ListingContextAction {
+    public final String MenuName = "AngryGhidraPlugin";
+    public final String Group_Name = "SymEx";
+    static Address CurrentFindAddr;
+    static Address CurrentBlankAddr;
+    static List < Address > CurrentAvoidAddrses;
+    public static PluginTool tool;
+    public static Program program;
+    public AngryGhidraPopupMenu(AngryGhidraPlugin plugin, Program program) {
+        super("AngryGhidraPlugin", plugin.getName());
+        setProgram(program);
+        tool = plugin.getTool();
+        setupActions();
+    }
+
+    public void setProgram(Program p) {
+        program = p;
+    }
+
+    public void setupActions() {
+        tool.setMenuGroup(new String[] {
+            MenuName
+        }, Group_Name);             
+
+        CurrentAvoidAddrses = new ArrayList < Address > ();
+        ListingContextAction SetFind = new ListingContextAction("Set Find Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                if (CurrentFindAddr != null) {
+                    UnSetColor(CurrentFindAddr);
+                }
+                Address address = context.getLocation().getAddress();
+                CurrentFindAddr = address;
+                SetColor(address, Color.GREEN);
+                AngryGhidraProvider.TFFind.setText("0x" + address.toString());
+            }
+        };
+
+        SetFind.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Set",
+            "Find Address"
+        }, null, Group_Name));
+        tool.addAction(SetFind);
+
+        ListingContextAction UnSetFind = new ListingContextAction("Unset Find Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                Address address = context.getLocation().getAddress();
+                UnSetColor(address);
+                CurrentFindAddr = null;
+            AngryGhidraProvider.TFFind.setText("");
+            }
+        };
+
+        UnSetFind.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Unset",
+            "Find Address"
+        }, null, Group_Name));
+        tool.addAction(UnSetFind);
+
+        ListingContextAction SetBlankState = new ListingContextAction("Set Blank State Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                if (CurrentBlankAddr != null) {
+                    UnSetColor(CurrentBlankAddr);
+                }
+                Address address = context.getLocation().getAddress();
+                CurrentBlankAddr = address;
+                SetColor(address, Color.CYAN);
+                AngryGhidraProvider.chckbxBlankState.setSelected(true);
+            AngryGhidraProvider.TFBlankState.setText("0x" + address.toString());
+            }
+        };
+
+        SetBlankState.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Set",
+            "Blank State Address"
+        }, null, Group_Name));
+        tool.addAction(SetBlankState);
+
+        ListingContextAction UnSetBlankState = new ListingContextAction("Unset Blank State Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                Address address = context.getLocation().getAddress();
+                UnSetColor(address);
+                CurrentBlankAddr = null;
+                AngryGhidraProvider.TFBlankState.setText("");
+                AngryGhidraProvider.chckbxBlankState.setSelected(false);
+            }
+        };
+
+        UnSetBlankState.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Unset",
+            "Blank State Address"
+        }, null, Group_Name));
+        tool.addAction(UnSetBlankState);
+
+        ListingContextAction SetAvoid = new ListingContextAction("Set Avoid Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                Address address = context.getLocation().getAddress();
+                SetColor(address, Color.RED);
+                AngryGhidraProvider.chckbxAvoidAddresses.setSelected(true);
+                if (AngryGhidraProvider.textArea.getText().isEmpty()) {
+                    AngryGhidraProvider.textArea.setText("0x" + address.toString());
+                } else {
+                    AngryGhidraProvider.textArea.append("," + System.getProperty("line.separator") + "0x" + address.toString());
+                }
+                CurrentAvoidAddrses.add(address);
+            }
+        };
+
+        SetAvoid.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Set",
+            "Avoid Address"
+        }, null, Group_Name));
+        tool.addAction(SetAvoid);
+
+        ListingContextAction UnSetAvoid = new ListingContextAction("Unset Avoid Address", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {
+                Address address = context.getLocation().getAddress();
+                UnSetColor(address);
+                String AvoidAreaText = AngryGhidraProvider.textArea.getText();
+                int addrindex = AvoidAreaText.indexOf("0x" + address.toString());
+                int commaindex = AvoidAreaText.indexOf(",");
+                if (addrindex == 0 & commaindex != -1) {
+                    AvoidAreaText = AvoidAreaText.replace("0x" + address.toString() + "," + System.getProperty("line.separator"), "");
+                }
+                if (addrindex == 0 & commaindex == -1) {
+                    AvoidAreaText = AvoidAreaText.replace("0x" + address.toString(), "");
+                }
+                if (addrindex != 0) {
+                    AvoidAreaText = AvoidAreaText.replace("," + System.getProperty("line.separator") + "0x" + address.toString(), "");
+                }
+                AngryGhidraProvider.textArea.setText(AvoidAreaText);
+                CurrentAvoidAddrses.remove(address);
+            }
+        };
+
+        UnSetAvoid.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Unset",
+            "Avoid Address"
+        }, null, Group_Name));
+        tool.addAction(UnSetAvoid); 
+        
+        ListingContextAction ApplyPatchedBytes = new ListingContextAction("Apply Patched Bytes", getName()) {
+            @Override
+            protected void actionPerformed(ListingActionContext context) {                    
+                Address MinAddress = context.getSelection().getMinAddress();
+                AddressIterator addressRange = context.getSelection().getAddresses(true);
+                StringBuilder HexStringBuilder = new StringBuilder();
+                for (Address address: addressRange) {
+                    byte Byte = 0;
+                    try {
+                        Byte = context.getProgram().getMemory().getByte(address);
+                    } catch (MemoryAccessException e) {						
+                        e.printStackTrace();
+                    }
+                    HexStringBuilder.append(String.format("%02X", Byte));                	
+                }  
+                String HexValueString = HexStringBuilder.toString();                
+                BigInteger HexValue = new BigInteger(HexValueString, 16);
+                
+                if (AngryGhidraProvider.TFstore_addr.getText().isEmpty() == false) {                	
+                    IntegerTextField TFaddr = new IntegerTextField();
+                    TFaddr.setHexMode();
+                    TFaddr.setValue(MinAddress.getOffset());
+                    GridBagConstraints gbc_TFaddr = new GridBagConstraints();
+                    gbc_TFaddr.fill = GridBagConstraints.HORIZONTAL;
+                    gbc_TFaddr.anchor = GridBagConstraints.NORTH;
+                    gbc_TFaddr.gridx = 1;
+                    gbc_TFaddr.insets = new Insets(0, 0, 0, 5);
+                    gbc_TFaddr.gridy = AngryGhidraProvider.GuiStoreCounter;
+                    gbc_TFaddr.weightx = 1;
+                    gbc_TFaddr.weighty = 0.1;
+                    AngryGhidraProvider.WMPanel.add(TFaddr.getComponent(), gbc_TFaddr);                
+                    AngryGhidraProvider.TFStoreAddrs.add(TFaddr);
+
+                    IntegerTextField TFval = new IntegerTextField();
+                    TFval.setHexMode();
+                    TFval.setValue(HexValue);
+                    GridBagConstraints gbc_TFval = new GridBagConstraints();
+                    gbc_TFval.fill = GridBagConstraints.HORIZONTAL;
+                    gbc_TFval.anchor = GridBagConstraints.NORTH;
+                    gbc_TFval.insets = new Insets(0, 0, 0, 5);
+                    gbc_TFval.gridx = 3;
+                    gbc_TFval.gridy = AngryGhidraProvider.GuiStoreCounter;
+                    gbc_TFval.weightx = 1;
+                    gbc_TFval.weighty = 0.1;
+                    AngryGhidraProvider.WMPanel.add(TFval.getComponent(), gbc_TFval);                
+                    AngryGhidraProvider.TFStoreVals.add(TFval);
+
+                    JButton btnDel = new JButton("");
+                    btnDel.setBorder(null);
+                    btnDel.setContentAreaFilled(false);
+                    btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                    GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                    gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                    gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                    gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                    gbc_btnDel.gridx = 0;
+                    gbc_btnDel.gridy = AngryGhidraProvider.GuiStoreCounter++;
+                    gbc_btnDel.weighty = 0.1;				
+                    AngryGhidraProvider.WMPanel.add(btnDel, gbc_btnDel);
+                    AngryGhidraProvider.delStore.add(btnDel);
+                    btnDel.addActionListener(new ActionListener() {
+                        public void actionPerformed(ActionEvent e) {
+                            AngryGhidraProvider.GuiStoreCounter--;
+                            AngryGhidraProvider.WMPanel.remove(TFaddr.getComponent());
+                            AngryGhidraProvider.WMPanel.remove(TFval.getComponent());
+                            AngryGhidraProvider.WMPanel.remove(btnDel);
+                            AngryGhidraProvider.delStore.remove(btnDel);
+                            AngryGhidraProvider.TFStoreAddrs.remove(TFaddr);
+                            AngryGhidraProvider.TFStoreVals.remove(TFval);
+                            AngryGhidraProvider.WMPanel.repaint();
+                            AngryGhidraProvider.WMPanel.revalidate();
+                        }
+                    });
+                    AngryGhidraProvider.WMPanel.repaint();
+                    AngryGhidraProvider.WMPanel.revalidate();
+                }            
+                else {
+                    AngryGhidraProvider.TFstore_addr.setValue(MinAddress.getOffset());
+                    AngryGhidraProvider.TFstore_val.setValue(HexValue);                	
+                }                
+            }
+        };   
+        ApplyPatchedBytes.setPopupMenuData(new MenuData(new String[] {
+            MenuName,
+            "Apply Patched Bytes"}, null, Group_Name));
+        tool.addAction(ApplyPatchedBytes);
+    }
+
+    public static void UnSetColor(Address address) {
+        ColorizingService service = tool.getService(ColorizingService.class);
+        int TransactionID = program.startTransaction("UnSetColor");
+        service.clearBackgroundColor(address, address);
+        program.endTransaction(TransactionID, true);
+    }
+
+    public static void SetColor(Address address, Color color) {
+        ColorizingService service = tool.getService(ColorizingService.class);
+        int TransactionID = program.startTransaction("SetColor");
+        service.setBackgroundColor(address, address, color);
+        program.endTransaction(TransactionID, true);
+    }    
+}
+
+```
+
+`src/main/java/angryghidra/AngryGhidraProvider.java`:
+
+```java
+package angryghidra;
+
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.InputStreamReader;
+import java.net.URISyntaxException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import javax.swing.BorderFactory;
+import javax.swing.GroupLayout;
+import javax.swing.GroupLayout.Alignment;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.LayoutStyle.ComponentPlacement;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+import javax.swing.UIManager;
+import javax.swing.border.Border;
+import javax.swing.border.LineBorder;
+import javax.swing.border.TitledBorder;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import docking.ComponentProvider;
+import docking.widgets.textfield.IntegerTextField;
+import ghidra.program.model.address.AddressFactory;
+import ghidra.program.model.listing.Program;
+import resources.ResourceManager;
+
+public class AngryGhidraProvider extends ComponentProvider {
+    private JPanel panel;
+    private JPanel CSOPanel;
+    private JPanel SAPanel;
+    static JTextField TFBlankState;
+    static JTextField TFFind;
+    static JCheckBox chckbxBlankState;
+    static JCheckBox chckbxAvoidAddresses;
+    static JTextArea textArea;
+    private IntegerTextField TFArglen;
+    private IntegerTextField TFsymbmem_addr;
+    private IntegerTextField TFsymbmem_len;
+    static IntegerTextField TFstore_addr;
+    static IntegerTextField TFstore_val;
+    private JTextField TFVal1;
+    private int GuiRegCounter;
+    private int GuiArgCounter;
+    private int GuiMemCounter;
+    static int GuiStoreCounter;
+    static int GuiHookCounter;
+    private ArrayList < JButton > delButtons;
+    private ArrayList < JTextField > TFregs;
+    private ArrayList < JTextField > TFVals;
+    private ArrayList < IntegerTextField > TFArgs;
+    private ArrayList < IntegerTextField > TFAddrs;
+    private ArrayList < IntegerTextField > TFLens;
+    static ArrayList < IntegerTextField > TFStoreAddrs;
+    static ArrayList < IntegerTextField > TFStoreVals;
+    private ArrayList < JButton > delMem;
+    static ArrayList < JButton > delStore;
+    private ArrayList < JButton > delArgs;
+    static ArrayList < JButton > delHooks;
+    static ArrayList < JLabel > lbHooks;
+    private JLabel StatusLabel;
+    private JLabel StatusLabelFound;
+    private JLabel lbStatus;
+    private JButton btnRun;
+    private JButton btnStop;
+    private JSONObject angr_options;
+    private Program ThisProgram;
+    private String solution;
+    private String insntrace;
+    private JTextArea SolutionArea;
+    private JScrollPane scrollSolution;
+    private Boolean isTerminated;
+    private JPanel EndPanel;
+    private String TmpDir;
+    private JScrollPane scroll;
+    private JPanel MemPanel;
+    private JPanel RegPanel;
+    private JTextField TFReg1;
+    static JPanel WMPanel;
+    private JButton btnAddWM;
+    private JLabel lbStoreAddr;
+    private JLabel lbStoreVal;
+    private JLabel lblWriteToMemory;
+    static JPanel RegHookPanel;
+    static Map < String[], String[][] > Hook;
+
+    public AngryGhidraProvider(AngryGhidraPlugin plugin, String owner, Program program) {
+        super(plugin.getTool(), owner, owner);
+        setIcon(ResourceManager.loadImage("images/Ico.png"));
+        setProgram(program);
+        buildPanel();
+    }
+
+    private void buildPanel() {
+        panel = new JPanel();
+        panel.setMinimumSize(new Dimension(210, 510));
+        setVisible(true);
+
+        ImageIcon Addicon = new ImageIcon(getClass().getResource("/images/add.png"));
+        delButtons = new ArrayList < JButton > ();
+        delArgs = new ArrayList < JButton > ();
+        delMem = new ArrayList < JButton > ();
+        delStore = new ArrayList < JButton > ();
+        delHooks = new ArrayList < JButton > ();
+        TFregs = new ArrayList < JTextField > ();
+        TFVals = new ArrayList < JTextField > ();
+        TFArgs = new ArrayList < IntegerTextField > ();
+        TFAddrs = new ArrayList < IntegerTextField > ();
+        TFLens = new ArrayList < IntegerTextField > ();
+        TFStoreAddrs = new ArrayList < IntegerTextField > ();
+        TFStoreVals = new ArrayList < IntegerTextField > ();
+        Hook = new HashMap < String[], String[][] > ();
+        lbHooks = new ArrayList < JLabel > ();
+        isTerminated = false;
+        GuiArgCounter = 2;
+        GuiMemCounter = 2;
+        GuiRegCounter = 2;
+        GuiStoreCounter = 2;
+        GuiHookCounter = 2;
+        TmpDir = System.getProperty("java.io.tmpdir");
+        if (System.getProperty("os.name").contains("Windows") == false) {
+            TmpDir += "/";
+        } 
+    
+        JPanel MPOPanel = new JPanel();
+        MPOPanel.setForeground(new Color(46, 139, 87));
+        TitledBorder borderMPO = BorderFactory.createTitledBorder("Main project options");
+        borderMPO.setTitleFont(new Font("SansSerif", Font.PLAIN, 12));
+        MPOPanel.setBorder(borderMPO);
+
+        CSOPanel = new JPanel();
+        TitledBorder borderCSO = BorderFactory.createTitledBorder("Custom symbolic options");
+        borderCSO.setTitleFont(new Font("SansSerif", Font.PLAIN, 12));
+        CSOPanel.setBorder(borderCSO);
+
+        SAPanel = new JPanel();
+        SAPanel.setForeground(new Color(46, 139, 87));
+        TitledBorder borderSA = BorderFactory.createTitledBorder("Program arguments");
+        borderSA.setTitleFont(new Font("SansSerif", Font.PLAIN, 12));
+        SAPanel.setBorder(borderSA);
+
+        JCheckBox chckbxArg = new JCheckBox("Arguments");
+        chckbxArg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        JPanel ArgPanel = new JPanel();
+        ArgPanel.setBorder(null);
+
+        GroupLayout gl_SAPanel = new GroupLayout(SAPanel);
+        gl_SAPanel.setHorizontalGroup(
+            gl_SAPanel.createParallelGroup(Alignment.TRAILING)
+            .addGroup(gl_SAPanel.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(chckbxArg, GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                .addGap(31)
+                .addComponent(ArgPanel, GroupLayout.DEFAULT_SIZE, 116, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+        gl_SAPanel.setVerticalGroup(
+            gl_SAPanel.createParallelGroup(Alignment.LEADING)
+            .addGroup(gl_SAPanel.createSequentialGroup()
+                .addGroup(gl_SAPanel.createParallelGroup(Alignment.LEADING)
+                    .addGroup(gl_SAPanel.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(chckbxArg))
+                    .addComponent(ArgPanel, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGap(20))
+        );
+
+        GridBagLayout gbl_ArgPanel = new GridBagLayout();
+        gbl_ArgPanel.columnWidths = new int[] {
+            0,
+            0,
+            0,
+            0,
+            0
+        };
+        gbl_ArgPanel.rowHeights = new int[] {
+            0,
+            0
+        };
+        gbl_ArgPanel.columnWeights = new double[] {
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            Double.MIN_VALUE
+        };
+        gbl_ArgPanel.rowWeights = new double[] {
+            0.0,
+            0.0
+        };
+        ArgPanel.setLayout(gbl_ArgPanel);
+
+        JButton btnAddArg = new JButton("");
+        GridBagConstraints gbc_btnAddArg = new GridBagConstraints();
+        gbc_btnAddArg.anchor = GridBagConstraints.NORTH;
+        gbc_btnAddArg.fill = GridBagConstraints.HORIZONTAL;
+        gbc_btnAddArg.insets = new Insets(0, 0, 0, 5);
+        gbc_btnAddArg.gridx = 0;
+        gbc_btnAddArg.gridy = 1;
+        gbc_btnAddArg.weighty = 0.1;
+        ArgPanel.add(btnAddArg, gbc_btnAddArg);
+        btnAddArg.setContentAreaFilled(false);
+        btnAddArg.setIcon(Addicon);
+        btnAddArg.setBorder(null);
+        btnAddArg.setVisible(false);
+
+        JLabel lbLenArg = new JLabel("Length");
+        GridBagConstraints gbc_lbLenArg = new GridBagConstraints();
+        gbc_lbLenArg.insets = new Insets(0, 0, 0, 5);
+        gbc_lbLenArg.anchor = GridBagConstraints.NORTH;
+        gbc_lbLenArg.gridwidth = 3;
+        gbc_lbLenArg.gridx = 1;
+        gbc_lbLenArg.gridy = 0;
+        gbc_lbLenArg.weightx = 1;
+        ArgPanel.add(lbLenArg, gbc_lbLenArg);
+        lbLenArg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        lbLenArg.setVisible(false);
+
+        TFArglen = new IntegerTextField();
+        Border Classic_border = TFArglen.getComponent().getBorder();
+        GridBagConstraints gbc_TFArglen = new GridBagConstraints();
+        gbc_TFArglen.insets = new Insets(0, 0, 0, 5);
+        gbc_TFArglen.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFArglen.anchor = GridBagConstraints.NORTH;
+        gbc_TFArglen.gridwidth = 3;
+        gbc_TFArglen.gridx = 1;
+        gbc_TFArglen.gridy = 1;
+        gbc_TFArglen.weightx = 1;
+        gbc_TFArglen.weighty = 0.1;
+        ArgPanel.add(TFArglen.getComponent(), gbc_TFArglen);
+        TFArglen.getComponent().setVisible(false);
+        chckbxArg.addItemListener(
+            new ItemListener() {
+                public void itemStateChanged(ItemEvent e) {
+                    if (chckbxArg.isSelected()) {
+                        TFArglen.getComponent().setVisible(true);
+                        lbLenArg.setVisible(true);
+                        btnAddArg.setVisible(true);
+                        for (JButton btnDel: delArgs) {
+                            btnDel.setVisible(true);
+                        }
+                        for (IntegerTextField TFArg: TFArgs) {
+                            TFArg.getComponent().setVisible(true);
+                        }
+                    } else {
+                        TFArglen.getComponent().setVisible(false);
+                        lbLenArg.setVisible(false);
+                        btnAddArg.setVisible(false);
+                        for (JButton btnDel: delArgs) {
+                            btnDel.setVisible(false);
+                        }
+                        for (IntegerTextField TFArg: TFArgs) {
+                            TFArg.getComponent().setVisible(false);
+                        }
+                    }
+                }
+            }
+        );
+
+        btnAddArg.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                IntegerTextField TFArg = new IntegerTextField();
+                GridBagConstraints gbc_TFArg = new GridBagConstraints();
+                gbc_TFArg.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFArg.anchor = GridBagConstraints.NORTH;
+                gbc_TFArg.gridwidth = 3;
+                gbc_TFArg.gridx = 1;
+                gbc_TFArg.insets = new Insets(0, 0, 0, 5);
+                gbc_TFArg.gridy = GuiArgCounter;
+                gbc_TFArg.weightx = 1;
+                gbc_TFArg.weighty = 0.1;
+                ArgPanel.add(TFArg.getComponent(), gbc_TFArg);
+                TFArgs.add(TFArg);
+
+                JButton btnDel = new JButton("");
+                btnDel.setBorder(null);
+                btnDel.setContentAreaFilled(false);
+                btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                gbc_btnDel.gridx = 0;
+                gbc_btnDel.gridy = GuiArgCounter++;
+                gbc_btnDel.weighty = 0.1;
+                ArgPanel.add(btnDel, gbc_btnDel);
+                delArgs.add(btnDel);
+                btnDel.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        GuiArgCounter--;
+                        ArgPanel.remove(TFArg.getComponent());
+                        ArgPanel.remove(btnDel);
+                        delArgs.remove(btnDel);
+                        TFArgs.remove(TFArg);
+                        ArgPanel.repaint();
+                        ArgPanel.revalidate();
+                    }
+                });
+                ArgPanel.repaint();
+                ArgPanel.revalidate();
+            }
+        });
+        SAPanel.setLayout(gl_SAPanel);
+
+        JCheckBox chckbxAutoloadlibs = new JCheckBox("Auto load libs");
+        chckbxAutoloadlibs.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        TFBlankState = new JTextField();
+        TFBlankState.setBorder(Classic_border);
+        TFBlankState.setVisible(false);
+        TFBlankState.addKeyListener(new KeyAdapter() {
+            public void keyReleased(KeyEvent e) {
+                if (AngryGhidraPopupMenu.CurrentBlankAddr != null) {
+                    AngryGhidraPopupMenu.UnSetColor(AngryGhidraPopupMenu.CurrentBlankAddr);
+                    AngryGhidraPopupMenu.CurrentBlankAddr = null;
+                }
+            }
+        });
+
+        chckbxBlankState = new JCheckBox("Blank State");
+        chckbxBlankState.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        chckbxBlankState.addItemListener(
+            new ItemListener() {
+                public void itemStateChanged(ItemEvent e) {
+                    if (chckbxBlankState.isSelected()) {
+                        TFBlankState.setVisible(true);
+                    } else {
+                        TFBlankState.setVisible(false);
+                    }
+                    MPOPanel.revalidate();
+                }
+            }
+        );
+
+        JLabel lbFind = new JLabel("Find address:");
+        lbFind.setForeground(new Color(60, 179, 113));
+        lbFind.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        TFFind = new JTextField();
+        TFFind.setBorder(Classic_border);
+        Font Classic_font = TFFind.getFont();
+        TFFind.addKeyListener(new KeyAdapter() {
+            public void keyReleased(KeyEvent e) {
+                if (AngryGhidraPopupMenu.CurrentFindAddr != null) {
+                    AngryGhidraPopupMenu.UnSetColor(AngryGhidraPopupMenu.CurrentFindAddr);
+                    AngryGhidraPopupMenu.CurrentFindAddr = null;
+                }
+            }
+        });
+
+        chckbxAvoidAddresses = new JCheckBox("Avoid addresses");
+        chckbxAvoidAddresses.setForeground(new Color(255, 0, 0));
+        chckbxAvoidAddresses.setToolTipText("");
+        chckbxAvoidAddresses.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        textArea = new JTextArea();
+        textArea.setMinimumSize(new Dimension(40, 40));
+        textArea.setToolTipText("Enter the hex values separated by comma.");
+        textArea.setFont(Classic_font);
+        textArea.addKeyListener(new KeyAdapter() {
+            public void keyReleased(KeyEvent e) {
+                if (AngryGhidraPopupMenu.CurrentAvoidAddrses.isEmpty() == false) {
+                    try {
+                        List < String > AvoidAddresses = Arrays.asList(textArea.getText().split("\\s*,\\s*"));
+                        for (int i = 0; i < AngryGhidraPopupMenu.CurrentAvoidAddrses.size(); i++) {
+                            String AddrfromGui = "0x" + AngryGhidraPopupMenu.CurrentAvoidAddrses.get(i).toString();
+                            String AddrfromArea = AvoidAddresses.get(i);
+                            if (AddrfromGui.equals(AddrfromArea) == false) {
+                                AngryGhidraPopupMenu.UnSetColor(AngryGhidraPopupMenu.CurrentAvoidAddrses.get(i));
+                                AngryGhidraPopupMenu.CurrentAvoidAddrses.remove(i);
+                            }
+                        }
+                    } catch (Exception ex) {};
+                }
+            }
+        });
+
+        scroll = new JScrollPane(textArea);
+        scroll.setMinimumSize(new Dimension(50, 50));
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        scroll.setVisible(false);
+        chckbxAvoidAddresses.addItemListener(
+            new ItemListener() {
+                public void itemStateChanged(ItemEvent e) {
+                    if (chckbxAvoidAddresses.isSelected()) {
+                        scroll.setVisible(true);
+                    } else {
+                        scroll.setVisible(false);
+                    }
+                    MPOPanel.revalidate();
+                }
+            }
+        );
+
+        GroupLayout gl_MPOPanel = new GroupLayout(MPOPanel);
+        gl_MPOPanel.setHorizontalGroup(
+            gl_MPOPanel.createParallelGroup(Alignment.TRAILING)
+            .addGroup(gl_MPOPanel.createSequentialGroup()
+                .addGap(11)
+                .addGroup(gl_MPOPanel.createParallelGroup(Alignment.LEADING)
+                    .addGroup(gl_MPOPanel.createSequentialGroup()
+                        .addComponent(chckbxAutoloadlibs, GroupLayout.PREFERRED_SIZE, 148, GroupLayout.PREFERRED_SIZE)
+                        .addContainerGap(105, Short.MAX_VALUE))
+                    .addGroup(gl_MPOPanel.createSequentialGroup()
+                        .addGroup(gl_MPOPanel.createParallelGroup(Alignment.LEADING)
+                            .addGroup(gl_MPOPanel.createParallelGroup(Alignment.LEADING)
+                                .addGroup(gl_MPOPanel.createSequentialGroup()
+                                    .addComponent(chckbxBlankState, GroupLayout.DEFAULT_SIZE, 132, Short.MAX_VALUE)
+                                    .addGap(18))
+                                .addGroup(gl_MPOPanel.createSequentialGroup()
+                                    .addComponent(chckbxAvoidAddresses, GroupLayout.PREFERRED_SIZE, 144, Short.MAX_VALUE)
+                                    .addPreferredGap(ComponentPlacement.UNRELATED)))
+                            .addGroup(gl_MPOPanel.createSequentialGroup()
+                                .addGap(21)
+                                .addComponent(lbFind, GroupLayout.PREFERRED_SIZE, 102, GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(ComponentPlacement.RELATED)))
+                        .addGroup(gl_MPOPanel.createParallelGroup(Alignment.LEADING)
+                            .addComponent(TFBlankState, GroupLayout.DEFAULT_SIZE, 88, Short.MAX_VALUE)
+                            .addComponent(TFFind, GroupLayout.DEFAULT_SIZE, 88, Short.MAX_VALUE)
+                            .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 88, Short.MAX_VALUE))
+                        .addGap(15))))
+        );
+        gl_MPOPanel.setVerticalGroup(
+            gl_MPOPanel.createParallelGroup(Alignment.LEADING)
+            .addGroup(gl_MPOPanel.createSequentialGroup()
+                .addGap(6)
+                .addComponent(chckbxAutoloadlibs, GroupLayout.PREFERRED_SIZE, 21, GroupLayout.PREFERRED_SIZE)
+                .addGap(2)
+                .addGroup(gl_MPOPanel.createParallelGroup(Alignment.BASELINE)
+                    .addComponent(chckbxBlankState)
+                    .addComponent(TFBlankState, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
+                .addGap(14)
+                .addGroup(gl_MPOPanel.createParallelGroup(Alignment.BASELINE)
+                    .addComponent(TFFind, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                    .addComponent(lbFind, GroupLayout.PREFERRED_SIZE, 13, GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(ComponentPlacement.UNRELATED)
+                .addGroup(gl_MPOPanel.createParallelGroup(Alignment.BASELINE)
+                    .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 102, Short.MAX_VALUE)
+                    .addComponent(chckbxAvoidAddresses, GroupLayout.PREFERRED_SIZE, 21, GroupLayout.PREFERRED_SIZE))
+                .addContainerGap())
+        );
+        MPOPanel.setLayout(gl_MPOPanel);
+
+        MemPanel = new JPanel();
+
+        JLabel lbMemory = new JLabel("Store symbolic vector:");
+        lbMemory.setHorizontalAlignment(SwingConstants.CENTER);
+        lbMemory.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        JLabel lbRegisters = new JLabel("<html>Registers<br/>Hint: to create and store symbolic vector enter \"sv{length}\", for example \"sv16\"</html>");
+        lbRegisters.setHorizontalAlignment(SwingConstants.CENTER);
+        lbRegisters.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        RegPanel = new JPanel();
+
+        WMPanel = new JPanel();
+        WMPanel.setBorder(null);
+        GridBagLayout gbl_WMPanel = new GridBagLayout();
+        gbl_WMPanel.columnWidths = new int[] {
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
+        gbl_WMPanel.rowHeights = new int[] {
+            0,
+            0,
+            0
+        };
+        gbl_WMPanel.columnWeights = new double[] {
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            Double.MIN_VALUE
+        };
+        gbl_WMPanel.rowWeights = new double[] {
+            0.0,
+            0.0,
+            Double.MIN_VALUE
+        };
+        WMPanel.setLayout(gbl_WMPanel);
+
+        lblWriteToMemory = new JLabel("Write to memory:");
+        lblWriteToMemory.setHorizontalAlignment(SwingConstants.CENTER);
+        lblWriteToMemory.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        lbStoreAddr = new JLabel("Address");
+        lbStoreAddr.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lbStoreAddr = new GridBagConstraints();
+        gbc_lbStoreAddr.weightx = 1.0;
+        gbc_lbStoreAddr.insets = new Insets(0, 0, 0, 5);
+        gbc_lbStoreAddr.gridx = 1;
+        gbc_lbStoreAddr.gridy = 0;
+        WMPanel.add(lbStoreAddr, gbc_lbStoreAddr);
+
+        lbStoreVal = new JLabel("Value");
+        lbStoreVal.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lbStoreVal = new GridBagConstraints();
+        gbc_lbStoreVal.weightx = 1.0;
+        gbc_lbStoreVal.insets = new Insets(0, 0, 0, 5);
+        gbc_lbStoreVal.gridx = 3;
+        gbc_lbStoreVal.gridy = 0;
+        WMPanel.add(lbStoreVal, gbc_lbStoreVal);
+
+        TFstore_addr = new IntegerTextField();
+        TFstore_addr.setHexMode();
+        GridBagConstraints gbc_TFstore_addr = new GridBagConstraints();
+        gbc_TFstore_addr.anchor = GridBagConstraints.NORTH;
+        gbc_TFstore_addr.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFstore_addr.insets = new Insets(0, 0, 0, 5);
+        gbc_TFstore_addr.gridx = 1;
+        gbc_TFstore_addr.gridy = 1;
+        gbc_TFstore_addr.weightx = 1;
+        gbc_TFstore_addr.weighty = 0.1;
+        WMPanel.add(TFstore_addr.getComponent(), gbc_TFstore_addr);
+
+        TFstore_val = new IntegerTextField();
+        TFstore_val.setHexMode();
+        GridBagConstraints gbc_TFstore_val = new GridBagConstraints();
+        gbc_TFstore_val.insets = new Insets(0, 0, 0, 5);
+        gbc_TFstore_val.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFstore_val.anchor = GridBagConstraints.NORTH;
+        gbc_TFstore_val.gridx = 3;
+        gbc_TFstore_val.gridy = 1;
+        gbc_TFstore_val.weightx = 1;
+        gbc_TFstore_val.weighty = 0.1;
+        WMPanel.add(TFstore_val.getComponent(), gbc_TFstore_val);
+
+        btnAddWM = new JButton("");
+        btnAddWM.setContentAreaFilled(false);
+        btnAddWM.setBorder(null);
+        btnAddWM.setIcon(Addicon);
+        GridBagConstraints gbc_btnAddWM = new GridBagConstraints();
+        gbc_btnAddWM.weighty = 0.1;
+        gbc_btnAddWM.fill = GridBagConstraints.HORIZONTAL;
+        gbc_btnAddWM.anchor = GridBagConstraints.NORTH;
+        gbc_btnAddWM.insets = new Insets(0, 0, 0, 5);
+        gbc_btnAddWM.gridx = 0;
+        gbc_btnAddWM.gridy = 1;
+        gbc_btnAddWM.weighty = 0.1;
+        WMPanel.add(btnAddWM, gbc_btnAddWM);
+        btnAddWM.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                IntegerTextField TFaddr = new IntegerTextField();
+                TFaddr.setHexMode();
+                GridBagConstraints gbc_TFaddr = new GridBagConstraints();
+                gbc_TFaddr.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFaddr.anchor = GridBagConstraints.NORTH;
+                gbc_TFaddr.gridx = 1;
+                gbc_TFaddr.insets = new Insets(0, 0, 0, 5);
+                gbc_TFaddr.gridy = GuiStoreCounter;
+                gbc_TFaddr.weightx = 1;
+                gbc_TFaddr.weighty = 0.1;
+                WMPanel.add(TFaddr.getComponent(), gbc_TFaddr);
+                TFStoreAddrs.add(TFaddr);
+
+                IntegerTextField TFval = new IntegerTextField();
+                TFval.setHexMode();
+                GridBagConstraints gbc_TFval = new GridBagConstraints();
+                gbc_TFval.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFval.anchor = GridBagConstraints.NORTH;
+                gbc_TFval.insets = new Insets(0, 0, 0, 5);
+                gbc_TFval.gridx = 3;
+                gbc_TFval.gridy = GuiStoreCounter;
+                gbc_TFval.weightx = 1;
+                gbc_TFval.weighty = 0.1;
+                WMPanel.add(TFval.getComponent(), gbc_TFval);
+                TFStoreVals.add(TFval);
+
+                JButton btnDel = new JButton("");
+                btnDel.setBorder(null);
+                btnDel.setContentAreaFilled(false);
+                btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                gbc_btnDel.gridx = 0;
+                gbc_btnDel.gridy = GuiStoreCounter++;
+                gbc_btnDel.weighty = 0.1;
+                WMPanel.add(btnDel, gbc_btnDel);
+                delStore.add(btnDel);
+                btnDel.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        GuiStoreCounter--;
+                        WMPanel.remove(TFaddr.getComponent());
+                        WMPanel.remove(TFval.getComponent());
+                        WMPanel.remove(btnDel);
+                        delStore.remove(btnDel);
+                        TFStoreAddrs.remove(TFaddr);
+                        TFStoreVals.remove(TFval);
+                        WMPanel.repaint();
+                        WMPanel.revalidate();
+                    }
+
+                });
+                WMPanel.repaint();
+                WMPanel.revalidate();
+            }
+        });
+
+        GroupLayout gl_CSOPanel = new GroupLayout(CSOPanel);
+        gl_CSOPanel.setHorizontalGroup(
+            gl_CSOPanel.createParallelGroup(Alignment.LEADING)
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(MemPanel, GroupLayout.DEFAULT_SIZE, 257, Short.MAX_VALUE)
+                    .addGap(24))
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addGroup(gl_CSOPanel.createParallelGroup(Alignment.LEADING)
+                        .addGroup(gl_CSOPanel.createSequentialGroup()
+                            .addComponent(lblWriteToMemory)
+                            .addPreferredGap(ComponentPlacement.RELATED, 150, GroupLayout.PREFERRED_SIZE))
+                        .addComponent(WMPanel, GroupLayout.DEFAULT_SIZE, 256, Short.MAX_VALUE))
+                    .addGap(25))
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(RegPanel, GroupLayout.DEFAULT_SIZE, 251, Short.MAX_VALUE)
+                    .addGap(30))
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(lbRegisters, GroupLayout.PREFERRED_SIZE, 258, GroupLayout.PREFERRED_SIZE)
+                    .addContainerGap(23, Short.MAX_VALUE))
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addComponent(lbMemory, GroupLayout.PREFERRED_SIZE, 148, GroupLayout.PREFERRED_SIZE)
+                    .addContainerGap(145, Short.MAX_VALUE))
+        );
+        gl_CSOPanel.setVerticalGroup(
+            gl_CSOPanel.createParallelGroup(Alignment.LEADING)
+                .addGroup(gl_CSOPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(lbMemory, GroupLayout.PREFERRED_SIZE, 13, GroupLayout.PREFERRED_SIZE)
+                    .addPreferredGap(ComponentPlacement.RELATED)
+                    .addComponent(MemPanel, GroupLayout.DEFAULT_SIZE, 40, Short.MAX_VALUE)
+                    .addGap(23)
+                    .addComponent(lblWriteToMemory)
+                    .addPreferredGap(ComponentPlacement.RELATED)
+                    .addComponent(WMPanel, GroupLayout.DEFAULT_SIZE, 39, Short.MAX_VALUE)
+                    .addGap(18)
+                    .addComponent(lbRegisters)
+                    .addGap(9)
+                    .addComponent(RegPanel, GroupLayout.DEFAULT_SIZE, 38, Short.MAX_VALUE)
+                    .addGap(54))
+        );
+        GridBagLayout gbl_RegPanel = new GridBagLayout();
+        gbl_RegPanel.columnWidths = new int[] {
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
+        gbl_RegPanel.rowHeights = new int[] {
+            0,
+            0
+        };
+        gbl_RegPanel.columnWeights = new double[] {
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            Double.MIN_VALUE
+        };
+        gbl_RegPanel.rowWeights = new double[] {
+            0.0,
+            0.0
+        };
+        RegPanel.setLayout(gbl_RegPanel);
+
+        JLabel lblReg = new JLabel("Register");
+        lblReg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblReg = new GridBagConstraints();
+        gbc_lblReg.anchor = GridBagConstraints.SOUTH;
+        gbc_lblReg.insets = new Insets(0, 0, 0, 5);
+        gbc_lblReg.gridx = 1;
+        gbc_lblReg.gridy = 0;
+        gbc_lblReg.weightx = 1;
+        RegPanel.add(lblReg, gbc_lblReg);
+
+        JLabel lblValue = new JLabel("Value");
+        lblValue.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblValue = new GridBagConstraints();
+        gbc_lblValue.anchor = GridBagConstraints.SOUTH;
+        gbc_lblValue.insets = new Insets(0, 0, 0, 5);
+        gbc_lblValue.gridx = 3;
+        gbc_lblValue.gridy = 0;
+        gbc_lblValue.weightx = 1;
+        RegPanel.add(lblValue, gbc_lblValue);
+
+        JButton btnAddButton = new JButton("");
+        GridBagConstraints gbc_btnAddButton = new GridBagConstraints();
+        gbc_btnAddButton.anchor = GridBagConstraints.NORTH;
+        gbc_btnAddButton.fill = GridBagConstraints.HORIZONTAL;
+        gbc_btnAddButton.insets = new Insets(0, 0, 0, 5);
+        gbc_btnAddButton.gridx = 0;
+        gbc_btnAddButton.gridy = 1;
+        gbc_btnAddButton.weighty = 0.1;
+        RegPanel.add(btnAddButton, gbc_btnAddButton);
+        btnAddButton.setBorder(null);
+        btnAddButton.setContentAreaFilled(false);
+        btnAddButton.setIcon(Addicon);
+
+        TFVal1 = new JTextField();
+        TFVal1.setBorder(Classic_border);
+        GridBagConstraints gbc_TFVal1 = new GridBagConstraints();
+        gbc_TFVal1.insets = new Insets(0, 0, 0, 5);
+        gbc_TFVal1.anchor = GridBagConstraints.NORTH;
+        gbc_TFVal1.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFVal1.gridx = 3;
+        gbc_TFVal1.gridy = 1;
+        gbc_TFVal1.weightx = 1;
+        gbc_TFVal1.weighty = 0.1;
+        RegPanel.add(TFVal1, gbc_TFVal1);
+
+        TFReg1 = new JTextField();
+        GridBagConstraints gbc_TFReg1 = new GridBagConstraints();
+        gbc_TFReg1.anchor = GridBagConstraints.NORTH;
+        gbc_TFReg1.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFReg1.insets = new Insets(0, 0, 0, 5);
+        gbc_TFReg1.gridx = 1;
+        gbc_TFReg1.gridy = 1;
+        gbc_TFReg1.weighty = 0.1;
+        RegPanel.add(TFReg1, gbc_TFReg1);
+        TFReg1.setBorder(Classic_border);
+
+        btnAddButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                JTextField TFReg = new JTextField();
+                GridBagConstraints gbc_TFReg = new GridBagConstraints();
+                gbc_TFReg.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFReg.anchor = GridBagConstraints.NORTH;
+                gbc_TFReg.gridx = 1;
+                gbc_TFReg.insets = new Insets(0, 0, 0, 5);
+                gbc_TFReg.gridy = GuiRegCounter;
+                gbc_TFReg.weightx = 1;
+                gbc_TFReg.weighty = 0.1;
+                RegPanel.add(TFReg, gbc_TFReg);
+                TFregs.add(TFReg);
+
+                JTextField TFVal = new JTextField();
+                TFVal.setBorder(Classic_border);
+                GridBagConstraints gbc_TFVal = new GridBagConstraints();
+                gbc_TFVal.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFVal.anchor = GridBagConstraints.NORTH;
+                gbc_TFVal.insets = new Insets(0, 0, 0, 5);
+                gbc_TFVal.gridx = 3;
+                gbc_TFVal.gridy = GuiRegCounter;
+                gbc_TFVal.weightx = 1;
+                gbc_TFVal.weighty = 0.1;
+                RegPanel.add(TFVal, gbc_TFVal);
+                TFVals.add(TFVal);
+
+                JButton btnDel = new JButton("");
+                btnDel.setBorder(null);
+                btnDel.setContentAreaFilled(false);
+                btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                gbc_btnDel.gridx = 0;
+                gbc_btnDel.gridy = GuiRegCounter++;
+                gbc_btnDel.weighty = 0.1;
+                RegPanel.add(btnDel, gbc_btnDel);
+                delButtons.add(btnDel);
+                btnDel.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        GuiRegCounter--;
+                        RegPanel.remove(TFReg);
+                        RegPanel.remove(TFVal);
+                        RegPanel.remove(btnDel);
+                        delButtons.remove(btnDel);
+                        TFregs.remove(TFReg);
+                        TFVals.remove(TFVal);
+                        RegPanel.repaint();
+                        RegPanel.revalidate();
+                    }
+
+                });
+                RegPanel.repaint();
+                RegPanel.revalidate();
+            }
+        });
+
+        GridBagLayout gbl_MemPanel = new GridBagLayout();
+        gbl_MemPanel.columnWidths = new int[] {
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+        };
+        gbl_MemPanel.rowHeights = new int[] {
+            0,
+            0
+        };
+        gbl_MemPanel.columnWeights = new double[] {
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            Double.MIN_VALUE
+        };
+        gbl_MemPanel.rowWeights = new double[] {
+            0.0,
+            0.0
+        };
+        MemPanel.setLayout(gbl_MemPanel);
+
+        JButton btnAddMem = new JButton("");
+        GridBagConstraints gbc_btnAddMem = new GridBagConstraints();
+        gbc_btnAddMem.anchor = GridBagConstraints.NORTH;
+        gbc_btnAddMem.fill = GridBagConstraints.HORIZONTAL;
+        gbc_btnAddMem.insets = new Insets(0, 0, 0, 5);
+        gbc_btnAddMem.gridx = 0;
+        gbc_btnAddMem.gridy = 1;
+        gbc_btnAddMem.weighty = 0.1;
+        MemPanel.add(btnAddMem, gbc_btnAddMem);
+        btnAddMem.setIcon(Addicon);
+        btnAddMem.setBorder(null);
+        btnAddMem.setContentAreaFilled(false);
+
+        JLabel lbMemAddr = new JLabel("Address");
+        lbMemAddr.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lbMemAddr = new GridBagConstraints();
+        gbc_lbMemAddr.insets = new Insets(0, 0, 0, 5);
+        gbc_lbMemAddr.gridx = 1;
+        gbc_lbMemAddr.gridy = 0;
+        gbc_lbMemAddr.weightx = 1;
+        MemPanel.add(lbMemAddr, gbc_lbMemAddr);
+
+        JLabel lblLentgh = new JLabel("Length");
+        lblLentgh.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblLentgh = new GridBagConstraints();
+        gbc_lblLentgh.insets = new Insets(0, 0, 0, 5);
+        gbc_lblLentgh.gridx = 3;
+        gbc_lblLentgh.gridy = 0;
+        gbc_lblLentgh.weightx = 1;
+        MemPanel.add(lblLentgh, gbc_lblLentgh);
+
+        TFsymbmem_addr = new IntegerTextField();
+        TFsymbmem_addr.setHexMode();
+        GridBagConstraints gbc_TFsymbmem_addr = new GridBagConstraints();
+        gbc_TFsymbmem_addr.anchor = GridBagConstraints.NORTH;
+        gbc_TFsymbmem_addr.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFsymbmem_addr.insets = new Insets(0, 0, 0, 5);
+        gbc_TFsymbmem_addr.gridx = 1;
+        gbc_TFsymbmem_addr.gridy = 1;
+        gbc_TFsymbmem_addr.weightx = 1;
+        gbc_TFsymbmem_addr.weighty = 0.1;
+        MemPanel.add(TFsymbmem_addr.getComponent(), gbc_TFsymbmem_addr);
+
+        TFsymbmem_len = new IntegerTextField();
+        GridBagConstraints gbc_TFsymbmem_len = new GridBagConstraints();
+        gbc_TFsymbmem_len.insets = new Insets(0, 0, 0, 5);
+        gbc_TFsymbmem_len.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFsymbmem_len.anchor = GridBagConstraints.NORTH;
+        gbc_TFsymbmem_len.gridx = 3;
+        gbc_TFsymbmem_len.gridy = 1;
+        gbc_TFsymbmem_len.weightx = 1;
+        gbc_TFsymbmem_len.weighty = 0.1;
+        MemPanel.add(TFsymbmem_len.getComponent(), gbc_TFsymbmem_len);
+
+        btnAddMem.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+
+                IntegerTextField TFaddr = new IntegerTextField();
+                TFaddr.setHexMode();
+                GridBagConstraints gbc_TFaddr = new GridBagConstraints();
+                gbc_TFaddr.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFaddr.anchor = GridBagConstraints.NORTH;
+                gbc_TFaddr.gridx = 1;
+                gbc_TFaddr.insets = new Insets(0, 0, 0, 5);
+                gbc_TFaddr.gridy = GuiMemCounter;
+                gbc_TFaddr.weightx = 1;
+                gbc_TFaddr.weighty = 0.1;
+                MemPanel.add(TFaddr.getComponent(), gbc_TFaddr);
+                TFAddrs.add(TFaddr);
+
+                IntegerTextField TFlen = new IntegerTextField();
+                GridBagConstraints gbc_TFlen = new GridBagConstraints();
+                gbc_TFlen.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFlen.anchor = GridBagConstraints.NORTH;
+                gbc_TFlen.insets = new Insets(0, 0, 0, 5);
+                gbc_TFlen.gridx = 3;
+                gbc_TFlen.gridy = GuiMemCounter;
+                gbc_TFlen.weightx = 1;
+                gbc_TFlen.weighty = 0.1;
+                MemPanel.add(TFlen.getComponent(), gbc_TFlen);
+                TFLens.add(TFlen);
+
+                JButton btnDel = new JButton("");
+                btnDel.setBorder(null);
+                btnDel.setContentAreaFilled(false);
+                btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                gbc_btnDel.gridx = 0;
+                gbc_btnDel.gridy = GuiMemCounter++;
+                gbc_btnDel.weighty = 0.1;
+                MemPanel.add(btnDel, gbc_btnDel);
+                delMem.add(btnDel);
+                btnDel.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {
+                        GuiMemCounter--;
+                        MemPanel.remove(TFaddr.getComponent());
+                        MemPanel.remove(TFlen.getComponent());
+                        MemPanel.remove(btnDel);
+                        delMem.remove(btnDel);
+                        TFAddrs.remove(TFaddr);
+                        TFLens.remove(TFlen);
+                        MemPanel.repaint();
+                        MemPanel.revalidate();
+                    }
+
+                });
+                MemPanel.repaint();
+                MemPanel.revalidate();
+            }
+        });
+
+        CSOPanel.setLayout(gl_CSOPanel);
+        ImageIcon Starticon = new ImageIcon(getClass().getResource("/images/flag.png"));
+        ImageIcon Stopicon = new ImageIcon(getClass().getResource("/images/process-stop.png"));
+
+        EndPanel = new JPanel();
+        EndPanel.setBorder(null);
+
+        lbStatus = new JLabel("Status:");
+        lbStatus.setForeground(Color.BLUE);
+        lbStatus.setFont(new Font("SansSerif", Font.PLAIN, 13));
+
+        StatusLabel = new JLabel("[+] Angr options selection");
+        StatusLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        StatusLabelFound = new JLabel("");
+        StatusLabelFound.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        btnRun = new JButton("Run");
+        btnRun.setIcon(Starticon);
+        btnRun.setFont(new Font("SansSerif", Font.PLAIN, 12));
+
+        SolutionArea = new JTextArea();
+        SolutionArea.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        scrollSolution = new JScrollPane(SolutionArea);
+        SolutionArea.setEditable(false);
+        scrollSolution.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollSolution.setBorder(new LineBorder(Color.blue, 1));
+        scrollSolution.setVisible(false);
+
+        btnStop = new JButton("Stop");
+        btnStop.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                if (new File(TmpDir + "angr_options.json").exists()) {
+                    isTerminated = true;
+                    StatusLabel.setText("[+] Stopping...");
+                    StatusLabelFound.setText("");
+                    scrollSolution.setVisible(false);
+                }
+            }
+        });
+        btnStop.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        btnStop.setIcon(Stopicon);
+
+        GroupLayout gl_EndPanel = new GroupLayout(EndPanel);
+        gl_EndPanel.setHorizontalGroup(
+            gl_EndPanel.createParallelGroup(Alignment.LEADING)
+                .addGroup(gl_EndPanel.createSequentialGroup()
+                    .addGap(10)
+                    .addComponent(StatusLabelFound, GroupLayout.DEFAULT_SIZE, 127, Short.MAX_VALUE)
+                    .addGap(71)
+                    .addComponent(scrollSolution, GroupLayout.DEFAULT_SIZE, 378, Short.MAX_VALUE)
+                    .addGap(10))
+                .addGroup(gl_EndPanel.createSequentialGroup()
+                    .addGroup(gl_EndPanel.createParallelGroup(Alignment.TRAILING)
+                        .addGroup(gl_EndPanel.createSequentialGroup()
+                            .addGap(134)
+                            .addComponent(btnRun, GroupLayout.DEFAULT_SIZE, 116, Short.MAX_VALUE)
+                            .addGap(77)
+                            .addComponent(btnStop, GroupLayout.DEFAULT_SIZE, 116, Short.MAX_VALUE)
+                            .addGap(62))
+                        .addGroup(gl_EndPanel.createSequentialGroup()
+                            .addGap(10)
+                            .addComponent(StatusLabel, GroupLayout.DEFAULT_SIZE, 495, Short.MAX_VALUE)))
+                    .addGap(91))
+                .addGroup(gl_EndPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(lbStatus, GroupLayout.PREFERRED_SIZE, 46, GroupLayout.PREFERRED_SIZE)
+                    .addContainerGap(538, Short.MAX_VALUE))
+        );
+        gl_EndPanel.setVerticalGroup(
+            gl_EndPanel.createParallelGroup(Alignment.LEADING)
+                .addGroup(gl_EndPanel.createSequentialGroup()
+                    .addGap(10)
+                    .addGroup(gl_EndPanel.createParallelGroup(Alignment.BASELINE)
+                        .addComponent(btnRun, GroupLayout.PREFERRED_SIZE, 21, GroupLayout.PREFERRED_SIZE)
+                        .addComponent(btnStop, GroupLayout.PREFERRED_SIZE, 21, GroupLayout.PREFERRED_SIZE))
+                    .addPreferredGap(ComponentPlacement.RELATED)
+                    .addComponent(lbStatus, GroupLayout.PREFERRED_SIZE, 13, GroupLayout.PREFERRED_SIZE)
+                    .addPreferredGap(ComponentPlacement.RELATED)
+                    .addComponent(StatusLabel, GroupLayout.PREFERRED_SIZE, 17, GroupLayout.PREFERRED_SIZE)
+                    .addGroup(gl_EndPanel.createParallelGroup(Alignment.LEADING)
+                        .addGroup(gl_EndPanel.createSequentialGroup()
+                            .addGap(5)
+                            .addComponent(StatusLabelFound, GroupLayout.PREFERRED_SIZE, 15, GroupLayout.PREFERRED_SIZE))
+                        .addGroup(gl_EndPanel.createSequentialGroup()
+                            .addPreferredGap(ComponentPlacement.RELATED)
+                            .addComponent(scrollSolution, GroupLayout.DEFAULT_SIZE, 36, Short.MAX_VALUE)))
+                    .addContainerGap())
+        );
+        EndPanel.setLayout(gl_EndPanel);
+
+        JPanel HookPanel = new JPanel();
+        TitledBorder borderHP = BorderFactory.createTitledBorder("Hook options");
+        borderHP.setTitleFont(new Font("SansSerif", Font.PLAIN, 12));
+        HookPanel.setBorder(borderHP);
+
+        GroupLayout gl_panel = new GroupLayout(panel);
+        gl_panel.setHorizontalGroup(
+            gl_panel.createParallelGroup(Alignment.TRAILING)
+            .addGroup(gl_panel.createSequentialGroup()
+                .addGroup(gl_panel.createParallelGroup(Alignment.LEADING)
+                    .addGroup(gl_panel.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(EndPanel, GroupLayout.DEFAULT_SIZE, 550, Short.MAX_VALUE))
+                    .addGroup(gl_panel.createSequentialGroup()
+                        .addGroup(gl_panel.createParallelGroup(Alignment.LEADING)
+                            .addGroup(gl_panel.createSequentialGroup()
+                                .addGap(10)
+                                .addComponent(MPOPanel, GroupLayout.DEFAULT_SIZE, 275, Short.MAX_VALUE))
+                            .addGroup(gl_panel.createSequentialGroup()
+                                .addContainerGap()
+                                .addComponent(SAPanel, GroupLayout.DEFAULT_SIZE, 275, Short.MAX_VALUE))
+                            .addGroup(gl_panel.createSequentialGroup()
+                                .addContainerGap()
+                                .addComponent(HookPanel, GroupLayout.DEFAULT_SIZE, 275, Short.MAX_VALUE)))
+                        .addPreferredGap(ComponentPlacement.RELATED)
+                        .addComponent(CSOPanel, GroupLayout.DEFAULT_SIZE, 269, Short.MAX_VALUE)))
+                .addGap(13))
+        );
+        gl_panel.setVerticalGroup(
+            gl_panel.createParallelGroup(Alignment.LEADING)
+            .addGroup(gl_panel.createSequentialGroup()
+                .addGroup(gl_panel.createParallelGroup(Alignment.LEADING)
+                    .addGroup(gl_panel.createSequentialGroup()
+                        .addGap(10)
+                        .addComponent(MPOPanel, GroupLayout.DEFAULT_SIZE, 178, Short.MAX_VALUE)
+                        .addGap(2)
+                        .addComponent(SAPanel, GroupLayout.DEFAULT_SIZE, 81, Short.MAX_VALUE)
+                        .addPreferredGap(ComponentPlacement.RELATED)
+                        .addComponent(HookPanel, GroupLayout.DEFAULT_SIZE, 90, Short.MAX_VALUE))
+                    .addGroup(gl_panel.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(CSOPanel, GroupLayout.DEFAULT_SIZE, 357, Short.MAX_VALUE)))
+                .addPreferredGap(ComponentPlacement.UNRELATED)
+                .addComponent(EndPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                .addGap(5))
+        );
+
+        JButton btnAddHook = new JButton("Add Hook");
+        btnAddHook.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                HookCreation window = new HookCreation();
+                window.main();
+            }
+        });
+        btnAddHook.setFont(new Font("SansSerif", Font.PLAIN, 11));
+        RegHookPanel = new JPanel();
+
+        GroupLayout gl_HookPanel = new GroupLayout(HookPanel);
+        gl_HookPanel.setHorizontalGroup(
+            gl_HookPanel.createParallelGroup(Alignment.LEADING)
+                .addGroup(gl_HookPanel.createSequentialGroup()
+                    .addContainerGap()
+                    .addComponent(btnAddHook, GroupLayout.PREFERRED_SIZE, 105, Short.MAX_VALUE)
+                    .addGap(43)
+                    .addComponent(RegHookPanel, GroupLayout.DEFAULT_SIZE, 105, Short.MAX_VALUE)
+                    .addContainerGap())
+        );
+        gl_HookPanel.setVerticalGroup(
+            gl_HookPanel.createParallelGroup(Alignment.TRAILING)
+                .addGroup(gl_HookPanel.createSequentialGroup()
+                    .addGroup(gl_HookPanel.createParallelGroup(Alignment.TRAILING)
+                        .addGroup(Alignment.LEADING, gl_HookPanel.createSequentialGroup()
+                            .addContainerGap()
+                            .addComponent(btnAddHook))
+                        .addGroup(gl_HookPanel.createSequentialGroup()
+                            .addGap(10)
+                            .addComponent(RegHookPanel, GroupLayout.DEFAULT_SIZE, 26, Short.MAX_VALUE)))
+                    .addGap(34))
+        );
+        GridBagLayout gbl_RegHookPanel = new GridBagLayout();
+        gbl_RegHookPanel.columnWidths = new int[] {
+            0
+        };
+        gbl_RegHookPanel.rowHeights = new int[] {
+            0
+        };
+        gbl_RegHookPanel.columnWeights = new double[] {
+            Double.MIN_VALUE
+        };
+        gbl_RegHookPanel.rowWeights = new double[] {
+            Double.MIN_VALUE
+        };
+        RegHookPanel.setLayout(gbl_RegHookPanel);
+        HookPanel.setLayout(gl_HookPanel);
+        panel.setLayout(gl_panel);
+        btnRun.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {                
+                StatusLabel.setText("[+] Angr options selection");
+                StatusLabelFound.setText("");
+                isTerminated = false;
+                angr_options = new JSONObject();
+
+                Boolean auto_load_libs = false;
+                if (chckbxAutoloadlibs.isSelected()) {
+                    auto_load_libs = true;
+                }
+
+                angr_options.put("auto_load_libs", auto_load_libs);
+
+                if (chckbxBlankState.isSelected()) {
+                    if (TFBlankState.getText().matches("0x[0-9A-Fa-f]+") == false) {
+                        TFBlankState.setBorder(new LineBorder(Color.red, 1));
+                        StatusLabel.setText("[-] Error: please, enter the correct hex value.");
+                        return;
+                    }
+                    TFBlankState.setBorder(Classic_border);
+                    String blank_state = TFBlankState.getText();
+                    angr_options.put("blank_state", blank_state);
+                }
+                if (TFFind.getText().matches("0x[0-9A-Fa-f]+") == false) {
+                    TFFind.setBorder(new LineBorder(Color.red, 1));
+                    StatusLabel.setText("[-] Error: please, enter the correct hex value without spaces.");
+                    return;
+                }
+                TFFind.setBorder(Classic_border);
+                String find = TFFind.getText();
+
+                angr_options.put("find", find);
+                
+                if (chckbxAvoidAddresses.isSelected()) {
+                    if (textArea.getText().replaceAll("\\s+", "").matches("[0x0-9a-fA-F, /,]+") == false) {
+                        textArea.setBorder(new LineBorder(Color.red, 1));
+                        StatusLabel.setText("[-] Error: please, enter the correct hex values separated by comma.");
+                        return;
+                    }
+                    textArea.setBorder(UIManager.getLookAndFeel().getDefaults().getBorder("TextArea.border"));
+                    String avoid = textArea.getText().replaceAll("\\s+", "");
+                    angr_options.put("avoid", avoid);
+                }
+                if (chckbxArg.isSelected()) {
+                    if (TFArglen.getText().isEmpty() == false) {
+                        JSONObject ArgDetails = new JSONObject();
+                        ArgDetails.put("1", TFArglen.getText());
+                        for (int i = 0; i < TFArgs.size(); i++) {
+                            if (TFArglen.getText().isEmpty() == false) {
+                                ArgDetails.put(Integer.toString(i + 2), TFArglen.getText());
+                            }
+                        }
+                        angr_options.put("Arguments", ArgDetails);
+                    }
+                }
+
+                if (TFsymbmem_addr.getText().isEmpty() == false & TFsymbmem_len.getText().isEmpty() == false) {
+                    JSONObject MemDetails = new JSONObject();
+                    MemDetails.put(TFsymbmem_addr.getText(), TFsymbmem_len.getText());
+                    for (int i = 0; i < TFAddrs.size(); i++) {
+                        if (TFAddrs.get(i).getText().isEmpty() == false & TFLens.get(i).getText().isEmpty() == false) {
+                            MemDetails.put(TFAddrs.get(i).getText(), TFLens.get(i).getText());
+                        }
+                    }
+                    angr_options.put("Memory", MemDetails);
+                }
+
+                if (TFstore_addr.getText().isEmpty() == false & TFstore_val.getText().isEmpty() == false) {
+                    JSONObject MemStoreDetails = new JSONObject();
+                    MemStoreDetails.put(TFstore_addr.getText(), TFstore_val.getText());
+                    for (int i = 0; i < TFStoreAddrs.size(); i++) {
+                        if (TFStoreAddrs.get(i).getText().isEmpty() == false & TFStoreVals.get(i).getText().isEmpty() == false) {
+                            MemStoreDetails.put(TFStoreAddrs.get(i).getText(), TFStoreVals.get(i).getText());
+                        }
+                    }
+                    angr_options.put("Store", MemStoreDetails);
+                }
+
+                if (TFReg1.getText().isEmpty() == false & TFVal1.getText().isEmpty() == false & (TFVal1.getText().matches("0x[0-9A-Fa-f]+") == true ||
+                        TFVal1.getText().matches("[0-9]+") == true || TFVal1.getText().contains("sv"))) {
+                    JSONObject RegDetails = new JSONObject();
+                    RegDetails.put(TFReg1.getText(), TFVal1.getText());
+                    for (int i = 0; i < TFregs.size(); i++) {
+                        if (TFregs.get(i).getText().isEmpty() == false & TFVals.get(i).getText().isEmpty() == false & (TFVals.get(i).getText().matches("0x[0-9A-Fa-f]+") == true ||
+                                TFVals.get(i).getText().matches("[0-9]+") == true || TFVals.get(i).getText().contains("sv"))) {
+                            RegDetails.put(TFregs.get(i).getText(), TFVals.get(i).getText());
+                        }
+                    }
+                    angr_options.put("Registers", RegDetails);
+                }
+
+                if (Hook.isEmpty() == false) {
+                    JSONArray HookList = new JSONArray();
+                    for (Entry < String[], String[][] > entry: Hook.entrySet()) {
+                        JSONObject HookDetails = new JSONObject();
+                        String[] HookOptions = entry.getKey();
+                        String HookAddress = HookOptions[0];
+                        HookDetails.put("Length", HookOptions[1]);
+                        String[][] Regs = entry.getValue();
+                        for (int i = 0; i < Regs[0].length; i++) {
+                            if (Regs[0][i] != null & Regs[1][i] != null) {
+                                HookDetails.put(Regs[0][i], Regs[1][i]);
+                            }
+                        }
+                        JSONObject NewHook = new JSONObject();
+                        NewHook.put(HookAddress, HookDetails);
+                        HookList.put(NewHook);
+                    }
+                    angr_options.put("Hooks", HookList);
+                }
+
+                panel.revalidate();
+                String binary_path = ThisProgram.getExecutablePath();
+
+                if (System.getProperty("os.name").contains("Windows")) {
+                    binary_path = binary_path.replaceFirst("/", "");
+                    binary_path = binary_path.replace("/", "\\");
+                }
+                angr_options.put("binary_file", binary_path);
+                
+                if (ThisProgram.getExecutableFormat().contains("Raw Binary")) {
+                    JSONObject RawBinary= new JSONObject();                    	
+                    String Arch = ThisProgram.getLanguage().toString().substring(0, ThisProgram.getLanguage().toString().indexOf("/"));
+                    RawBinary.put("Arch", Arch);                    	
+                    RawBinary.put("Base", "0x" + Long.toHexString(ThisProgram.getMinAddress().getOffset()));                    	
+                    angr_options.put("Raw Binary", RawBinary);
+                }
+                
+                File angrfile = new File(TmpDir + "angr_options.json");
+                if (angrfile.exists()) {
+                    angrfile.delete();
+                }
+                try {
+                    FileWriter file = new FileWriter(TmpDir + "angr_options.json");
+                    file.write(angr_options.toString());
+                    file.flush();
+                    file.close();
+                } catch (Exception e1) {};
+                angrInProgress(angrfile);                
+            }
+        });
+    }
+
+    protected void angrInProgress(File angrfile) {
+        SwingWorker sw = new SwingWorker() {
+            @Override
+            protected String doInBackground() throws Exception {
+                String spath = null;
+                try {
+                    spath = new File(AngryGhidraProvider.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getPath();
+                } catch (URISyntaxException e2) {
+                    e2.printStackTrace();
+                }
+                spath = (spath.substring(0, spath.indexOf("lib")) + "angryghidra_script" + File.separator + "angryghidra.py");
+                File Scriptfile = new File(spath);
+                String script_path = Scriptfile.getAbsolutePath();
+                
+                //PythonVersion check (issue#5)
+                if (runAngr("python3", script_path, angrfile.getAbsolutePath()) == 0) {
+                    ProcessBuilder pb = new ProcessBuilder("python", "--version");
+                    try {
+                        Process p = pb.start();
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                        String line = "";
+                        while ((line = reader.readLine()) != null) {                	         	
+                            if (compareVersion(line.substring(7), "3.4") == -1 && compareVersion(line.substring(7), "3.0") == 1) {
+                                runAngr("python", script_path, angrfile.getAbsolutePath());
+                            }    
+                        };           
+                        p.waitFor();
+                        reader.close();
+                    } catch (Exception e1) {
+                        e1.printStackTrace();
+                    };           
+                }
+                angrfile.delete();
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                if (isTerminated == true) {
+                    StatusLabel.setText("[+] Angr options selection");
+                    return;
+                }
+                if (solution.isEmpty() == false) {
+                    StatusLabelFound.setText("[+] Solution found:");
+                    scrollSolution.setVisible(true);
+                    SolutionArea.setText(solution.trim());
+                    List < String > TraceList = Arrays.asList(insntrace.split("\\s*,\\s*"));
+                    for (String TraceAddress: TraceList) {
+                        AddressFactory AF = ThisProgram.getAddressFactory();
+                        try {
+                            AngryGhidraPopupMenu.SetColor(AF.getAddress(TraceAddress), Color.getHSBColor(247, 224, 98));
+                        } catch (Exception ex) {};
+                    }
+                } else {
+                    StatusLabelFound.setText("[-] Solution NOT found!");
+                }
+            }
+        };
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                StatusLabel.setText("[+] Angr in progress...");
+                scrollSolution.setVisible(false);
+            }
+        });
+        sw.execute();
+    }
+
+    public int runAngr(String pythonVersion, String script_path, String angrfile_path) {
+        solution = "";
+        insntrace = "";
+        ProcessBuilder pb = new ProcessBuilder(pythonVersion, script_path, angrfile_path);
+        try {
+            Process p = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line = "";
+            while ((line = reader.readLine()) != null & isTerminated == false) {
+                if (line.contains("Trace:")) {
+                    insntrace = line.substring(6);
+                } else {
+                    solution += line + "\n";
+                }
+            };
+            if (isTerminated == true) {
+                p.destroy();
+                reader.close();
+                return -1;
+            }
+            p.waitFor();
+            reader.close();
+            return 1;
+        } catch (Exception e1) {
+            e1.printStackTrace();
+            return 0;
+        }
+    }
+    public int compareVersion(String version1, String version2) {
+        String[] arr1 = version1.split("\\.");
+        String[] arr2 = version2.split("\\.");
+    
+        int i=0;
+        while (i<arr1.length || i<arr2.length) {
+            if (i<arr1.length && i<arr2.length) {
+                if (Integer.parseInt(arr1[i]) < Integer.parseInt(arr2[i])) {
+                    return -1;
+                } else if (Integer.parseInt(arr1[i]) > Integer.parseInt(arr2[i])) {
+                    return 1;
+                }
+            } else if (i<arr1.length) {
+                if (Integer.parseInt(arr1[i]) != 0) {
+                    return 1;
+                }
+            } else if (i<arr2.length) {
+            if (Integer.parseInt(arr2[i]) != 0) {
+                    return -1;
+                }
+            }	 
+            i++;
+        }	 
+        return 0;
+    }
+
+    @Override
+    public JComponent getComponent() {
+        return panel;
+    }
+
+    public void setProgram(Program p) {
+        ThisProgram = p;
+    }    
+}
+
+```
+
+`src/main/java/angryghidra/HookCreation.java`:
+
+```java
+package angryghidra;
+
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Image;
+import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.util.ArrayList;
+import javax.swing.GroupLayout;
+import javax.swing.GroupLayout.Alignment;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.LayoutStyle.ComponentPlacement;
+import javax.swing.SwingConstants;
+
+import docking.widgets.textfield.IntegerTextField;
+
+public class HookCreation {
+
+    static JFrame Hookframe;
+    static IntegerTextField TFAddress;
+    static JTextField TFHookReg1;
+    static JTextField TFHookVal1;
+    private int GuiHookRegCounter;
+    private ArrayList < JTextField > TFregs;
+    private ArrayList < JTextField > TFVals;
+    private ArrayList < JButton > delButtons;   
+    private IntegerTextField TFLength;
+
+    public void main() {
+        EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                try {
+                    HookCreation window = new HookCreation();
+                    window.Hookframe.setVisible(true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+    }
+    
+    public HookCreation() {
+        initialize();
+    }
+	
+    private void initialize() {
+        Hookframe = new JFrame();
+        Hookframe.getContentPane().setMinimumSize(new Dimension(500, 333));
+        Hookframe.setTitle("Add hook");		
+        Hookframe.setMinimumSize(new Dimension(500, 333));		
+        Hookframe.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        Hookframe.setLocationRelativeTo(null);
+        Image icon = Toolkit.getDefaultToolkit().getImage(getClass().getResource("/images/Ico.png"));
+        Hookframe.setIconImage(icon);		
+        
+        ImageIcon Addicon = new ImageIcon(getClass().getResource("/images/add.png"));
+        delButtons = new ArrayList < JButton > ();
+        TFregs = new ArrayList < JTextField > ();
+        TFVals = new ArrayList < JTextField > ();
+        GuiHookRegCounter = 2;
+        
+        TFAddress = new IntegerTextField();		
+        TFAddress.setHexMode();
+        GridBagConstraints gbc_TFAddress = new GridBagConstraints();
+        gbc_TFAddress.anchor = GridBagConstraints.NORTH;
+        gbc_TFAddress.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFAddress.gridx = 0;
+        gbc_TFAddress.gridy = 1;
+		
+        JButton btnCreate = new JButton("Add");
+        btnCreate.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        btnCreate.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {				
+                if (TFAddress.getText().isEmpty() == false & TFLength.getText().isEmpty() == false) {										
+                    String[] options = new String[2];
+                    options[0] = TFAddress.getText();
+                    options[1] = TFLength.getText();
+                    String[][] Regs = new String[2][TFregs.size()+1];					
+                    if (TFHookReg1.getText().isEmpty() == false & TFHookVal1.getText().isEmpty() == false & (TFHookVal1.getText().matches("0x[0-9A-Fa-f]+") == true || 
+                        TFHookVal1.getText().matches("[0-9]+") == true || TFHookVal1.getText().contains("sv"))) {	                        
+                            Regs[0][0] = TFHookReg1.getText();
+                            Regs[1][0] = TFHookVal1.getText();	                       
+                            for (int i = 0; i < TFregs.size(); i++) { 
+                                if (TFregs.get(i).getText().isEmpty() == false & TFVals.get(i).getText().isEmpty() == false & (TFVals.get(i).getText().matches("0x[0-9A-Fa-f]+") == true || 
+                                    TFVals.get(i).getText().matches("[0-9]+") == true || TFVals.get(i).getText().contains("sv"))) {	                        		
+                                    Regs[0][i+1] = TFregs.get(i).getText();
+                                    Regs[1][i+1] = TFVals.get(i).getText();
+                                }
+                            }		                        
+                            AngryGhidraProvider.Hook.put(options, Regs); 	    					
+                            JLabel lbHook = new JLabel("Hook at " + TFAddress.getText());	    					
+                            lbHook.setFont(new Font("SansSerif", Font.PLAIN, 12)); 
+                            GridBagConstraints gbc_lbHook = new GridBagConstraints();
+                            gbc_lbHook.fill = GridBagConstraints.HORIZONTAL;
+                            gbc_lbHook.anchor = GridBagConstraints.CENTER;
+                            gbc_lbHook.gridwidth = 3;
+                            gbc_lbHook.gridx = 1;
+                            gbc_lbHook.insets = new Insets(0, 0, 0, 5);
+                            gbc_lbHook.gridy = AngryGhidraProvider.GuiHookCounter;
+                            gbc_lbHook.weightx = 1;
+                            gbc_lbHook.weighty = 0.1;
+                            AngryGhidraProvider.RegHookPanel.add(lbHook, gbc_lbHook);     					
+                            
+                            JButton btnDel = new JButton("");
+                            btnDel.setBorder(null);
+                            btnDel.setContentAreaFilled(false);
+                            btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                            GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                            gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                            gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                            gbc_btnDel.anchor = GridBagConstraints.CENTER;
+                            gbc_btnDel.gridx = 0;
+                            gbc_btnDel.gridy =  AngryGhidraProvider.GuiHookCounter++;
+                            gbc_btnDel.weighty = 0.1;				
+                            AngryGhidraProvider.RegHookPanel.add(btnDel, gbc_btnDel);
+                            AngryGhidraProvider.delHooks.add(btnDel);
+                            btnDel.addActionListener(new ActionListener() {
+                                public void actionPerformed(ActionEvent e) {
+                                    AngryGhidraProvider.Hook.remove(options, Regs);
+                                    AngryGhidraProvider.GuiHookCounter--;
+                                    AngryGhidraProvider.RegHookPanel.remove(lbHook);
+                                    AngryGhidraProvider.RegHookPanel.remove(btnDel);
+                                    AngryGhidraProvider.delHooks.remove(btnDel);
+                                    AngryGhidraProvider.lbHooks.remove(lbHook);
+                                    AngryGhidraProvider.RegHookPanel.repaint();
+                                    AngryGhidraProvider.RegHookPanel.revalidate();
+                                }
+                            });
+                            AngryGhidraProvider.RegHookPanel.repaint();
+                            AngryGhidraProvider.RegHookPanel.revalidate();
+                        }
+                    }
+                }
+        });
+        JLabel lbRegisters = new JLabel("<html>Registers<br/>Hint: to create and store symbolic vector enter \"sv{length}\", for example \"sv16\"</html>");
+        lbRegisters.setHorizontalAlignment(SwingConstants.CENTER);
+        lbRegisters.setFont(new Font("SansSerif", Font.PLAIN, 12));
+            
+        JPanel RegPanel = new JPanel();
+        GridBagLayout gbl_RegPanel = new GridBagLayout();
+        gbl_RegPanel.columnWidths = new int[]{0, 0, 0, 0, 0, 0};
+        gbl_RegPanel.rowHeights = new int[]{0, 0, 0};
+        gbl_RegPanel.columnWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+        gbl_RegPanel.rowWeights = new double[]{0.0, 0.0, Double.MIN_VALUE};
+        RegPanel.setLayout(gbl_RegPanel);
+            
+        JLabel lblReg = new JLabel("Register");
+        lblReg.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblReg = new GridBagConstraints();
+        gbc_lblReg.anchor = GridBagConstraints.SOUTH;
+        gbc_lblReg.insets = new Insets(0, 0, 0, 5);
+        gbc_lblReg.gridx = 1;
+        gbc_lblReg.gridy = 0;
+        gbc_lblReg.weightx = 1;        
+        RegPanel.add(lblReg, gbc_lblReg);
+
+        JLabel lblValue = new JLabel("Value");
+        lblValue.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblValue = new GridBagConstraints();
+        gbc_lblValue.anchor = GridBagConstraints.SOUTH;
+        gbc_lblValue.insets = new Insets(0, 0, 0, 5);
+        gbc_lblValue.gridx = 3;
+        gbc_lblValue.gridy = 0;
+        gbc_lblValue.weightx = 1;        
+        RegPanel.add(lblValue, gbc_lblValue);
+
+        JButton btnAddButton = new JButton("");
+        GridBagConstraints gbc_btnAddButton = new GridBagConstraints();
+        gbc_btnAddButton.anchor = GridBagConstraints.NORTH;
+        gbc_btnAddButton.fill = GridBagConstraints.HORIZONTAL;
+        gbc_btnAddButton.insets = new Insets(0, 0, 0, 5);
+        gbc_btnAddButton.gridx = 0;
+        gbc_btnAddButton.gridy = 1;
+        gbc_btnAddButton.weighty = 0.1;
+        RegPanel.add(btnAddButton, gbc_btnAddButton);
+        btnAddButton.setBorder(null);
+        btnAddButton.setContentAreaFilled(false);
+        btnAddButton.setIcon(Addicon);
+
+        TFHookReg1 = new JTextField();
+        TFHookReg1.setBorder(TFAddress.getComponent().getBorder());
+        GridBagConstraints gbc_TFReg1 = new GridBagConstraints();
+        gbc_TFReg1.anchor = GridBagConstraints.NORTH;
+        gbc_TFReg1.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFReg1.insets = new Insets(0, 0, 0, 5);
+        gbc_TFReg1.gridx = 1;
+        gbc_TFReg1.gridy = 1;
+        gbc_TFReg1.weighty = 0.1;
+        RegPanel.add(TFHookReg1, gbc_TFReg1);
+        TFHookReg1.setBorder(TFAddress.getComponent().getBorder());
+        
+        TFHookVal1 = new JTextField();       
+        TFHookVal1.setBorder(TFAddress.getComponent().getBorder());
+        GridBagConstraints gbc_TFVal1 = new GridBagConstraints();
+        gbc_TFVal1.insets = new Insets(0, 0, 0, 5);
+        gbc_TFVal1.anchor = GridBagConstraints.NORTH;
+        gbc_TFVal1.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFVal1.gridx = 3;
+        gbc_TFVal1.gridy = 1;
+        gbc_TFVal1.weightx = 1;
+        gbc_TFVal1.weighty = 0.1;
+        RegPanel.add(TFHookVal1, gbc_TFVal1);
+            
+        btnAddButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {               
+                JTextField TFReg = new JTextField();
+                TFReg.setBorder(TFAddress.getComponent().getBorder());
+                GridBagConstraints gbc_TFReg = new GridBagConstraints();
+                gbc_TFReg.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFReg.anchor = GridBagConstraints.NORTH;
+                gbc_TFReg.gridx = 1;
+                gbc_TFReg.insets = new Insets(0, 0, 0, 5);
+                gbc_TFReg.gridy = GuiHookRegCounter;
+                gbc_TFReg.weightx = 1;
+                gbc_TFReg.weighty = 0.1;
+                RegPanel.add(TFReg, gbc_TFReg);
+                TFregs.add(TFReg);
+
+                JTextField TFVal = new JTextField();
+                TFVal.setBorder(TFAddress.getComponent().getBorder());
+                GridBagConstraints gbc_TFVal = new GridBagConstraints();
+                gbc_TFVal.fill = GridBagConstraints.HORIZONTAL;
+                gbc_TFVal.anchor = GridBagConstraints.NORTH;
+                gbc_TFVal.insets = new Insets(0, 0, 0, 5);
+                gbc_TFVal.gridx = 3;
+                gbc_TFVal.gridy = GuiHookRegCounter;
+                gbc_TFVal.weightx = 1;
+                gbc_TFVal.weighty = 0.1;
+                RegPanel.add(TFVal, gbc_TFVal);
+                TFVals.add(TFVal);
+
+                JButton btnDel = new JButton("");
+                btnDel.setBorder(null);
+                btnDel.setContentAreaFilled(false);
+                btnDel.setIcon(new ImageIcon(getClass().getResource("/images/edit-delete.png")));
+                GridBagConstraints gbc_btnDel = new GridBagConstraints();
+                gbc_btnDel.insets = new Insets(0, 0, 0, 5);
+                gbc_btnDel.fill = GridBagConstraints.HORIZONTAL;
+                gbc_btnDel.anchor = GridBagConstraints.NORTH;
+                gbc_btnDel.gridx = 0;
+                gbc_btnDel.gridy = GuiHookRegCounter++;
+                gbc_btnDel.weighty = 0.1;
+                RegPanel.add(btnDel, gbc_btnDel);
+                delButtons.add(btnDel);
+                btnDel.addActionListener(new ActionListener() {
+                    public void actionPerformed(ActionEvent e) {	
+                        GuiHookRegCounter--;
+                        RegPanel.remove(TFReg);
+                        RegPanel.remove(TFVal);
+                        RegPanel.remove(btnDel);
+                        delButtons.remove(btnDel);
+                        TFregs.remove(TFReg);
+                        TFVals.remove(TFVal);
+                        RegPanel.repaint();
+                        RegPanel.revalidate();
+                    }
+                });
+                RegPanel.repaint();
+                RegPanel.revalidate();
+            }
+        });
+        JPanel AddrPanel = new JPanel();
+            
+        GroupLayout groupLayout = new GroupLayout(Hookframe.getContentPane());
+        groupLayout.setHorizontalGroup(
+            groupLayout.createParallelGroup(Alignment.TRAILING)
+                .addGroup(groupLayout.createSequentialGroup()
+                    .addGap(18)
+                    .addComponent(AddrPanel, GroupLayout.DEFAULT_SIZE, 129, Short.MAX_VALUE)
+                    .addGap(39)
+                    .addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+                        .addComponent(RegPanel, GroupLayout.DEFAULT_SIZE, 238, Short.MAX_VALUE)
+                        .addComponent(lbRegisters, GroupLayout.DEFAULT_SIZE, 238, Short.MAX_VALUE))
+                    .addContainerGap())
+                .addGroup(groupLayout.createSequentialGroup()
+                    .addGap(129)
+                    .addComponent(btnCreate, GroupLayout.DEFAULT_SIZE, 184, Short.MAX_VALUE)
+                    .addGap(121))
+        );
+        groupLayout.setVerticalGroup(
+            groupLayout.createParallelGroup(Alignment.LEADING)
+                .addGroup(groupLayout.createSequentialGroup()
+                    .addGap(20)
+                    .addGroup(groupLayout.createParallelGroup(Alignment.LEADING, false)
+                        .addGroup(groupLayout.createSequentialGroup()
+                            .addComponent(lbRegisters, GroupLayout.PREFERRED_SIZE, 47, GroupLayout.PREFERRED_SIZE)
+                            .addPreferredGap(ComponentPlacement.UNRELATED)
+                            .addComponent(RegPanel, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
+                        .addComponent(AddrPanel, 0, 0, Short.MAX_VALUE))
+                    .addPreferredGap(ComponentPlacement.RELATED, 130, Short.MAX_VALUE)
+                    .addComponent(btnCreate)
+                    .addGap(27))
+        );
+        GridBagLayout gbl_AddrPanel = new GridBagLayout();
+        gbl_AddrPanel.columnWidths = new int[]{0, 0};
+        gbl_AddrPanel.rowHeights = new int[]{0, 0, 0, 0, 0};
+        gbl_AddrPanel.columnWeights = new double[]{1.0, Double.MIN_VALUE};
+        gbl_AddrPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+        AddrPanel.setLayout(gbl_AddrPanel);
+        
+        JLabel lbAddress = new JLabel("Hook at address:");
+        lbAddress.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lbAddress = new GridBagConstraints();
+        gbc_lbAddress.anchor = GridBagConstraints.SOUTH;
+        gbc_lbAddress.insets = new Insets(0, 0, 5, 5);
+        gbc_lbAddress.gridx = 0;
+        gbc_lbAddress.gridy = 0;
+        AddrPanel.add(lbAddress, gbc_lbAddress);
+        
+        TFAddress = new IntegerTextField();
+        TFAddress.setHexMode();
+        GridBagConstraints gbc_AddrPanel = new GridBagConstraints();
+        gbc_AddrPanel.fill = GridBagConstraints.HORIZONTAL;
+        gbc_AddrPanel.gridx = 0;
+        gbc_AddrPanel.gridy = 1;
+        AddrPanel.add(TFAddress.getComponent(), gbc_AddrPanel);			
+        
+        JLabel lblHookLength = new JLabel("Hook length");
+        lblHookLength.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        GridBagConstraints gbc_lblHookLength = new GridBagConstraints();
+        gbc_lblHookLength.anchor = GridBagConstraints.SOUTH;
+        gbc_lblHookLength.insets = new Insets(0, 0, 5, 5);
+        gbc_lblHookLength.gridx = 0;
+        gbc_lblHookLength.gridy = 2;
+        AddrPanel.add(lblHookLength, gbc_lblHookLength);
+        
+        TFLength = new IntegerTextField();
+        TFLength.setDecimalMode();
+        GridBagConstraints gbc_TFLength = new GridBagConstraints();
+        gbc_TFLength.fill = GridBagConstraints.HORIZONTAL;
+        gbc_TFLength.gridx = 0;
+        gbc_TFLength.gridy = 3;
+        AddrPanel.add(TFLength.getComponent(), gbc_TFLength);		
+        Hookframe.getContentPane().setLayout(groupLayout);
+    }
+}
+
+```
