@@ -1,0 +1,761 @@
+Project Path: arc_gmh5225_Windows-Spoofer__kq4ffu1
+
+Source Tree:
+
+```txt
+arc_gmh5225_Windows-Spoofer__kq4ffu1
+├── GRINX64v2
+│   ├── AMIDEWIN.EXE
+│   ├── AMIDEWINx64.EXE
+│   ├── DMI16.EXE
+│   ├── DMIEDIT.EXE
+│   ├── UCOREDLL.DLL
+│   ├── UCORESYS.SYS
+│   ├── UCOREVXD.VXD
+│   ├── UCOREW64.SYS
+│   └── amifldrv64.sys
+├── PS_Modules
+│   ├── DNS
+│   │   ├── dns.ps1
+│   │   └── docs.txt
+│   ├── Date&Time
+│   │   └── InstallDate.ps1
+│   ├── Drive
+│   │   ├── VolumeID.ps1
+│   │   ├── drive.ps1
+│   │   └── drives_v2.ps1
+│   ├── GUID
+│   │   └── guids.ps1
+│   ├── MAC
+│   │   └── mac.ps1
+│   ├── Miscellaneous
+│   │   └── miscellaneous.ps1
+│   ├── Name
+│   │   └── name.ps1
+│   └── Serials
+│       ├── docs.txt
+│       └── serials.ps1
+├── README.md
+└── Research
+    ├── AMI DMI Instructions.txt
+    ├── EFT Checks.txt
+    └── docs.txt
+
+```
+
+`PS_Modules/DNS/dns.ps1`:
+
+```ps1
+# Quad9 DNS servers
+$Ipv4PrimaryDns = '9.9.9.9'
+$Ipv4BackupDns = '149.112.112.112'
+$Ipv6PrimaryDns = '2620:fe::fe'
+$Ipv6BackupDns = '2620:fe::9'
+
+Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
+    Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses $Ipv4PrimaryDns, $Ipv4BackupDns, $Ipv6PrimaryDns, $Ipv6BackupDns
+}
+
+Clear-DnsClientCache
+```
+
+`PS_Modules/DNS/docs.txt`:
+
+```txt
+https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-networkadapter
+
+
+NetEnabled=true/false
+
+
+NetConnectionStatus:
+
+0 = Disconnected
+1 = Connecting
+2 = Connected 2
+3 = Disconnecting
+4 = Hardware Not Present
+5 = Hardware Disabled
+6 = Hardware Malfunction
+7 = Media Disconnected
+8 = Authenticating
+9 = Authentication Succeeded
+10 = Authentication Failed
+11 = Invalid Address
+12 = Credentials Required
+```
+
+`PS_Modules/Date&Time/InstallDate.ps1`:
+
+```ps1
+# Generate random date between 2011-01-01 and 2022-12-31
+$randomDate = Get-Random -Minimum ([datetime]'2011-01-01').Ticks -Maximum (([datetime]'2022-12-31').Ticks) | ForEach-Object {[datetime]$_}
+
+# Convert to Unix timestamp and LDAP/FILETIME
+$unixTimestamp = [int]($randomDate.ToUniversalTime() - [datetime]'1970-01-01').TotalSeconds
+$ldapFileTime = [int64](($unixTimestamp + 11644473600) * 1e7)
+
+# Update registry values with proper numeric types
+$regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+Set-ItemProperty -Path $regPath -Name "InstallDate" -Value $unixTimestamp -Force
+Set-ItemProperty -Path $regPath -Name "InstallTime" -Value $ldapFileTime -Force
+
+# Ensure time service is running and reconfigure
+Get-Service w32time | Where Status -ne Running | Start-Service
+w32tm /config /syncfromflags:manual /manualpeerlist:"0.pool.ntp.org,1.pool.ntp.org,2.pool.ntp.org,3.pool.ntp.org" /update
+Restart-Service w32time -Force; w32tm /resync
+
+```
+
+`PS_Modules/Drive/VolumeID.ps1`:
+
+```ps1
+function Get-UpperRandomString {
+    $randomChars = 65..71 + 48..57
+    $randomString = -join (1..8 | ForEach-Object { [char](Get-Random -InputObject $randomChars) })
+    return ($randomString -replace '(.{4})(.{4})', '$1-$2')
+}
+
+$tempPath = $env:temp
+$volumeIdPath = "$tempPath\Volumeid64.exe"
+$zipPath = "$tempPath\VolumeId.zip"
+$testIP = "9.9.9.9"
+
+if (-not (Test-Path $volumeIdPath)) {
+    if (-not (Test-Connection -ComputerName $testIP -Count 1 -Quiet)) {
+        Write-Host "No internet connection"
+        exit 1
+    }
+
+    Set-Location -Path $tempPath
+    Invoke-WebRequest -Uri "https://download.sysinternals.com/files/VolumeId.zip" -OutFile "VolumeId.zip" -UserAgent "Mozilla/5.0" -UseBasicParsing
+    Expand-Archive -Path $zipPath -DestinationPath $tempPath -Force
+
+    Get-ChildItem -Path "$tempPath\Volumeid64.exe" | ForEach-Object {
+        $driveLetter = $_.Name.Substring(0, 1)
+        $volumeId = "$($_.Name.Substring(1, 4))-$($_.Name.Substring(5, 4))"
+        if (Test-Path "$driveLetter:\") {
+            Start-Process -FilePath $volumeIdPath -ArgumentList "$driveLetter:", $volumeId, "-nobanner" -NoNewWindow -Wait
+        }
+    }
+}
+
+```
+
+`PS_Modules/Drive/drive.ps1`:
+
+```ps1
+function Get-LowerRandomIdentifier {
+    $Identifier = -join (1..16 | ForEach {[char]((97..122) + (48..57) | Get-Random)})
+    $FormattedIdentifier = ($Identifier -replace '(.{8})(.{8})', '$1-$2-A')
+    return $FormattedIdentifier
+}
+
+
+function Get-UpperRandomString {
+    $Identifier = -join (1..20 | ForEach {[char]((65..90) + (48..57) | Get-Random)})
+    return $Identifier
+}
+
+
+# DiskPeripheral - Identifier(s)
+$keys = Get-ItemProperty "HKLM:\HARDWARE\DESCRIPTION\System\MultifunctionAdapter\0\DiskController\0\DiskPeripheral\*" | Get-ItemProperty | ForEach-Object {$_.PSChildName}
+
+foreach ($key in $keys) {
+    $newIdentifier = Get-LowerRandomIdentifier
+    Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\MultifunctionAdapter\0\DiskController\0\DiskPeripheral\$key" -Name 'Identifier' -Type String -Value "$newIdentifier" -Force
+}
+
+
+# Physical Drives (SATA/NVMe)
+foreach ($PortNumber in 0..9) {
+    foreach ($LogicalUnitIdNumber in 0..9) {
+        $registryPath = "HKLM:\HARDWARE\DEVICEMAP\Scsi\Scsi Port $PortNumber\Scsi Bus 0\Target Id 0\Logical Unit Id $LogicalUnitIdNumber"
+
+        if (Test-Path -Path $registryPath) {
+		$NewString = Get-UpperRandomString
+  		Set-ItemProperty -Path $registryPath -Name 'SerialNumber' -Type String -Value "$NewString" -Force
+        }
+    }
+}
+
+```
+
+`PS_Modules/Drive/drives_v2.ps1`:
+
+```ps1
+function Get-LowerRandomIdentifier {
+    return -join ((48..57 + 97..122) | Get-Random -Count 16) -replace '(.{8})(.{4})', '$1-$2-A'
+}
+
+function Get-UpperRandomString {
+    return -join ((48..57 + 65..90) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
+}
+
+function Get-RandomVolumeId {
+    return (-join ((48..57 + 65..71) | Get-Random -Count 8 | ForEach-Object { [char]$_ }) -replace '(.{4})', '$1-').TrimEnd('-')
+}
+
+# Volume ID spoofing
+$volumeIdPath = "$env:TEMP\Volumeid64.exe"
+
+if (-not (Test-Path $volumeIdPath)) {
+    $zipPath = "$env:TEMP\VolumeId.zip"
+    Invoke-WebRequest https://download.sysinternals.com/files/VolumeId.zip -OutFile $zipPath -UseBasicParsing
+    Expand-Archive $zipPath -DestinationPath $env:TEMP -Force
+    Remove-Item $zipPath -Force
+}
+
+Get-PSDrive -PSProvider FileSystem | Where-Object Root -ne '' | ForEach-Object {
+    $drive = $_.Root.TrimEnd('\')
+    $id = Get-VolumeId
+    Start-Process $volumeIdPath -Args "$drive", $id, "-nobanner", "-acceptEula" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+}
+
+}
+
+# Update DiskPeripheral identifiers
+Get-ChildItem "HKLM:\HARDWARE\DESCRIPTION\System\MultifunctionAdapter\0\DiskController\0\DiskPeripheral\*" |
+ForEach-Object {
+    Set-ItemProperty -Path $_.PSPath -Name Identifier -Value (Get-LowerRandomIdentifier) -Force
+}
+
+# Update SCSI device serial numbers
+Get-ChildItem -Path 'HKLM:\HARDWARE\DEVICEMAP\Scsi' -Recurse -ErrorAction SilentlyContinue |
+Where-Object { $_.PSPath -match 'Scsi Port \\d+\\Scsi Bus \\d+\\Target Id \\d+\\Logical Unit Id \\d+' } |
+ForEach-Object {
+    Set-ItemProperty -Path $_.PSPath -Name SerialNumber -Value (Get-UpperRandomString) -Force
+}
+
+# Volume ID spoofing - https://learn.microsoft.com/en-us/sysinternals/downloads/volumeid
+$volumeIdPath = "$env:TEMP\Volumeid64.exe"
+
+if (-not (Test-Path $volumeIdPath)) {
+    $zipPath = "$env:TEMP\VolumeId.zip"
+    Invoke-WebRequest https://download.sysinternals.com/files/VolumeId.zip -OutFile $zipPath -UseBasicParsing
+    Expand-Archive $zipPath -DestinationPath $env:TEMP -Force
+    Remove-Item $zipPath -Force
+}
+
+Get-PSDrive -PSProvider FileSystem | Where-Object Root -ne '' | ForEach-Object {
+    $drive = $_.Root.TrimEnd('\')
+    $id = (Get-RandomVolumeId).TrimEnd('-')
+    Start-Process $volumeIdPath -Args "$drive", $id, "-nobanner", "-acceptEula" -NoNewWindow -Wait -ErrorAction SilentlyContinue > $null 2>&1
+}
+
+```
+
+`PS_Modules/GUID/guids.ps1`:
+
+```ps1
+function Get-RandomProductId {
+    return (-join (1..20 | ForEach {[char]((65..90) + (48..57) | Get-Random)}) -replace '(.{5})', '$1-').TrimEnd('-')
+}
+
+# HwProfileGuid
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\IDConfigDB\Hardware Profiles\0001' -Name 'HwProfileGuid' -Type String -Value "{$([guid]::NewGuid().ToString())}" -Force
+
+# Cryptography
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name 'MachineGuid' -Type String -Value "$([guid]::NewGuid().ToString())" -Force
+
+# SQMClient (Device ID)
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\SQMClient' -Name 'MachineId' -Type String -Value "{$([guid]::NewGuid().ToString().ToUpper())}" -Force
+
+# ProductId (Product ID)
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'ProductId' -Type String -Value "$(Get-RandomProductId)" -Force
+
+```
+
+`PS_Modules/MAC/mac.ps1`:
+
+```ps1
+# Spoof MAC Address
+$newMac = ('{0:X}' -f (Get-Random -Maximum 0xFFFFFFFFFFFF)).PadLeft(12, "0") -replace '^(.)(.)', ('$1' + (Get-Random -InputObject 'A','E','2','6')) -replace '\$', ''
+$adapter = (Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1).Name
+Set-NetAdapter -Name "$adapter" -MacAddress "$newMac" -Confirm:$false
+```
+
+`PS_Modules/Miscellaneous/miscellaneous.ps1`:
+
+```ps1
+slmgr -upk  # Uninstalls the current Windows product key
+slmgr -cpky # Clears the product key from the registry
+
+```
+
+`PS_Modules/Name/name.ps1`:
+
+```ps1
+$RandomString = -join ((48..57) + (65..90) | Get-Random -Count '7' | % {[char]$_})
+
+# Local Windows User Account
+# $env:USERNAME
+# Rename-LocalUser -Name "$env:USERNAME" -NewName "$RandomString$RandomString"
+
+# Local Computer Name (Device Name)
+# [System.Environment]::MachineName
+Rename-Computer -NewName "DESKTOP-$RandomString" -Force *>$null
+# Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ComputerName' -Name 'ComputerName' -Type String -Value "DESKTOP-$RandomString" -Force
+
+# Network Computer Name (NetBIOS Name)
+# [System.Net.Dns]::GetHostName()
+# Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\ComputerName\ActiveComputerName' -Name 'ComputerName' -Type String -Value "DESKTOP-$RandomString" -Force
+
+```
+
+`PS_Modules/Serials/docs.txt`:
+
+```txt
+https://www.monitortests.com/forum/Thread-Custom-Resolution-Utility-CRU
+
+https://en.wikipedia.org/wiki/Extended_Display_Identification_Data#Structure,_version_1.4
+
+Bytes 12-15 = Serial #
+
+HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY
+```
+
+`PS_Modules/Serials/serials.ps1`:
+
+```ps1
+
+# Restart "winmgmt" to update WMIC modified values
+Restart-Service -Force -Name "winmgmt"
+
+# [SMBIOS DMI] - System Information
+Write-Host "  # [31m[SMBIOS DMI] - System Information[0m"
+wmic path Win32_BIOS get Manufacturer,SerialNumber
+wmic path Win32_ComputerSystemProduct get Name,UUID,Vendor
+
+# [SMBIOS DMI] - Base/Main/Motherboard
+Write-Host " # [31m[SMBIOS DMI] - Base/Main/Motherboard[0m"
+wmic path Win32_BaseBoard get Product,SerialNumber
+
+# [SMBIOS DMI] - System Enclosure/Chassis
+Write-Host " # [31m[SMBIOS DMI] - System Enclosure/Chassis[0m"
+wmic path Win32_SystemEnclosure get Manufacturer,SerialNumber
+
+# [SMBIOS DMI] - Processor/CPU
+Write-Host " # [31m[SMBIOS DMI] - Processor/CPU[0m"
+wmic path Win32_Processor get Name,SerialNumber
+
+# [SMBIOS DMI] - RAM
+Write-Host " # [31m[SMBIOS DMI] - RAM[0m"
+wmic path Win32_PhysicalMemory get Manufacturer,SerialNumber
+
+# NVIDIA UUID
+Write-Host " # [31mNVIDIA UUID(s)[0m"
+nvidia-smi -L
+
+# NIC
+Write-Host "`n # [31mNIC(s)[0m"
+wmic path Win32_NetworkAdapter where netenabled=true get MACAddress,Name,NetConnectionId
+
+# Hard Drive
+Write-Host " # [31mHard Drive(s)[0m"
+wmic path Win32_DiskDrive get Model,SerialNumber
+
+# VolumeID
+Write-Host " # [31mVolumeID(s)[0m"
+foreach ($driveLetter in ('A'..'Z')) {
+    if (Test-Path -Path "{$driveLetter}:\") {
+        $volumeInfo = Get-Volume -DriveLetter $driveLetter | Select-Object -ExpandProperty FileSystemLabel
+        if ($volumeInfo -ne "The system cannot find the path specified.") {
+            Write-Output "$driveLetter > $volumeInfo"
+        }
+    }
+}
+
+# Monitor Name & Serial
+function Get-MonitorSerial {
+    $monitors = Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorID -ErrorAction SilentlyContinue |
+                Where-Object { $_.SerialNumberID -ne $null } |
+                ForEach-Object {
+                    $name = [System.Text.Encoding]::ASCII.GetString($_.UserFriendlyName)
+                    $serial = [System.Text.Encoding]::ASCII.GetString($_.SerialNumberID)
+                    if ($name) {
+                        Write-Host "${name}: $serial"
+                    } else {
+                        Write-Host "Monitor: $serial"
+                    }
+                }
+}
+
+Get-MonitorSerial
+
+# Product ID
+Write-Host " # [31mProduct ID[0m"
+wmic path Win32_OperatingSystem get Caption,SerialNumber
+
+pause
+
+```
+
+`README.md`:
+
+```md
+<h1 align="center">FOSS Windows 10 & 11 Spoofer</h1>
+
+This is a Free and Open Source Windows 10/11 spoofer. It's carefully programmed and thoroughly documented. I've dedicated a significant amount of time to refine it, ensuring smooth functionality across all modules. My motivation came from noticing issues with existing spoofers, such as poor programming, excessive bloat, and unnecessary system actions. Frustrated with the lack of reliable options, I conducted extensive research and programming to develop a truly effective, free, and open-source solution. Inspired by [vektort13](https://github.com/vektort13) and his projects [antiOS_batch](https://github.com/vektort13/antiOS_batch) and [AntiOS](https://github.com/vektort13/AntiOS), I aimed to enhance and expand upon his work, making it 10 times better with additional functionality. Join the new project, Antidetect, and remember to stay elusive!
+
+> [!IMPORTANT]
+> By using these scripts, you acknowledge and agree that you are doing so at your own risk. The provider of these scripts makes no warranties, either express or implied, regarding their safety, reliability, or suitability for any purpose. You assume full responsibility for any consequences, damages, or loss that may arise from their use. The provider shall not be liable for any direct, indirect, incidental, consequential, or punitive damages resulting from the use of these scripts.
+
+## Support 🔧
+  * Supported ✅
+    * Operating System(s)
+      * <img src="https://external-content.duckduckgo.com/ip3/www.microsoft.com.ico" width="16" height="16"> - Windows 11
+      * <img src="https://external-content.duckduckgo.com/ip3/www.microsoft.com.ico" width="16" height="16"> - Windows 10
+    * Motherboard Manufacture(s)
+      * <img src="https://external-content.duckduckgo.com/ip3/www.asus.com.ico" width="16" height="16"> - ASUS
+      * <img src="https://external-content.duckduckgo.com/ip3/us.msi.com.ico" width="16" height="16"> - MSI (Micro-Star International)
+      * <img src="https://external-content.duckduckgo.com/ip3/www.asrock.com.ico" width="16" height="16"> - ASRock
+      * <img src="https://external-content.duckduckgo.com/ip3/www.gigabyte.com.ico" width="16" height="16"> - Gigabyte / Aorus
+      * <img src="https://external-content.duckduckgo.com/ip3/www.biostar-usa.com.ico" width="16" height="16"> - Biostar
+      * <img src="https://external-content.duckduckgo.com/ip3/www.supermicro.com.ico" width="16" height="16"> - Supermicro
+      * <img src="https://duckduckgo.com/i/c01ed58d.png" width="16" height="16"> - ECS (Elitegroup Computer Systems)
+  * Unsupported ❌
+    * Operating System(s)
+      * <img src="https://external-content.duckduckgo.com/ip3/www.linux.org.ico" width="16" height="16"> - Linux
+    * Motherboard Manufacture(s)
+      * <img src="https://external-content.duckduckgo.com/ip3/www.acer.com.ico" width="16" height="16"> - Acer
+      * <img src="https://external-content.duckduckgo.com/ip3/www.dell.com.ico" width="16" height="16"> - Dell
+      * <img src="https://external-content.duckduckgo.com/ip3/www.hp.com.ico" width="16" height="16"> - HP
+      * <img src="https://external-content.duckduckgo.com/ip3/www.lenovo.com.ico" width="16" height="16"> - Lenovo
+
+## Spoofing Functions ⚙️
+| Spoof Function | Support |
+|-|-|
+| Local Windows User Account | ✅ |
+| Local Computer Name (Device Name) | ✅ |
+| Network Computer Name (NetBIOS Name) | ✅ |
+| Custom DNS | ✅ |
+| Registry | ✅ |
+| MAC Address | ✅ |
+| VolumeID | ✅ |
+| SMBIOS DMI | ✅ |
+| Disk (HDD/SSD/NVMe) Serials | ❌ |
+| RAM Serials | ❌ |
+| GPU Serials | ❌ |
+| NVIDIA UUID | ✅ |
+| Monitor Serials | ❌ |
+| PnP Device Serials | ❌ |
+| ARP | ❌ |
+
+## Flushing/Cleaning/Deletion Functions 🗑️
+| Cleaning Function | Support |
+|-|-|
+| DNS Cache | ✅ |
+| ARP Cache | ✅ |
+| Prefetch Files | ✅ |
+| `%TMP%\*` Files | ✅ |
+| `*.log` Files | ✅ |
+| USN Journal ID(s) | ✅ |
+| Ubisoft, Valorant, cache | ✅ |
+| Old Windows Backup | ✅ |
+
+## Spoofing Software
+* [VolumeID](https://learn.microsoft.com/en-us/sysinternals/downloads/volumeid)
+  * [⬇️ Download Link](https://download.sysinternals.com/files/VolumeId.zip)
+* [DMI Edit](https://download.schenker-tech.de/package/dmi-edit-efi-ami/)
+  * [⬇️ DMI Edit](https://download.schenker-tech.de/package/dmi-edit-efi-ami/?wpdmdl=3997&refresh=6596c76501be81704380261&ind=1647077068432&filename=dmi-edit-win64-ami.zip)
+  * [⬇️ DMI EFI Edit](https://download.schenker-tech.de/package/dmi-edit-efi-ami/?wpdmdl=3997&refresh=6596c76501be81704380261&ind=1637063374897&filename=dmi-edit-efi-ami.zip)
+* [mutante](https://github.com/SamuelTulach/mutante)
+* [hwid](https://github.com/btbd/hwid)
+* [rainbow](https://github.com/SamuelTulach/rainbow)
+* [Nvidia GPU UUID Randomizer](https://gist.github.com/Xyrem/4b6ea950e26565581ccd851be09ace00)
+
+## UEFI/BIOS Keys by Manufacturer
+```
+shutdown /r /fw /f /t 0
+```
+|Manufacturer|Key/Sequence|
+|-|-|
+| Acer | F2 |
+| ASRock | F2 or DEL |
+| Asus | DEL or F2 |
+| Dell | F2 or F12 |
+| Gigabyte | DEL or F2 |
+| HP | ESC or F10 |
+| Lenovo | F1 or F2 |
+| MSI | DEL or F2 |
+| Samsung | F2 |
+| Sony | F1, F2, or F3 |
+| Toshiba | F2 or ESC |
+| Intel NUC | F2 |
+
+## UEFI/BIOS Key Differences
+* If you use UEFI firmware, use GPT for the partitioning scheme.
+* If you use BIOS firmware, use MBR for the partitioning scheme.
+
+* UEFI (Unified Extensible Firmware Interface):
+  * Modern firmware standard.
+  * Supports both MBR and GPT (GUID Partition Table).
+  * Operates in 32-bit or 64-bit processor modes.
+  * Can have a graphical user interface.
+  * Generally faster boot times.
+* BIOS (Basic Input/Output System):
+  * Legacy technology.
+  * Typically uses MBR (Master Boot Record) for booting.
+  * Limited to 16-bit processor mode.
+  * Has a text-based user interface.
+  * Generally slower boot times.
+
+## Guides
+* [Evasion Techniques](https://evasions.checkpoint.com/)
+* [UC - All methods of retrieving unique identifiers(HWIDs) on your PC](https://www.unknowncheats.me/forum/anti-cheat-bypass/333662-methods-retrieving-unique-identifiers-hwids-pc.html)
+* [HWID Ban: Change UUID and Serial of AMI BIOS Motherboard](https://www.se7ensins.com/forums/threads/hwid-ban-change-uuid-and-serial-of-ami-bios-motherboard.1802379/)
+## Video Guides
+* [hdd serial number bypass (cheat engine)](https://www.youtube.com/watch?v=6BIpRNnUm5w)
+  * Make sure to unload `dbk64.sys` driver with `Kernelmoduleunloader.exe` because anti-cheats detect the `dbk64.sys` driver.
+```
+Windows7
+FFFF800000000000
+FFFFFF0000000000
+
+Windows8
+FFFF800000000000
+FFFFFF0000000000
+
+Windows10(Fast Scan)
+FFFF800000000000
+FFFFA00000000000
+
+Windows10(Slow Scan)
+(Fast Scan Not Found Result)
+FFFF800000000000
+FFFFC00000000000
+```
+
+```
+# Install the required module if not already installed
+if (-not (Get-Module -ListAvailable -Name NtObjectManager)) {
+    Install-Module -Name NtObjectManager -Force
+}
+
+# Import the NtObjectManager module
+Import-Module NtObjectManager
+
+# Get a handle to the current thread
+$currentThread = Get-NtThread -Current -PseudoHandle
+
+# Get the TrustedInstaller service
+$tiService = Get-CimInstance -ClassName Win32_Service -Filter "Name='TrustedInstaller'"
+$tiProcess = Get-Process -Id $tiService.ProcessId
+
+# Open the process with duplicate handle rights
+$tiProcessHandle = Get-NtProcess -ProcessId $tiProcess.Id -Access DupHandle
+
+# Get the primary token of the TrustedInstaller process
+$tiToken = $tiProcessHandle.OpenToken()
+
+# Duplicate the token as an impersonation token
+$impToken = $tiToken.DuplicateToken([NtApiDotNet.NtTokenDuplication]::Impersonation)
+
+# Impersonate the current thread using the duplicated token
+$imp = $currentThread.ImpersonateThread($impToken)
+
+# Output the impersonated token
+$impToken
+
+# Run a command as TrustedInstaller
+Start-Process -FilePath "cmd.exe" -ArgumentList "/c whoami" -NoNewWindow -Wait
+
+# Revert to self after performing the required actions
+$currentThread.RevertToSelf()
+```
+
+```
+
+`Research/AMI DMI Instructions.txt`:
+
+```txt
++---------------------------------------------------------------------------+
+|        AMI Desktop Management Interface Edit Utility v5.27.00.0003        |
+|      Copyright (c) 1985-2020, American Megatrends International LLC.      |
+|         All rights reserved. Subject to AMI licensing agreement.          |
++---------------------------------------------------------------------------+
+| Commands:                                                                 |
+|       /ALL  [FileName]  Output SMBIOS string to screen/file.              |
+|       /DMS  [FileName]  Create configuration file.                        |
+|   /DUMPALL  [FileName]  Output all SMBIOS data to screen/file.            |
+|      /DUMP  # [#] ...   Read Type # data.                                 |
+| Options:                                                                  |
+|       /IVN  ["String"]  Read/Write BIOS vendor name in Type 0.            |
+|        /IV  ["String"]  Read/Write BIOS version in Type 0.                |
+|        /ID  ["String"]  Read/Write BIOS release date in Type 0.           |
+|        /SM  ["String"]  Read/Write System manufacture in Type 1.          |
+|        /SP  ["String"]  Read/Write System product in Type 1.              |
+|        /SV  ["String"]  Read/Write System version in Type 1.              |
+|        /SS  ["String"]  Read/Write System Serial number in Type 1.        |
+|        /SU  [16 Bytes]  Read/Write System UUID in Type 1.                 |
+|        /SU  AUTO Generates system UUID automatically and update Type 1.   |
+|        /SK  ["String"]  Read/Write System SKU number in Type 1.           |
+|        /SF  ["String"]  Read/Write System family in Type 1.               |
+|        /BM  ["String"]  Read/Write Baseboard manufacture in Type 2.       |
+|        /BP  ["String"]  Read/Write Baseboard product in Type 2.           |
+|        /BV  ["String"]  Read/Write Baseboard version in Type 2.           |
+|        /BS  ["String"]  Read/Write Baseboard Serial number in Type 2.     |
+|        /BT  ["String"]  Read/Write Baseboard Asset Tag  in Type 2.        |
+|       /BLC  ["String"]  Read/Write Baseboard Loc. in Chassis  in Type 2.  |
+|       /BMH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard manufacture in Type 2.                   |
+|       /BPH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard product in Type 2.                       |
+|       /BVH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard version in Type 2.                       |
+|       /BSH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard Serial number in Type 2.                 |
+|       /BTH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard Asset Tag  in Type 2.                    |
+|      /BLCH  <handle #>  ["String"]                                        |
+|             Read/Write Baseboard Loc. in Chassis  in Type 2.              |
+|        /CM  ["String"]  Read/Write Chassis manufacture in Type 3.         |
+|        /CT  [8 Bits]    Read/Write Chassis type in Type 3.                |
+|        /CV  ["String"]  Read/Write Chassis version in Type 3.             |
+|        /CS  ["String"]  Read/Write Chassis Serial number in Type 3.       |
+|        /CA  ["String"]  Read/Write Chassis Tag number in Type 3.          |
+|        /CO  [32 Bits]   Read/Write Chassis OEM-defined value in Type 3.   |
+|        /CH  [8 Bits]    Read/Write Chassis Height in Type 3.              |
+|       /CPC  [8 Bits]    Read/Write Chassis Power Cords number in Type 3.  |
+|       /CSK  ["String"]  Read/Write Chassis SKU number in Type 3.          |
+|       /CMH  <handle #>  ["String"]                                        |
+|             Read/Write Chassis manufacture in Type 3.                     |
+|       /CTH  <handle #>  [8 bits]                                          |
+|             Read/Write Chassis type in Type 3.                            |
+|       /CVH  <handle #>  ["String"]                                        |
+|             Read/Write Chassis version in Type 3.                         |
+|       /CSH  <handle #>  ["String"]                                        |
+|             Read/Write Chassis Serial number in Type 3.                   |
+|       /CAH  <handle #>  ["String"]                                        |
+|             Read/Write Chassis Tag number in Type 3.                      |
+|       /COH  <handle #>  [32 bits]                                         |
+|             Read/Write Chassis OEM-defined value in Type 3.               |
+|       /CHH  <handle #>  [8 bits]                                          |
+|             Read/Write Chassis Height in Type 3.                          |
+|      /CPCH  <handle #>  [8 bits]                                          |
+|             Read/Write Chassis Power Cords number in Type 3.              |
+|      /CSKH  <handle #>  ["String"]                                        |
+|             Read/Write Chassis SKU number in Type 3.                      |
+|       /PSN  ["String"]  Read/Write Processor serial number in Type 4.     |
+|       /PAT  ["String"]  Read/Write Processor asset tag in Type 4.         |
+|       /PPN  ["String"]  Read/Write Processor part number in Type 4.       |
+|      /PSNH  <handle #>  ["String"]                                        |
+|             Read/Write Processor serial number in Type 4.                 |
+|      /PATH  <handle #>  ["String"]                                        |
+|             Read/Write Processor asset tag in Type 4.                     |
+|      /PPNH  <handle #>  ["String"]                                        |
+|             Read/Write Processor part number in Type 4.                   |
+|        /OS  [<Number> <"String">]                                         |
+|             Read/Write OEM string in Type 11.                             |
+|       /SCO  [<Number> <"String">]                                         |
+|             Read/Write Sys. Configuration Op. in Type 12.                 |
+|       /PBL  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery Location in Type 22.                 |
+|       /PBM  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery Manufacturer in Type 22.             |
+|       /PBD  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery ManuDate in Type 22.                 |
+|       /PBS  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery Serial Number in Type 22.            |
+|       /PBN  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery Device Name in Type 22.              |
+|      /PBCH  <handle #>  [8 Bits]                                          |
+|             Read/Write Port. Battery Device Chemistry in Type 22.         |
+|      /PBCA  <handle #>  [16 Bits]                                         |
+|             Read/Write Port. Battery Design Capacity in Type 22.          |
+|       /PBV  <handle #>  [16 Bits]                                         |
+|             Read/Write Port. Battery Design Voltage in Type 22.           |
+|      /PBSV  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery SBDS Ver. Num. in Type 22.           |
+|       /PBE  <handle #>  [8 Bits]                                          |
+|             Read/Write Port. Battery Maxmum Error in Type 22.             |
+|      /PBSN  <handle #>  [16 Bits]                                         |
+|             Read/Write Port. Battery in SBDS Ser. Num. in Type 22.        |
+|      /PBSD  <handle #>  [16 Bits]                                         |
+|             Read/Write Port. Battery in SBDS Manu. Date. in Type 22.      |
+|      /PBSC  <handle #>  ["String"]                                        |
+|             Read/Write Port. Battery in SBDS Dev. Chem. in Type 22.       |
+|      /PBCM  <handle #>  [8 Bits]                                          |
+|             Read/Write Port. Battery in Design Cap Multi in Type 22.      |
+|       /PBO  <handle #>  [32 Bits]                                         |
+|             Read/Write Por. Bat. in OEM-Specific Type 22.                 |
+|        /PU  <handle #>  [8 Bits]                                          |
+|             Read/Write Power supply unit group in Type 39.                |
+|        /PL  <handle #>  ["String"]                                        |
+|             Read/Write Power supply location in Type 39.                  |
+|        /PD  <handle #>  ["String"]                                        |
+|             Read/Write Power supply device name in Type 39.               |
+|        /PM  <handle #>  ["String"]                                        |
+|             Read/Write Power supply manufacturer in Type 39.              |
+|        /PS  <handle #>  ["String"]                                        |
+|             Read/Write Power supply serial number in Type 39.             |
+|        /PT  <handle #>  ["String"]                                        |
+|             Read/Write Power supply asset tag number in Type 39.          |
+|        /PN  <handle #>  ["String"]                                        |
+|             Read/Write Power supply model part number in Type 39.         |
+|        /PR  <handle #>  ["String"]                                        |
+|             Read/Write Power supply revision level in Type 39.            |
+|        /PP  <handle #>  [16 Bits]                                         |
+|             Read/Write Power supply max power capacity in Type 39.        |
+|        /PC  <handle #> [16 Bits]                                          |
+|             Read/Write Power supply characteristics in Type 39.           |
+```
+
+`Research/EFT Checks.txt`:
+
+```txt
+2021.07.10 21:51:12.932 -04:00  [INFO] Starting launcher v.12.8.3.1445 TRACE_ID: bf16124c-5a65-40b4-a537-e0a48d905cb0
+
+2021.07.10 21:53:20.922 -04:00 [DEBUG] Collecting SystemInfo...
+2021.07.10 21:53:20.934 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_BaseBoard. Code: InvalidQuery
+2021.07.10 21:53:20.940 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_BIOS. Code: InvalidQuery
+2021.07.10 21:53:20.946 -04:00 [ERROR] Could not execute WMI request SELECT UUID FROM Win32_ComputerSystemProduct. Code: InvalidQuery
+2021.07.10 21:53:20.950 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_Processor. Code: InvalidQuery
+2021.07.10 21:53:20.957 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_VideoController. Code: InvalidQuery
+2021.07.10 21:53:20.962 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_NetworkAdapter. Code: InvalidQuery
+2021.07.10 21:53:20.996 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_OperatingSystem. Code: InvalidQuery
+2021.07.10 21:53:21.002 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_PhysicalMemory. Code: InvalidQuery
+2021.07.10 21:53:21.009 -04:00 [ERROR] Could not execute WMI request SELECT * FROM Win32_DiskDrive. Code: InvalidQuery
+2021.07.10 21:53:21.029 -04:00 [DEBUG] SystemInfo successfully collected
+
+```
+
+`Research/docs.txt`:
+
+```txt
+Supported Motherboard Brands:
+    ASUS
+    MSI (Micro-Star International)
+    ASRock
+    Gigabyte
+    Biostar
+    Supermicro
+    ECS (Elitegroup Computer Systems)
+
+
+
+Custom UEFI and BIOS utilities for Aptio and AMIBIOS:
+https://www.ami.com/bios-uefi-utilities/
+
+	Aptio V AMI Firmware Update Utility:
+	https://f.hubspotusercontent10.net/hubfs/9443417/Support/BIOS_Firmware_Update/Aptio_V_AMI_Firmware_Update_Utility.zip
+
+	AMIBIOS8 AMI Firmware Update Utility:
+	https://f.hubspotusercontent10.net/hubfs/9443417/Support/BIOS_Firmware_Update/AMIBIOS8_AMI_Firmware_Update_Utility.zip
+
+
+
+DMI Edit via Windows or EFI for AMI BIOS:
+https://download.schenker-tech.de/package/dmi-edit-efi-ami/
+
+	dmi-edit-win64-ami
+	https://download.schenker-tech.de/package/dmi-edit-efi-ami/?wpdmdl=3997&ind=1647077068432&filename=dmi-edit-win64-ami.zip
+	
+	dmi-edit-efi-ami
+	https://download.schenker-tech.de/package/dmi-edit-efi-ami/?wpdmdl=3997&ind=1637063374897&filename=dmi-edit-efi-ami.zip
+
+
+https://www.thetechgame.com/Tutorials/id=28615/c=12091/mwhwid-ban-change-uuid-and-serial-of-ami-bios-motherboard.html
+https://github.com/hfiref0x/DSEFix
+```
