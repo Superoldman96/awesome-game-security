@@ -1,0 +1,3932 @@
+Project Path: arc_gmh5225_UnrealSharp_p5rrvfbu
+
+Source Tree:
+
+```txt
+arc_gmh5225_UnrealSharp_p5rrvfbu
+├── FUNDING.yml
+├── LICENSE
+├── README.md
+├── UnrealSharp
+│   ├── Engine
+│   │   ├── Extensions.cs
+│   │   ├── Hotkeys.cs
+│   │   ├── Memory.cs
+│   │   ├── SigScan.cs
+│   │   └── UnrealEngine.cs
+│   ├── Overlay.cs
+│   ├── Overlay.resx
+│   ├── Properties
+│   │   └── AssemblyInfo.cs
+│   ├── UnrealSharp.csproj
+│   └── packages.config
+├── UnrealSharp.sln
+├── UnrealSharpInspector
+│   ├── App.config
+│   ├── Program.cs
+│   ├── Properties
+│   │   ├── AssemblyInfo.cs
+│   │   ├── Resources.Designer.cs
+│   │   ├── Resources.resx
+│   │   ├── Settings.Designer.cs
+│   │   └── Settings.settings
+│   ├── UnrealSharpInspector.cs
+│   ├── UnrealSharpInspector.csproj
+│   ├── UnrealSharpInspector.designer.cs
+│   └── UnrealSharpInspector.resx
+└── example.png
+
+```
+
+`FUNDING.yml`:
+
+```yml
+patreon: shalzuth
+custom: shalzuth.com
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2021 shalzuth
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# UnrealSharp
+ UnrealSharp is a helper framework to create extra sensory perception, radar, and other tools and game mods for UnrealEngine games.
+
+# What is this and is it shiny?
+ Unreal Sharp is written in C#, and works by using reading process memory. The framework is setup to be dynamic for multiple games, as well as being able to dynamically reference fields by name. While it is external, it is also one of, if not the only, external that can call internal functions.
+ 
+# How does this work
+ This project heavily relies on Unreal Engine's reflection system, using strings to dump out game info.
+ 
+# Screenshot or it didn't happen
+ ![Preview](example.png)
+
+# Legal stuff
+ shalzuth isn't endorsed by Epic Games and doesn’t reflect the views or opinions of Epic Games or anyone officially involved in producing or managing Epic Games content and materials are trademarks and copyrights of Epic Games
+```
+
+`UnrealSharp.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31112.23
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnrealSharp", "UnrealSharp\UnrealSharp.csproj", "{B34C4537-EB0C-4E38-A21C-1327752CA4AA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnrealSharpInspector", "UnrealSharpInspector\UnrealSharpInspector.csproj", "{53B81F12-380D-431F-AEEA-57648D7DC7F3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B34C4537-EB0C-4E38-A21C-1327752CA4AA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B34C4537-EB0C-4E38-A21C-1327752CA4AA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B34C4537-EB0C-4E38-A21C-1327752CA4AA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B34C4537-EB0C-4E38-A21C-1327752CA4AA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{53B81F12-380D-431F-AEEA-57648D7DC7F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53B81F12-380D-431F-AEEA-57648D7DC7F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53B81F12-380D-431F-AEEA-57648D7DC7F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53B81F12-380D-431F-AEEA-57648D7DC7F3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DD293E2F-7566-4597-A0A3-F9339730A4BD}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`UnrealSharp/Engine/Extensions.cs`:
+
+```cs
+using System;
+using System.Numerics;
+
+namespace UnrealSharp
+{
+    public static class Extensions
+    {
+        public static SharpDX.Color ToSharpDx(this System.Drawing.Color color)
+        {
+            return new SharpDX.Color(color.R, color.G, color.B, color.A);
+        }
+        public static SharpDX.Vector3 ToSharpDx(this Vector3 v3)
+        {
+            return new SharpDX.Vector3(v3.X, v3.Y, v3.Z);
+        }
+        public static SharpDX.Vector2 ToSharpDx(this Vector2 v2)
+        {
+            return new SharpDX.Vector2(v2.X, v2.Y);
+        }
+        public static Vector3 ToNative(this SharpDX.Vector3 v3)
+        {
+            return new Vector3(v3.X, v3.Y, v3.Z);
+        }
+        public static Vector2 ToNative(this SharpDX.Vector2 v2)
+        {
+            return new Vector2(v2.X, v2.Y);
+        }
+        public static Single Mult(this Vector3 v, Vector3 s) => v.X * s.X + v.Y * s.Y + v.Z * s.Z;
+        public static void GetAxes(this Vector3 v, out Vector3 x, out Vector3 y, out Vector3 z)
+        {
+            var m = v.ToMatrix();
+
+            x = new Vector3(m[0, 0], m[0, 1], m[0, 2]);
+            y = new Vector3(m[1, 0], m[1, 1], m[1, 2]);
+            z = new Vector3(m[2, 0], m[2, 1], m[2, 2]);
+        }
+        public static Vector3 FromRotator(this Vector3 v)
+        {
+            float radPitch = (float)(v.X * Math.PI / 180f);
+            float radYaw = (float)(v.Y * Math.PI / 180f);
+            float SP = (float)Math.Sin(radPitch);
+            float CP = (float)Math.Cos(radPitch);
+            float SY = (float)Math.Sin(radYaw);
+            float CY = (float)Math.Cos(radYaw);
+            return new Vector3(CP * CY, CP * SY, SP);
+        }
+        public static Single[,] ToMatrix(this Vector3 v, Vector3 origin = default(Vector3))
+        {
+            if (origin == default)
+                origin = default;
+            var radPitch = (Single)(v.X * Math.PI / 180f);
+            var radYaw = (Single)(v.Y * Math.PI / 180f);
+            var radRoll = (Single)(v.Z * Math.PI / 180f);
+
+            var SP = (Single)Math.Sin(radPitch);
+            var CP = (Single)Math.Cos(radPitch);
+            var SY = (Single)Math.Sin(radYaw);
+            var CY = (Single)Math.Cos(radYaw);
+            var SR = (Single)Math.Sin(radRoll);
+            var CR = (Single)Math.Cos(radRoll);
+
+            var m = new Single[4, 4];
+            m[0, 0] = CP * CY;
+            m[0, 1] = CP * SY;
+            m[0, 2] = SP;
+            m[0, 3] = 0f;
+
+            m[1, 0] = SR * SP * CY - CR * SY;
+            m[1, 1] = SR * SP * SY + CR * CY;
+            m[1, 2] = -SR * CP;
+            m[1, 3] = 0f;
+
+            m[2, 0] = -(CR * SP * CY + SR * SY);
+            m[2, 1] = CY * SR - CR * SP * SY;
+            m[2, 2] = CR * CP;
+            m[2, 3] = 0f;
+
+            m[3, 0] = origin.X;
+            m[3, 1] = origin.Y;
+            m[3, 2] = origin.Z;
+            m[3, 3] = 1f;
+            return m;
+        }
+        public struct Transform
+        {
+            public Vector3 Rotation;
+            public Single RotationW;
+            public Vector3 Translation;
+            public Single TranslationW;
+            public Vector3 Scale;
+            public Single ScaleW;
+            public Matrix4x4 ToMatrixWithScale()
+            {
+                float x2 = Rotation.X + Rotation.X;
+                float y2 = Rotation.Y + Rotation.Y;
+                float z2 = Rotation.Z + Rotation.Z;
+
+                float xx2 = Rotation.X * x2;
+                float yy2 = Rotation.Y * y2;
+                float zz2 = Rotation.Z * z2;
+
+                float yz2 = Rotation.Y * z2;
+                float wx2 = RotationW * x2;
+
+                float xy2 = Rotation.X * y2;
+                float wz2 = RotationW * z2;
+
+                float xz2 = Rotation.X * z2;
+                float wy2 = RotationW * y2;
+
+                var m = new Matrix4x4
+                {
+                    M41 = Translation.X,
+                    M42 = Translation.Y,
+                    M43 = Translation.Z,
+                    M11 = (1.0f - (yy2 + zz2)) * Scale.X,
+                    M22 = (1.0f - (xx2 + zz2)) * Scale.Y,
+                    M33 = (1.0f - (xx2 + yy2)) * Scale.Z,
+                    M32 = (yz2 - wx2) * Scale.Z,
+                    M23 = (yz2 + wx2) * Scale.Y,
+                    M21 = (xy2 - wz2) * Scale.Y,
+                    M12 = (xy2 + wz2) * Scale.X,
+                    M31 = (xz2 + wy2) * Scale.Z,
+                    M13 = (xz2 - wy2) * Scale.X,
+                    M14 = 0.0f,
+                    M24 = 0.0f,
+                    M34 = 0.0f,
+                    M44 = 1.0f
+                };
+                return m;
+            }
+            public Single[,] ToMatrixWithScale2()
+            {
+                var m = new Single[4, 4];
+
+                m[3, 0] = Translation.X;
+                m[3, 1] = Translation.Y;
+                m[3, 2] = Translation.Z;
+
+                var x2 = Rotation.X * 2;
+                var y2 = Rotation.Y * 2;
+                var z2 = Rotation.Z * 2;
+
+                var xx2 = Rotation.X * x2;
+                var yy2 = Rotation.Y * y2;
+                var zz2 = Rotation.Z * z2;
+                m[0, 0] = (1.0f - (yy2 + zz2)) * Scale.X;
+                m[1, 1] = (1.0f - (xx2 + zz2)) * Scale.Y;
+                m[2, 2] = (1.0f - (xx2 + yy2)) * Scale.Z;
+
+                var yz2 = Rotation.Y * z2;
+                var wx2 = RotationW * x2;
+                m[2, 1] = (yz2 - wx2) * Scale.Z;
+                m[1, 2] = (yz2 + wx2) * Scale.Y;
+
+                var xy2 = Rotation.X * y2;
+                var wz2 = RotationW * z2;
+                m[1, 0] = (xy2 - wz2) * Scale.Y;
+                m[0, 1] = (xy2 + wz2) * Scale.X;
+
+                var xz2 = Rotation.X * z2;
+                var wy2 = RotationW * y2;
+                m[2, 0] = (xz2 + wy2) * Scale.Z;
+                m[0, 2] = (xz2 - wy2) * Scale.X;
+
+                m[0, 3] = 0.0f;
+                m[1, 3] = 0.0f;
+                m[2, 3] = 0.0f;
+                m[3, 3] = 1.0f;
+
+                return m;
+            }
+        }
+        public static Single[,] MultiplyMatrix(Single[,] a, Single[,] b)
+        {
+            var c = new Single[4, 4];
+            for (var i = 0; i < 4; i++)
+            {
+                for (var j = 0; j < 4; j++)
+                {
+                    c[i, j] = 0;
+                    for (var k = 0; k < 4; k++) c[i, j] += a[i, k] * b[k, j];
+                }
+            }
+            return c;
+        }
+        public static Vector3 CalcRotation(this Vector3 source, Vector3 destination, Vector3 origAngles, Single smooth)
+        {
+            var angles = new Vector3();
+            var diff = source - destination;
+            var hyp = Math.Sqrt(diff.X * diff.X + diff.Y * diff.Y);
+            angles.Y = (Single)Math.Atan(diff.Y / diff.X) * 57.295779513082f;
+            angles.X = -(Single)Math.Atan(diff.Z / hyp) * 57.295779513082f;
+            angles.Z = 0.0f;
+            if (diff.X >= 0.0)
+            {
+                if (angles.Y > 0)
+                    angles.Y -= 180.0f;
+                else
+                    angles.Y += 180.0f;
+            }
+            if (smooth > 0 && Math.Abs(angles.Y - origAngles.Y) < 180.0f)
+                angles -= ((angles - origAngles) * smooth);
+            return angles;
+        }
+    }
+}
+```
+
+`UnrealSharp/Engine/Hotkeys.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+
+namespace UnrealSharp
+{
+    public class Hotkeys
+    {
+        [DllImport("user32")] static extern short GetKeyState(int keyCode);
+        [DllImport("user32")] static extern short GetAsyncKeyState(int keyCode);
+        static Dictionary<Keys, Boolean> ToggleVals = new Dictionary<Keys, Boolean>();
+        static Dictionary<Keys, Boolean> SingleVals = new Dictionary<Keys, Boolean>();
+        public static Boolean ToggledKey(Keys keyCode)
+        {
+            if (!ToggleVals.ContainsKey(keyCode)) ToggleVals.Add(keyCode, false);
+            if (SinglePress(keyCode))
+                ToggleVals[keyCode] = !ToggleVals[keyCode];
+            return ToggleVals[keyCode];
+            return (GetAsyncKeyState((int)keyCode) & 0x8000) != 0;
+            return (GetAsyncKeyState((int)keyCode) & 0x1) != 0;
+            return (GetAsyncKeyState((int)keyCode) == 0);
+            return (GetKeyState((int)keyCode) == 0);
+        }
+        public static Boolean SinglePress(Keys keyCode)
+        {
+            if (!SingleVals.ContainsKey(keyCode)) SingleVals.Add(keyCode, false);
+            if (IsPressed(keyCode))
+            {
+                if (SingleVals[keyCode]) return false;
+                SingleVals[keyCode] = true;
+                return true;
+            }
+            else SingleVals[keyCode] = false;
+            return false;
+            return (GetAsyncKeyState((int)keyCode) & 0x8000) != 0;
+            return (GetAsyncKeyState((int)keyCode) & 0x1) != 0;
+            return (GetAsyncKeyState((int)keyCode) == 0);
+            return (GetKeyState((int)keyCode) == 0);
+        }
+        public static Boolean IsPressed(Keys keyCode)
+        {
+            return (GetAsyncKeyState((int)keyCode) & 0x8000) != 0;
+            return (GetKeyState((int)keyCode) & 0x100) != 0;
+        }
+    }
+}
+
+```
+
+`UnrealSharp/Engine/Memory.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+
+namespace UnrealSharp
+{
+    public unsafe class Memory
+    {
+        [DllImport("kernel32")] static extern IntPtr OpenProcess(UInt32 dwDesiredAccess, Int32 bInheritHandle, Int32 dwProcessId);
+        [DllImport("kernel32")] static extern Int32 ReadProcessMemory(IntPtr hProcess, UInt64 lpBaseAddress, [In, Out] Byte[] buffer, Int32 size, out Int32 lpNumberOfBytesRead);
+        //public static delegate* unmanaged[Stdcall] <IntPtr, UInt64, Byte[], Int32, out Int32, Int32> ReadProcMemInternal;
+        [DllImport("kernel32")] static extern Boolean WriteProcessMemory(IntPtr hProcess, UInt64 lpBaseAddress, Byte[] buffer, Int32 nSize, out Int32 lpNumberOfBytesWritten);
+        [DllImport("kernel32")] static extern Int32 CloseHandle(IntPtr hObject);
+        [DllImport("kernel32")] static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, UInt32 dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, UInt32 dwCreationFlags, IntPtr lpThreadId);
+        [DllImport("kernel32")] static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
+        [DllImport("kernel32")] static extern IntPtr VirtualAllocEx(IntPtr hProcess, IntPtr lpAddress, Int32 dwSize, Int32 flAllocationType, Int32 flProtect);
+        [DllImport("kernel32")] static extern Boolean VirtualFreeEx(IntPtr hProcess, IntPtr lpAddress, Int32 dwSize, Int32 dwFreeType);
+        [DllImport("user32")] public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, String lpszClass, String lpszWindow);
+        [DllImport("user32")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out Int32 lpdwProcessId);
+        public IntPtr procHandle = IntPtr.Zero;
+        public Process Process { get; private set; }
+        public UInt64 BaseAddress { get { return (UInt64)Process.MainModule.BaseAddress; } }
+        public Memory(Process proc)
+        {
+            //var handle = NativeLibrary.Load("kernel32.dll");
+            //ReadProcMemInternal = (delegate* unmanaged[Stdcall]<IntPtr, UInt64, Byte[], Int32, out Int32, Int32>)NativeLibrary.GetExport(handle, "ReadProcessMemory");
+            Process = proc;
+            if (Process == null) return;
+            OpenProcess(Process.Id);
+        }
+        public Memory(String name)
+        {
+            var procs = Process.GetProcessesByName(name);
+            Process = procs.FirstOrDefault();
+            if (Process == null) return;
+            OpenProcess(Process.Id);
+        }
+        private Dictionary<IntPtr, int> _allocations = new Dictionary<IntPtr, int>();
+        public void OpenProcess(Int32 procId)
+        {
+            procHandle = OpenProcess(0x38, 1, procId);
+        }
+        public Int32 maxStringLength = 0x100;
+        /*public static Int32 ReadProcessMemory(IntPtr hProcess, UInt64 lpBaseAddress, [In, Out] Byte[] buffer, Int32 size, out Int32 lpNumberOfBytesRead)
+        {
+            return ReadProcMemInternal(hProcess, lpBaseAddress, buffer, size, out lpNumberOfBytesRead);
+        }*/
+        public Byte[] ReadProcessMemory(UInt64 addr, Int32 length)
+        {
+            var maxSize = 0x64000;
+            var buffer = new Byte[length];
+            for (var i = 0; i < length / (Single)maxSize; i++)
+            {
+                var buf = new Byte[0x64000];
+                var blockSize = (i == (length / maxSize)) ? length : i % maxSize;
+                ReadProcessMemory(procHandle, addr + (UInt64)(i * maxSize), buf, blockSize, out Int32 bytesRead);
+                Array.Copy(buf, 0, buffer, i * maxSize, blockSize);
+            }
+            return buffer;
+        }
+        public unsafe Object ReadProcessMemory(Type type, UInt64 addr)
+        {
+            if (type == typeof(String))
+            {
+                var stringLength = maxStringLength;
+                List<Byte> bytes = new List<Byte>();
+                var isUtf16 = false;
+                for (UInt32 i = 0; i < 32; i++)
+                {
+                    var letters8 = ReadProcessMemory<UInt64>(addr + i * 8);
+                    var tempBytes = BitConverter.GetBytes(letters8);
+                    for (int j = 0; j < 8 && stringLength > 0; j++)
+                    {
+                        if (tempBytes[j] == 0 && j == 1 && bytes.Count == 1)
+                            isUtf16 = true;
+                        if (isUtf16 && j % 2 == 1)
+                            continue;
+                        if (tempBytes[j] == 0)
+                            return (Object)Encoding.UTF8.GetString(bytes.ToArray());
+                        if ((tempBytes[j] < 32 || tempBytes[j] > 126) && tempBytes[j] != '\n')
+                            return (Object)"null";
+                        bytes.Add(tempBytes[j]);
+                        stringLength--;
+                    }
+                }
+                return (Object)Encoding.UTF8.GetString(bytes.ToArray());
+            }
+            var buffer = new Byte[Marshal.SizeOf(type)];
+            ReadProcessMemory(procHandle, addr, buffer, Marshal.SizeOf(type), out Int32 bytesRead);
+            var structPtr = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            var obj = Marshal.PtrToStructure(structPtr.AddrOfPinnedObject(), type);
+            var members = obj.GetType().GetFields();
+            foreach (var member in members)
+            {
+                continue;
+                if (member.FieldType == typeof(String))
+                {
+                    var offset = Marshal.OffsetOf(type, member.Name).ToInt32();
+                    var ptr = BitConverter.ToUInt32(buffer.Skip(offset).Take(4).ToArray(), 0);
+                    if (ptr == 0xffffffff || ptr == 0)
+                    {
+                        member.SetValueDirect(__makeref(obj), "null");
+                        continue;
+                    }
+                    /* var val = member.GetValue(obj);
+                     var validStr = true;
+                     for (int i = 0; i < 16; i++)
+                     {
+                         if (buffer[offset + i] == 0 && i > 1)
+                             break;
+                         if (buffer[offset + i] < 32 || buffer[offset + i] > 126)
+                         {
+                             validStr = false;
+                             break;
+                         }
+                     }
+                     if (validStr)
+                         continue;*/
+                    var strPtr = Marshal.ReadIntPtr(structPtr.AddrOfPinnedObject(), offset);
+                    var str = ReadProcessMemory<String>((UInt32)strPtr);
+                    if (str != "null" && str != "")
+                        member.SetValueDirect(__makeref(obj), str);
+                }
+                /*if (member.FieldType.IsPointer)
+                {
+                    var address = System.Reflection.Pointer.Unbox(member.GetValue(obj));
+                    var value = ReadProcessMemory(member.FieldType.GetElementType(), (UInt32)address);
+                }*/
+            }
+            structPtr.Free();
+            return obj;
+        }
+        public T ReadProcessMemory<T>(UInt64 addr)
+        {
+            return (T)ReadProcessMemory(typeof(T), addr);
+        }
+        public void WriteProcessMemory(UInt64 addr, Byte[] buffer)
+        {
+            WriteProcessMemory(procHandle, addr, buffer, buffer.Length, out Int32 bytesRead);
+        }
+        public void WriteProcessMemory<T>(UInt64 addr, T value)
+        {
+            if (value.GetType().IsEnum)
+            {
+                var enumBaseType = Enum.GetUnderlyingType(value.GetType());
+                if (Marshal.SizeOf(enumBaseType) == 2) WriteProcessMemory(addr, (Int16)(Object)value);
+                else if (Marshal.SizeOf(enumBaseType) == 4) WriteProcessMemory(addr, (Int32)(Object)value);
+                else if (Marshal.SizeOf(enumBaseType) == 8) WriteProcessMemory(addr, (Int64)(Object)value);
+                else throw new Exception("unk enum size");
+                return;
+            }
+            var objSize =  Marshal.SizeOf(value);
+            var objBytes = new Byte[objSize];
+            var objPtr = Marshal.AllocHGlobal(objSize);
+            Marshal.StructureToPtr(value, objPtr, true);
+            Marshal.Copy(objPtr, objBytes, 0, objSize);
+            Marshal.FreeHGlobal(objPtr);
+            WriteProcessMemory(procHandle, addr, objBytes, objBytes.Length, out Int32 bytesRead);
+        }
+        public UInt64 Execute(UInt64 fPtr, UInt64 a1, UInt64 a2, UInt64 a3, UInt64 a4, params UInt64[] args)
+        {
+            var retValPtr = VirtualAllocEx(procHandle, IntPtr.Zero, 0x40, 0x1000, 0x40);
+            WriteProcessMemory((UInt64)retValPtr, BitConverter.GetBytes((UInt64)0xdeadbeefcafef00d));
+
+            var asm = new List<Byte>();
+            asm.AddRange(new Byte[] { 0x48, 0x83, 0xEC }); // sub rsp
+            asm.Add(104);
+
+            asm.AddRange(new Byte[] { 0x48, 0xB9 }); // mov rcx
+            asm.AddRange(BitConverter.GetBytes(a1));
+
+            asm.AddRange(new Byte[] { 0x48, 0xBA }); // mov rdx
+            asm.AddRange(BitConverter.GetBytes(a2));
+
+            asm.AddRange(new Byte[] { 0x49, 0xB8 }); // mov r8
+            asm.AddRange(BitConverter.GetBytes(a3));
+
+            asm.AddRange(new Byte[] { 0x49, 0xB9 }); // mov r9
+            asm.AddRange(BitConverter.GetBytes(a4));
+
+            var offset = 0u;
+            foreach (var obj in args)
+            {
+                asm.AddRange(new Byte[] { 0x48, 0xB8 }); // mov rax
+                asm.AddRange(BitConverter.GetBytes(obj));
+                asm.AddRange(new Byte[] { 0x48, 0x89, 0x44, 0x24, (Byte)(0x28 + 8 * offset++) }); // mov rax to stack
+            }
+            asm.AddRange(new Byte[] { 0x48, 0xB8 }); // mov rax
+            asm.AddRange(BitConverter.GetBytes(fPtr));
+
+            asm.AddRange(new Byte[] { 0xFF, 0xD0 }); // call rax
+            asm.AddRange(new Byte[] { 0x48, 0x83, 0xC4 }); // add rsp
+            asm.Add(104);
+
+            asm.AddRange(new Byte[] { 0x48, 0xA3 }); // mov rax to
+            asm.AddRange(BitConverter.GetBytes((UInt64)retValPtr));
+            asm.Add(0xC3); // ret
+            var codePtr = VirtualAllocEx(procHandle, IntPtr.Zero, asm.Count, 0x1000, 0x40);
+            WriteProcessMemory(procHandle, (UInt64)codePtr, asm.ToArray(), asm.Count, out Int32 bytesRead);
+
+            var thread = CreateRemoteThread(procHandle, IntPtr.Zero, 0, codePtr, IntPtr.Zero, 0, IntPtr.Zero);
+            WaitForSingleObject(thread, 10000);
+            var returnValue = ReadProcessMemory<UInt64>((UInt64)retValPtr);
+            VirtualFreeEx(procHandle, codePtr, 0, 0x8000);
+            VirtualFreeEx(procHandle, retValPtr, 0, 0x8000);
+            CloseHandle(thread);
+            return returnValue;
+        }
+        public T ExecuteUEFunc<T>(IntPtr vtableAddr, IntPtr objAddr, IntPtr funcAddr, params Object[] args)
+        {
+            //var retValPtr = VirtualAllocEx(procHandle, IntPtr.Zero, 0x40, 0x1000, 0x40);
+            //WriteProcessMemory((UInt64)retValPtr, BitConverter.GetBytes((UInt64)0xdeadbeefcafef00d));
+            var dummyParms = VirtualAllocEx(procHandle, IntPtr.Zero, 0x100, 0x1000, 0x40);
+
+            WriteProcessMemory((UInt64)dummyParms, BitConverter.GetBytes((UInt64)0xffffffffffffffff));
+            var offset = 0u;
+            foreach (var obj in args)
+            {
+                WriteProcessMemory((UInt64)dummyParms + offset, obj);
+                var outputType = obj.GetType().IsEnum ? Enum.GetUnderlyingType(obj.GetType()) : obj.GetType();
+                offset += (UInt32)Marshal.SizeOf(outputType);
+            }
+
+            var asm = new List<Byte>();
+            asm.AddRange(new byte[] { 0x48, 0x83, 0xEC }); // sub rsp
+            asm.Add(40);
+            asm.AddRange(new byte[] { 0x48, 0xB8 }); // mov rax
+            asm.AddRange(BitConverter.GetBytes((UInt64)vtableAddr));
+
+            asm.AddRange(new byte[] { 0x48, 0xB9 }); // mov rcx
+            asm.AddRange(BitConverter.GetBytes((UInt64)objAddr));
+
+            asm.AddRange(new byte[] { 0x48, 0xBA }); // mov rdx
+            asm.AddRange(BitConverter.GetBytes((UInt64)funcAddr));
+
+            asm.AddRange(new byte[] { 0x49, 0xB8 }); // mov r8
+            asm.AddRange(BitConverter.GetBytes((UInt64)dummyParms));
+
+            asm.AddRange(new byte[] { 0xFF, 0xD0 }); // call rax
+            asm.AddRange(new byte[] { 0x48, 0x83, 0xC4 }); // add rsp
+            asm.Add(40);
+            //asm.AddRange(new byte[] { 0x48, 0xA3 }); // mov rax to
+            //asm.AddRange(BitConverter.GetBytes((UInt64)retValPtr));
+            asm.Add(0xC3); // ret
+            var codePtr = VirtualAllocEx(procHandle, IntPtr.Zero, asm.Count, 0x1000, 0x40);
+            WriteProcessMemory(procHandle, (UInt64)codePtr, asm.ToArray(), asm.Count, out Int32 bytesRead);
+
+            IntPtr thread = CreateRemoteThread(procHandle, IntPtr.Zero, 0, codePtr, IntPtr.Zero, 0, IntPtr.Zero);
+            WaitForSingleObject(thread, 10000);
+
+            var returnValue = ReadProcessMemory<T>((UInt64)dummyParms);
+            VirtualFreeEx(procHandle, dummyParms, 0, 0x8000);
+            VirtualFreeEx(procHandle, codePtr, 0, 0x8000);
+            //VirtualFreeEx(procHandle, retValPtr, 0, 0x8000);
+            CloseHandle(thread);
+            return returnValue;
+        }
+
+        public List<UInt64> SearchProcessMemory(String pattern, UInt64 start, UInt64 end, Boolean absolute = true)
+        {
+            var arrayOfBytes = pattern.Split(' ').Select(b => b.Contains("?") ? -1 : Convert.ToInt32(b, 16)).ToArray();
+            var addresses = new List<UInt64>();
+            var iters = 1 + ((end - start) / 0x1000);
+            if (iters == 0) iters++;
+            for (uint i = 0; i < iters; i++)
+            {
+                var buffer = new Byte[0x1000];
+                ReadProcessMemory(procHandle, (UInt32)(start + i * 0x1000), buffer, 0x1000, out Int32 bytesRead);
+                var results = Scan(buffer, arrayOfBytes).Select(j => (UInt64)j + start + i * 0x1000).ToList();
+                if (start + (i + 1) * 0x1000 > end && results.Count > 0)
+                    results.RemoveAll(r => r > end);
+                addresses.AddRange(results);
+            }
+            if (absolute)
+                return addresses;
+            else
+                return addresses.Select(a => a - start).ToList();
+        }
+        public List<UInt64> ReSearchProcessMemory(List<UInt64> existing, String pattern)
+        {
+            var arrayOfBytes = pattern.Split(' ').Select(b => b.Contains("?") ? -1 : Convert.ToInt32(b, 16)).ToArray();
+            var addresses = new List<UInt64>();
+            foreach (var val in existing)
+            {
+                var buffer = new Byte[4];
+                ReadProcessMemory(procHandle, (UInt32)val, buffer, 4, out Int32 bytesRead);
+                var results = Scan(buffer, arrayOfBytes).Select(j => (UInt64)j + val).ToList();
+                addresses.AddRange(results);
+            }
+            return addresses;
+        }
+        public String DumpSurroundString(UInt64 start)
+        {
+            var buffer = new Byte[0x100];
+            ReadProcessMemory(procHandle, (UInt32)(start - 0x80), buffer, buffer.Length, out Int32 bytesRead);
+            var val = "";
+            for (int i = 0x7f; i > 0; i--)
+            {
+                if (buffer[i] == 0)
+                    break;
+                val = Encoding.UTF8.GetString(buffer, i, 1) + val;
+            }
+            for (int i = 0x80; i < 0x100; i++)
+            {
+                if (buffer[i] == 0)
+                    break;
+                val += Encoding.UTF8.GetString(buffer, i, 1);
+            }
+            return val;
+        }
+        public String GetString(UInt64 start)
+        {
+            var buffer = new Byte[0x1000];
+            ReadProcessMemory(procHandle, (UInt32)(start), buffer, buffer.Length, out Int32 bytesRead);
+            return String.Join(",", buffer.Select(b => "0x" + b.ToString("X2")));
+        }
+        static Byte[] FileBytes;
+        public static List<Int32> Scan(Byte[] buf, Int32[] pattern)
+        {
+            var addresses = new List<Int32>();
+
+            for (int i = 0; i <= buf.Length - pattern.Length; i++)
+            {
+                var found = true;
+                for (int j = 0; j < pattern.Length; j++)
+                {
+                    if (pattern[j] == -1)
+                        continue;
+                    if (buf[i + j] != pattern[j])
+                    {
+                        found = false;
+                        break;
+                    }
+                }
+                if (found)
+                    addresses.Add(i);
+            }
+            return addresses;
+        }
+
+        public static void SetImageFile(String file)
+        {
+            FileBytes = System.IO.File.ReadAllBytes(file);
+        }
+        public static UInt32 GetImageBase()
+        {
+            var pe = BitConverter.ToUInt16(FileBytes, 0x3c);
+            return BitConverter.ToUInt32(FileBytes, pe + 0x34);
+        }
+        public static UInt32 FindAddr(String sig, Int32 offset, Boolean isOffset = false)
+        {
+            var arrayOfBytes = sig.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(b => b.Contains("?") ? -1 : Convert.ToInt32(b, 16)).ToArray();
+            var offs = Scan(FileBytes, arrayOfBytes);
+            if (isOffset)
+                return BitConverter.ToUInt32(FileBytes, offs.First() + offset);
+            var addr = BitConverter.ToUInt32(FileBytes, offs.First() + offset) - GetImageBase();
+            return addr;
+        }
+        public static UInt32 FindAddr(String sig)
+        {
+            var arrayOfBytes = sig.Split(' ').Select(b => b.Contains("?") ? -1 : Convert.ToInt32(b, 16)).ToArray();
+            var offs = Scan(FileBytes, arrayOfBytes);
+            return (UInt32)offs.First() + GetImageBase();
+        }
+        public IntPtr FindPattern(String pattern)
+        {
+            return FindPattern(pattern, Process.MainModule.BaseAddress, Process.MainModule.ModuleMemorySize);
+        }
+        public List<IntPtr> FindStringRefs(String str)
+        {
+            var pattern2 = BitConverter.ToString(Encoding.Unicode.GetBytes(str)).Replace("-", " ");
+            var pattern = BitConverter.ToString(Encoding.UTF8.GetBytes(str).Reverse().ToArray()).Replace("-", " ");
+            return FindPatterns(pattern);
+        }
+        public IntPtr FindPattern(String pattern, IntPtr start, Int32 length)
+        {
+            //var skip = pattern.ToLower().Contains("cc") ? 0xcc : pattern.ToLower().Contains("aa") ? 0xaa : 0;
+            var sigScan = new SigScan(Process, start, length);
+            var arrayOfBytes = pattern.Split(' ').Select(b => b.Contains("?") ? (Byte)0 : (Byte)Convert.ToInt32(b, 16)).ToArray();
+            var strMask = String.Join("", pattern.Split(' ').Select(b => b.Contains("?") ? '?' : 'x'));
+            return sigScan.FindPattern(arrayOfBytes, strMask, 0);
+        }
+        public List<IntPtr> FindPatterns(String pattern)
+        {
+            //var skip = pattern.ToLower().Contains("cc") ? 0xcc : pattern.ToLower().Contains("aa") ? 0xaa : 0;
+            var sigScan = new SigScan(Process, Process.MainModule.BaseAddress, Process.MainModule.ModuleMemorySize);
+            var arrayOfBytes = pattern.Split(' ').Select(b => b.Contains("?") ? (Byte)0 : (Byte)Convert.ToInt32(b, 16)).ToArray();
+            var strMask = String.Join("", pattern.Split(' ').Select(b => b.Contains("?") ? '?' : 'x'));
+            return sigScan.FindPatterns(arrayOfBytes, strMask, 0);
+        }
+    }
+}
+```
+
+`UnrealSharp/Engine/SigScan.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+//
+// sigScan C# Implementation - Written by atom0s [aka Wiccaan]
+// Class Version: 2.0.0
+//
+// [ CHANGE LOG ] -------------------------------------------------------------------------
+//
+//      2.0.0
+//          - Updated to no longer require unsafe or fixed code.
+//          - Removed unneeded methods and code.
+//
+//      1.0.0
+//          - First version written and release.
+//
+// [ CREDITS ] ----------------------------------------------------------------------------
+//
+// sigScan is based on the FindPattern code written by
+// dom1n1k and Patrick at GameDeception.net
+//
+// Full credit to them for the purpose of this code. I, atom0s, simply
+// take credit for converting it to C#.
+//
+// [ USAGE ] ------------------------------------------------------------------------------
+//
+// Examples:
+//
+//      SigScan _sigScan = new SigScan();
+//      _sigScan.Process = someProc;
+//      _sigScan.Address = new IntPtr(0x123456);
+//      _sigScan.Size = 0x1000;
+//      IntPtr pAddr = _sigScan.FindPattern(new byte[]{ 0xFF, 0xFF, 0xFF, 0xFF, 0x51, 0x55, 0xFC, 0x11 }, "xxxx?xx?", 12);
+//
+//      SigScan _sigScan = new SigScan(someProc, new IntPtr(0x123456), 0x1000);
+//      IntPtr pAddr = _sigScan.FindPattern(new byte[]{ 0xFF, 0xFF, 0xFF, 0xFF, 0x51, 0x55, 0xFC, 0x11 }, "xxxx?xx?", 12);
+//
+// ----------------------------------------------------------------------------------------
+namespace UnrealSharp
+{
+    public class SignatureEntity
+    {
+        public int StartAddress { get; set; }
+        public int SearchRange { get; set; }
+        public byte[] WantedBytes { get; set; }
+        public String Mask { get; set; }
+        public int AddressOffset { get; set; }
+
+        public SignatureEntity(int startSAddress, int searchRange, byte[] wantedBytes, String mask, int addressOffset)
+        {
+            StartAddress = startSAddress;
+            SearchRange = searchRange;
+            WantedBytes = wantedBytes;
+            Mask = mask;
+            AddressOffset = addressOffset;
+        }
+
+        public IntPtr ScanSignature(Process process)
+        {
+            SigScan sigScan = new SigScan(process, new IntPtr(StartAddress), SearchRange);
+            return sigScan.FindPattern(WantedBytes, Mask, AddressOffset);
+        }
+    }
+
+
+    public class SigScan
+    {
+        /// <summary>
+        /// ReadProcessMemory
+        /// 
+        ///     API import definition for ReadProcessMemory.
+        /// </summary>
+        /// <param name="hProcess">Handle to the process we want to read from.</param>
+        /// <param name="lpBaseAddress">The base address to start reading from.</param>
+        /// <param name="lpBuffer">The return buffer to write the read data to.</param>
+        /// <param name="dwSize">The size of data we wish to read.</param>
+        /// <param name="lpNumberOfBytesRead">The number of bytes successfully read.</param>
+        /// <returns></returns>
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool ReadProcessMemory(
+            IntPtr hProcess,
+            IntPtr lpBaseAddress,
+            [Out()] byte[] lpBuffer,
+            int dwSize,
+            out int lpNumberOfBytesRead
+            );
+
+        /// <summary>
+        /// m_vDumpedRegion
+        /// 
+        ///     The memory dumped from the external process.
+        /// </summary>
+        private byte[] m_vDumpedRegion;
+
+        /// <summary>
+        /// m_vProcess
+        /// 
+        ///     The process we want to read the memory of.
+        /// </summary>
+        private Process m_vProcess;
+
+        /// <summary>
+        /// m_vAddress
+        /// 
+        ///     The starting address we want to begin reading at.
+        /// </summary>
+        private IntPtr m_vAddress;
+
+        /// <summary>
+        /// m_vSize
+        /// 
+        ///     The number of bytes we wish to read from the process.
+        /// </summary>
+        private Int32 m_vSize;
+
+
+        #region "sigScan Class Construction"
+        /// <summary>
+        /// SigScan
+        /// 
+        ///     Main class constructor that uses no params. 
+        ///     Simply initializes the class properties and 
+        ///     expects the user to set them later.
+        /// </summary>
+        public SigScan()
+        {
+            this.m_vProcess = null;
+            this.m_vAddress = IntPtr.Zero;
+            this.m_vSize = 0;
+            this.m_vDumpedRegion = null;
+        }
+        /// <summary>
+        /// SigScan
+        /// 
+        ///     Overloaded class constructor that sets the class
+        ///     properties during construction.
+        /// </summary>
+        /// <param name="proc">The process to dump the memory from.</param>
+        /// <param name="addr">The started address to begin the dump.</param>
+        /// <param name="size">The size of the dump.</param>
+        public SigScan(Process proc, IntPtr addr, int size)
+        {
+            this.m_vProcess = proc;
+            this.m_vAddress = addr;
+            this.m_vSize = size;
+        }
+        #endregion
+
+        #region "sigScan Class Private Methods"
+        /// <summary>
+        /// DumpMemory
+        /// 
+        ///     Internal memory dump function that uses the set class
+        ///     properties to dump a memory region.
+        /// </summary>
+        /// <returns>Boolean based on RPM results and valid properties.</returns>
+        private bool DumpMemory()
+        {
+            try
+            {
+                // Checks to ensure we have valid data.
+                if (this.m_vProcess == null)
+                    return false;
+                if (this.m_vProcess.HasExited == true)
+                    return false;
+                if (this.m_vAddress == IntPtr.Zero)
+                    return false;
+                if (this.m_vSize == 0)
+                    return false;
+
+                // Create the region space to dump into.
+                this.m_vDumpedRegion = new byte[this.m_vSize];
+
+                bool bReturn = false;
+                int nBytesRead = 0;
+
+                // Dump the memory.
+                bReturn = ReadProcessMemory(
+                    this.m_vProcess.Handle, this.m_vAddress, this.m_vDumpedRegion, this.m_vSize, out nBytesRead
+                    );
+
+                // Validation checks.
+                if (bReturn == false || nBytesRead != this.m_vSize)
+                    return false;
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// MaskCheck
+        /// 
+        ///     Compares the current pattern byte to the current memory dump
+        ///     byte to check for a match. Uses wildcards to skip bytes that
+        ///     are deemed unneeded in the compares.
+        /// </summary>
+        /// <param name="nOffset">Offset in the dump to start at.</param>
+        /// <param name="btPattern">Pattern to scan for.</param>
+        /// <param name="strMask">Mask to compare against.</param>
+        /// <returns>Boolean depending on if the pattern was found.</returns>
+        private bool MaskCheck(int nOffset, byte[] btPattern, string strMask)
+        {
+            // Loop the pattern and compare to the mask and dump.
+            for (int x = 0; x < btPattern.Length; x++)
+            {
+                // If the mask char is a wildcard, just continue.
+                if (strMask[x] == '?')
+                    continue;
+
+                // If the mask char is not a wildcard, ensure a match is made in the pattern.
+                if ((strMask[x] == 'x') && (btPattern[x] != this.m_vDumpedRegion[nOffset + x]))
+                    return false;
+            }
+
+            // The loop was successful so we found the pattern.
+            return true;
+        }
+        #endregion
+
+        #region "sigScan Class Public Methods"
+        /// <summary>
+        /// FindPattern
+        /// 
+        ///     Attempts to locate the given pattern inside the dumped memory region
+        ///     compared against the given mask. If the pattern is found, the offset
+        ///     is added to the located address and returned to the user.
+        /// </summary>
+        /// <param name="btPattern">Byte pattern to look for in the dumped region.</param>
+        /// <param name="strMask">The mask string to compare against.</param>
+        /// <param name="nOffset">The offset added to the result address.</param>
+        /// <returns>IntPtr - zero if not found, address if found.</returns>
+        public IntPtr FindPattern(byte[] btPattern, string strMask, int nOffset)
+        {
+            try
+            {
+                // Dump the memory region if we have not dumped it yet.
+                if (this.m_vDumpedRegion == null || this.m_vDumpedRegion.Length == 0)
+                {
+                    if (!this.DumpMemory())
+                        return IntPtr.Zero;
+                }
+
+                // Ensure the mask and pattern lengths match.
+                if (strMask.Length != btPattern.Length)
+                    return IntPtr.Zero;
+
+                // Loop the region and look for the pattern.
+                for (int x = 0; x < this.m_vDumpedRegion.Length - strMask.Length; x++)
+                {
+                    if (this.MaskCheck(x, btPattern, strMask))
+                    {
+                        // The pattern was found, return it.
+                        return IntPtr.Add(this.m_vAddress, x + nOffset);
+                    }
+                }
+
+                // Pattern was not found.
+                return IntPtr.Zero;
+            }
+            catch (Exception)
+            {
+                return IntPtr.Zero;
+            }
+        }
+        public List<IntPtr> FindPatterns(byte[] btPattern, string strMask, int nOffset)
+        {
+            var ptrs = new List<IntPtr>();
+            try
+            {
+                // Dump the memory region if we have not dumped it yet.
+                if (this.m_vDumpedRegion == null || this.m_vDumpedRegion.Length == 0)
+                {
+                    if (!this.DumpMemory())
+                        return null;
+                }
+
+                // Ensure the mask and pattern lengths match.
+                if (strMask.Length != btPattern.Length)
+                    return null;
+
+                // Loop the region and look for the pattern.
+                for (int x = 0; x < this.m_vDumpedRegion.Length; x++)
+                {
+                    if (this.MaskCheck(x, btPattern, strMask))
+                    {
+                        // The pattern was found, return it.
+                        ptrs.Add(IntPtr.Add(this.m_vAddress, x + nOffset));
+                    }
+                }
+
+                // Pattern was not found.
+                return ptrs;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// ResetRegion
+        /// 
+        ///     Resets the memory dump array to nothing to allow
+        ///     the class to redump the memory.
+        /// </summary>
+        public void ResetRegion()
+        {
+            this.m_vDumpedRegion = null;
+        }
+        #endregion
+
+        #region "sigScan Class Properties"
+        public Process Process
+        {
+            get { return this.m_vProcess; }
+            set { this.m_vProcess = value; }
+        }
+        public IntPtr Address
+        {
+            get { return this.m_vAddress; }
+            set { this.m_vAddress = value; }
+        }
+        public Int32 Size
+        {
+            get { return this.m_vSize; }
+            set { this.m_vSize = value; }
+        }
+        #endregion
+
+    }
+}
+```
+
+`UnrealSharp/Engine/UnrealEngine.cs`:
+
+```cs
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+namespace UnrealSharp
+{
+    public class UnrealEngine
+    {
+        public static UnrealEngine Instance;
+        static UInt64 GNamesPattern;
+        public static UInt64 GNames;
+        static UInt64 GObjectsPattern;
+        public static UInt64 GObjects;
+        static UInt64 GWorldPtrPattern;
+        public static UInt64 GWorldPtr;
+        static UInt64 GEnginePattern;
+        public static UInt64 GEngine;
+        public static UInt64 GStaticCtor;
+        public static UInt64 ActorListOffset;
+        public static Memory Memory;
+        public UnrealEngine(Memory mem) { Memory = mem; Instance = this; }
+        public void LoadAddesses(String data)
+        {
+            var dataBytes = Convert.FromBase64String(data);
+            var i = 0;
+
+            GNamesPattern = BitConverter.ToUInt64(dataBytes, i++ * 8);
+            var newFName = true;// (GNamesPattern & 0x8000000000000000) == 0x8000000000000000; if (newFName) GNamesPattern -= 0x8000000000000000;
+            var offset = Memory.ReadProcessMemory<UInt32>(GNamesPattern + 3);
+            GNames = newFName ? GNamesPattern + offset + 7 : Memory.ReadProcessMemory<UInt64>(GNamesPattern + offset + 7);
+
+            GWorldPtrPattern = BitConverter.ToUInt64(dataBytes, i++ * 8);
+            offset = Memory.ReadProcessMemory<UInt32>(GWorldPtrPattern + 3);
+            GWorldPtr = GWorldPtrPattern + offset + 7;
+
+            GObjectsPattern = BitConverter.ToUInt64(dataBytes, i++ * 8);
+            offset = Memory.ReadProcessMemory<UInt32>(GObjectsPattern + 13);
+            GObjects = GObjectsPattern + offset + 17 - Memory.BaseAddress;
+
+            GEnginePattern = BitConverter.ToUInt64(dataBytes, i++ * 8);
+            offset = Memory.ReadProcessMemory<UInt32>(GEnginePattern + 3);
+            GEngine = Memory.ReadProcessMemory<UInt64>(GEnginePattern + offset + 7);
+
+            GStaticCtor = BitConverter.ToUInt64(dataBytes, i++ * 8);
+            var j = 0;
+            UEObject.objectOuterOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.classOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.nameOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.structSuperOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.childPropertiesOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.childrenOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.fieldNameOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.fieldTypeNameOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.fieldClassOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.fieldNextOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.funcNextOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.fieldOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.propertySize = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.vTableFuncNum = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.funcFlagsOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.enumArrayOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+            UEObject.enumCountOffset = BitConverter.ToUInt32(dataBytes, i * 8 + j++ * 4);
+        }
+        public String SaveAddresses()
+        {
+            var bytes = new List<Byte>();
+            bytes.AddRange(BitConverter.GetBytes(GNamesPattern));
+            bytes.AddRange(BitConverter.GetBytes(GWorldPtrPattern));
+            bytes.AddRange(BitConverter.GetBytes(GObjectsPattern));
+            bytes.AddRange(BitConverter.GetBytes(GEnginePattern));
+            bytes.AddRange(BitConverter.GetBytes(GStaticCtor));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.objectOuterOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.classOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.nameOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.structSuperOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.childPropertiesOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.childrenOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.fieldNameOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.fieldTypeNameOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.fieldClassOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.fieldNextOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.funcNextOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.fieldOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.propertySize));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.vTableFuncNum));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.funcFlagsOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.enumArrayOffset));
+            bytes.AddRange(BitConverter.GetBytes(UEObject.enumCountOffset));
+            return Convert.ToBase64String(bytes.ToArray());
+        }
+        public void UpdateAddresses()
+        {
+            {
+                // GNamesPattern = (UInt64)Memory.FindPattern("48 8D 0D ? ? ? ? E8 ? ? ? ? C6 05 ? ? ? ? 01 0F 10 03 4C 8D 44 24 20 48 8B C8");
+                //GNamesPattern = (UInt64)Memory.FindPattern("74 09 48 8D 15 ? ? ? ? EB 16");
+                GNamesPattern = (UInt64)Memory.FindPattern("48 8D 35 ? ? ? ? EB 16");
+                if (GNamesPattern == 0)
+                {
+                    UEObject.NewFName = false;
+                    GNamesPattern = (UInt64)Memory.FindPattern("48 8B 05 ? ? ? ? 48 85 C0 75 5F");
+                    var offset = Memory.ReadProcessMemory<UInt32>(GNamesPattern + 3);
+                    GNames = Memory.ReadProcessMemory<UInt64>(GNamesPattern + offset + 7);
+                    if (GNamesPattern == 0) throw new Exception("need new GNames pattern");
+                    if (UEObject.GetName(1) != "ByteProperty") throw new Exception("bad GNames");
+                }
+                else
+                {
+                    var offset = Memory.ReadProcessMemory<UInt32>(GNamesPattern + 3);
+                    GNames = GNamesPattern + offset + 7;
+                    if (UEObject.GetName(3) != "ByteProperty") throw new Exception("bad GNames");
+                }
+            }
+            {
+                GWorldPtrPattern = (UInt64)Memory.FindPattern("48 8B 1D ? ? ? ? 48 85 DB 74 3B 41 B0 01");
+                GObjectsPattern = (UInt64)Memory.FindPattern("C1 F9 10 48 63 C9 48 8D 14 40 48 8B 05");
+                //DumpGNames();
+
+                var offset = UnrealEngine.Memory.ReadProcessMemory<UInt32>(GWorldPtrPattern + 3);
+                GWorldPtr = GWorldPtrPattern + offset + 7;
+                UpdateUEObject();
+
+                offset = Memory.ReadProcessMemory<UInt32>(GObjectsPattern + 13);
+                GObjects = GObjectsPattern + offset + 17 - Memory.BaseAddress;
+            }
+            {
+                GEnginePattern = (UInt64)Memory.FindPattern("48 8B 0D ?? ?? ?? ?? 48 85 C9 74 1E 48 8B 01 FF 90");
+                var offset = Memory.ReadProcessMemory<UInt32>(GEnginePattern + 3);
+                GEngine = Memory.ReadProcessMemory<UInt64>(GEnginePattern + offset + 7);
+            }
+            {
+                var engine = new UEObject(GEngine);
+                GStaticCtor = (UInt64)Memory.FindPattern("4C 89 44 24 18 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ? ? ? ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4");
+            }
+            {
+                var world = Memory.ReadProcessMemory<UInt64>(GWorldPtr);
+                var World = new UEObject(world);
+                var Level = World["PersistentLevel"];
+                var owningWorldOffset = (UInt64)Level.GetFieldOffset(Level.GetFieldAddr("OwningWorld"));
+                // https://github.com/EpicGames/UnrealTournament/blob/3bf4b43c329ce041b4e33c9deb2ca66d78518b29/Engine/Source/Runtime/Engine/Classes/Engine/Level.h#L366
+                // Actors, StreamedLevelOwningWorld, Owning World
+                ActorListOffset = owningWorldOffset - 0x10;
+            }
+            //DumpSdk();
+        }
+        public void EnableConsole()
+        {
+            var engine = new UEObject(GEngine);
+            var console = new UEObject(Memory.Execute(GStaticCtor, engine["ConsoleClass"].Value, engine["GameViewport"].Address, 0, 0, 0, 0, 0, 0, 0));
+            engine["GameViewport"]["ViewportConsole"] = console;
+        }
+        public void UpdateUEObject()
+        {
+            var world = Memory.ReadProcessMemory<UInt64>(GWorldPtr);
+            {
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                var foundClassAndName = false;
+                for (var c = 0u; c < 0x50 && !foundClassAndName; c += 0x8)
+                {
+                    classPtr = Memory.ReadProcessMemory<UInt64>(world + c);
+                    if (classPtr == 0x0) continue;
+                    for (var n = 0u; n < 0x50 && !foundClassAndName; n += 0x8)
+                    {
+                        var classNameIndex = Memory.ReadProcessMemory<Int32>(classPtr + n);
+                        var name = UEObject.GetName(classNameIndex);
+                        if (name == "World")
+                        {
+                            UEObject.classOffset = c;
+                            UEObject.nameOffset = n;
+                            foundClassAndName = true;
+                        }
+                    }
+                }
+                if (!foundClassAndName) throw new Exception("bad World or offsets?");
+            }
+            {
+                var foundOuter = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                for (var o = 0u; o < 0x50; o += 0x8)
+                {
+                    var outerObj = Memory.ReadProcessMemory<UInt64>(classPtr + o);
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(outerObj + UEObject.nameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "/Script/Engine")
+                    {
+                        UEObject.objectOuterOffset = o;
+                        foundOuter = true;
+                        break;
+                    }
+                }
+                if (!foundOuter) throw new Exception("bad outer addr");
+            }
+            {
+                var foundSuper = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                for (var o = 0u; o < 0x50; o += 0x8)
+                {
+                    var superObj = Memory.ReadProcessMemory<UInt64>(classPtr + o);
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(superObj + UEObject.nameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "Object")
+                    {
+                        UEObject.structSuperOffset = o;
+                        foundSuper = true;
+                        break;
+                    }
+                }
+                if (!foundSuper) throw new Exception("bad super addr");
+            }
+            {
+                var foundChildsAndFieldName = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                for (var c = 0u; c < 0x80 && !foundChildsAndFieldName; c += 0x8)
+                {
+                    var childPtr = Memory.ReadProcessMemory<UInt64>(classPtr + c);
+                    if (childPtr == 0x0) continue;
+                    for (var n = 0u; n < 0x80 && !foundChildsAndFieldName; n += 0x8)
+                    {
+                        var classNameIndex = Memory.ReadProcessMemory<Int32>(childPtr + n);
+                        var name = UEObject.GetName(classNameIndex);
+                        if (name == "PersistentLevel")
+                        {
+                            UEObject.childPropertiesOffset = c;
+                            UEObject.fieldNameOffset = n;
+                            foundChildsAndFieldName = true;
+                        }
+                    }
+                }
+                if (!foundChildsAndFieldName) throw new Exception("bad childs offset");
+            }
+            {
+                var foundNextField = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                var fieldPtr = Memory.ReadProcessMemory<UInt64>(classPtr + UEObject.childPropertiesOffset);
+                for (var c = 0u; c < 0x80 && !foundNextField; c += 0x8)
+                {
+                    var childClassPtr = Memory.ReadProcessMemory<UInt64>(fieldPtr + c);
+                    if (childClassPtr == 0x0) continue;
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(childClassPtr + UEObject.fieldNameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "NetDriver")
+                    {
+                        UEObject.fieldNextOffset = c;
+                        foundNextField = true;
+                    }
+                }
+                if (!foundNextField) throw new Exception("bad next field offset");
+            }
+            {
+                var foundNextField = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                var fieldPtr = Memory.ReadProcessMemory<UInt64>(classPtr + UEObject.childPropertiesOffset);
+                for (var c = 0u; c < 0x180 && !foundNextField; c += 0x8)
+                {
+                    var childClassPtr = Memory.ReadProcessMemory<UInt64>(fieldPtr + c);
+                    if (childClassPtr == 0x0) continue;
+                    //var classNameOffset = UEObject.NewFName ? 0 : UEObject.fieldNameOffset;
+                    var classNameOffset = UEObject.fieldNameOffset;
+                    //classNameOffset =UEObject.nameOffset;
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(childClassPtr + classNameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "Level" || name == "ObjectProperty")
+                    {
+                        UEObject.fieldClassOffset = c;
+                        foundNextField = true;
+                    }
+                }
+                if (!foundNextField) throw new Exception("bad field class offset");
+            }
+            {
+                var foundFuncs = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                for (var c = 0u; c < 0x80 && !foundFuncs; c += 0x8)
+                {
+                    var childPtr = Memory.ReadProcessMemory<UInt64>(classPtr + c);
+                    if (childPtr == 0x0) continue;
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(childPtr + UEObject.nameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "K2_GetWorldSettings")
+                    {
+                        UEObject.childrenOffset = c;
+                        foundFuncs = true;
+                    }
+                }
+                if (!foundFuncs)
+                {
+                    var testObj = new UEObject(world);
+                    var isField = testObj["K2_GetWorldSettings"];
+                    if (isField != null)
+                    {
+                        UEObject.childrenOffset = UEObject.funcNextOffset = UEObject.childPropertiesOffset;
+                        foundFuncs = true;
+                    }
+                }
+                if (!foundFuncs) throw new Exception("bad childs offset");
+            }
+            if (UEObject.childrenOffset != UEObject.childPropertiesOffset)
+            {
+                var foundNextField = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                var fieldPtr = Memory.ReadProcessMemory<UInt64>(classPtr + UEObject.childrenOffset);
+                for (var c = 0u; c < 0x80 && !foundNextField; c += 0x8)
+                {
+                    var childClassPtr = Memory.ReadProcessMemory<UInt64>(fieldPtr + c);
+                    if (childClassPtr == 0x0) continue;
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(childClassPtr + UEObject.nameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "HandleTimelineScrubbed")
+                    {
+                        UEObject.funcNextOffset = c;
+                        foundNextField = true;
+                    }
+                }
+                if (!foundNextField) throw new Exception("bad next offset");
+            }
+            {
+                var foundFieldOffset = false;
+                var classPtr = Memory.ReadProcessMemory<UInt64>(world + UEObject.classOffset);
+                var fieldPtr = Memory.ReadProcessMemory<UInt64>(classPtr + UEObject.childPropertiesOffset);
+                for (var c = 0x0u; c < 0x80 && !foundFieldOffset; c += 0x4)
+                {
+                    var fieldOffset = Memory.ReadProcessMemory<UInt64>(fieldPtr + c);
+                    var nextFieldPtr = Memory.ReadProcessMemory<UInt64>(fieldPtr + UEObject.fieldNextOffset);
+                    var fieldOffsetPlus8 = Memory.ReadProcessMemory<UInt64>(nextFieldPtr + c);
+                    if ((fieldOffset + 8) == fieldOffsetPlus8)
+                    {
+                        UEObject.fieldOffset = c;
+                        foundFieldOffset = true;
+                    }
+                }
+                if (!foundFieldOffset) throw new Exception("bad field offset");
+            }
+            {
+                var World = new UEObject(world);
+                var field = World.GetFieldAddr("StreamingLevelsToConsider");
+                var foundPropertySize = false;
+                for (var c = 0x60u; c < 0x100 && !foundPropertySize; c += 0x8)
+                {
+                    var classAddr = Memory.ReadProcessMemory<UInt64>(field + c);
+                    var classNameIndex = Memory.ReadProcessMemory<Int32>(classAddr + UEObject.nameOffset);
+                    var name = UEObject.GetName(classNameIndex);
+                    if (name == "StreamingLevelsToConsider")
+                    {
+                        UEObject.propertySize = c;
+                        foundPropertySize = true;
+                    }
+                }
+                if (!foundPropertySize) throw new Exception("bad property size offset");
+            }
+            {
+                var vTable = UnrealEngine.Memory.ReadProcessMemory<UInt64>(world);
+                var foundProcessEventOffset = false;
+                for (var i = 50u; i < 0x100 && !foundProcessEventOffset; i++)
+                {
+                    var s = UnrealEngine.Memory.ReadProcessMemory<IntPtr>(vTable + i * 8);
+                    var sig = (UInt64)UnrealEngine.Memory.FindPattern("40 55 56 57 41 54 41 55 41 56 41 57", s, 0X20);
+                    if (sig != 0)
+                    {
+                        UEObject.vTableFuncNum = i;
+                        foundProcessEventOffset = true;
+                    }
+                }
+                if (!foundProcessEventOffset) throw new Exception("bad process event offset");
+            }
+            {
+                var testObj = new UEObject(world);
+                var funcAddr = testObj.GetFuncAddr(testObj.ClassAddr, testObj.ClassAddr, "K2_GetWorldSettings");
+                var foundFuncFlags = false;
+                for (var i = 0u; i < 0x200 && !foundFuncFlags; i += 8)
+                {
+                    var flags = UnrealEngine.Memory.ReadProcessMemory<UInt64>(funcAddr + i);
+                    if (flags == 0x0008000104020401)
+                    {
+                        UEObject.funcFlagsOffset = i;
+                        foundFuncFlags = true;
+                    }
+                }
+                if (!foundFuncFlags) throw new Exception("bad func flags offset");
+            }
+        }
+        public void DumpGNames()
+        {
+            var testObj = new UEObject(0);
+            var sb = new StringBuilder();
+            var i = 0;
+            var badCount = 0;
+            while (true)
+            {
+                var name = UEObject.GetName(i);
+                if (name == "badIndex" || name == "null")
+                {
+                    badCount++;
+                    if (badCount > 0x100) break;
+                    i++; continue;
+                }
+                badCount = 0;
+                sb.AppendLine("[" + i + " / " + (i).ToString("X") + "] " + name);
+                i += name.Length / 2 + name.Length % 2 + 1;
+            }
+            System.IO.Directory.CreateDirectory(Memory.Process.ProcessName);
+            System.IO.File.WriteAllText(Memory.Process.ProcessName + @"\GNamesDump.txt", sb.ToString());
+        }
+        public String GetTypeFromFieldAddr(String fName, String fType, UInt64 fAddr, out String gettersetter)
+        {
+            gettersetter = "";
+            if (fType == "BoolProperty")
+            {
+                fType = "bool";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].Flag; } set { this[nameof(" + fName + ")].Flag = value; } }";
+            }
+            else if (fType == "ByteProperty" || fType == "Int8Property")
+            {
+                fType = "byte";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "Int16Property")
+            {
+                fType = "short";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "UInt16Property")
+            {
+                fType = "ushort";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "IntProperty")
+            {
+                fType = "int";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "UInt32Property")
+            {
+                fType = "uint";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "Int64Property")
+            {
+                fType = "long";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "UInt64Property")
+            {
+                fType = "ulong";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "FloatProperty")
+            {
+                fType = "float";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "DoubleProperty")
+            {
+                fType = "double";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "StrProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "TextProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "ObjectProperty")
+            {
+                var structFieldIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(UnrealEngine.Memory.ReadProcessMemory<UInt64>(fAddr + UEObject.propertySize) + UEObject.nameOffset);
+                fType = UEObject.GetName(structFieldIndex);
+                gettersetter = "{ get { return this[nameof(" + fName + ")].As<" + fType + ">(); } set { this[\"" + fName + "\"] = value; } }";
+            }
+            else if (fType == "StructProperty")
+            {
+                var structFieldIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(UnrealEngine.Memory.ReadProcessMemory<UInt64>(fAddr + UEObject.propertySize) + UEObject.nameOffset);
+                fType = UEObject.GetName(structFieldIndex);
+                //gettersetter = "{ get { return UnrealEngine.Memory.ReadProcessMemory<" + fType + ">(this[nameof(" + fName + ")].Address); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].As<" + fType + ">(); } set { this[\"" + fName + "\"] = value; } }";
+            }
+            else if (fType == "EnumProperty")
+            {
+                var structFieldIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(UnrealEngine.Memory.ReadProcessMemory<UInt64>(fAddr + UEObject.propertySize + 8) + UEObject.nameOffset);
+                fType = UEObject.GetName(structFieldIndex);
+                gettersetter = "{ get { return (" + fType + ")this[nameof(" + fName + ")].GetValue<int>(); } set { this[nameof(" + fName + ")].SetValue<int>((int)value); } }";
+            }
+            else if (fType == "NameProperty")
+            {
+                fType = "string";
+                gettersetter = "{ get { return this[nameof(" + fName + ")].GetValue<" + fType + ">(); } set { this[nameof(" + fName + ")].SetValue<" + fType + ">(value); } }";
+            }
+            else if (fType == "ArrayProperty")
+            {
+                var inner = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fAddr + UEObject.propertySize);
+                var innerClass = UnrealEngine.Memory.ReadProcessMemory<UInt64>(inner + UEObject.fieldClassOffset);
+                //if (innerClass == 0)
+                {
+                    fType = new UEObject(0).GetFieldTypeName(inner);
+                    //fType = UEObject.GetName(0);
+                    var innerType = GetTypeFromFieldAddr(fName, fType, inner, out gettersetter);
+                    gettersetter = "{ get { return new Array<" + innerType + ">(this[nameof(" + fName + ")].Address); } }";// set { this[\"" + fName + "\"] = value; } }";
+                    fType = "Array<" + innerType + ">";
+
+                }
+                if (false && innerClass != 0)
+                {
+                    var structFieldIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(innerClass + UEObject.nameOffset);
+                    fType = UEObject.GetName(structFieldIndex);
+                    var innerType = GetTypeFromFieldAddr(fName, fType, inner, out gettersetter);
+                    if (innerType == "None")
+                        Console.Write("");
+                    gettersetter = "{ get { return new Array<" + innerType + ">(this[nameof(" + fName + ")].Address); } }";// set { this[\"" + fName + "\"] = value; } }";
+                    fType = "Array<" + innerType + ">";
+                }
+            }
+            else if (fType == "SoftObjectProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "SoftClassProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "WeakObjectProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "LazyObjectProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "DelegateProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "MulticastSparseDelegateProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "MulticastInlineDelegateProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "ClassProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "MapProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "SetProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "FieldPathProperty")
+            {
+                fType = "unk";
+            }
+            else if (fType == "InterfaceProperty")
+            {
+                fType = "unk";
+            }
+            if (fType == "unk")
+            {
+                fType = "Object";
+                gettersetter = "{ get { return this[nameof(" + fName + ")]; } set { this[nameof(" + fName + ")] = value; } }";
+            }
+            if (gettersetter.Contains("nameof(base)")) gettersetter = gettersetter.Replace("nameof(base)", "\"base\"");
+            return fType;
+        }
+        public class Package
+        {
+            public String FullName;
+            public String Name => FullName.Substring(FullName.LastIndexOf("/") + 1);
+            public List<SDKClass> Classes = new List<SDKClass>();
+            public List<Package> Dependencies = new List<Package>();
+            public class SDKClass
+            {
+                public String SdkType;
+                public String Namespace;
+                public String Name;
+                public String Parent;
+                public List<SDKFields> Fields = new List<SDKFields>();
+                public List<SDKFunctions> Functions = new List<SDKFunctions>();
+                public class SDKFields
+                {
+                    public String Type;
+                    public String Name;
+                    public String GetterSetter;
+                    public Int32 EnumVal;
+                }
+                public class SDKFunctions
+                {
+                    public String ReturnType;
+                    public String Name;
+                    public List<SDKFields> Params = new List<SDKFields>();
+                }
+
+            }
+        }
+        public void DumpSdk(String location = "")
+        {
+            if (location == "") location = Memory.Process.ProcessName;
+            var addresses = new StringBuilder();
+            addresses.AppendLine("namespace SDK.Addresses");
+            addresses.AppendLine("{");
+            addresses.AppendLine("    public static class Hardcoded");
+            addresses.AppendLine("    {");
+            addresses.AppendLine("        public static string Payload = \"" + SaveAddresses() + "\";");
+            addresses.AppendLine("    }");
+            addresses.AppendLine("}");
+            System.IO.Directory.CreateDirectory(location);
+            System.IO.File.WriteAllText(location + @"\Addresses.cs", addresses.ToString());
+            var entityList = Memory.ReadProcessMemory<UInt64>(Memory.BaseAddress + GObjects);
+            var count = Memory.ReadProcessMemory<UInt32>(Memory.BaseAddress + GObjects + 0x14);
+            entityList = Memory.ReadProcessMemory<UInt64>(entityList);
+            var packages = new Dictionary<UInt64, List<UInt64>>();
+            for (var i = 0u; i < count; i++)
+            {
+                // var entityAddr = Memory.ReadProcessMemory<UInt64>((entityList + 8 * (i / 0x10400)) + 24 * (i % 0x10400));
+                var entityAddr = Memory.ReadProcessMemory<UInt64>((entityList + 8 * (i >> 16)) + 24 * (i % 0x10000));
+                if (entityAddr == 0) continue;
+                var outer = entityAddr;
+                while (true)
+                {
+                    var tempOuter = Memory.ReadProcessMemory<UInt64>(outer + UEObject.objectOuterOffset);
+                    if (tempOuter == 0) break;
+                    outer = tempOuter;
+                }
+                if (!packages.ContainsKey(outer)) packages.Add(outer, new List<UInt64>());
+                packages[outer].Add(entityAddr);
+            }
+            var ii = 0;
+            var dumpedPackages = new List<Package>();
+            foreach (var package in packages)
+            {
+                var packageObj = new UEObject(package.Key);
+                var fullPackageName = packageObj.GetName();
+                var dumpedClasses = new List<String>();
+                var sdkPackage = new Package { FullName = fullPackageName };
+                foreach (var objAddr in package.Value)
+                {
+                    var obj = new UEObject(objAddr);
+                    if (dumpedClasses.Contains(obj.ClassName)) continue;
+                    dumpedClasses.Add(obj.ClassName);
+                    if (obj.ClassName.StartsWith("Package")) continue;
+                    var typeName = obj.ClassName.StartsWith("Class") ? "class" : obj.ClassName.StartsWith("ScriptStruct") ? "class" : obj.ClassName.StartsWith("Enum") ? "enum" : "unk";
+                    //if (obj.ClassName.StartsWith("BlueprintGenerated")) typeName = "class";
+                    var className = obj.GetName();
+                    if (typeName == "unk") continue;
+                    if (className == "Object") continue;
+                    var parentClass = UnrealEngine.Memory.ReadProcessMemory<UInt64>(obj.Address + UEObject.structSuperOffset);
+                    var sdkClass = new Package.SDKClass { Name = className, Namespace = fullPackageName, SdkType = typeName };
+                    if (typeName == "enum") sdkClass.Parent = "int";
+                    else if (parentClass != 0)
+                    {
+                        var parentNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(parentClass + UEObject.nameOffset);
+                        var parentName = UEObject.GetName(parentNameIndex);
+                        sdkClass.Parent = parentName;
+                    }
+                    else sdkClass.Parent = "Object";
+                    //else throw new Exception("unparented obj not supported");
+
+                    if (typeName == "enum")
+                    {
+                        var enumArray = UnrealEngine.Memory.ReadProcessMemory<UInt64>(objAddr + 0x40);
+                        var enumCount = UnrealEngine.Memory.ReadProcessMemory<UInt32>(objAddr + 0x48);
+                        for (var i = 0u; i < enumCount; i++)
+                        {
+                            var enumNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(enumArray + i * 0x10);
+                            var enumName = UEObject.GetName(enumNameIndex);
+                            enumName = enumName.Substring(enumName.LastIndexOf(":") + 1);
+                            var enumNameRepeatedIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(enumArray + i * 0x10 + 4);
+                            if (enumNameRepeatedIndex > 0)
+                                enumName += "_" + enumNameRepeatedIndex;
+                            var enumVal = UnrealEngine.Memory.ReadProcessMemory<Int32>(enumArray + i * 0x10 + 0x8);
+                            sdkClass.Fields.Add(new Package.SDKClass.SDKFields { Name = enumName, EnumVal = enumVal });
+                        }
+                    }
+                    else if (typeName == "unk")
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        var field = obj.Address + UEObject.childPropertiesOffset - UEObject.fieldNextOffset;
+                        while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + UEObject.fieldNextOffset)) > 0)
+                        {
+                            var fName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + UEObject.fieldNameOffset));
+                            var fType = obj.GetFieldTypeName(field);
+                            var fValue = "(" + field.ToString() + ")";
+                            var offset = (UInt32)obj.GetFieldOffset(field);
+                            var gettersetter = "{ get { return new {0}(this[\"{1}\"].Address); } set { this[\"{1}\"] = value; } }";
+                            fType = GetTypeFromFieldAddr(fName, fType, field, out gettersetter);
+                            //if (typeName == "struct") gettersetter = ";";
+                            if (fName == className) fName += "_value";
+                            if (fName == "base") fName += "_value";
+                            if (fType == "Function")
+                            {
+                                var func = new Package.SDKClass.SDKFunctions { Name = fName };
+                                var fField = field + UEObject.childPropertiesOffset - UEObject.fieldNextOffset;
+                                while ((fField = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fField + UEObject.fieldNextOffset)) > 0)
+                                {
+                                    var pName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(fField + UEObject.fieldNameOffset));
+                                    if (pName == "base") pName += "_value";
+                                    var pType = obj.GetFieldTypeName(fField);
+                                    pType = GetTypeFromFieldAddr("", pType, fField, out _);
+                                    func.Params.Add(new Package.SDKClass.SDKFields { Name = pName, Type = pType });
+                                }
+                                sdkClass.Functions.Add(func);
+                            }
+                            else sdkClass.Fields.Add(new Package.SDKClass.SDKFields { Type = fType, Name = fName, GetterSetter = gettersetter });
+                        }
+                        if (UEObject.funcNextOffset != UEObject.childrenOffset)
+                        {
+                            field = obj.Address + UEObject.childrenOffset - UEObject.funcNextOffset;
+                            while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + UEObject.funcNextOffset)) > 0)
+                            {
+                                var fName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + UEObject.nameOffset));
+                                if (fName == className) fName += "_value";
+                                var func = new Package.SDKClass.SDKFunctions { Name = fName };
+                                var fField = field + UEObject.childPropertiesOffset - UEObject.fieldNextOffset;
+                                while ((fField = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fField + UEObject.fieldNextOffset)) > 0)
+                                {
+                                    var pName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(fField + UEObject.fieldNameOffset));
+                                    if (pName == "base") pName += "_value";
+                                    var pType = obj.GetFieldTypeName(fField);
+                                    pType = GetTypeFromFieldAddr("", pType, fField, out _);
+                                    func.Params.Add(new Package.SDKClass.SDKFields { Name = pName, Type = pType });
+                                }
+                                sdkClass.Functions.Add(func);
+                            }
+                        }
+                    }
+                    sdkPackage.Classes.Add(sdkClass);
+                }
+                dumpedPackages.Add(sdkPackage);
+            }
+            foreach (var p in dumpedPackages)
+            {
+                p.Dependencies = new List<Package>();
+                foreach (var c in p.Classes)
+                {
+                    {
+                        var fromPackage = dumpedPackages.Find(tp => tp.Classes.Count(tc => tc.Name == c.Parent) > 0);
+                        if (fromPackage != null && fromPackage != p && !p.Dependencies.Contains(fromPackage)) p.Dependencies.Add(fromPackage);
+                    }
+                    foreach (var f in c.Fields)
+                    {
+                        var fromPackage = dumpedPackages.Find(tp => tp.Classes.Count(tc => tc.Name == f.Type?.Replace("Array<", "").Replace(">", "")) > 0);
+                        if (fromPackage != null && fromPackage != p && !p.Dependencies.Contains(fromPackage)) p.Dependencies.Add(fromPackage);
+                    }
+                    foreach (var f in c.Functions)
+                    {
+                        foreach (var param in f.Params)
+                        {
+                            var fromPackage = dumpedPackages.Find(tp => tp.Classes.Count(tc => tc.Name == param.Type?.Replace("Array<", "").Replace(">", "")) > 0);
+                            if (fromPackage != null && fromPackage != p && !p.Dependencies.Contains(fromPackage)) p.Dependencies.Add(fromPackage);
+                        }
+                    }
+                }
+            }
+            foreach (var p in dumpedPackages)
+            {
+                var sb = new StringBuilder();
+                sb.AppendLine("using UnrealSharp;");
+                sb.AppendLine("using Object = UnrealSharp.UEObject;");
+                foreach (var d in p.Dependencies) sb.AppendLine("using SDK" + d.FullName.Replace("/", ".") + "SDK;");
+                sb.AppendLine("namespace SDK" + p.FullName.Replace("/", ".") + "SDK");
+                sb.AppendLine("{");
+                var printedClasses = 0;
+                foreach (var c in p.Classes)
+                {
+                    if (c.Fields.Count > 0) printedClasses++;
+                    // sb.AppendLine("    [Namespace(\"" + c.Namespace + "\")]");
+                    sb.AppendLine("    public " + c.SdkType + " " + c.Name + ((c.Parent == null) ? "" : (" : " + c.Parent)));
+                    sb.AppendLine("    {");
+                    if (c.SdkType != "enum")
+                        sb.AppendLine("        public " + c.Name + "(ulong addr) : base(addr) { }");
+                    foreach (var f in c.Fields)
+                    {
+                        if (f.Name == "RelatedPlayerState") continue; // todo fix
+                        if (c.SdkType == "enum")
+                            sb.AppendLine("        " + f.Name + " = " + f.EnumVal + ",");
+                        else
+                            sb.AppendLine("        public " + f.Type + " " + f.Name + " " + f.GetterSetter);
+                    }
+                    foreach (var f in c.Functions)
+                    {
+                        if (f.Name == "ClientReceiveLocalizedMessage") continue; // todo fix
+                        var returnType = f.Params.FirstOrDefault(pa => pa.Name == "ReturnValue")?.Type ?? "void";
+                        var parameters = String.Join(", ", f.Params.FindAll(pa => pa.Name != "ReturnValue").Select(pa => pa.Type + " " + pa.Name));
+                        var args = f.Params.FindAll(pa => pa.Name != "ReturnValue").Select(pa => pa.Name).ToList();
+                        args.Insert(0, "nameof(" + f.Name + ")");
+                        var argList = String.Join(", ", args);
+                        var returnTypeTemplate = returnType == "void" ? "" : ("<" + returnType + ">");
+                        sb.AppendLine("        public " + returnType + " " + f.Name + "(" + parameters + ") { " + (returnType == "void" ? "" : "return ") + "Invoke" + returnTypeTemplate + "(" + argList + "); }");
+                    }
+                    sb.AppendLine("    }");
+                }
+                sb.AppendLine("}");
+                if (printedClasses == 0 && !dumpedPackages.Any(pack => pack.Dependencies.Contains(p)))
+                    continue;
+                System.IO.File.WriteAllText(location + @"\" + p.Name + ".cs", sb.ToString());
+            }
+        }
+    }
+    public class Array<T> : UEObject
+    {
+        public Array(UInt64 addr) : base(addr) { }
+        public UInt32 Num
+        {
+            get
+            {
+                if (_num != UInt32.MaxValue) return _num;
+                _num = UnrealEngine.Memory.ReadProcessMemory<UInt32>(Address + 8);
+                if (_num > 0x20000) _num = 0x20000;
+                return _num;
+            }
+        }
+        public Byte[] ArrayCache
+        {
+            get
+            {
+                if (_arrayCache.Length != 0) return _arrayCache;
+                _arrayCache = UnrealEngine.Memory.ReadProcessMemory(Value, (Int32)Num * 8);
+                return _arrayCache;
+            }
+        }
+        public T this[UInt32 index] { get { return (T)Activator.CreateInstance(typeof(T), BitConverter.ToUInt64(ArrayCache, (Int32)index * 8)); } }
+    }
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum)]
+    public class NamespaceAttribute : Attribute
+    {
+        public string name;
+        public NamespaceAttribute(string name)
+        {
+            this.name = name;
+        }
+    }
+    public class UEObject
+    {
+        public static UInt32 objectOuterOffset = 0x20;
+        public static UInt32 classOffset = 0x10;
+        public static UInt32 nameOffset = 0x18;
+        public static UInt32 structSuperOffset = 0x40;
+        public static UInt32 childPropertiesOffset = 0x50;
+        public static UInt32 childrenOffset = 0x48;
+        public static UInt32 fieldNameOffset = 0x28;
+        public static UInt32 fieldTypeNameOffset = 0;
+        public static UInt32 fieldClassOffset = 0x8;
+        public static UInt32 fieldNextOffset = 0x20;
+        public static UInt32 funcNextOffset = 0x20;
+        public static UInt32 fieldOffset = 0x4C;
+        public static UInt32 propertySize = 0x78;
+        public static UInt32 vTableFuncNum = 66;
+        public static UInt32 funcFlagsOffset = 0xB0;
+        public static UInt32 enumArrayOffset = 0x40;
+        public static UInt32 enumCountOffset = 0x48;
+
+        static ConcurrentDictionary<UInt64, String> AddrToName = new ConcurrentDictionary<UInt64, String>();
+        static ConcurrentDictionary<UInt64, UInt64> AddrToClass = new ConcurrentDictionary<UInt64, UInt64>();
+        static ConcurrentDictionary<String, Boolean> ClassIsSubClass = new ConcurrentDictionary<String, Boolean>();
+        static ConcurrentDictionary<String, UInt64> ClassToAddr = new ConcurrentDictionary<String, UInt64>();
+        static ConcurrentDictionary<UInt64, ConcurrentDictionary<String, UInt64>> ClassFieldToAddr = new ConcurrentDictionary<UInt64, ConcurrentDictionary<String, UInt64>>();
+        static ConcurrentDictionary<UInt64, Int32> FieldAddrToOffset = new ConcurrentDictionary<UInt64, Int32>();
+        static ConcurrentDictionary<UInt64, String> FieldAddrToType = new ConcurrentDictionary<UInt64, String>();
+        public static void ClearCache()
+        {
+            AddrToName.Clear();
+            AddrToClass.Clear();
+            ClassIsSubClass.Clear();
+            ClassToAddr.Clear();
+            ClassFieldToAddr.Clear();
+            FieldAddrToOffset.Clear();
+            FieldAddrToType.Clear();
+        }
+        public Int32 GetFieldOffset(UInt64 fieldAddr)
+        {
+            if (FieldAddrToOffset.ContainsKey(fieldAddr)) return FieldAddrToOffset[fieldAddr];
+            var offset = UnrealEngine.Memory.ReadProcessMemory<Int32>(fieldAddr + fieldOffset);
+            FieldAddrToOffset[fieldAddr] = offset;
+            return offset;
+        }
+        String _className;
+        public String ClassName
+        {
+            get
+            {
+                if (_className != null) return _className;
+                _className = GetFullPath();// GetFullName(ClassAddr);
+                return _className;
+            }
+        }
+        public UInt64 _classAddr = UInt64.MaxValue;
+        public UInt64 ClassAddr
+        {
+            get
+            {
+                if (_classAddr != UInt64.MaxValue) return _classAddr;
+                if (AddrToClass.ContainsKey(Address))
+                {
+                    _classAddr = AddrToClass[Address];
+                    return _classAddr;
+                }
+                _classAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address + classOffset);
+                AddrToClass[Address] = _classAddr;
+                return _classAddr;
+            }
+        }
+        public UEObject(UInt64 address)
+        {
+            Address = address;
+        }
+        public Boolean IsA(UInt64 entityClassAddr, String targetClassName)
+        {
+            var key = entityClassAddr + ":" + targetClassName;
+            if (ClassIsSubClass.ContainsKey(key)) return ClassIsSubClass[key];
+            var tempEntityClassAddr = entityClassAddr;
+            while (true)
+            {
+                var tempEntity = new UEObject(tempEntityClassAddr);
+                var className = tempEntity.GetFullPath();
+                if (className == targetClassName)
+                {
+                    ClassIsSubClass[key] = true;
+                    return true;
+                }
+                tempEntityClassAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(tempEntityClassAddr + structSuperOffset);
+                if (tempEntityClassAddr == 0) break;
+            }
+            ClassIsSubClass[key] = false;
+            return false;
+        }
+        public Boolean IsA(String className)
+        {
+            return IsA(ClassAddr, className);
+        }
+        public Boolean IsA<T>(out T converted) where T : UEObject
+        {
+            var n = typeof(T).Namespace;
+            n = n.Substring(3, n.Length - 6).Replace(".", "/");
+            n = "Class " + n + "." + typeof(T).Name;
+            converted = As<T>();
+            return IsA(ClassAddr, n);
+        }
+        public Boolean IsA<T>() where T : UEObject
+        {
+            if (Address == 0) return false;
+            return IsA<T>(out _);
+        }
+        public static Boolean NewFName = true;
+        public static String GetName(Int32 key)
+        {
+            if (!NewFName) return GetNameOld(key);
+            var namePtr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(UnrealEngine.GNames + (UInt32)((key >> 16) + 2) * 8);
+            if (namePtr == 0) return "badIndex";
+            var nameEntry = UnrealEngine.Memory.ReadProcessMemory<UInt16>(namePtr + (((UInt16)key) * 2u));
+            var nameLength = (Int32)(nameEntry >> 6);
+            if (nameLength <= 0) return "badIndex";
+
+            UnrealEngine.Memory.maxStringLength = nameLength;
+            string result = UnrealEngine.Memory.ReadProcessMemory<String>(namePtr + ((UInt16)key) * 2u + 2u);
+            UnrealEngine.Memory.maxStringLength = 0x100;
+            return result;
+        }
+        public String GetName()
+        {
+            return GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(Address + nameOffset));
+        }
+        public static String GetNameOld(Int32 i)
+        {
+            var fNamePtr = UnrealEngine.Memory.ReadProcessMemory<ulong>(UnrealEngine.GNames + ((UInt64)i / 0x4000) * 8);
+            var fName2 = UnrealEngine.Memory.ReadProcessMemory<ulong>(fNamePtr + (8 * ((UInt64)i % 0x4000)));
+            var fName3 = UnrealEngine.Memory.ReadProcessMemory<String>(fName2 + 0x10);
+            return fName3;
+        }
+        public String GetShortName()
+        {
+            var classNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(ClassAddr + nameOffset);
+            return GetName(classNameIndex);
+        }
+        public String GetFullPath()
+        {
+            if (AddrToName.ContainsKey(Address)) return AddrToName[Address];
+            var classPtr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address + classOffset);
+            var classNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(classPtr + nameOffset);
+            var name = GetName(classNameIndex);
+            UInt64 outerEntityAddr = Address;
+            var parentName = "";
+            while (true)
+            {
+                var tempOuterEntityAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(outerEntityAddr + objectOuterOffset);
+                //var tempOuterEntityAddr = Memory.ReadProcessMemory<UInt64>(outerEntityAddr + structSuperOffset);
+                if (tempOuterEntityAddr == outerEntityAddr || tempOuterEntityAddr == 0) break;
+                outerEntityAddr = tempOuterEntityAddr;
+                var outerNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(outerEntityAddr + nameOffset);
+                var tempName = GetName(outerNameIndex);
+                if (tempName == "") break;
+                if (tempName == "None") break;
+                parentName = tempName + "." + parentName;
+            }
+            name += " " + parentName;
+            var nameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(Address + nameOffset);
+            name += GetName(nameIndex);
+            AddrToName[Address] = name;
+            return name;
+        }
+        public String GetHierachy()
+        {
+            var sb = new StringBuilder();
+            var tempEntityClassAddr = ClassAddr;
+            while (true)
+            {
+                var tempEntity = new UEObject(tempEntityClassAddr);
+                var className = tempEntity.GetFullPath();
+                sb.AppendLine(className);
+                tempEntityClassAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(tempEntityClassAddr + structSuperOffset);
+                if (tempEntityClassAddr == 0) break;
+            }
+            return sb.ToString();
+        }
+        public String GetFieldTypeName(UInt64 fieldAddr)
+        {
+            if (FieldAddrToType.ContainsKey(fieldAddr)) return FieldAddrToType[fieldAddr];
+            // 4.25 only??
+            var baseTypeOffset = 8u;
+            var baseType = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + baseTypeOffset);
+            var fieldType = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + fieldClassOffset);
+            var fieldNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(baseType);
+            var fieldTypeName = GetName(fieldNameIndex);
+            FieldAddrToType[fieldAddr] = name;
+            return fieldTypeName;
+            var name = GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(fieldType + fieldNameOffset));
+            return name;
+        }
+        UInt64 GetFieldAddr(UInt64 origClassAddr, UInt64 classAddr, String fieldName)
+        {
+            if (ClassFieldToAddr.ContainsKey(origClassAddr) && ClassFieldToAddr[origClassAddr].ContainsKey(fieldName)) return ClassFieldToAddr[origClassAddr][fieldName];
+            var field = classAddr + childPropertiesOffset - fieldNextOffset;
+            while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + fieldNextOffset)) > 0)
+            {
+                var fName = GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + fieldNameOffset));
+                if (fName == fieldName)
+                {
+                    if (!ClassFieldToAddr.ContainsKey(origClassAddr))
+                        ClassFieldToAddr[origClassAddr] = new ConcurrentDictionary<String, UInt64>();
+                    ClassFieldToAddr[origClassAddr][fieldName] = field;
+                    return field;
+                }
+            }
+            var parentClass = UnrealEngine.Memory.ReadProcessMemory<UInt64>(classAddr + structSuperOffset);
+            //if (parentClass == classAddr) throw new Exception("parent is me");
+            if (parentClass == 0)
+            {
+                if (!ClassFieldToAddr.ContainsKey(origClassAddr))
+                    ClassFieldToAddr[origClassAddr] = new ConcurrentDictionary<String, UInt64>();
+                ClassFieldToAddr[origClassAddr][fieldName] = 0;
+                return 0;
+            }
+            return GetFieldAddr(origClassAddr, parentClass, fieldName);
+        }
+        public UInt64 GetFieldAddr(String fieldName)
+        {
+            return GetFieldAddr(ClassAddr, ClassAddr, fieldName);
+        }
+        public UInt64 GetFuncAddr(UInt64 origClassAddr, UInt64 classAddr, String fieldName)
+        {
+            if (!NewFName) return GetFieldAddr(origClassAddr, classAddr, fieldName);
+            if (ClassFieldToAddr.ContainsKey(origClassAddr) && ClassFieldToAddr[origClassAddr].ContainsKey(fieldName)) return ClassFieldToAddr[origClassAddr][fieldName];
+            if (UEObject.funcNextOffset == UEObject.childrenOffset) return GetFieldAddr(origClassAddr, classAddr, fieldName);
+            var field = classAddr + childrenOffset - funcNextOffset;
+            while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + funcNextOffset)) > 0)
+            {
+                var fName = GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + nameOffset));
+                if (fName == fieldName)
+                {
+                    if (!ClassFieldToAddr.ContainsKey(origClassAddr))
+                        ClassFieldToAddr[origClassAddr] = new ConcurrentDictionary<String, UInt64>();
+                    ClassFieldToAddr[origClassAddr][fieldName] = field;
+                    return field;
+                }
+            }
+            var parentClass = UnrealEngine.Memory.ReadProcessMemory<UInt64>(classAddr + structSuperOffset);
+            if (parentClass == classAddr) throw new Exception("parent is me");
+            if (parentClass == 0) throw new Exception("bad field");
+            return GetFuncAddr(origClassAddr, parentClass, fieldName);
+        }
+        public UInt32 FieldOffset;
+        public Byte[] Data;
+        public UInt64 _value = 0xdeadbeef0badf00d;
+        public UInt64 Value
+        {
+            get
+            {
+                if (_value != 0xdeadbeef0badf00d) return _value;
+                _value = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address);
+                return _value;
+            }
+            set
+            {
+                _value = 0xdeadbeef0badf00d;
+                UnrealEngine.Memory.WriteProcessMemory(Address, value);
+            }
+        }
+
+        public T GetValue<T>()
+        {
+            return UnrealEngine.Memory.ReadProcessMemory<T>(Address);
+        }
+        public void SetValue<T>(T value)
+        {
+            UnrealEngine.Memory.WriteProcessMemory<T>(Address, value);
+        }
+        UInt64 boolMask = 0;
+        public Boolean Flag
+        {
+            get
+            {
+                var val = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address);
+                return ((val & boolMask) == boolMask);
+            }
+            set
+            {
+                var val = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address);
+                if (value) val |= boolMask;
+                else val &= ~boolMask;
+                UnrealEngine.Memory.WriteProcessMemory(Address, val);
+                //UnrealEngine.Memory.WriteProcessMemory(Address, value);
+            }
+
+        }
+        public UInt64 Address;
+        public UEObject this[String key]
+        {
+            get
+            {
+                var fieldAddr = GetFieldAddr(key);
+                if (fieldAddr == 0) return null;
+                var fieldType = GetFieldTypeName(fieldAddr);
+                var offset = (UInt32)GetFieldOffset(fieldAddr);
+                UEObject obj;
+                if (fieldType == "ObjectProperty" || fieldType == "ScriptStruct")
+                    obj = new UEObject(UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address + offset)) { FieldOffset = offset };
+                else if (fieldType == "ArrayProperty")
+                {
+                    obj = new UEObject(Address + offset);
+                    obj._classAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + propertySize);
+                }
+                else if (fieldType.Contains("Bool"))
+                {
+                    obj = new UEObject(Address + offset);
+                    obj._classAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + classOffset);
+                    obj.boolMask = UnrealEngine.Memory.ReadProcessMemory<Byte>(fieldAddr + propertySize);
+                }
+                else if (fieldType.Contains("Function"))
+                {
+                    obj = new UEObject(fieldAddr);
+                    //obj.BaseObjAddr = Address;
+                }
+                else if (fieldType.Contains("StructProperty"))
+                {
+                    obj = new UEObject(Address + offset);
+                    obj._classAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + propertySize);
+                }
+                else if (fieldType.Contains("FloatProperty"))
+                {
+                    obj = new UEObject(Address + offset);
+                    obj._classAddr = 0;
+                }
+                else
+                {
+                    obj = new UEObject(Address + offset);
+                    obj._classAddr = UnrealEngine.Memory.ReadProcessMemory<UInt64>(fieldAddr + propertySize);
+                }
+                if (obj.Address == 0)
+                {
+                    obj = new UEObject(0);
+                    //var classInfo = Engine.Instance.DumpClass(ClassAddr);
+                    //throw new Exception("bad addr");
+                }
+                return obj;
+            }
+            set
+            {
+                var fieldAddr = GetFieldAddr(key);
+                var offset = (UInt32)GetFieldOffset(fieldAddr);
+                UnrealEngine.Memory.WriteProcessMemory(Address + offset, value.Address);
+            }
+        }
+        public UInt32 _num = UInt32.MaxValue;
+        public UInt32 Num
+        {
+
+            get
+            {
+                if (_num != UInt32.MaxValue) return _num;
+                _num = UnrealEngine.Memory.ReadProcessMemory<UInt32>(Address + 8);
+                if (_num > 0x10000) _num = 0x10000;
+                return _num;
+            }
+        }
+        public Byte[] _arrayCache = new Byte[0];
+        public Byte[] ArrayCache
+        {
+            get
+            {
+                if (_arrayCache.Length != 0) return _arrayCache;
+                _arrayCache = UnrealEngine.Memory.ReadProcessMemory(Value, (Int32)Num * 8);
+                return _arrayCache;
+            }
+        }
+        public UEObject this[UInt32 index] { get { return new UEObject(BitConverter.ToUInt64(ArrayCache, (Int32)index * 8)); } }
+        public UInt64 _vTableFunc = 0xdeadbeef0badf00d;
+        public UInt64 VTableFunc
+        {
+            get
+            {
+                if (_vTableFunc != 0xdeadbeef0badf00d) return _vTableFunc;
+                _vTableFunc = UnrealEngine.Memory.ReadProcessMemory<UInt64>(Address) + vTableFuncNum * 8;
+                _vTableFunc = UnrealEngine.Memory.ReadProcessMemory<UInt64>(_vTableFunc);
+                return _vTableFunc;
+            }
+        }
+        public T Invoke<T>(String funcName, params Object[] args)
+        {
+            var funcAddr = GetFuncAddr(ClassAddr, ClassAddr, funcName);
+            var initFlags = UnrealEngine.Memory.ReadProcessMemory<UInt64>((UInt64)funcAddr + funcFlagsOffset);
+            var nativeFlag = initFlags;
+            nativeFlag |= 0x400;
+            if (nativeFlag != initFlags) UnrealEngine.Memory.WriteProcessMemory((UInt64)funcAddr + funcFlagsOffset, BitConverter.GetBytes(nativeFlag));
+            var val = UnrealEngine.Memory.ExecuteUEFunc<T>((IntPtr)VTableFunc, (IntPtr)Address, (IntPtr)funcAddr, args);
+            if (nativeFlag != initFlags) UnrealEngine.Memory.WriteProcessMemory((UInt64)funcAddr + funcFlagsOffset, BitConverter.GetBytes(initFlags));
+            return val;
+        }
+        public void Invoke(String funcName, params Object[] args)
+        {
+            Invoke<UInt64>(funcName, args);
+        }
+        public T As<T>() where T : UEObject
+        {
+            var obj = (T)Activator.CreateInstance(typeof(T), Address);
+            obj._classAddr = _classAddr;
+            return obj;
+        }
+    }
+}
+```
+
+`UnrealSharp/Overlay.cs`:
+
+```cs
+using System;
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using SharpDX;
+using SharpDX.Direct2D1;
+using SharpDX.DirectWrite;
+using SharpDX.DXGI;
+using SharpDX.Windows;
+using AlphaMode = SharpDX.Direct2D1.AlphaMode;
+using Factory = SharpDX.Direct2D1.Factory;
+using FactoryType = SharpDX.Direct2D1.FactoryType;
+using FontFactory = SharpDX.DirectWrite.Factory;
+using TextAntialiasMode = SharpDX.Direct2D1.TextAntialiasMode;
+using Vector3 = System.Numerics.Vector3;
+using Vector2 = System.Numerics.Vector2;
+using Color = System.Drawing.Color;
+
+namespace UnrealSharp
+{
+    public class OverlayRenderForm : RenderForm
+    {
+        public OverlayRenderForm()
+        {
+            ShowInTaskbar = false;
+            BackColor = TransparencyKey = Color.AntiqueWhite;
+        }
+        [DllImport("user32")] static extern IntPtr SetActiveWindow(IntPtr handle);
+        protected override void WndProc(ref Message m)
+        {
+            if (FormBorderStyle == FormBorderStyle.Sizable) base.WndProc(ref m);
+            else if (m.Msg == 0x21)
+            {
+                m.Result = (IntPtr)4;
+                return;
+            }
+            else if (m.Msg == 6)
+            {
+                if (((int)m.WParam & 0xFFFF) != 0)
+                    if (m.LParam != IntPtr.Zero) SetActiveWindow(m.LParam);
+                    else SetActiveWindow(IntPtr.Zero);
+            }
+            else
+                base.WndProc(ref m);
+        }
+        protected override bool ShowWithoutActivation { get { return FormBorderStyle == FormBorderStyle.Sizable ? base.ShowWithoutActivation : true; } }
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                if (FormBorderStyle == FormBorderStyle.Sizable) return base.CreateParams;
+                var param = base.CreateParams;
+                param.ExStyle |= 0x08000000;
+                return param;
+            }
+        }
+    }
+    public class Overlay
+    {
+        WindowRenderTarget GraphicsDevice;
+        TextFormat tf;
+        SolidColorBrush br;
+        FontFactory font;
+        Process process;
+        RenderLoop Loop;
+        OverlayRenderForm overlayWindowForm;
+        public Overlay(Process proc)
+        {
+            overlayWindowForm = new OverlayRenderForm();
+            Control.CheckForIllegalCrossThreadCalls = false;
+            process = proc;
+            CreateDx();
+            SetToTransparentChild();
+            Loop = new RenderLoop(overlayWindowForm);
+            overlayWindowForm.Show();
+        }
+        public void Begin()
+        {
+            if (overlayWindowForm.FormBorderStyle != FormBorderStyle.Sizable) overlayWindowForm.TopMost = process.MainWindowHandle == GetForegroundWindow();
+            TickFps();
+            GraphicsDevice.BeginDraw();
+            GraphicsDevice.Clear(((overlayWindowForm.FormBorderStyle == FormBorderStyle.Sizable) ? Color.Blue : Color.AntiqueWhite).ToSharpDx().ToColor4());
+        }
+        public void End()
+        {
+            GraphicsDevice.EndDraw();
+        }
+        void CreateDx()
+        {
+            var deviceProperties = new HwndRenderTargetProperties()
+            {
+                Hwnd = overlayWindowForm.Handle,
+                PixelSize = new Size2(1920, 1080),
+                PresentOptions = PresentOptions.RetainContents
+            };
+            var _factory = new Factory(FactoryType.SingleThreaded);
+            font = new FontFactory();
+            tf = new TextFormat(font, "Arial", 12);
+            var renderProperties = new RenderTargetProperties(RenderTargetType.Default, new PixelFormat(Format.B8G8R8A8_UNorm, AlphaMode.Premultiplied), 96.0f, 96.0f, RenderTargetUsage.None, FeatureLevel.Level_DEFAULT);
+            try
+            {
+                GraphicsDevice = new WindowRenderTarget(_factory, renderProperties, deviceProperties);
+            }
+            catch (SharpDXException)
+            {
+                try
+                {
+                    renderProperties.PixelFormat = new PixelFormat(Format.R8G8B8A8_UNorm, AlphaMode.Premultiplied);
+                    GraphicsDevice = new WindowRenderTarget(_factory, renderProperties, deviceProperties);
+                }
+                catch (SharpDXException)
+                {
+                    renderProperties.PixelFormat = new PixelFormat(Format.Unknown, AlphaMode.Premultiplied);
+                    GraphicsDevice = new WindowRenderTarget(_factory, renderProperties, deviceProperties);
+                }
+            }
+            br = new SolidColorBrush(GraphicsDevice, Color.Green.ToSharpDx().ToColor4());
+            GraphicsDevice.AntialiasMode = AntialiasMode.Aliased;
+            GraphicsDevice.TextAntialiasMode = TextAntialiasMode.Aliased;
+        }
+        public void SetToTransparentChild(Boolean topMost = true)
+        {
+            overlayWindowForm.FormBorderStyle = FormBorderStyle.None;
+            SetWindowLong(overlayWindowForm.Handle, -20, GetWindowLong(overlayWindowForm.Handle, -20) | 0x80000 | 0x20);
+            GetClientRect(process.MainWindowHandle, out Rect c);
+            GraphicsDevice.Resize(new Size2(c.Right, c.Bottom));
+            if (topMost)
+            {
+                GetWindowRect(process.MainWindowHandle, out Rect w);
+                var border = (w.Right - w.Left - c.Right) / 2;
+                var toolbar = w.Bottom - w.Top - c.Bottom - border;
+                SetWindowPos(overlayWindowForm.Handle, 0, w.Left + border, w.Top + toolbar, c.Right, c.Bottom, 0);
+                overlayWindowForm.TopMost = true;
+            }
+            else
+            {
+                SetParent(overlayWindowForm.Handle, (IntPtr)process.MainWindowHandle);
+                SetWindowPos(overlayWindowForm.Handle, 0, 0, 0, c.Right, c.Bottom, 0);
+            }
+        }
+        public void SetToRegularWindow()
+        {
+            overlayWindowForm.TopMost = false;
+            SetWindowPos(overlayWindowForm.Handle, 0, 0, 0, 500, 500, 0);
+            GraphicsDevice.Resize(new Size2(500, 500));
+            //ShowInTaskbar = true;
+            overlayWindowForm.FormBorderStyle = FormBorderStyle.Sizable;
+            //SetWindowLong(Handle, -20, GetWindowLong(Handle, -20) | 0x80000 | 0x20);
+            //SetParent(Handle, IntPtr.Zero);
+        }
+        Vector3 LastRotation = Vector3.Zero;
+        Vector3 vAxisX = Vector3.Zero;
+        Vector3 vAxisY = Vector3.Zero;
+        Vector3 vAxisZ = Vector3.Zero;
+        public Vector2 WorldToScreen(Vector3 worldLocation, Vector3 cameraLocation, Vector3 cameraRotation, Single fieldOfView)
+        {
+            if (LastRotation != cameraRotation)
+            {
+                cameraRotation.GetAxes(out vAxisX, out vAxisY, out vAxisZ);
+                LastRotation = cameraRotation;
+            }
+            var vDelta = worldLocation - cameraLocation;
+            var vTransformed = new Vector3(vDelta.Mult(vAxisY), vDelta.Mult(vAxisZ), vDelta.Mult(vAxisX));
+            if (vTransformed.Z < 1f) vTransformed.Z = 1f;
+            var ScreenCenterX = overlayWindowForm.ClientSize.Width / 2;
+            var ScreenCenterY = overlayWindowForm.ClientSize.Height / 2;
+            var fullScreen = new Vector2(ScreenCenterX + vTransformed.X * (ScreenCenterX / (float)Math.Tan(fieldOfView * (float)Math.PI / 360)) / vTransformed.Z,
+                ScreenCenterY - vTransformed.Y * (ScreenCenterX / (float)Math.Tan(fieldOfView * (float)Math.PI / 360)) / vTransformed.Z);
+            return new Vector2(fullScreen.X, fullScreen.Y);
+        }
+        Single LastYRotation = 0;
+        Single CameraSinTheta = 0;
+        Single CameraCosTheta = 0;
+        public Vector2 WorldToWindow(Vector3 targetLocation, Vector3 playerLocation, Vector3 cameraRotation, Single maxRange, Single radarSize, Single radarSizeY = 0)
+        {
+            if (LastYRotation != cameraRotation.Y)
+            {
+                var CameraRadians = (Single)Math.PI * (-cameraRotation.Y - 90.0f) / 180.0f;
+                CameraSinTheta = (Single)Math.Sin(CameraRadians);
+                CameraCosTheta = (Single)Math.Cos(CameraRadians);
+                LastYRotation = cameraRotation.Y;
+            }
+            if (radarSizeY == 0) radarSizeY = radarSize;
+            radarSize /= 2;
+            radarSizeY /= 2;
+            var diff = targetLocation - playerLocation;
+            var radarLoc = new Vector2(radarSize * diff.X / maxRange, radarSizeY * diff.Y / maxRange);
+            radarLoc = new Vector2(CameraCosTheta * radarLoc.X - CameraSinTheta * radarLoc.Y, CameraSinTheta * radarLoc.X + CameraCosTheta * radarLoc.Y);
+            radarLoc += new Vector2(radarSize, radarSizeY);
+            return radarLoc;
+        }
+        public void DrawLines(Color color, Vector2[] points)
+        {
+            for (int i = 0; i < points.Length - 1; i++)
+                DrawLine(color, points[i], points[i + 1]);
+        }
+        public void DrawLine(Color color, Vector2 start, Vector2 end)
+        {
+            var dist = Vector2.Distance(start, end);
+            var angle = -Math.PI / 2 - Math.Atan2(-(end.Y - start.Y), end.X - start.X);
+            using (var brush = new SolidColorBrush(GraphicsDevice, color.ToSharpDx().ToColor4()))
+                GraphicsDevice.DrawLine(start.ToSharpDx(), end.ToSharpDx(), brush);
+        }
+        public void DrawBox(Vector3 targetPosition, Vector3 targetRotation, Vector3 cameraLocation, Vector3 cameraRotation, Single fieldOfView, System.Drawing.Color color)
+        {
+            var targetTest = WorldToScreen(targetPosition, cameraLocation, cameraRotation, fieldOfView);
+            if (targetTest.X < 0 || targetTest.Y < 0 || targetTest.X > overlayWindowForm.Width || targetTest.Y > overlayWindowForm.Height)
+                return;
+
+            Single l = 60f, w = 60f, h = 140f, o = 50f;
+
+            var zOffset = -40f;
+            var xOffset = -20f;
+            var yOffset = -20f;
+
+            var p02 = new Vector3(o - l, w / 2, 0f);
+            var p03 = new Vector3(o - l, -w / 2, 0f);
+            var p00 = new Vector3(o, -w / 2, 0f);
+            var p01 = new Vector3(o, w / 2, 0f);
+
+            var theta1 = 2.0f * (targetRotation.FromRotator().Y);
+
+            var cos = (float)Math.Cos(theta1);
+            var sin = (float)Math.Sin(theta1);
+
+            Single[] rotMVals =
+                {cos, sin, 0, 0,
+                -sin, cos, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1 };
+            var rotM = new Matrix(rotMVals);
+
+            var curPos = new Vector3(targetPosition.X + xOffset, targetPosition.Y + yOffset, targetPosition.Z + zOffset);
+            p01 = SharpDX.Vector3.TransformCoordinate(p01.ToSharpDx(), rotM).ToNative() + curPos;
+            p03 = SharpDX.Vector3.TransformCoordinate(p03.ToSharpDx(), rotM).ToNative() + curPos;
+            p00 = SharpDX.Vector3.TransformCoordinate(p00.ToSharpDx(), rotM).ToNative() + curPos;
+            p02 = SharpDX.Vector3.TransformCoordinate(p02.ToSharpDx(), rotM).ToNative() + curPos;
+
+            var s03 = WorldToScreen(p03, cameraLocation, cameraRotation, fieldOfView);
+            var s00 = WorldToScreen(p00, cameraLocation, cameraRotation, fieldOfView);
+            var s02 = WorldToScreen(p02, cameraLocation, cameraRotation, fieldOfView);
+            var s01 = WorldToScreen(p01, cameraLocation, cameraRotation, fieldOfView);
+
+            p03.Z += h; var s032 = WorldToScreen(p03, cameraLocation, cameraRotation, fieldOfView);
+            p00.Z += h; var s002 = WorldToScreen(p00, cameraLocation, cameraRotation, fieldOfView);
+            p02.Z += h; var s022 = WorldToScreen(p02, cameraLocation, cameraRotation, fieldOfView);
+            p01.Z += h; var s012 = WorldToScreen(p01, cameraLocation, cameraRotation, fieldOfView);
+
+            DrawLines(color, new Vector2[] { s00, s01, s02, s03, s00 });
+            DrawLines(color, new Vector2[] { s002, s012, s022, s032, s002 });
+            DrawLine(color, s03, s032);
+            DrawLine(color, s00, s002);
+            DrawLine(color, s02, s022);
+            DrawLine(color, s01, s012);
+        }
+        public void DrawArrow(Vector3 targetPosition, Vector3 targetRotation, Vector3 playerLocation, Vector3 cameraRotation)
+        {
+            if (targetPosition == playerLocation)
+            {
+                var playerLoc = WorldToWindow(playerLocation, playerLocation, cameraRotation, 3000, 200);
+                DrawLine(Color.Green, playerLoc, new Vector2(playerLoc.X, playerLoc.Y - 100));
+                return;
+            }
+            var radarLoc = WorldToWindow(targetPosition, playerLocation, cameraRotation, 3000, 200);
+            if (radarLoc.X > 0 && radarLoc.X < 200 && radarLoc.Y > 0 && radarLoc.Y < 200)
+            {
+                targetRotation = targetRotation.FromRotator();
+                targetRotation.Z = 0;
+                targetRotation = Vector3.Normalize(targetRotation);
+                var endLoc = targetPosition + 400 * targetRotation;
+                var endRadarLoc = WorldToWindow(endLoc, playerLocation, cameraRotation, 3000, 200);
+                DrawLine(Color.Yellow, radarLoc, endRadarLoc);
+            }
+        }
+        public void DrawMinimap(Vector3 targetPosition, Vector3 playerLocation, Vector3 cameraRotation, String text, Color color)
+        {
+            var offset = 50;
+            var radarSize = 200;
+            var radarLoc = WorldToWindow(targetPosition, playerLocation, cameraRotation, 10000, radarSize);
+            if (radarLoc.X > 0 && radarLoc.X < radarSize && radarLoc.Y > 0 && radarLoc.Y < radarSize)
+            {
+                radarLoc += new Vector2(offset, offset - 10);
+                DrawText(text, radarLoc, color);
+            }
+        }
+        public void DrawText(String text, Vector2 loc, Color color)
+        {
+            using (var size = new TextLayout(font, text, tf, 1920, 1080))
+            using (var brush = new SolidColorBrush(GraphicsDevice, color.ToSharpDx().ToColor4()))
+                GraphicsDevice.DrawText(text, tf, new SharpDX.Mathematics.Interop.RawRectangleF(loc.X, loc.Y, loc.X + size.Metrics.Width + 5, loc.Y + size.Metrics.Height + 5), brush);
+        }
+        Stopwatch clock = new Stopwatch();
+        UInt64 frameCount;
+        public Double MeasuredFps { get; set; }
+        void TickFps()
+        {
+            if (!clock.IsRunning) clock.Start();
+            frameCount++;
+            var updateTimeMs = 400.0f;
+            if (clock.ElapsedMilliseconds >= updateTimeMs)
+            {
+                //MeasuredFps = (float)frameCount / (clock.ElapsedMilliseconds / 1000.0f);
+                MeasuredFps = (float)frameCount / (clock.ElapsedMilliseconds / 1000.0f);
+                frameCount = 0;
+                clock.Restart();
+            }
+        }
+        public void AimAtPos(Vector2 location, Single smoothSpeed = 2)
+        {
+            Single ScreenCenterX = overlayWindowForm.Width / 2;
+            Single ScreenCenterY = overlayWindowForm.Height / 2;
+            Single TargetX = 0;
+            Single TargetY = 0;
+            if (location.X > ScreenCenterX)
+            {
+                TargetX = -(ScreenCenterX - location.X);
+                TargetX /= smoothSpeed;
+            }
+            else if (location.X < ScreenCenterX)
+            {
+                TargetX = location.X - ScreenCenterX;
+                TargetX /= smoothSpeed;
+            }
+            if (location.Y > ScreenCenterY)
+            {
+                TargetY = -(ScreenCenterY - location.Y);
+                TargetY /= smoothSpeed;
+            }
+            else if (location.Y < ScreenCenterY)
+            {
+                TargetY = location.Y - ScreenCenterY;
+                TargetY /= smoothSpeed;
+            }
+            if (TargetX > 10) TargetX = 10;
+            if (TargetY > 10) TargetY = 10;
+            mouse_event(0x0001, (int)TargetX, (int)TargetY, 0, 0);
+        }
+        [DllImport("user32")] static extern Int32 GetWindowLong(IntPtr hWnd, Int32 nIndex);
+        [DllImport("user32")] static extern bool GetWindowRect(IntPtr hwnd, out Rect rectangle);
+        [DllImport("user32")] static extern bool GetClientRect(IntPtr hwnd, out Rect rectangle);
+        [DllImport("user32")] static extern int SetWindowLong(IntPtr hWnd, Int32 nIndex, Int32 dwNewLong);
+        [DllImport("user32")] static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
+        [DllImport("user32")] static extern bool SetWindowPos(IntPtr hWnd, Int32 hWndInsertAfter, Int32 X, Int32 Y, Int32 cx, Int32 cy, UInt32 uFlags);
+        [DllImport("user32")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32")] static extern short GetKeyState(Int32 keyCode);
+        [DllImport("user32")] static extern void mouse_event(UInt32 dwFlags, Int32 dx, Int32 dy, UInt32 dwData, Int32 dwExtraInfo);
+        struct Rect
+        {
+            public int Left { get; set; }
+            public int Top { get; set; }
+            public int Right { get; set; }
+            public int Bottom { get; set; }
+        }
+    }
+}
+```
+
+`UnrealSharp/Overlay.resx`:
+
+```resx
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+</root>
+```
+
+`UnrealSharp/Properties/AssemblyInfo.cs`:
+
+```cs
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+// General Information about an assembly is controlled through the following
+// set of attributes. Change these attribute values to modify the information
+// associated with an assembly.
+[assembly: AssemblyTitle("UnrealSharp")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("UnrealSharp")]
+[assembly: AssemblyCopyright("Copyright ©  2021")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+
+// Setting ComVisible to false makes the types in this assembly not visible
+// to COM components.  If you need to access a type in this assembly from
+// COM, set the ComVisible attribute to true on that type.
+[assembly: ComVisible(false)]
+
+// The following GUID is for the ID of the typelib if this project is exposed to COM
+[assembly: Guid("b34c4537-eb0c-4e38-a21c-1327752ca4aa")]
+
+// Version information for an assembly consists of the following four values:
+//
+//      Major Version
+//      Minor Version
+//      Build Number
+//      Revision
+//
+// You can specify all the values or you can default the Build and Revision Numbers
+// by using the '*' as shown below:
+// [assembly: AssemblyVersion("1.0.*")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+
+```
+
+`UnrealSharp/UnrealSharp.csproj`:
+
+```csproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{B34C4537-EB0C-4E38-A21C-1327752CA4AA}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>UnrealSharp</RootNamespace>
+    <AssemblyName>UnrealSharp</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="SharpDX, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+	  <HintPath>$(SolutionDir)packages\SharpDX.4.2.0\lib\net45\SharpDX.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Desktop, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+	  <HintPath>$(SolutionDir)packages\SharpDX.Desktop.4.2.0\lib\net45\SharpDX.Desktop.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Direct2D1, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+	  <HintPath>$(SolutionDir)packages\SharpDX.Direct2D1.4.2.0\lib\net45\SharpDX.Direct2D1.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.DXGI, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+	  <HintPath>$(SolutionDir)packages\SharpDX.DXGI.4.2.0\lib\net45\SharpDX.DXGI.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Mathematics, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+	  <HintPath>$(SolutionDir)packages\SharpDX.Mathematics.4.2.0\lib\net45\SharpDX.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Engine\Extensions.cs" />
+    <Compile Include="Engine\Hotkeys.cs" />
+    <Compile Include="Engine\Memory.cs" />
+    <Compile Include="Engine\SigScan.cs" />
+    <Compile Include="Engine\UnrealEngine.cs" />
+    <Compile Include="Overlay.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Overlay.resx">
+      <DependentUpon>Overlay.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
+```
+
+`UnrealSharp/packages.config`:
+
+```config
+<?xml version="1.0" encoding="utf-8"?>
+<packages>
+  <package id="SharpDX" version="4.2.0" targetFramework="net472" />
+  <package id="SharpDX.Desktop" version="4.2.0" targetFramework="net472" />
+  <package id="SharpDX.Direct2D1" version="4.2.0" targetFramework="net472" />
+  <package id="SharpDX.DXGI" version="4.2.0" targetFramework="net472" />
+  <package id="SharpDX.Mathematics" version="4.2.0" targetFramework="net472" />
+</packages>
+```
+
+`UnrealSharpInspector/App.config`:
+
+```config
+<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+    <startup> 
+        <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.7.2" />
+    </startup>
+</configuration>
+```
+
+`UnrealSharpInspector/Program.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace UnrealSharpInspector
+{
+    static class Program
+    {
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new UnrealSharpInspector());
+        }
+    }
+}
+
+```
+
+`UnrealSharpInspector/Properties/AssemblyInfo.cs`:
+
+```cs
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+// General Information about an assembly is controlled through the following
+// set of attributes. Change these attribute values to modify the information
+// associated with an assembly.
+[assembly: AssemblyTitle("UnrealSharpInspector")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("UnrealSharpInspector")]
+[assembly: AssemblyCopyright("Copyright ©  2021")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+
+// Setting ComVisible to false makes the types in this assembly not visible
+// to COM components.  If you need to access a type in this assembly from
+// COM, set the ComVisible attribute to true on that type.
+[assembly: ComVisible(false)]
+
+// The following GUID is for the ID of the typelib if this project is exposed to COM
+[assembly: Guid("53b81f12-380d-431f-aeea-57648d7dc7f3")]
+
+// Version information for an assembly consists of the following four values:
+//
+//      Major Version
+//      Minor Version
+//      Build Number
+//      Revision
+//
+// You can specify all the values or you can default the Build and Revision Numbers
+// by using the '*' as shown below:
+// [assembly: AssemblyVersion("1.0.*")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+
+```
+
+`UnrealSharpInspector/Properties/Resources.Designer.cs`:
+
+```cs
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by a tool.
+//     Runtime Version:4.0.30319.42000
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+
+namespace UnrealSharpInspector.Properties
+{
+    /// <summary>
+    ///   A strongly-typed resource class, for looking up localized strings, etc.
+    /// </summary>
+    // This class was auto-generated by the StronglyTypedResourceBuilder
+    // class via a tool like ResGen or Visual Studio.
+    // To add or remove a member, edit your .ResX file then rerun ResGen
+    // with the /str option, or rebuild your VS project.
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+    [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+    internal class Resources
+    {
+
+        private static global::System.Resources.ResourceManager resourceMan;
+
+        private static global::System.Globalization.CultureInfo resourceCulture;
+
+        [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
+        internal Resources()
+        {
+        }
+
+        /// <summary>
+        ///   Returns the cached ResourceManager instance used by this class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        internal static global::System.Resources.ResourceManager ResourceManager
+        {
+            get
+            {
+                if ((resourceMan == null))
+                {
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("UnrealSharpInspector.Properties.Resources", typeof(Resources).Assembly);
+                    resourceMan = temp;
+                }
+                return resourceMan;
+            }
+        }
+
+        /// <summary>
+        ///   Overrides the current thread's CurrentUICulture property for all
+        ///   resource lookups using this strongly typed resource class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        internal static global::System.Globalization.CultureInfo Culture
+        {
+            get
+            {
+                return resourceCulture;
+            }
+            set
+            {
+                resourceCulture = value;
+            }
+        }
+    }
+}
+
+```
+
+`UnrealSharpInspector/Properties/Resources.resx`:
+
+```resx
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+</root>
+```
+
+`UnrealSharpInspector/Properties/Settings.Designer.cs`:
+
+```cs
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by a tool.
+//     Runtime Version:4.0.30319.42000
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+
+namespace UnrealSharpInspector.Properties
+{
+    [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "11.0.0.0")]
+    internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase
+    {
+
+        private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
+
+        public static Settings Default
+        {
+            get
+            {
+                return defaultInstance;
+            }
+        }
+    }
+}
+
+```
+
+`UnrealSharpInspector/Properties/Settings.settings`:
+
+```settings
+<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)">
+  <Profiles>
+    <Profile Name="(Default)" />
+  </Profiles>
+  <Settings />
+</SettingsFile>
+
+```
+
+`UnrealSharpInspector/UnrealSharpInspector.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+using System.Numerics;
+using UnrealSharp;
+
+namespace UnrealSharpInspector
+{
+    public partial class UnrealSharpInspector : Form
+    {
+        //String staticGameName => "autogenerate";
+        //String staticGameName => "FSD-Win64-Shipping";
+        String staticGameName => "ANVIL-WinGDK-Shipping";
+        Process process;
+        Overlay esp;
+        public List<UEObject> actors { get; set; } = new List<UEObject>();
+        public UnrealSharpInspector()
+        {
+            InitializeComponent();
+            Control.CheckForIllegalCrossThreadCalls = false;
+            if (staticGameName == "autogenerate") AddProcesses();
+            else inspectProcess_Click(null, null);
+        }
+        void AddProcesses()
+        {
+            var window = Memory.FindWindowEx(IntPtr.Zero, IntPtr.Zero, "UnrealWindow", null);
+            if (window != IntPtr.Zero)
+            {
+                Memory.GetWindowThreadProcessId(window, out Int32 unrealProcId);
+                var proc = Process.GetProcessById(unrealProcId);
+                actorList.Items.Add(proc.Id + " : " + proc.ProcessName + " : " + proc.MainWindowTitle + " UE Autodetect");
+                actorList.Items.Add("");
+            }
+            foreach (var proc in Process.GetProcesses())
+                actorList.Items.Add(proc.Id + " : " + proc.ProcessName + " : " + proc.MainWindowTitle);
+        }
+        Object sync = new Object();
+        void inspectProcess_Click(object sender, EventArgs e)
+        {
+            if (process == null)
+            {
+                GetProcess();
+                new UnrealEngine(new Memory(process)).UpdateAddresses();
+                esp = new Overlay(process);
+                new Thread(() =>
+                {
+                    while (true)
+                    {
+                        lock (sync)
+                        {
+                            esp.Begin();
+                            if (EngineLoop() > 0) { UEObject.ClearCache(); }
+                            esp.End();
+                        }
+                    }
+                })
+                { IsBackground = true }.Start();
+            }
+            else
+            {
+                DumpScene();
+            }
+        }
+        private void DumpScene()
+        {
+            actorList.Items.Clear();
+            var World = new UEObject(UnrealEngine.Memory.ReadProcessMemory<UInt64>(UnrealEngine.GWorldPtr));
+            var Levels = World["Levels"];
+            for (var levelIndex = 0u; levelIndex < Levels.Num; levelIndex++)
+            {
+                var Level = Levels[levelIndex];
+                actorList.Items.Add(Level.Address + " : " + Level.GetFullPath());
+                var Actors = new UEObject(Level.Address + 0xA8); // todo fix hardcoded 0xA8 offset...
+                for (var i = 0u; i < Actors.Num; i++)
+                {
+                    var Actor = Actors[i];
+                    if (Actor.Address == 0) continue;
+                    if (Actor.IsA("Class /Script/Engine.Actor"))
+                        actorList.Items.Add(Actor.Address + " : " + Actor.GetFullPath());
+                }
+            }
+        }
+        private void dump_Click(object sender, EventArgs e)
+        {
+            UnrealEngine.Instance.DumpSdk();
+        }
+        private void DisplayActorInfo(UInt64 actorAddr)
+        {
+            actorInfo.Items.Clear();
+            var actor = new UEObject(actorAddr);
+            actorInfo.Items.Add(actor.Address + " : " + actor.GetFullPath() + " : " + actor.ClassName);
+            var tempEntity = actor.ClassAddr;
+            while (true)
+            {
+                var classNameIndex = UnrealEngine.Memory.ReadProcessMemory<Int32>(tempEntity + UEObject.nameOffset);
+                var name = UEObject.GetName(classNameIndex);
+
+                actorInfo.Items.Add(name);
+                var field = tempEntity + UEObject.childPropertiesOffset - UEObject.fieldNextOffset;
+                while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + UEObject.fieldNextOffset)) > 0)
+                {
+                    var fName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + UEObject.fieldNameOffset));
+                    var fType = actor.GetFieldTypeName(field);
+                    var fValue = "(" + field.ToString() + ")";
+                    var offset = (UInt32)actor.GetFieldOffset(field);
+                    if (fType == "BoolProperty")
+                    {
+                        fType = "Boolean";
+                        fValue = actor[fName].Flag.ToString();
+                    }
+                    else if (fType == "FloatProperty")
+                    {
+                        fType = "Single";
+                        fValue = BitConverter.ToSingle(BitConverter.GetBytes(actor[fName].Value), 0).ToString();
+                    }
+                    else if (fType == "IntProperty")
+                    {
+                        fType = "Int32";
+                        fValue = actor[fName].Value.ToString();
+                    }
+                    else if (fType == "ObjectProperty" || fType == "StructProperty")
+                    {
+                        var obj = new UEObject(UnrealEngine.Memory.ReadProcessMemory<UInt64>(actorAddr + offset)) { FieldOffset = offset };
+                        fType = obj.GetShortName();
+                    }
+                    actorInfo.Items.Add("  " + fType + " " + fName + " = " + fValue);
+                }
+
+                field = tempEntity + UEObject.childrenOffset - UEObject.funcNextOffset;
+                while ((field = UnrealEngine.Memory.ReadProcessMemory<UInt64>(field + UEObject.funcNextOffset)) > 0)
+                {
+                    var fName = UEObject.GetName(UnrealEngine.Memory.ReadProcessMemory<Int32>(field + UEObject.nameOffset));
+                    actorInfo.Items.Add("  func " + fName);
+                }
+                tempEntity = UnrealEngine.Memory.ReadProcessMemory<UInt64>(tempEntity + UEObject.structSuperOffset);
+                if (tempEntity == 0) break;
+            }
+        }
+        private void actorList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (process == null) return;
+            var actorAddr = UInt64.Parse(actorList.SelectedItem.ToString().Split(':')[0].Replace(" ", ""));
+            DisplayActorInfo(actorAddr);
+        }
+
+        private void actorInfo_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            var actorAddr = UInt64.Parse(actorInfo.Items[0].ToString().Split(':')[0].Replace(" ", ""));
+            var fName = actorInfo.SelectedItem.ToString().Split(new char[1] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[1];
+            var a = new UEObject(actorAddr)[fName];
+            DisplayActorInfo(a.Address);
+        }
+
+        void GetProcess()
+        {
+            while (true)
+            {
+                if (staticGameName != "autogenerate") process = Process.GetProcesses().FirstOrDefault(p => p.ProcessName.Contains(staticGameName) && p.MainWindowHandle != IntPtr.Zero);
+                else process = Process.GetProcessById(Int32.Parse(actorList.SelectedItem.ToString().Split(':')[0].Replace(" ", "")));
+                if (process != null) break;
+                Thread.Sleep(500);
+            }
+            inspectProcess.Text = "Dump Actor List";
+        }
+        Int32 EngineLoop()
+        {
+            if (!showOverlay.Checked) return 0;
+            if (UnrealEngine.GWorldPtr == 0) return 1;
+            var sb = new StringBuilder();
+            sb.AppendLine("Shalzuth's Helper Tool");
+            sb.AppendLine("FPS : " + esp.MeasuredFps.ToString("0.00"));
+            sb.AppendLine("ESP(F1) : " + !Hotkeys.ToggledKey(Keys.F1));
+            sb.AppendLine("Radar(F2) : " + !Hotkeys.ToggledKey(Keys.F2));
+            sb.AppendLine("HoldAim(F3) : " + Hotkeys.IsPressed(Keys.F3));
+            esp.DrawText(sb.ToString(), new Vector2(20, 20), Color.Green);
+            var World = new UEObject(UnrealEngine.Memory.ReadProcessMemory<UInt64>(UnrealEngine.GWorldPtr)); if (World == null || !World.IsA("Class /Script/Engine.World")) return 1;
+            var PersistentLevel = World["PersistentLevel"];
+            var Levels = World["Levels"];
+            var OwningGameInstance = World["OwningGameInstance"]; if (OwningGameInstance == null || !OwningGameInstance.IsA("Class /Script/Engine.GameInstance")) return 1;
+            var LocalPlayers = OwningGameInstance["LocalPlayers"]; if (LocalPlayers == null) return 1;
+            var PlayerController = LocalPlayers[0]["PlayerController"]; if (PlayerController == null) return 1;
+            var Player = PlayerController["Player"];
+            var AcknowledgedPawn = PlayerController["AcknowledgedPawn"];
+            if (AcknowledgedPawn == null || !AcknowledgedPawn.IsA("Class /Script/Engine.Character")) return 1;
+
+            var PlayerCameraManager = PlayerController["PlayerCameraManager"];
+            var CameraCache = PlayerCameraManager["CameraCachePrivate"];
+            var CameraPOV = CameraCache["POV"];
+            var CameraLocation = UnrealEngine.Memory.ReadProcessMemory<Vector3>(CameraPOV["Location"].Address);
+            var CameraRotation = UnrealEngine.Memory.ReadProcessMemory<Vector3>(CameraPOV["Rotation"].Address);
+            var CameraFOV = UnrealEngine.Memory.ReadProcessMemory<Single>(CameraPOV["FOV"].Address);
+            var PlayerRoot = AcknowledgedPawn["RootComponent"];
+            var PlayerRelativeLocation = PlayerRoot["RelativeLocation"];
+            var PlayerLocation = UnrealEngine.Memory.ReadProcessMemory<Vector3>(PlayerRelativeLocation.Address);
+            if (!Hotkeys.ToggledKey(Keys.F2)) esp.DrawArrow(PlayerLocation, CameraRotation, PlayerLocation, CameraRotation);
+            var bestAngle = Single.MaxValue;
+            var target = Vector2.Zero;
+            for (var levelIndex = 0u; levelIndex < Levels.Num; levelIndex++)
+            {
+                var Level = Levels[levelIndex];
+                var Actors = new UEObject(Level.Address + 0xA8); // todo fix hardcoded 0xA8 offset...
+                var y = 0;
+                for (var i = 0u; i < Actors.Num; i++)
+                {
+                    var Actor = Actors[i];
+                    if (Actor.Address == 0) continue;
+                    if (Actor.Address == Player.Address) continue;
+                    if (!Actor.IsA("Class /Script/Engine.Actor")) continue;
+                    if (Actor["bActorIsBeingDestroyed"].Value == 1) continue;
+                    var RootComponent = Actor["RootComponent"];
+                    if (RootComponent == null || RootComponent.Address == 0 || !RootComponent.ClassName.Contains("Component")) continue;
+                    var RelativeLocation = RootComponent["RelativeLocation"];
+                    var Location = UnrealEngine.Memory.ReadProcessMemory<Vector3>(RelativeLocation.Address);
+                    var RelativeRotation = RootComponent["RelativeRotation"];
+                    var Rotation = UnrealEngine.Memory.ReadProcessMemory<Vector3>(RelativeRotation.Address);
+
+                    if (!Hotkeys.ToggledKey(Keys.F1)) esp.DrawBox(Location, Rotation, CameraLocation, CameraRotation, CameraFOV, Color.Red);
+                    if (!Hotkeys.ToggledKey(Keys.F2)) esp.DrawArrow(Location, Rotation, CameraLocation, CameraRotation);
+
+                    if (Hotkeys.IsPressed(Keys.F3))
+                    {
+                        var turnVector = CameraLocation.CalcRotation(Location, CameraRotation, 0.0f);
+                        var turnWeight = (Single)(CameraRotation - turnVector).Length();
+                        if (turnWeight < bestAngle)
+                        {
+                            bestAngle = turnWeight;
+                            target = esp.WorldToScreen(Location, CameraLocation, CameraRotation, CameraFOV);
+                        }
+                    }
+                }
+                if (Hotkeys.IsPressed(Keys.F3)) esp.AimAtPos(target);
+            }
+            return 0;
+        }
+    }
+}
+
+```
+
+`UnrealSharpInspector/UnrealSharpInspector.csproj`:
+
+```csproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{53B81F12-380D-431F-AEEA-57648D7DC7F3}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>UnrealSharpInspector</RootNamespace>
+    <AssemblyName>UnrealSharpInspector</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="UnrealSharpInspector.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UnrealSharpInspector.designer.cs">
+      <DependentUpon>UnrealSharpInspector.cs</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <EmbeddedResource Include="UnrealSharpInspector.resx">
+      <DependentUpon>UnrealSharpInspector.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UnrealSharp\UnrealSharp.csproj">
+      <Project>{b34c4537-eb0c-4e38-a21c-1327752ca4aa}</Project>
+      <Name>UnrealSharp</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
+```
+
+`UnrealSharpInspector/UnrealSharpInspector.designer.cs`:
+
+```cs
+
+namespace UnrealSharpInspector
+{
+    partial class UnrealSharpInspector
+    {
+        /// <summary>
+        ///  Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        ///  Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        ///  Required method for Designer support - do not modify
+        ///  the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent()
+        {
+            this.inspectProcess = new System.Windows.Forms.Button();
+            this.dump = new System.Windows.Forms.Button();
+            this.actorList = new System.Windows.Forms.ListBox();
+            this.actorInfo = new System.Windows.Forms.ListBox();
+            this.showOverlay = new System.Windows.Forms.CheckBox();
+            this.SuspendLayout();
+            // 
+            // inspectProcess
+            // 
+            this.inspectProcess.Location = new System.Drawing.Point(11, 11);
+            this.inspectProcess.Name = "inspectProcess";
+            this.inspectProcess.Size = new System.Drawing.Size(96, 20);
+            this.inspectProcess.TabIndex = 2;
+            this.inspectProcess.Text = "Inspect Process";
+            this.inspectProcess.UseVisualStyleBackColor = true;
+            this.inspectProcess.Click += new System.EventHandler(this.inspectProcess_Click);
+            // 
+            // dump
+            // 
+            this.dump.Location = new System.Drawing.Point(113, 10);
+            this.dump.Name = "dump";
+            this.dump.Size = new System.Drawing.Size(64, 20);
+            this.dump.TabIndex = 3;
+            this.dump.Text = "Dump SDK";
+            this.dump.UseVisualStyleBackColor = true;
+            this.dump.Click += new System.EventHandler(this.dump_Click);
+            // 
+            // actorList
+            // 
+            this.actorList.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left)));
+            this.actorList.FormattingEnabled = true;
+            this.actorList.Location = new System.Drawing.Point(10, 53);
+            this.actorList.Name = "actorList";
+            this.actorList.Size = new System.Drawing.Size(319, 329);
+            this.actorList.TabIndex = 7;
+            this.actorList.SelectedIndexChanged += new System.EventHandler(this.actorList_SelectedIndexChanged);
+            // 
+            // actorInfo
+            // 
+            this.actorInfo.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.actorInfo.FormattingEnabled = true;
+            this.actorInfo.Location = new System.Drawing.Point(334, 14);
+            this.actorInfo.Name = "actorInfo";
+            this.actorInfo.Size = new System.Drawing.Size(236, 368);
+            this.actorInfo.TabIndex = 8;
+            this.actorInfo.SelectedIndexChanged += new System.EventHandler(this.actorInfo_SelectedIndexChanged);
+            // 
+            // showOverlay
+            // 
+            this.showOverlay.AutoSize = true;
+            this.showOverlay.Location = new System.Drawing.Point(183, 12);
+            this.showOverlay.Name = "showOverlay";
+            this.showOverlay.Size = new System.Drawing.Size(92, 17);
+            this.showOverlay.TabIndex = 9;
+            this.showOverlay.Text = "Show Overlay";
+            this.showOverlay.UseVisualStyleBackColor = true;
+            // 
+            // UnrealSharpInspector
+            // 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(580, 391);
+            this.Controls.Add(this.showOverlay);
+            this.Controls.Add(this.actorInfo);
+            this.Controls.Add(this.actorList);
+            this.Controls.Add(this.dump);
+            this.Controls.Add(this.inspectProcess);
+            this.Name = "UnrealSharpInspector";
+            this.Text = "UnrealSharp [by shalzuth]";
+            this.ResumeLayout(false);
+            this.PerformLayout();
+
+        }
+
+        #endregion
+        private System.Windows.Forms.Button inspectProcess;
+        private System.Windows.Forms.Button dump;
+        private System.Windows.Forms.ListBox actorList;
+        private System.Windows.Forms.ListBox actorInfo;
+        private System.Windows.Forms.CheckBox showOverlay;
+    }
+}
+
+
+```
+
+`UnrealSharpInspector/UnrealSharpInspector.resx`:
+
+```resx
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+</root>
+```
