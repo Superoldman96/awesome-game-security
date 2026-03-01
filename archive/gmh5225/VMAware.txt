@@ -1,0 +1,4163 @@
+Project Path: arc_gmh5225_VMAware_k2s7err5
+
+Source Tree:
+
+```txt
+arc_gmh5225_VMAware_k2s7err5
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── TODO.md
+├── assets
+│   ├── banner.jpg
+│   └── image.png
+├── docs
+│   └── documentation.md
+└── src
+    ├── cli.cpp
+    └── vmaware.hpp
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+# basic info
+cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
+project(
+    VMAware
+    DESCRIPTION "VM detection library"
+    LANGUAGES CXX
+)
+
+
+# compiler flags
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if (MSVC)
+    set(CMAKE_CXX_FLAGS "/W4 /std:c++20 /EHsc")
+else()
+    set(CMAKE_CXX_FLAGS "-Wextra -Wall -Wextra -Wconversion -Wdouble-promotion -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion")
+endif()
+
+
+# fetch and set build type
+set(available_build_types Debug Release)
+if(NOT CMAKE_BUILD_TYPE)
+set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build (Debug or Release)" FORCE)
+endif()
+if(NOT CMAKE_BUILD_TYPE IN_LIST available_build_types)
+MESSAGE(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}. Allowed values: ${available_build_types}")
+endif()
+
+
+# Define preprocessor macros based on the build type
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+add_compile_definitions(__VMAWARE_DEBUG__)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+add_compile_definitions(__VMAWARE_RELEASE__)
+endif()
+
+
+# general variables
+set(PROJECT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(BUILD_DIR "${PROJECT_DIR}/build")
+set(TARGET "vmaware")
+
+
+# debug/release CXX flag options
+if (NOT MSVC)
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+        MESSAGE(STATUS "Build set to debug mode")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DDEBUG -O0 -fsanitize=address")
+    elseif(CMAKE_BUILD_TYPE MATCHES "Release")
+        MESSAGE(STATUS "Build set to release mode")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -g0")
+        if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -mtune=native")
+        elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=native")
+        endif()
+    endif()
+endif()
+
+
+# CTest stuff
+include(CTest)
+enable_testing()
+
+
+# add executable
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
+add_executable(${TARGET} "src/cli.cpp")
+set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD 20)
+set_property(TARGET ${TARGET} PROPERTY CXX_STANDARD_REQUIRED ON)
+add_test(Test_1, "${CMAKE_SOURCE_DIR}/bin/${TARGET}")
+
+
+# release stuff
+if (NOT MSVC)
+    if(CMAKE_BUILD_TYPE MATCHES "Release")
+        install(TARGETS ${TARGET} DESTINATION bin)
+        install(FILES "src/vmaware.hpp" DESTINATION /usr/include)
+    endif()
+elseif(MSVC)
+    set(CMAKE_INSTALL_PREFIX "C:\\Program Files\\YourApplication")
+    install(TARGETS ${TARGET} DESTINATION .)
+endif()
+
+```
+
+`LICENSE`:
+
+```
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    <program>  Copyright (C) <year>  <name of author>
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details.
+
+The hypothetical commands `show w' and `show c' should show the appropriate
+parts of the General Public License.  Of course, your program's commands
+might be different; for a GUI interface, you would use an "about box".
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+<https://www.gnu.org/licenses/>.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+<https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+```
+
+`README.md`:
+
+```md
+<h1 align="center">VMAware</h1>
+<br>
+<p align="center">
+<img src="assets/banner.jpg" align="center" width="500" title="VMAware">
+<br>
+<img alt="GitHub Workflow Status (with event)" align="center" src="https://img.shields.io/github/actions/workflow/status/kernelwernel/VMAware/cmake-multi-platform.yml">
+<img alt="GitHub" align="center" src="https://img.shields.io/github/license/kernelwernel/VMAware">
+</p>
+
+**VMAware** (not to be confused with VMware) is an open-source, cross-platform, and incredibly simple C++ library for virtual machine detection.
+
+It utilises a comprehensive list of low-level and high-level anti-VM techniques that gets accounted in a scoring system. The library is meant to be stupidly easy to use, with additional features such as brand detection.
+
+The library is:
+- Very easy to use, with only 3 functions in its public interface
+- Very flexible with fine-grained control
+- Cross-platform (NOTE: MACOS AND MSVC ARE NOT EFFECTIVE FOR NOW)
+- Header-only
+- Available with C++11 and above
+- Able to detect VMware, VirtualBox, QEMU, KVM, Parallels, and much more
+- Able to detect semi-VM technologies like hypervisors, docker, and wine
+- Able to determine the VM brand
+- Memoized, meaning past results are cached and retrieved if ran again for performance benefits 
+
+- - -
+
+**IMPORTANT:** The library is currently a beta, so more improvements and cross-compatibility fixes are planned (especially for Windows which I'm currently working on fixing). I don't recommend using this for any serious projects for now.
+
+- - -
+
+
+## Example 🧪
+```cpp
+#include "vmaware.hpp"
+#include <iostream>
+
+int main() {
+    if (VM::detect()) {
+        std::cout << "Virtual machine detected!" << std::endl;
+        std::cout << "VM name: " << VM::brand() << std::endl;
+    } else {
+        std::cout << "Running in baremetal" << std::endl;
+    }
+}
+```
+
+
+## CLI tool 🔧
+This project also provides a tiny, but handy CLI tool utilising the full potential of what the library can do. Also, running the CLI as root would give better results.
+
+<img src="assets/image.png" width="500" title="cli">
+
+
+## Installation 📥
+To install the library, download or copy and paste the [vmaware.hpp](src/vmaware.hpp) file to your project. No CMake or shared object linkages are necessary, it's literally that simple.
+
+However, if you want the full project (globally accessible headers with <vmaware.hpp> and the CLI tool), follow these commands:
+```bash
+git clone https://github.com/kernelwernel/VMAware 
+cd VMAware
+```
+
+```bash
+# FOR LINUX
+mkdir build
+cd build
+cmake ..
+sudo make install
+```
+
+```bash
+# FOR WINDOWS
+cmake -S . -B build/ -G "Visual Studio 16 2019"
+```
+> NOTE: I'm most likely going to change my username in the future. If the github link doesn't exist, search for the VMAware project and you should find it.
+
+
+## Documentation 📒
+You can view the full docs [here](docs/documentation.md). Trust me, it's not too intimidating.
+
+
+## Q&A ❓
+- Who is this library for?
+> It's designed for security researchers, VM engineers, and pretty much anybody who needs a practical and rock-solid VM detection mechanism in their project. For example, if you're making a VM and you're testing the effectiveness of concealing itself, or if you're a malware analyst and you want to check if your VM environment is good enough.
+
+- Why another VM detection project?
+> There's already loads of projects that have the same goal such as [InviZzzible](https://github.com/CheckPointSW/InviZzzible), [pafish](https://github.com/a0rtega/pafish) and [Al-Khaser](https://github.com/LordNoteworthy/al-khaser). But the difference between the aforementioned projects is that they don't provide a programmable interface to interact with the detection mechanisms, on top of having little to no support for non-Windows systems. I wanted the core detection techniques to be accessible programmatically for everybody to get something useful out of it rather than providing just a CLI tool like the projects above.
+
+- Is it possible to spoof the result?
+> Yes. There are some techniques that are trivially spoofable, and there's nothing the library can do about it whether it's a deliberate false negative or even a false positive. This is a problem that every VM detection project is facing, which is why the library is trying to test every technique possible to get the best result based on the environment it's running under. 
+
+- Can I use this for malware?
+> This project is not soliciting the development of malware for any malicious intentions. Even if you intend to use it that way, it'll most likely be flagged by antiviruses anyway.
+
+- When will a 1.0 be available?
+> Pretty soon, maybe around mid November (I just started university very recently, so I can't guarantee anything)
+
+
+## Issues and pull requests 📬
+If you have any suggestions, ideas, or any sort of contribution, feel free to ask! I'll be more than happy to discuss. If you want to personally ask something in private, my discord is `kr.nl`
+
+If you found this project useful, a star would be appreciated :)
+
+
+## Credits ✒️
+- [Check Point Research](https://research.checkpoint.com/)
+- [Unprotect Project](https://unprotect.it/)
+- [Al-Khaser](https://github.com/LordNoteworthy/al-khaser)
+- [pafish](https://github.com/a0rtega/pafish)
+- [Matteo Malvica](https://www.matteomalvica.com)
+
+
+## Legal 📜
+I am not responsible nor liable for any damage you cause through any malicious usage of this project. 
+
+License: GPL-3.0
+```
+
+`TODO.md`:
+
+```md
+- revise sidt check
+- analyse the UUID check technique's efficiency
+- fix c++11 debug function param error
+- completely remove std::system() grep commands
+- add github metrics for license (looks cool af)
+- add CTest before alpha release
+
+- ~~update doc without technique column~~
+- ~~make a flagcheck function~~
+- ~~create a standard cpuid function (replace __cpuidex bc wine)~~
+- ~~fix the pointer destruction error~~
+- ~~add "is root?" column~~
+- ~~convert makefile to cmake~~
+- ~~fix the inconsistent naming~~ 
+- ~~maybe add github templates and other ci/cd stuff~~
+- ~~create a technique table so i don't have to manually add them for VM::detect() and VM::check()~~
+
+
+# distant plans
+- add ARM support
+- add the library to conan.io when released
+
+
+# fully tackled VMs
+- [x] Wine
+- [ ] QEMU
+- [ ] VMware
+- [ ] VBox
+```
+
+`docs/documentation.md`:
+
+```md
+# Documentation
+# `VM::detect()`
+
+This is basically the only thing you need, which returns a bool. If the parameter is set to default, all the recommended checks will be performed. But you can optionally set what techniques are used:
+
+```cpp
+int main() {
+    /**
+     * The basic way to detect a VM where most checks will be 
+     * performed. This is the recommended usage of the library.
+     */ 
+    bool is_vm = VM::detect();
+
+
+    /**
+     * Essentially means only the brand, MAC, and hypervisor bit techniques 
+     * should be performed. Note that the less flags you provide, the more 
+     * likely the result will not be accurate. If you just want to check for 
+     * a single technique, use VM::check() instead.
+     */
+    bool is_vm2 = VM::detect(VM::BRAND | VM::MAC | VM::HYPERV_BIT);
+
+
+    /**
+     * All checks are performed including the cursor check, 
+     * which waits 5 seconds for any human mouse interaction 
+     * to detect automated virtual environments. This is the 
+     * only technique that's disabled by default but if you 
+     * want to include it, add VM::ALL which is NOT RECOMMENDED
+     */ 
+    bool is_vm3 = VM::detect(VM::ALL);
+
+
+    /**
+     * If you don't want the value to be memoized for whatever reason, 
+     * you can set the VM::NO_MEMO flag and the result will not be cached. 
+     * Keep in mind that this could take a performance hit.
+     */ 
+    bool is_vm3 = VM::detect(VM::ALL | VM::NO_MEMO);
+}
+```
+
+
+# `VM::brand()`
+This will essentially return the VM brand as a `std::string`. The possible brand string return values are: 
+- `VMware`
+- `VirtualBox`
+- `KVM`
+- `bhyve`
+- `QEMU`
+- `Microsoft Hyper-V`
+- `Microsoft x86-to-ARM`
+- `Parallels`
+- `Xen HVM`
+- `ACRN`
+- `QNX hypervisor`
+- `Hybrid Analysis`
+- `Sandboxie`
+- `Docker`
+- `Wine`
+- `Virtual Apple`
+- `Virtual PC`
+If none were detected, it will return `Unknown`. It's often not going to produce a satisfying result due to technical difficulties with accomplishing this, on top of being highly dependant on what mechanisms detected a VM. Don't rely on this function too much.
+
+```cpp
+int main() {
+    const std::string result = VM::brand();
+
+    if (result == "KVM") {
+        // do KVM specific stuff
+    } else if (result == "VirtualBox") {
+        // do vbox specific stuff
+    } else {
+        // do stuff
+    }
+}
+```
+
+# `VM::check()`
+This takes a single flag argument and returns a `bool`. It's essentially the same as `VM::detect()` but it doesn't have a scoring system. It only returns the technique's effective output. The reason why this exists is because it allows end-users to have fine-grained control over what is being executed and what isn't. 
+
+`VM::detect()` is meant for a range of techniques to be evaluated in the bigger picture with weights and biases in its scoring system, while `VM::check()` is meant for a single technique to be evaluated without any points or anything extra. It just gives you what the technique has found on its own. For example:
+
+```cpp
+if (VM::check(VM::VMID)) {
+    std::cout << "VMID technique detected a VM!\n";
+}
+
+if (VM::check(VM::HYPERV_BIT)) {
+    std::cout << "Hypervisor bit is set, most definitely a VM!\n";
+}
+
+// invalid
+bool result = VM::check(VM::SIDT | VM::RDTSC);
+```
+
+
+# Flag table
+VMAware provides a convenient way to not only check for VMs, but also have the flexibility and freedom for the end-user to choose what techniques are used with complete control over what gets executed or not. This is handled with a flag system.
+
+
+| Flag alias | Description | Cross-platform? | Certainty | Root required? |
+| ---------- | ----------- | --------------- | --------- | -------------- |
+| `VM::VMID` | Check if the CPU manufacturer ID matches that of a VM brand | Yes | 100% |  |
+| `VM::BRAND` | Check if the CPU brand string contains any indications of VM keywords | Yes | 50% |  |
+| `VM::HYPERV_BIT` | Check if the hypervisor bit is set (always false on physical CPUs) | Yes | 95% |  |
+|`VM::CPUID_0x4` | Check if there are any leaf values between 0x40000000 and 0x400000FF that changes the CPUID output | Yes | 70% |  |
+| `VM::HYPERV_STR` | Check if brand string length is long enough (would be around 2 characters in a host machine while it's longer in a hypervisor) | Yes | 45% |  |
+| `VM::RDTSC` | Benchmark RDTSC and evaluate its speed, usually it's very slow in VMs | Linux and Windows | 20% |  |
+| `VM::SIDT` | Check if SIDT instructions does anything to the interrupt descriptor table | Linux | 65% |  |
+| `VM::SIDT5` | Check if the 5th byte after sidt is null | Linux | 45% |  |
+| `VM::VMWARE_PORT` | Check if VMware port number 0x5658 is present | Linux and Windows | 80% |  |
+| `VM::THREADCOUNT` | Check if there are only 1 or 2 threads, which is a common pattern in VMs with default settings (nowadays physical CPUs should have at least 4 threads for modern CPUs) | Yes | 35% |  |
+| `VM::MAC` | Check if the system's MAC address matches with preset values for certain VMs | Linux and Windows | 90% |  |
+| `VM::TEMPERATURE` | Check for the presence of CPU temperature sensors (mostly not present in VMs) | Linux | 15% |  |
+| `VM::SYSTEMD` | Get output from systemd-detect-virt tool | Linux | 70% |  |
+| `VM::CVENDOR` | Check if the chassis has any VM-related keywords | Linux | 65% |  |
+| `VM::CTYPE` | Check if the chassis type is valid (usually not in VMs) | Linux | 10% |  |
+| `VM::DOCKERENV` | Check if any docker-related files are present such as /.dockerenv and /.dockerinit | Linux | 80% |  |
+| `VM::DMIDECODE` | Get output from dmidecode tool and grep for common VM keywords | Linux | 55% | Yes |
+| `VM::DMESG` | Get output from dmesg tool and grep for common VM keywords | Linux | 55% |  |
+| `VM::HWMON` | Check if HWMON is present (if not, likely a VM) | Linux | 75% |  |
+| `VM::CURSOR`  | Check if cursor isn't active (sign of automated VM environment) | Windows | 10% |  |
+| `VM::VMWARE_REG` | Look for any VMware-specific registry data | Windows | 65% |  |
+| `VM::VBOX_REG` | Look for any VirtualBox-specific registry data | Windows | 65% |  |
+| `VM::USER` | Match the username for any defaulted ones | Windows | 35% |  |
+| `VM::DLL` | Match for VM-specific DLLs | Windows | 50% |  |
+| `VM::REGISTRY` | Look throughout the registry for all sorts of VMs | Windows | 75% |  |
+| `VM::SUNBELT` | Detect for Sunbelt technology | Windows | 10% |  |
+| `VM::WINE_CHECK` | Find for a Wine-specific file | Windows | 85% |  |
+| `VM::BOOT` | Analyse the OS uptime | Yes | 5% |  |
+| `VM::VM_FILES` | Find if any VM-specific files exists | Windows | 80% |  |
+| `VM::HWMODEL` | Check if the sysctl for the hwmodel does not contain the "Mac" string | MacOS | 75% |  |
+| `VM::DISK_SIZE` | Check if disk size is under or equal to 50GB | Linux | 60% |  |
+| `VM::VBOX_DEFAULT` | Check for default RAM and DISK sizes set by VirtualBox | Linux and Windows | 55% | Yes |
+| `VM::VBOX_NETWORK` | Check VBox network provider string | Windows | 70% |  |
+| `VM::COMPUTER_NAME` | Check for computer name string | Windows | 40% |  |
+| `VM::MEMORY` | Check if memory space is far too low for a physical machine | Windows | 35% |  |
+| `VM::VM_PROCESSES` | Check for any VM processes that are active | Windows | 30% |  |
+| `VM::LINUX_USER_HOST` | Check for default VM username and hostname for linux | Linux | 35% |  |
+
+# Non-technique flags
+| Flag | Description |
+|------|-------------|
+| `VM::ALL` | This will enable all the technique flags, including the cursor check. |
+| `VM::NO_MEMO` | This will disable memoization, meaning the result will not be fetched through a previous computation of the VM::detect function. Not sure why you'd need this, but it will take a performance hit if enabled. |
+
+```
+
+`src/cli.cpp`:
+
+```cpp
+#include "vmaware.hpp"
+#include <string>
+#include <iostream>
+#include <vector>
+
+#if (defined(__GNUC__) || defined(__linux__))
+    #include <unistd.h>
+#endif
+
+constexpr float ver = 1.0;
+constexpr const char* date = "September 2023";
+constexpr const char* bold = "\033[1m";
+constexpr const char* ansi_exit = "\x1B[0m";
+constexpr const char* red = "\x1B[38;2;239;75;75m";
+constexpr const char* green = "\x1B[38;2;94;214;114m";
+
+void help(void) {
+    std::cout << 
+R"(Usage: 
+ vmaware [options]
+
+Options:
+ -h | --help        prints this help menu
+ -v | --version     print version and other stuff
+ -s | --stdout      returns either 0 or 1 to STDOUT without any text output (0 = VM, 1 = baremetal)
+ -b | --brand       returns the VM brand string (consult documentation for full output list)
+)";
+}
+
+void version(void) {
+    std::cout << "vmaware " << "v" << ver << " (" << date << ")\n\n" <<
+    "Derived project of VMAware library at https://github.com/kernelwernel/VMAware"
+    "License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.\n" << 
+    "This is free software: you are free to change and redistribute it.\n" <<
+    "There is NO WARRANTY, to the extent permitted by law.\n" <<
+    "Developed and maintained by kernelwernel, see https://github.com/kernelwernel\n";
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        const std::string detected = ("[  " + std::string(green) + "DETECTED" + std::string(ansi_exit) + "  ]");
+        const std::string not_detected = ("[" + std::string(red) + "NOT DETECTED" + std::string(ansi_exit) + "]");
+        const std::string note = ("[    NOTE    ]");
+
+        auto checker = [=](const std::uint64_t flag, const char* message) -> void {
+            std::cout << (VM::check(flag) ? detected : not_detected) << " Checking " << message << "...\n";
+        };
+
+        #if (defined(__GNUC__) || defined(__linux__))
+            const uid_t uid = getuid();
+            const uid_t euid = geteuid();
+
+            const bool is_root = (
+                (uid != euid) || 
+                (euid == 0)
+            );
+
+            if (!is_root) {
+                std::cout << note << " Running under root would give better results\n";
+            }
+        #endif
+
+        checker(VM::VMID, "VMID");
+        checker(VM::BRAND, "CPU brand");
+        checker(VM::HYPERV_BIT, "CPUID hypervisor bit");
+        checker(VM::CPUID_0x4, "CPUID 0x4 leaf");
+        checker(VM::HYPERV_STR, "hypervisor brand");
+        checker(VM::RDTSC, "RDTSC");
+        checker(VM::SIDT, "sidt");
+        checker(VM::SIDT5, "sidt null byte");
+        checker(VM::VMWARE_PORT, "VMware port");
+        checker(VM::THREADCOUNT, "processor count");
+        checker(VM::MAC, "MAC address");
+        checker(VM::TEMPERATURE, "temperature");
+        checker(VM::SYSTEMD, "systemd virtualisation");
+        checker(VM::CVENDOR, "chassis vendor");
+        checker(VM::CTYPE, "chassis type");
+        checker(VM::DOCKERENV, "Dockerenv");
+        checker(VM::DMIDECODE, "dmidecode output");
+        checker(VM::DMESG, "dmesg output");
+        checker(VM::HWMON, "hwmon presence");
+        checker(VM::CURSOR, "cursor");
+        checker(VM::VMWARE_REG, "VMware registry");
+        checker(VM::VBOX_REG, "VBox registry");
+        checker(VM::USER, "users");
+        checker(VM::DLL, "DLLs");
+        checker(VM::REGISTRY, "registry");
+        checker(VM::SUNBELT, "Sunbelt");
+        checker(VM::WINE_CHECK, "Wine");
+        checker(VM::BOOT, "boot uptime");
+        checker(VM::VM_FILES, "VM files");
+        checker(VM::HWMODEL, "hw.model");
+        checker(VM::DISK_SIZE, "disk size");
+        checker(VM::VBOX_DEFAULT, "VBox default specs");
+        checker(VM::VBOX_NETWORK, "VBox network provider match");
+        checker(VM::COMPUTER_NAME, "computer name");
+        checker(VM::HOSTNAME, "hostname");
+        checker(VM::MEMORY, "low memory space");
+        checker(VM::VM_PROCESSES, "VM processes");
+        checker(VM::LINUX_USER_HOST, "default Linux user/host");
+        std::printf("\n");
+
+        std::cout << "VM brand: " << (std::string(VM::brand()) == "Unknown" ? red : green) << VM::brand() << ansi_exit << "\n\n";
+
+        const std::string baremetal = (std::string(red) + "Running in baremetal " + std::string(ansi_exit));
+        const std::string vmachine = (std::string(green) + "Running inside a VM " + std::string(ansi_exit));
+
+        std::cout 
+            << bold 
+            << "====== CONCLUSION: "
+            << ansi_exit
+            << (VM::detect() ? vmachine : baremetal)
+            << bold
+            << "======"
+            << ansi_exit
+            << "\n\n";
+    } else if (argc == 2) {
+        const std::vector<const char*> args(argv, argv + argc); // easier this way
+        const char* arg = args.at(1);
+
+        auto cmp = [](const char* a, const char* b) -> bool {
+            return (strcmp(a, b) == 0);
+        };
+
+        if (cmp(arg, "-s") || cmp(arg, "--stdout")) {
+            return (!VM::detect());
+        } else if (cmp(arg, "-h") || cmp(arg, "--help")) {
+            help();
+            return 0;
+        } else if (cmp(arg, "-v") || cmp(arg, "--version")) {
+            version();
+            return 0;
+        } else if (cmp(arg, "-b") || cmp(arg, "--brand")) {
+            std::cout << VM::brand() << "\n";
+            return 0;
+        } else {
+            std::cerr << "Unknown argument provided, aborting\n";
+            return 1;
+        }
+    } else if (argc > 2) {
+        std::cerr << "Either zero or one argument must be provided\n";
+        return 1;
+    } else {
+        std::cerr << "Encountered unknown error, aborting\n";
+        return 1;
+    }
+    
+    return 0;
+}
+```
+
+`src/vmaware.hpp`:
+
+```hpp
+/**
+ * ██╗   ██╗███╗   ███╗ █████╗ ██╗    ██╗ █████╗ ██████╗ ███████╗
+ * ██║   ██║████╗ ████║██╔══██╗██║    ██║██╔══██╗██╔══██╗██╔════╝
+ * ██║   ██║██╔████╔██║███████║██║ █╗ ██║███████║██████╔╝█████╗  
+ * ╚██╗ ██╔╝██║╚██╔╝██║██╔══██║██║███╗██║██╔══██║██╔══██╗██╔══╝  
+ *  ╚████╔╝ ██║ ╚═╝ ██║██║  ██║╚███╔███╔╝██║  ██║██║  ██║███████╗
+ *   ╚═══╝  ╚═╝     ╚═╝╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ beta version
+ * 
+ *  A C++ VM detection library
+ * 
+ *  - Made by: @kernelwernel (https://github.com/kernelwernel)
+ *  - Repository: https://github.com/kernelwernel/VMAware
+ *  - Docs: https://github.com/kernelwernel/VMAware/docs/documentation.md
+ *  - Full credits: https://github.com/kernelwernel/VMAware#credits
+ *  - License: GPL-3.0
+ */ 
+
+#pragma once
+
+#include <functional>
+#include <cstring>
+#include <string>
+#include <fstream>
+#include <regex>
+#include <thread>
+#include <filesystem>
+#include <limits>
+#include <cstdint>
+#include <map>
+#include <array>
+#include <algorithm>
+#include <iostream>
+#include <cassert>
+#include <cmath>
+
+// shorter and succinct macros
+#if __cplusplus == 202002L
+    #define CPP 20
+#elif __cplusplus == 201703L
+    #define CPP 17
+#elif __cplusplus == 201402L
+    #define CPP 14
+#elif __cplusplus == 201103L
+    #define CPP 11
+#else
+    #define CPP 0
+#endif
+#if (__x86_64__)
+    #define x86 1
+#else
+    #define x86 0
+#endif
+#if (defined(_MSC_VER) || defined(_WIN32) || defined(_WIN64) || defined(__MINGW32__))
+    #define MSVC 1
+#else
+    #define MSVC 0
+#endif
+#if (defined(__GNUC__) || defined(__linux__))
+    #define LINUX 1
+#else
+    #define LINUX 0
+#endif
+#if (defined(__APPLE__) || defined(__APPLE_CPP__) || defined(__MACH__) || defined(__DARWIN))
+    #define APPLE 1
+#else
+    #define APPLE 0
+#endif
+#if !(defined (MSVC) || defined(LINUX) || defined(APPLE))
+    #warning "Unknown OS detected, tests will be severely limited"
+#endif
+#if (CPP >= 20)
+    #include <ranges>
+#endif
+#if (CPP >= 17)
+    #include <bit>
+#endif
+#ifdef __VMAWARE_DEBUG__
+    #include <iomanip>
+    #include <ios>
+#endif
+#if (CPP < 11 && !MSVC)
+    #error "VMAware only supports C++11 or above, set your compiler flag to '-std=c++20' for GCC/clang, or '/std:c++20' for MSVC"
+#endif
+
+
+#if (MSVC)
+    #include <windows.h>
+    #include <intrin.h>
+    #include <tchar.h>
+    #include <stdbool.h>
+    #include <stdio.h>
+    #include <Iphlpapi.h>
+    #include <Assert.h>
+    #include <excpt.h>
+    #include <winternl.h>
+    #include <winnetwk.h>
+    #include <versionhelpers.h>
+    #include <tlhelp32.h>
+    #pragma comment(lib, "iphlpapi.lib")
+#elif (LINUX)
+    #include <cpuid.h>
+    #include <x86intrin.h>
+    #include <sys/stat.h>
+    #include <sys/statvfs.h>
+    #include <sys/ioctl.h>
+    #include <net/if.h> 
+    #include <netinet/in.h>
+    #include <unistd.h>
+    #include <string.h>
+    #include <memory>
+#elif (APPLE)
+    #include <sys/types.h>
+    #include <sys/sysctl.h>
+#endif
+
+
+struct VM {
+private:
+    using u8  = std::uint8_t;
+    using u16 = std::uint16_t;
+    using u32 = std::uint32_t;
+    using u64 = std::uint64_t;
+    using i32 = std::int32_t;
+    using i64 = std::int64_t;
+
+    #if (CPP >= 17)
+        using sv = std::string_view;
+    #endif
+
+    #if (LINUX)
+        // fetch file data
+        [[nodiscard]] static std::string read_file(const char* dir) {
+            std::ifstream file{};
+            std::string data{};
+            file.open(dir);
+            if (file.is_open()) {
+                file >> data;
+            }
+            file.close(); 
+            return data;
+        };
+
+        // Basically std::system but it runs in the background with no output
+        [[nodiscard]] static std::unique_ptr<std::string> sys_result(const char *cmd) {
+            #if (CPP < 14)
+                std::unique_ptr<std::string> tmp(nullptr);
+                return tmp; 
+            #else
+                std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd, "r"), pclose);
+
+                if (!pipe) { 
+                    return nullptr;
+                }
+
+                std::string result{};
+                std::array<char, 128> buffer{};
+
+                while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                    result += buffer.data();
+                }
+
+                result.pop_back();
+
+                return std::make_unique<std::string>(result);
+            #endif
+        }
+    #endif
+
+    // check if file exists
+    #if (MSVC)
+        [[nodiscard]] static bool exists(LPCSTR path) {
+            GetFileAttributes(path);
+            return (!(
+                (INVALID_FILE_ATTRIBUTES == GetFileAttributes(path)) && 
+                (GetLastError() == ERROR_FILE_NOT_FOUND)
+            ));
+        }
+    #else
+        [[nodiscard]] static bool exists(const char* path) {
+            #if (CPP >= 17)
+                return std::filesystem::exists(path);
+            #elif (CPP >= 11)
+                struct stat buffer;
+                return (stat (path, &buffer) == 0); 
+            #endif
+        }
+    #endif
+    
+    /**
+     * Official aliases for VM brands. This is added to avoid accidental typos 
+     * which could really fuck up the result. Also, no errors/warnings are 
+     * issued if the string is invalid in case of a typo. For example: 
+     * scoreboard[VBOX]++; 
+     * is much better and safer against typos than:
+     * scoreboard["VirtualBox"]++;
+     * Hopefully this makes sense. 
+     * 
+     * TL;DR I have wonky fingers :(
+     */ 
+    static constexpr const char* VMWARE = "VMware";
+    static constexpr const char* VBOX = "VirtualBox";
+    static constexpr const char* KVM = "KVM";
+    static constexpr const char* BHYVE = "bhyve";
+    static constexpr const char* QEMU = "QEMU";
+    static constexpr const char* HYPERV = "Microsoft Hyper-V";
+    static constexpr const char* MSXTA = "Microsoft x86-to-ARM";
+    static constexpr const char* PARALLELS = "Parallels";
+    static constexpr const char* XEN = "Xen HVM";
+    static constexpr const char* ACRN = "ACRN";
+    static constexpr const char* QNX = "QNX hypervisor";
+    static constexpr const char* HYBRID = "Hybrid Analysis";
+    static constexpr const char* SANDBOXIE = "Sandboxie";
+    static constexpr const char* DOCKER = "Docker";
+    static constexpr const char* WINE = "Wine";
+    static constexpr const char* VAPPLE = "Virtual Apple";
+    static constexpr const char* VPC = "Virtual PC";
+    static constexpr const char* ANUBIS = "Anubis";
+    static constexpr const char* JOEBOX = "JoeBox";
+    
+    // VM scoreboard table specifically for VM::brand()
+    #if (MSVC)
+        static std::map<const char*, int> scoreboard;
+    #else
+        static std::map<const char*, u8> scoreboard;
+    #endif
+
+    // cross-platform wrapper function for linux and MSVC cpuid
+    static void cpuid
+    (
+        u32 &a, u32 &b, u32 &c, u32 &d, 
+        const u32 a_leaf,
+        const u32 c_leaf = 0xFF  // dummy value if not set manually
+    ) {
+        #if (MSVC)
+            i32 x[4];
+            __cpuidex((i32*)x, a_leaf, c_leaf);
+            a = static_cast<u32>(x[0]);
+            b = static_cast<u32>(x[1]);
+            c = static_cast<u32>(x[2]);
+            d = static_cast<u32>(x[3]);
+        #elif (LINUX)
+            __cpuid_count(a_leaf, c_leaf, a, b, c, d);
+        #endif
+    };
+
+    // same as above but for array type parameters (MSVC specific)
+    static void cpuid
+    (
+        i32 x[4],
+        const u32 a_leaf,
+        const u32 c_leaf = 0xFF
+    ) {
+        #if (MSVC)
+            __cpuidex((i32*)x, a_leaf, c_leaf);
+        #elif (LINUX)
+            __cpuid_count(a_leaf, c_leaf, x[0], x[1], x[2], x[3]);
+        #endif
+    };
+
+    // cpuid leaf values
+    struct leaf {
+        static constexpr u32
+            hyperv   = 0x40000000,
+            proc_ext = 0x80000001,
+            brand1   = 0x80000002,
+            brand2   = 0x80000003,
+            brand3   = 0x80000004;
+    };
+
+    // self-explanatory
+    [[nodiscard]] static bool is_root() noexcept {
+        #if (!LINUX)
+            return false;
+        #else
+            const uid_t uid = getuid();
+            const uid_t euid = geteuid();
+
+            return (
+                (uid != euid) || 
+                (euid == 0)
+            );
+        #endif
+    }
+
+    // for debug output
+    #ifdef __VMAWARE_DEBUG__
+        template <typename... Args>
+        static inline void debug(Args... message) noexcept {
+            constexpr const char* black_bg = "\x1B[48;2;0;0;0m";
+            constexpr const char* bold = "\033[1m";
+            constexpr const char* blue = "\x1B[38;2;00;59;193m";
+            constexpr const char* ansiexit = "\x1B[0m";
+
+            std::cout.setf(std::ios::fixed, std::ios::floatfield);
+            std::cout.setf(std::ios::showpoint);
+
+            std::cout << black_bg << bold << "[" << blue << "DEBUG" << ansiexit << bold << black_bg << "]" << ansiexit << " ";
+            ((std::cout << message),...);
+            std::cout << "\n";
+        }
+    #endif
+
+    // directly return when adding a brand to the scoreboard for a more succint expression
+    #if (MSVC) 
+        __declspec(noalias)
+    #elif (LINUX)
+        [[gnu::const]]
+    #endif
+    [[nodiscard]] static inline bool add(const char* p_brand) noexcept {
+        scoreboard[p_brand]++;
+        return true;
+    }
+
+    // get disk size in GB
+    // TODO: finish the MSVC section
+    [[nodiscard]] static u32 get_disk_size() {
+        u32 size = 0;
+    
+        #if (LINUX)
+            struct statvfs stat;
+
+            if (statvfs("/", &stat) != 0) {
+                #if __VMAWARE_DEBUG__
+                    debug("private get_disk_size function: ", "failed to fetch disk size");
+                #endif
+                return false;
+            }
+
+            // in gigabytes
+            constexpr u64 GB = (1000 * 1000 * 1000);
+            size = static_cast<u32>((stat.f_blocks * stat.f_frsize) / GB);
+        #elif (MSVC)
+
+        #endif
+    
+        if (size == 0) {
+            return false;
+        }
+
+        // round to the nearest factor of 10
+        const u32 result = static_cast<u32>(std::round((size / 10.0) * 10));
+
+        #if __VMAWARE_DEBUG__
+            debug("private get_disk_size function: ", "disk size = ", result, "GB");
+        #endif
+
+        return result;
+    }
+
+    // get physical RAM size in GB
+    [[nodiscard]] static u64 get_physical_ram_size() {
+        #if (LINUX)
+            if (!is_root()) {
+                #if __VMAWARE_DEBUG__
+                    debug("private get_physical_ram_size function: ", "not root, returned 0");
+                #endif
+                return 0;
+            }
+
+            auto result = sys_result("dmidecode --type 19 | grep 'Size' | grep '[[:digit:]]*'");
+
+            if (result == nullptr) {
+                #if __VMAWARE_DEBUG__
+                    debug("private get_physical_ram_size function: ", "invalid system result from dmidecode, returned 0");
+                #endif
+                return 0;
+            }
+
+            const bool MB = (std::regex_search(*result, std::regex("MB")));
+            const bool GB = (std::regex_search(*result, std::regex("GB")));
+
+            if (!(MB || GB)) {
+                #if __VMAWARE_DEBUG__
+                    debug("private get_physical_ram_size function: ", "neither MB nor GB found, returned 0");
+                #endif
+                return 0;
+            }
+
+            std::string number_str;
+            bool in_number = false;
+
+            for (char c : *result) {
+                if (std::isdigit(c)) {
+                    number_str += c;
+                    in_number = true;
+                } else if (in_number) {
+                    break;
+                }
+            }
+
+            if (number_str.empty()) {
+                #if __VMAWARE_DEBUG__
+                    debug("private get_physical_ram_size function: ", "string is empty, returned 0");
+                #endif
+                return 0;
+            }
+
+            u64 number = 0;
+
+            number = std::stoi(number_str);
+
+            if (MB == true) {
+                number = static_cast<u64>(std::round(number / 1024)); // 1000?
+            }
+
+            return number; // in GB
+        #elif (MSVC)
+            if (!IsWindowsVistaOrGreater()) {
+                return 0;
+            }
+
+            ULONGLONG total_memory_kb = 0;
+
+            if (GetPhysicallyInstalledSystemMemory(&total_memory_kb) == ERROR_INVALID_DATA) {
+                return 0;
+            }
+
+            return (total_memory_kb / (1024 * 1024)); // 1000?
+        #else
+            return 0;
+        #endif
+    }
+
+    // get available memory space
+    [[nodiscard]] static u64 get_memory_space() {
+        #if (MSVC)        
+            MEMORYSTATUSEX statex = {0};
+            statex.dwLength = sizeof(statex);
+            GlobalMemoryStatusEx(&statex); // calls NtQuerySystemInformation
+            return statex.ullTotalPhys;
+        #elif (LINUX)
+            const i64 pages = sysconf(_SC_PHYS_PAGES);
+            const i64 page_size = sysconf(_SC_PAGE_SIZE);
+            return (pages * page_size);
+        #elif (APPLE)
+            i32 mib[2] = { CTL_HW, HW_MEMSIZE };
+            u32 namelen = sizeof(mib) / sizeof(mib[0]);
+            u64 size = 0;
+            std::size_t len = sizeof(size);
+
+            if (sysctl(mib, namelen, &size, &len, NULL, 0) < 0) {
+                return 0;
+            }
+
+            return size; // in bytes
+        #endif
+    }
+
+    // memoize the value from VM::detect() in case it's ran again
+    static std::map<bool, std::pair<bool, const char*>> memo;
+
+    // cpuid check value
+    static bool cpuid_supported;
+
+    // flags
+    static u64 flags;
+
+    /**
+     * assert if the flag is enabled, far better expression than typing this:
+     * if (!(flags & VMID)) { 
+     *    return false;
+     * }
+     * 
+     * compared to this:
+     * 
+     * if (disabled(VMID)) {
+     *    return false;
+     * }
+     */
+    #if (LINUX && __has_cpp_attribute(gnu::pure))
+        [[gnu::pure]]
+    #endif
+    [[nodiscard]] static inline bool disabled(const u64 p_flag) noexcept {
+        return (!(flags & p_flag));
+    }
+
+public:
+    VM() = delete; // Delete default constructor
+    VM(const VM&) = delete; // Delete copy constructor
+    VM(VM&&) = delete; // Delete move constructor
+
+    static constexpr u64
+        VMID = 1 << 0,
+        BRAND = 1 << 1,
+        HYPERV_BIT = 1 << 2,
+        CPUID_0x4 = 1 << 3,
+        HYPERV_STR = 1 << 4,
+        RDTSC = 1 << 5,
+        SIDT = 1 << 6,
+        VMWARE_PORT = 1 << 7,
+        THREADCOUNT = 1 << 8,
+        MAC = 1 << 9,
+
+        // linux-specific
+        TEMPERATURE = 1 << 10,
+        SYSTEMD = 1 << 11,
+        CVENDOR = 1 << 12,
+        CTYPE = 1 << 13,
+        DOCKERENV = 1 << 14,
+        DMIDECODE = 1 << 15,
+        DMESG = 1 << 16,
+        HWMON = 1 << 17,
+        SIDT5 = 1 << 18,
+        
+        // windows-specific
+        CURSOR = 1 << 19,
+        VMWARE_REG = 1 << 20,
+        VBOX_REG = 1 << 21,
+        USER = 1 << 22,
+        DLL = 1 << 23,
+        REGISTRY = 1 << 24,
+        SUNBELT = 1 << 25,
+        WINE_CHECK = 1 << 26,
+        BOOT = 1 << 27,
+        VM_FILES = 1 << 28,
+        HWMODEL = 1 << 29,
+        DISK_SIZE = 1 << 30,
+        VBOX_DEFAULT = 1ULL << 31,
+        VBOX_NETWORK = 1ULL << 32,
+        COMPUTER_NAME = 1ULL << 33,
+        HOSTNAME = 1ULL << 34,
+        MEMORY = 1ULL << 35,
+        VM_PROCESSES = 1ULL << 36,
+        LINUX_USER_HOST = 1ULL << 37,
+
+        // settings
+        NO_MEMO = 1ULL << 63,
+        
+        #if (MSVC)
+            ALL = ~(NO_MEMO & 0xFFFFFFFFFFFFFFFF);
+        #else
+            ALL = ~(NO_MEMO & std::numeric_limits<u64>::max());
+        #endif
+
+private:
+    static constexpr u64 DEFAULT = (~(CURSOR) & ALL);
+
+    /**
+     * @brief Check CPUID output of manufacturer ID for known VMs/hypervisors
+     * @category x86
+     */
+    [[nodiscard]] static bool vmid() try {
+        #if (!x86)
+            return false;
+        #else
+            if (!cpuid_supported || disabled(VMID)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VMID: precondition return called");
+                #endif
+                return false;
+            }
+
+            #if (CPP >= 17)
+                constexpr sv 
+            #else
+                const std::string
+            #endif
+                bhyve = "bhyve bhyve ",
+                kvm = " KVMKVMKVM  ",
+                qemu = "TCGTCGTCGTCG",
+                hyperv = "Microsoft Hv",
+                xta = "MicrosoftXTA",
+                parallels = " prl hyperv ",
+                parallels2 = " lrpepyh  vr",
+                vmware = "VMwareVMware",
+                vbox = "VBoxVBoxVBox",
+                xen = "XenVMMXenVMM",
+                acrn = "ACRNACRNACRN",
+                qnx = " QNXQVMBSQG ",
+                virtapple = "VirtualApple";
+
+            #if (CPP >= 17)
+                constexpr std::array<sv, 13> IDs {
+            #else
+                std::array<std::string, 13> IDs {
+            #endif
+                bhyve, kvm, qemu,
+                hyperv, parallels, parallels,
+                parallels2, vmware, vbox,
+                xen, acrn, qnx,
+                virtapple
+            };
+
+            auto cpuid_thingy = [](const u32 p_leaf, u32* regs, std::size_t start = 0, std::size_t end = 4) -> bool {
+                u32 x[4];
+                cpuid(x[0], x[1], x[2], x[3], p_leaf);
+
+                for (; start < end; start++) { 
+                    *regs++ = x[start];
+                }
+
+                return true;
+            };
+
+            std::string brand = "";
+
+            u32 sig_reg[3] = {0};
+
+            if (!cpuid_thingy(0, sig_reg, 1)) {
+                return false;
+            }
+
+            u32 features;
+            cpuid_thingy(1, &features, 2, 3);
+
+            auto strconvert = [](u64 n) -> std::string {
+                const std::string &str(reinterpret_cast<char*>(&n));
+                return str;
+            };
+
+            std::stringstream ss;
+            ss << strconvert(sig_reg[0]);
+            ss << strconvert(sig_reg[2]);
+            ss << strconvert(sig_reg[1]);
+
+            brand = ss.str();
+ 
+            #ifdef __VMAWARE_DEBUG__
+                debug("VMID: ", brand);
+            #endif
+
+            const bool found = (std::find(std::begin(IDs), std::end(IDs), brand) != std::end(IDs));
+
+            if (found) {
+                if (brand == bhyve) { return add(BHYVE); }
+                if (brand == kvm) { return add(KVM); }
+                if (brand == qemu) [[likely]] { return add(QEMU); }
+                if (brand == hyperv) { return add(HYPERV); }
+                if (brand == xta) { return add(MSXTA); }
+                if (brand == vmware) [[likely]] { return add(VMWARE); }
+                if (brand == vbox) [[likely]] { return add(VBOX); }
+                if (brand == parallels) { return add(PARALLELS); }
+                if (brand == parallels2) { return add(PARALLELS); }
+                if (brand == xen) { return add(XEN); }
+                if (brand == acrn) { return add(ACRN); }
+                if (brand == qnx) { return add(QNX); }
+                if (brand == virtapple) { return add(VAPPLE); }
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VMID: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if CPU brand is a VM brand
+     * @category x86
+     */
+    [[nodiscard]] static bool cpu_brand() try {
+        #if (!x86)
+            return false;
+        #else
+            if (!cpuid_supported || disabled(BRAND)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("BRAND: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            // maybe not necessary but whatever
+            #if (LINUX)
+                if (!__get_cpuid_max(0x80000004, nullptr)) {
+                    return false;
+                }
+            #endif
+
+            std::array<u32, 4> buffer{};
+            constexpr std::size_t buffer_size = sizeof(i32) * buffer.size();
+            std::array<char, 64> charbuffer{};
+
+            constexpr std::array<u32, 3> ids = {
+                leaf::brand1,
+                leaf::brand2,
+                leaf::brand3
+            };
+
+            std::string brand = "";
+
+            for (const u32 &id : ids) {
+                cpuid(buffer.at(0), buffer.at(1), buffer.at(2), buffer.at(3), id);
+
+                std::memcpy(charbuffer.data(), buffer.data(), buffer_size);
+
+                const char* convert = charbuffer.data();
+                brand += convert;
+            }
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("BRAND: ", "cpu brand = ", brand);
+            #endif
+
+            // TODO: might add more potential keywords, be aware that it could (theoretically) cause false positives
+            constexpr std::array<const char*, 16> vmkeywords {
+                "qemu", "kvm", "virtual", "vm", 
+                "vbox", "virtualbox", "vmm", "monitor", 
+                "bhyve", "hyperv", "hypervisor", "hvisor", 
+                "parallels", "vmware", "hvm", "qnx"
+            };
+
+            u8 match_count = 0;
+
+            for (std::size_t i = 0; i < vmkeywords.size(); i++) {
+                const auto regex = std::regex(vmkeywords.at(i), std::regex::icase);
+                const bool match = std::regex_search(brand, regex);
+                
+                #ifdef __VMAWARE_DEBUG__
+                    if (match) {
+                        debug("BRAND: ", "match = ", vmkeywords.at(i));
+                    }
+                #endif
+
+                match_count += match;
+            }
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("BRAND: ", "matches: ", static_cast<u32>(match_count));
+            #endif
+
+            return (match_count >= 1);
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("BRAND: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if hypervisor feature bit in CPUID is enabled (always false for physical CPUs)
+     * @category x86
+     */
+    [[nodiscard]] static bool cpuid_hyperv() try {
+        #if (!x86)
+            return false;
+        #else
+            if (!cpuid_supported || disabled(HYPERV_BIT)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("HYPERV_BIT: precondition return called");
+                #endif
+                return false;
+            }
+
+            u32 unused, ecx = 0;
+
+            cpuid(unused, unused, ecx, unused, 1);
+
+            return (ecx & (1 << 31));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("HYPERV_BIT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if 0x40000000~0x400000FF cpuid input is present (mostly present in VMs, according to VMware)
+     * @link https://kb.vmware.com/s/article/1009458
+     * @category x86
+     */
+    [[nodiscard]] static bool cpuid_0x4() try {
+        #if (!x86)
+            return false;
+        #else
+            if (!cpuid_supported || disabled(CPUID_0x4)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CPUID_0X4: precondition return called");
+                #endif
+                return false;
+            }
+
+            u32 a, b, c, d = 0;
+
+            for (u8 i = 0; i < 0xFF; i++) {
+                cpuid(a, b, c, d, (leaf::hyperv + i));
+                if ((a + b + c + d) != 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("CPUID_0x4: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for hypervisor brand string length (would be around 2 characters in a host machine)
+     * @category x86
+     */
+    [[nodiscard]] static bool hyperv_brand() try {
+        #if (!x86)
+            return false;
+        #else
+            if (disabled(HYPERV_STR)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("HYPERV_STR: precondition return called");
+                #endif
+                return false;
+            }
+
+            char out[sizeof(i32) * 4 + 1] = { 0 }; // e*x size + number of e*x registers + null terminator
+            cpuid((int*)out, leaf::hyperv);
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("HYPERV_STR: eax: ", static_cast<u32>(out[0]), 
+                    "\nebx: ", static_cast<u32>(out[1]), 
+                    "\necx: ", static_cast<u32>(out[2]), 
+                    "\nedx: ", static_cast<u32>(out[3])
+                );
+            #endif
+
+            return (std::strlen(out + 4) >= 4);
+        #endif
+    } catch (...) {
+        #ifdef __VMAWARE_DEBUG__
+            debug("HYPERV_STR: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if RDTSC is slow, if yes then it might be a VM
+     * @category x86
+     */
+    [[nodiscard]] static bool rdtsc_check() try {
+        #if (!x86)
+            return false;
+        #else
+            if (disabled(RDTSC)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("RDTSC: precondition return called");
+                #endif
+                return false;
+            }
+
+            #if (LINUX)
+                u32 a, b, c, d = 0;
+
+                if (!__get_cpuid(leaf::proc_ext, &a, &b, &c, &d)) {
+                    if (!(d & (1 << 27))) { 
+                        return false;
+                    }
+                }
+                
+                u64 s, acc = 0;
+                i32 out[4];
+
+                for (std::size_t i = 0; i < 100; ++i) {
+                    s = __rdtsc();
+                    cpuid(out, 0, 0);
+                    acc += __rdtsc() - s;
+                }
+
+                #ifdef __VMAWARE_DEBUG__
+                    debug("RDTSC: ", "acc = ", acc);
+                    debug("RDTSC: ", "acc/100 = ", acc / 100);
+                #endif
+
+                return (acc / 100 > 350);
+            #elif (MSVC)
+                #define LODWORD(_qw)    ((DWORD)(_qw))
+                u64 tsc1 = 0;
+                u64 tsc2 = 0;
+                u64 avg = 0;
+                i32 cpuInfo[4] = {};
+                for (INT i = 0; i < 10; i++) {
+                    tsc1 = __rdtsc();
+                    GetProcessHeap();
+                    tsc2 = __rdtsc();
+                    CloseHandle(0);
+                    tsc3 = __rdtsc();
+                    const bool conditon = ((LODWORD(tsc3) - LODWORD(tsc2)) / (LODWORD(tsc2) - LODWORD(tsc1)) >= 10);
+                    if (condition) {
+                        return false;
+                    }
+                }
+
+                return true;
+            #endif
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("RDTSC: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if the 5th byte after sidt is null
+     * @author Matteo Malvica
+     * @link https://www.matteomalvica.com/blog/2018/12/05/detecting-vmware-on-64-bit-systems/
+     * @category x86
+     */
+    [[nodiscard]] static bool sidt5() try {
+        #if (!x86 || !LINUX)
+            return false;
+        #else
+            if (disabled(SIDT5)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SIDT5: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            u8 values[10];
+            std::memset(values, 0, 10);
+
+            fflush(stdout);
+            __asm__ __volatile__("sidt %0" : "=m"(values));
+
+            #ifdef __VMAWARE_DEBUG__
+                u32 result = 0;
+
+                for (u8 i = 0; i < 10; i++) {
+                    result <<= 8;
+                    result |= values[i];
+                }
+
+                debug("SIDT5: ", "values = 0x", std::hex, std::setw(16), std::setfill('0'), result);
+            #endif
+
+            return (values[5] == 0x00);
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("SIDT5: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for vm presence using sidt instruction 
+     * @todo: Check if this actually works
+     * @author Unprotect
+     * @link https://unprotect.it/technique/sidt-red-pill/
+     * @category x86
+     */
+    [[nodiscard]] static bool sidt_check() try {
+        return false; // TODO: REMOVE AFTER VERIFYING IF IT WORKS
+
+/*
+        #if (!x86 || !LINUX)
+            return false;
+        #else
+            if (disabled(SIDT)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SIDT: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            u64 idtr = 0;
+
+            __asm__ __volatile__(
+                "sidt %0"
+                : "=m" (idtr)
+            );
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("SIDT: ", "idtr = ", idtr);
+            #endif
+
+            return (idtr != 0);
+        #endif
+*/
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("SIDT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if VMware port number 0x5658 is present
+     * @todo Make better Linux-compatible GCC inline assembly code
+     * @link https://kb.vmware.com/s/article/1009458
+     * @category x86 Windows
+     */
+    [[nodiscard]] static bool vmware_port() try {
+        #if (!x86)
+            return false;
+        #else
+            if (disabled(VMWARE_PORT)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VMWARE_PORT: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            i32 is_vm = false;
+
+            #if (LINUX)
+/*
+                u32 a, b, c, d = 0;
+
+                constexpr u32 vmware_magic = 0x564D5868, // magic hypervisor ID
+                            vmware_port  = 0x5658,     // hypervisor port number
+                            vmware_cmd   = 10,         // Getversion command identifier
+                            u32_max      = std::numeric_limits<u32>::max(); // max for u32, idk
+
+                __asm__ __volatile__(
+                    "pushq %%rdx\n\t"
+                    "pushq %%rcx\n\t"
+                    "pushq %%rbx\n\t"
+                    "movl $0x564D5868, %%eax\n\t" // "VMXh"
+                    "movb $0, %%bl\n\t"
+                    "movb $10, %%cl\n\t"
+                    "movl $0x5658, %%edx\n\t" // "VX"
+                    "inl %%dx, %%eax\n\t"
+                    "cmpl $0x564D5868, %%ebx\n\t"
+                    "setz %0\n\t"
+                    "popl %%ebx\n\t"
+                    "popl %%ecx\n\t"
+                    "popl %%edx\n\t"
+                    //: "=a" (a), "=b" (b), "=c" (c), "=d" (d)
+                    : "=r" (is_vm)
+                    :
+                    : "%eax"
+                );
+    
+                or this:
+
+                __asm__ __volatile__(
+                    "inl (%%dx)"
+                    : "=a"(a), "=b"(b), "=c"(c), "=d"(d)
+                    : "0"(0x564D5868), "1"(10), "2"(0x5658), "3"(0xFFFFFFFF)
+                    : "memory"
+                );
+*/
+
+            #elif (MSVC)
+                u16 ioports[] = { 'VX' , 'VY' };
+                u16 ioport;
+                for (u8 i = 0; i < _countof(ioports); ++i) {
+                    ioport = ioports[i];
+                    for (u8 cmd = 0; cmd < 0x2C; ++cmd) {
+                        __try {
+                            __asm {
+                                push eax
+                                push ebx
+                                push ecx
+                                push edx
+                                mov eax, 'VMXh'
+                                movzx ecx, cmd
+                                mov dx, ioport
+                                in eax, dx      // <- key point is here
+                                pop edx
+                                pop ecx
+                                pop ebx
+                                pop eax
+                            }
+
+                            is_vm = true;
+                            break;
+                        }
+                        __except (EXCEPTION_EXECUTE_HANDLER) {
+                            #ifdef __VMAWARE_DEBUG__
+                                debug("VMWARE_PORT: exception encountered for inline assembly");
+                            #endif
+                        }
+                    }
+
+                    if (is_vm) {
+                        break;
+                    }
+                }
+            #endif
+
+            if (is_vm) {
+                scoreboard[VMWARE]++; 
+                //scoreboard[VMWARE]++; // extra point bc it's incredibly VMware-specific, also it's not += 2 since that causes a linker error for some reason?
+                return true;
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VMWARE_PORT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if processor count is 1 or 2 (some VMs only have a single core)
+     * @category All systems
+     */
+    [[nodiscard]] static bool thread_count() try {
+        if (disabled(THREADCOUNT)) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("THREADCOUNT: ", "precondition return called");
+            #endif
+            return false;
+        }
+
+        #ifdef __VMAWARE_DEBUG__
+            debug("THREADCOUNT: ", "threads = ", std::thread::hardware_concurrency());
+        #endif
+
+        return (std::thread::hardware_concurrency() <= 2);
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("THREADCOUNT: catched error, returned false");
+        #endif
+        return false;
+    }
+    
+
+    /**
+     * @brief Check if mac address starts with certain VM designated values
+     * @category All systems (I think)
+     */
+    [[nodiscard]] static bool mac_address_check() try {
+        if (disabled(MAC)) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("MAC: ", "precondition return called");
+            #endif
+            return false;
+        }
+
+        // C-style array on purpose
+        u8 mac[6] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+        #if (LINUX)
+            struct ifreq ifr;
+            struct ifconf ifc;
+            char buf[1024];
+            i32 success = 0;
+
+            i32 sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+
+            if (sock == -1) { 
+                return false;
+            };
+
+            ifc.ifc_len = sizeof(buf);
+            ifc.ifc_buf = buf;
+
+            if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) {
+                return false;
+            }
+
+            struct ifreq* it = ifc.ifc_req;
+            const struct ifreq* end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+            for (; it != end; ++it) {
+                std::strcpy(ifr.ifr_name, it->ifr_name);
+
+                if (ioctl(sock, SIOCGIFFLAGS, &ifr) != 0) { 
+                    return false;
+                }
+
+                if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
+                    if (ioctl(sock, SIOCGIFHWADDR, &ifr) == 0) {
+                        success = 1;
+                        break;
+                    }
+                }
+            }
+
+            if (success) { 
+                std::memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
+            } else {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("MAC: ", "not successful");
+                #endif
+            }
+        #elif (MSVC)
+            PIP_ADAPTER_INFO AdapterInfo;
+            DWORD dwBufLen = sizeof(IP_ADAPTER_INFO);
+
+            char *mac_addr = static_cast<char*>(std::malloc(18));
+
+            AdapterInfo = (IP_ADAPTER_INFO *) std::malloc(sizeof(IP_ADAPTER_INFO));
+
+            if (AdapterInfo == NULL) {
+                free(mac_addr);
+                return false;
+            }
+
+            if (GetAdaptersInfo(AdapterInfo, &dwBufLen) == ERROR_BUFFER_OVERFLOW) {
+                std::free(AdapterInfo);
+                AdapterInfo = (IP_ADAPTER_INFO *) std::malloc(dwBufLen);
+                if (AdapterInfo == NULL) {
+                    std::free(mac_addr);
+                    return false;
+                }
+            }
+
+            if (GetAdaptersInfo(AdapterInfo, &dwBufLen) == NO_ERROR) {
+                PIP_ADAPTER_INFO pAdapterInfo = AdapterInfo;
+                for (std::size_t i = 0; i < 6; i++) {
+                    mac[i] = pAdapterInfo->Address[i];
+                }
+            }
+
+            std::free(AdapterInfo);
+        #endif
+
+        #ifdef __VMAWARE_DEBUG__
+            std::stringstream ss;
+            ss << std::setw(2) << std::setfill('0') << std::hex
+            << static_cast<i32>(mac[0]) << ":"
+            << static_cast<i32>(mac[1]) << ":"
+            << static_cast<i32>(mac[2]) << ":"
+            << static_cast<i32>(mac[3]) << ":"
+            << static_cast<i32>(mac[4]) << ":"
+            << static_cast<i32>(mac[5]);
+            debug("MAC: ", ss.str());
+        #endif
+        
+        // better expression to fix code duplication
+        auto compare = [=](const u8 mac1, const u8 mac2, const u8 mac3) noexcept -> bool {
+            return (mac[0] == mac1 && mac[1] == mac2 && mac[2] == mac3);
+        };
+
+        if (compare(0x08, 0x00, 0x27)) {
+            return add(VBOX);
+        }
+
+        if (
+            (compare(0x00, 0x0C, 0x29)) ||
+            (compare(0x00, 0x1C, 0x14)) ||
+            (compare(0x00, 0x50, 0x56)) ||
+            (compare(0x00, 0x05, 0x69))
+        ) {
+            return add(VMWARE);
+        }
+
+        if (compare(0x00, 0x16, 0xE3)) {
+            return add(XEN);
+        }
+
+        if (compare(0x00, 0x1C, 0x42)) {
+            return add(PARALLELS);
+        }
+
+        if (compare(0x0A, 0x00, 0x27)) {
+            return add(HYBRID);
+        }
+
+        return false;
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("MAC: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if thermal directory is present, might not be present in VMs
+     * @category Linux
+     */
+    [[nodiscard]] static bool temperature() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(TEMPERATURE)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("TEMPERATURE: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            return (!exists("/sys/class/thermal/thermal_zone0/"));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("TEMPERATURE: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check result from systemd-detect-virt tool
+     * @category Linux
+     */ 
+    [[nodiscard]] static bool systemd_virt() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(SYSTEMD)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SYSTEMD: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            if (!(exists("/usr/bin/systemd-detect-virt") || exists("/bin/systemd-detect-virt"))) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SYSTEMD: ", "binary doesn't exist");
+                #endif
+                return false;
+            }
+
+            const std::unique_ptr<std::string> result = sys_result("systemd-detect-virt");
+            
+            if (result == nullptr) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SYSTEMD: ", "invalid stdout output from systemd-detect-virt");
+                #endif
+                return false;
+            }
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("SYSTEMD: ", "output = ", *result);
+            #endif
+
+            return (*result != "none");
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("SYSTEMD: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if chassis vendor is a VM vendor
+     * @category Linux
+     */ 
+    [[nodiscard]] static bool chassis_vendor() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(CVENDOR)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CVENDOR: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            const char* vendor_file = "/sys/devices/virtual/dmi/id/chassis_vendor";
+
+            if (exists(vendor_file)) {
+                const std::string vendor = read_file(vendor_file);
+
+                // TODO: More can be definitely added, I only tried QEMU and VMware so far
+                if (vendor == "QEMU") { return add(QEMU); }
+                if (vendor == "Oracle Corporation") { return add(VMWARE); }
+
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CVENDOR: ", "unknown vendor = ", vendor);
+                #endif
+            } else {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CVENDOR: ", "file doesn't exist");
+                #endif
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("CVENDOR: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if the chassis type is valid (it's very often invalid in VMs)
+     * @category Linux
+     */
+    [[nodiscard]] static bool chassis_type() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(CTYPE)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CTYPE: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            const char* chassis = "/sys/devices/virtual/dmi/id/chassis_type";
+            
+            if (exists(chassis)) {
+                return (stoi(read_file(chassis)) == 1);
+            } else {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CTYPE: ", "file doesn't exist");
+                #endif
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("CTYPE: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if /.dockerenv or /.dockerinit file is present
+     * @category Linux
+     */
+    [[nodiscard]] static bool dockerenv() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(DOCKERENV)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DOCKER: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            return (exists("/.dockerenv") || exists("/.dockerinit"));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("DOCKERENV: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if dmidecode output matches a VM brand
+     * @category Linux
+     */
+    [[nodiscard]] static bool dmidecode() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(DMIDECODE) || (is_root() == false)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMIDECODE: ", "precondition return called (root = ", is_root(), ")");
+                #endif
+                return false;
+            }
+
+            if (!(exists("/bin/dmidecode") || exists("/usr/bin/dmidecode"))) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMIDECODE: ", "binary doesn't exist");
+                #endif
+                return false;
+            }
+            
+            const std::unique_ptr<std::string> result = sys_result("dmidecode -t system | grep 'Manufacturer|Product' | grep -c \"QEMU|VirtualBox|KVM\"");
+
+            if (*result == "" || result == nullptr) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMIDECODE: ", "invalid output");
+                #endif
+                return false;
+            } else if (*result == "QEMU") {
+                return add(QEMU);
+            } else if (*result == "VirtualBox") {
+                return add(VBOX);
+            } else if (*result == "KVM") {
+                return add(KVM);
+            } else if (std::atoi(result->c_str()) >= 1) {
+                return true;
+            } else {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMIDECODE: ", "output = ", *result);
+                #endif
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("DMIDECODE: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if dmesg command output matches a VM brand
+     * @category Linux
+     */
+    [[nodiscard]] static bool dmesg() try {
+        #if (!LINUX || CPP <= 11)
+            return false;
+        #else
+            if (disabled(DMESG)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMESG: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            if (!exists("/bin/dmesg") && !exists("/usr/bin/dmesg")) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMESG: ", "binary doesn't exist");
+                #endif
+                return false;
+            }
+
+            const std::unique_ptr<std::string> result = sys_result("dmesg | grep -i hypervisor | grep -c \"KVM|QEMU\"");
+
+            if (*result == "" || result == nullptr) {
+                return false;
+            } else if (*result == "KVM") {
+                return add(KVM);
+            } else if (*result == "QEMU") {
+                return add(QEMU);
+            } else if (std::atoi(result->c_str())) {
+                return true;
+            } else {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DMESG: ", "output = ", *result);
+                #endif
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("DMESG: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if /sys/class/hwmon/ directory is present. If not, likely a VM
+     * @category Linux
+     */
+    [[nodiscard]] static bool hwmon() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(HWMON)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("HWMON: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            return (!exists("/sys/class/hwmon/"));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("HWMON: catched error, returned false");
+        #endif
+        return false;
+    }
+    
+
+    // [[nodiscard]] static bool dmi_check() try {
+    //     char string[10];
+    //     GET_BIOS_SERIAL(string);
+    //     if (!memcmp(string, "VMware-", 7) || !memcmp(string, "VMW", 3)) { return true; }
+    //     else { return false; }
+    // } catch (...) { return false; }
+
+
+    /**
+     * @brief Check for tons of VM-specific registry values
+     * @category Windows
+     */
+    [[nodiscard]] static bool registry_key() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(REGISTRY)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("REGISTRY: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            u8 score = 0;
+
+            auto key = [&score](const char* p_brand, const char* regkey_s) -> void {
+                HKEY regkey;
+                LONG ret;
+                BOOL isWow64 = FALSE;
+
+                if (IsWow64Process(GetCurrentProcess(), &isWow64) && isWow64) { 
+                    ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, regkey_s, 0, KEY_READ | KEY_WOW64_64KEY, &regkey);
+                } else { 
+                    ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, regkey_s, 0, KEY_READ, &regkey);
+                }
+
+                if (ret == ERROR_SUCCESS) {
+                    RegCloseKey(regkey);
+                    score++;
+
+                    if (std::string(p_brand) != "")
+                    #if (CPP >= 20)
+                        [[likely]]
+                    #endif 
+                    {
+                        #ifdef __VMAWARE_DEBUG__
+                            debug("REGISTRY: ", "detected = ", p_brand);
+                        #endif
+                        scoreboard[p_brand]++;
+                    }
+                }
+            };
+
+            // general
+            key("", "HKLM\\Software\\Classes\\Folder\\shell\\sandbox");
+
+            // hyper-v
+            key("Microsoft Hyper-V", "HKLM\\SOFTWARE\\Microsoft\\Hyper-V");
+            key("Microsoft Hyper-V", "HKLM\\SOFTWARE\\Microsoft\\VirtualMachine");
+            key("Microsoft Hyper-V", "HKLM\\SOFTWARE\\Microsoft\\Virtual Machine\\Guest\\Parameters");
+            key("Microsoft Hyper-V", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmicheartbeat");
+            key("Microsoft Hyper-V", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmicvss");
+            key("Microsoft Hyper-V", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmicshutdown");
+            key("Microsoft Hyper-V", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmicexchange");
+
+            // parallels
+            key("Parallels", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\PCI\\VEN_1AB8*");
+
+            // sandboxie
+            key("Sandboxie", "HKLM\\SYSTEM\\CurrentControlSet\\Services\\SbieDrv");
+            key("Sandboxie", "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Sandboxie");
+
+            // virtualbox
+            key("VirtualBox", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\PCI\\VEN_80EE*");
+            key("VirtualBox", "HKLM\\HARDWARE\\ACPI\\DSDT\\VBOX__");
+            key("VirtualBox", "HKLM\\HARDWARE\\ACPI\\FADT\\VBOX__");
+            key("VirtualBox", "HKLM\\HARDWARE\\ACPI\\RSDT\\VBOX__");
+            key("VirtualBox", "HKLM\\SOFTWARE\\Oracle\\VirtualBox Guest Additions");
+            key("VirtualBox", "HKLM\\SYSTEM\\ControlSet001\\Services\\VBoxGuest");
+            key("VirtualBox", "HKLM\\SYSTEM\\ControlSet001\\Services\\VBoxMouse");
+            key("VirtualBox", "HKLM\\SYSTEM\\ControlSet001\\Services\\VBoxService");
+            key("VirtualBox", "HKLM\\SYSTEM\\ControlSet001\\Services\\VBoxSF");
+            key("VirtualBox", "HKLM\\SYSTEM\\ControlSet001\\Services\\VBoxVideo");
+
+            // virtualpc
+            key("Virtual PC", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\PCI\\VEN_5333*");
+            key("Virtual PC", "HKLM\\SYSTEM\\ControlSet001\\Services\\vpcbus");
+            key("Virtual PC", "HKLM\\SYSTEM\\ControlSet001\\Services\\vpc-s3");
+            key("Virtual PC", "HKLM\\SYSTEM\\ControlSet001\\Services\\vpcuhub");
+            key("Virtual PC", "HKLM\\SYSTEM\\ControlSet001\\Services\\msvmmouf");
+
+            // vmware
+            key("VMware", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\PCI\\VEN_15AD*");
+            key("VMware", "HKCU\\SOFTWARE\\VMware, Inc.\\VMware Tools");
+            key("VMware", "HKLM\\SOFTWARE\\VMware, Inc.\\VMware Tools");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmdebug");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmmouse");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\VMTools");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\VMMEMCTL");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmware");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmci");
+            key("VMware", "HKLM\\SYSTEM\\ControlSet001\\Services\\vmx86");
+            key("VMware", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\IDE\\CdRomNECVMWar_VMware_IDE_CD*");
+            key("VMware", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\IDE\\CdRomNECVMWar_VMware_SATA_CD*");
+            key("VMware", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\IDE\\DiskVMware_Virtual_IDE_Hard_Drive*");
+            key("VMware", "HKLM\\SYSTEM\\CurrentControlSet\\Enum\\IDE\\DiskVMware_Virtual_SATA_Hard_Drive*");
+
+            // wine
+            key("Wine", "HKCU\\SOFTWARE\\Wine");
+            key("Wine", "HKLM\\SOFTWARE\\Wine");
+
+            // xen
+            key("Xen HVM", "HKLM\\HARDWARE\\ACPI\\DSDT\\xen");
+            key("Xen HVM", "HKLM\\HARDWARE\\ACPI\\FADT\\xen");
+            key("Xen HVM", "HKLM\\HARDWARE\\ACPI\\RSDT\\xen");
+            key("Xen HVM", "HKLM\\SYSTEM\\ControlSet001\\Services\\xenevtchn");
+            key("Xen HVM", "HKLM\\SYSTEM\\ControlSet001\\Services\\xennet");
+            key("Xen HVM", "HKLM\\SYSTEM\\ControlSet001\\Services\\xennet6");
+            key("Xen HVM", "HKLM\\SYSTEM\\ControlSet001\\Services\\xensvc");
+            key("Xen HVM", "HKLM\\SYSTEM\\ControlSet001\\Services\\xenvdb");
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("REGISTRY: ", "score = ", static_cast<u32>(score));
+            #endif
+
+            return (score >= 1);
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("REGISTRY: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief checks for default usernames, often a sign of a VM 
+     * @author: Some guy in a russian underground forum from a screenshot I saw, idk I don't speak russian ¯\_(ツ)_/¯
+     * @category Windows
+     */ 
+    [[nodiscard]] static bool user_check() try {     
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(USER)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("USER: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            TCHAR user[UNLEN+1];
+            DWORD user_len = UNLEN+1;
+            GetUserName((TCHAR*)user, &user_len);
+            std::string u = user;
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("USER: ", "output = ", u);
+            #endif
+
+            return (
+                (u == "username") ||  // ThreadExpert
+                (u == "USER") ||      // Sandbox
+                (u == "user") ||      // Sandbox 2
+                (u == "currentuser")  // Normal
+            );
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("USER: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if Sunbelt-specific file exists
+     * @author same russian guy as above. Whoever you are, ty
+     * @category Windows
+     */
+    [[nodiscard]] static bool sunbelt_check() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(SUNBELT)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("SUNBELT: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            return (exists("C:\\analysis"));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("SUNBELT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for VM-specific DLLs
+     * @category Windows
+     */
+    [[nodiscard]] static bool DLL_check() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(DLL)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("DLL: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            std::vector<const char*> real_dlls = {
+                "kernel32.dll",
+                "networkexplorer.dll",
+                "NlsData0000.dll"
+            };
+
+            std::vector<const char*> false_dlls = {
+                "NetProjW.dll",
+                "Ghofr.dll",
+                "fg122.dll"
+            };
+
+            HMODULE lib_inst;
+
+            for (auto &dll : real_dlls) {
+                lib_inst = LoadLibraryA(dll);
+                if (lib_inst == nullptr) {
+                    #ifdef __VMAWARE_DEBUG__
+                        debug("DLL: ", "LIB_INST detected true for real dll = ", dll);
+                    #endif
+                    return true;
+                }
+                FreeLibrary(lib_inst);
+            }
+
+            for (auto &dll : false_dlls) {
+                lib_inst = LoadLibraryA(dll);
+                if (lib_inst != nullptr) {
+                    #ifdef __VMAWARE_DEBUG__
+                        debug("DLL: ", "LIB_INST detected true for false dll = ", dll);
+                    #endif
+                    return true;
+                }
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("DLL: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check VBox RdrDN
+     * @category Windows 
+     */
+    [[nodiscard]] static bool vbox_registry() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(VBOX_REG)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VBOX_REG: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            HANDLE handle = CreateFile(_T("\\\\.\\VBoxMiniRdrDN"), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+            if (handle != INVALID_HANDLE_VALUE) {
+                CloseHandle(handle);
+                return add(VBOX);
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VBOX_REG: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Find VMware tools presence
+     * @todo FIX THIS SHIT
+     * @category Windows
+     */
+    [[nodiscard]] static bool vmware_registry() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(VMWARE_REG)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VMWARE_REG: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            HKEY hKey;
+            bool result = (RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\VMware, Inc.\\VMware Tools", 0, KEY_QUERY_VALUE, &hKey) == ERROR_SUCCESS);
+            
+            #ifdef __VMAWARE_DEBUG__
+                debug("VMWARE_REG: result = ", result);
+            #endif
+            
+            if (result == true) {
+                return add(VMWARE);
+            }
+
+            return result;
+        #endif
+    } catch (...) {
+        #ifdef __VMAWARE_DEBUG__
+            debug("VMWARE_REG: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if the mouse coordinates have changed after 5 seconds
+     * @note Some VMs are automatic without a human due to mass malware scanning being a thing
+     * @note Disabled by default due to performance reasons
+     * @note Doing this on linux is a major pain bc it requires X11 linkage and it isn't universally supported
+     * @category Windows
+     */
+    [[nodiscard]] static bool cursor_check() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(CURSOR)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("CURSOR: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            POINT pos1, pos2;
+            GetCursorPos(&pos1);
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("CURSOR: pos1.x = ", pos1.x);
+                debug("CURSOR: pos1.y = ", pos1.y);
+                debug("CURSOR: pos2.x = ", pos2.x);
+                debug("CURSOR: pos2.y = ", pos2.y);
+            #endif
+            
+            Sleep(5000);
+            GetCursorPos(&pos2);
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("CURSOR: pos1.x = ", pos1.x);
+                debug("CURSOR: pos1.y = ", pos1.y);
+                debug("CURSOR: pos2.x = ", pos2.x);
+                debug("CURSOR: pos2.y = ", pos2.y);
+            #endif
+
+            return ((pos1.x == pos2.x) && (pos1.y == pos2.y));
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("CURSOR: catched error, returned false");
+        #endif
+        return false; 
+    }
+
+
+    /**
+     * @brief Check wine_get_unix_file_name file for Wine
+     * @author pafish project
+     * @link https://github.com/a0rtega/pafish/blob/master/pafish/wine.c
+     * @category Windows
+     */
+    [[nodiscard]] static bool wine() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(WINE_CHECK)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("WINE: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            HMODULE k32;
+            k32 = GetModuleHandle("kernel32.dll");
+
+            if (k32 != NULL) {
+                return (GetProcAddress(k32, "wine_get_unix_file_name") != NULL);
+            } 
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("WINE_CHECK: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check boot-time 
+     * @todo: finish the linux part tomorrow
+     * @category All systems
+     */ 
+    [[nodiscard]] static bool boot_time() try {
+        if (disabled(BOOT)) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("BOOT: ", "precondition return called");
+            #endif
+            return false;
+        }
+
+        #if (MSVC)
+            // doesn't work for some reason, fix this whenever i have time
+            /*
+            SYSTEM_TIME_OF_DAY_INFORMATION  SysTimeInfo;
+            LARGE_INTEGER LastBootTime;
+            
+            NtQuerySystemInformation(SystemTimeOfDayInformation, &SysTimeInfo, sizeof(SysTimeInfo), 0);
+            LastBootTime = wmi_Get_LastBootTime();
+            return ((wmi_LastBootTime.QuadPart - SysTimeInfo.BootTime.QuadPart) / 10000000 != 0); // 0 seconds
+            */
+        #elif (LINUX)
+            // TODO: finish this shit tomorrow
+            //https://stackoverflow.com/questions/349889/how-do-you-determine-the-amount-of-linux-system-ram-in-c
+        #endif
+
+        return false;
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("BOOT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Find for VMware and VBox specific files
+     * @category Windows
+     */
+    [[nodiscard]] static bool vm_files() try {
+        #if (!MSVC)
+            return false;
+        #else
+            if (disabled(VM_FILES)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VMFILES: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            // points
+            u8 vbox = 0;
+            u8 vmware = 0;
+
+            constexpr std::array<const char*, 26> files = {
+                // VMware
+                "C:\\windows\\System32\\Drivers\\Vmmouse.sys",
+                "C:\\windows\\System32\\Drivers\\vm3dgl.dll",
+                "C:\\windows\\System32\\Drivers\\vmdum.dll",
+                "C:\\windows\\System32\\Drivers\\VmGuestLibJava.dll",
+                "C:\\windows\\System32\\Drivers\\vm3dver.dll",
+                "C:\\windows\\System32\\Drivers\\vmtray.dll",
+                "C:\\windows\\System32\\Drivers\\VMToolsHook.dll",
+                "C:\\windows\\System32\\Drivers\\vmGuestLib.dll",
+                "C:\\windows\\System32\\Drivers\\vmhgfs.dll",
+                "C:\\windows\\System32\\Driversvmhgfs.dll",
+                
+                // VBox
+                "C:\\windows\\System32\\Drivers\\VBoxMouse.sys",
+                "C:\\windows\\System32\\Drivers\\VBoxGuest.sys",
+                "C:\\windows\\System32\\Drivers\\VBoxSF.sys",
+                "C:\\windows\\System32\\Drivers\\VBoxVideo.sys",
+                "C:\\windows\\System32\\vboxoglpackspu.dll",
+                "C:\\windows\\System32\\vboxoglpassthroughspu.dll",
+                "C:\\windows\\System32\\vboxservice.exe",
+                "C:\\windows\\System32\\vboxoglcrutil.dll",
+                "C:\\windows\\System32\\vboxdisp.dll",
+                "C:\\windows\\System32\\vboxhook.dll",
+                "C:\\windows\\System32\\vboxmrxnp.dll",
+                "C:\\windows\\System32\\vboxogl.dll",
+                "C:\\windows\\System32\\vboxtray.exe",
+                "C:\\windows\\System32\\VBoxControl.exe",
+                "C:\\windows\\System32\\vboxoglerrorspu.dll",
+                "C:\\windows\\System32\\vboxoglfeedbackspu.dll",
+            };
+
+            for (const auto file : files) {
+                if (exists(file)) {
+                    const auto regex = std::regex(file, std::regex::icase);
+
+                    if (std::regex_search("vbox", regex)) {
+                        #ifdef __VMAWARE_DEBUG__
+                            debug("VM_FILES: found vbox file = ", file);
+                        #endif
+                        vbox++;
+                    } else {
+                        #ifdef __VMAWARE_DEBUG__
+                            debug("VM_FILES: found vmware file = ", file);
+                        #endif
+                        vmware++;
+                    }
+                }
+            }
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("VM_FILES: vmware score: ", vmware);
+                debug("VM_FILES: vbox score: ", vbox);
+            #endif
+
+            if (vbox > vmware) {
+                return add(VBOX);
+            } else if (vbox < vmware) {
+                return add(VMWARE);
+            } else if (vbox == vmware) {
+                return true;
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VM_FILES: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for sysctl hardware model
+     * @author MacRansom ransomware
+     * @todo TEST IF THIS WORKS
+     * @category MacOS
+     */ 
+    [[nodiscard]] static bool hwmodel() try {
+        #if (!APPLE)
+            return false;
+        #else
+            if (disabled(HWMODEL)) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("HWMODEL: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            auto result = sys_result("sysctl -n hw.model");
+
+            std::smatch match;
+
+            if (result == nullptr) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("HWMODEL: ", "null result received");
+                #endif
+                return false;
+            }
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("HWMODEL: ", "output = ", *result);
+            #endif
+
+            // if string contains "Mac" anywhere in the string, assume it's baremetal
+            if (std::regex_search(*result, match, std::regex("Mac"))) {
+                return false;
+            }
+
+            // not sure about the other VMs, more could potentially be added
+            if (std::regex_search(*result, match, std::regex("VMware"))) {
+                return add(VMWARE);
+            }
+
+            return true;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("HWMODEL: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if disk size is too low
+     * @category Linux (for now)
+     */
+     [[nodiscard]] static bool disk_size() try {
+        #if (!LINUX)
+            return false;
+        #else
+            if (disabled(DISK_SIZE)) {
+                #if __VMAWARE_DEBUG__
+                    debug("DISK_SIZE: ", "precondition return called");
+                #endif
+                return false;
+            }
+
+            const u32 size = get_disk_size();
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("DISK_SIZE: size = ", size);
+            #endif
+
+            return (size <= 60); // in GB
+        #endif
+     } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("DISK_SIZE: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for match with default RAM and disk size (VBOX-specific)
+     * @note        RAM     DISK
+     * WINDOWS 11:  4096MB, 80GB
+     * WINDOWS 10:  2048MB, 50GB
+     * ARCH, OPENSUSE, REDHAD, GENTOO, FEDORA, DEBIAN: 1024MB, 8GB
+     * UBUNTU:      1028MB, 10GB
+     * ORACLE:      1024MB, 12GB
+     * OTHER LINUX: 512MB,  8GB
+     
+     * @todo: check if it still applies to host systems with larger RAM and disk size than what I have
+     * @category Linux, Windows
+     */
+    [[nodiscard]] static bool vbox_default_specs() try {
+        if (disabled(VBOX_DEFAULT)) {
+            return false;
+        }
+
+        const u32 disk = get_disk_size();
+        const u64 ram = get_physical_ram_size();
+
+        #ifdef __VMAWARE_DEBUG__
+            debug("VBOX_DEFAULT: disk = ", disk);
+            debug("VBOX_DEFAULT: ram = ", ram);
+        #endif
+
+        if ((disk > 80) || (ram > 4)) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("VBOX_DEFAULT: returned false due to lack of precondition spec comparisons");
+            #endif
+            return false;
+        }
+ 
+        #if (LINUX)
+            auto get_distro = []() -> std::string {
+                std::ifstream osReleaseFile("/etc/os-release");
+                std::string line;
+                
+                while (std::getline(osReleaseFile, line)) {
+                    if (line.find("ID=") != std::string::npos) {
+                        const std::size_t start = line.find('"');
+                        const std::size_t end = line.rfind('"');
+                        if (start != std::string::npos && end != std::string::npos && start < end) {
+                            return line.substr(start + 1, end - start - 1);
+                        }
+                    }
+                }
+
+                return "unknown";
+            };
+
+            const std::string distro = get_distro();
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("VBOX_DEFAULT: linux, detected distro: ", distro);
+            #endif
+
+            // yoda notation ftw
+            if ("unknown" == distro) {
+                return false;
+            }
+
+            if (
+                "arch" == distro ||
+                "opensuse" == distro ||
+                "redhat" == distro ||
+                "gentoo" == distro ||
+                "fedora" == distro ||
+                "debian" == distro
+            ) {
+                return ((8 == disk) && (1 == ram));
+            }
+            
+            if ("ubuntu" == distro) {
+                return ((10 == disk) && (1 == ram));
+            }
+
+            if ("ol" == distro) { // ol = oracle
+                return ((12 == disk) && (1 == ram));
+            }
+        #elif (MSVC)
+            double ret = 0.0;
+            NTSTATUS(WINAPI *RtlGetVersion)(LPOSVERSIONINFOEXW);
+            OSVERSIONINFOEXW osInfo;
+
+            *(FARPROC*)&RtlGetVersion = GetProcAddress(GetModuleHandleA("ntdll"), "RtlGetVersion");
+
+            if (NULL != RtlGetVersion) {
+                osInfo.dwOSVersionInfoSize = sizeof(osInfo);
+                RtlGetVersion(&osInfo);
+                ret = static_cast<double>(osInfo.dwMajorVersion);
+            }
+            
+            // less than windows 10
+            if (ret < 10) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VBOX_DEFAULT: less than windows 10 detected");
+                #endif
+                return false;
+            }
+
+            // windows 10
+            if (10 == ret) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VBOX_DEFAULT: windows 10 detected");
+                #endif
+                return ((50 == disk) && (2 == ram));
+            }
+
+            // windows 11
+            if (11 == ret) {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VBOX_DEFAULT: windows 11 detected");
+                #endif
+                return ((80 == disk) && (4 == ram));
+            }
+        #endif
+
+        return false;
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VBOX_DEFAULT: catched error, returned false");
+        #endif
+        return false;
+    }
+
+    /**
+     * @brief check if there are any user inputs
+     * 
+     * 
+     */
+    /*
+    [[nodiscard]] static bool user_input() try {
+        if (disabled(VBOX_DEFAULT)) {
+            return false;
+        }
+        
+        Sleep(30000);
+
+        DWORD ticks = GetTickCount();
+
+        LASTINPUTINFO li;
+        li.cbSize = sizeof(LASTINPUTINFO);
+        BOOL res = GetLastInputInfo(&li);
+
+        return (ticks - li.dwTime > 6000);
+    } catch (...) { return false; }
+    */
+
+
+   /**
+    * @brief Check VBox network provider string
+    * @todo fix WNetGetProviderName linker error
+   */
+    [[nodiscard]] static bool vbox_network_share() try {
+        return false;
+        /*
+
+        if (disabled(VBOX_NETWORK)) {
+            return false;
+        }
+
+        #if (!MSVC)
+            return false;
+        #else
+            u32 pnsize = 0x1000;
+            char* provider = new char[pnsize];
+
+            i32 retv = WNetGetProviderName(WNNC_NET_RDR2SAMPLE, provider, &pnsize);
+    
+            if (retv == NO_ERROR) {
+                return (lstrcmpi(provider, "VirtualBox Shared Folders") == 0);
+            }
+
+            return FALSE;
+        #endif
+        */
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VBOX_NETWORK: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check if the computer name (not username to be clear) is VM-specific
+     * @category Windows
+     * @author InviZzzible project
+    */
+    [[nodiscard]] static bool computer_name_match() try {
+        if (disabled(COMPUTER_NAME)) {
+            return false;
+        }
+
+        #if (!MSVC)
+            return false;
+        #else
+            auto out_length = MAX_PATH;
+            std::vector<u8> comp_name(out_length, 0);
+            GetComputerNameA((LPSTR)comp_name.data(), (LPDWORD)&out_length);
+
+            auto compare = [&](const std::string &s) -> bool {
+                return (std::strcmp((LPCSTR)comp_name.data(), s.c_str()) == 0);
+            };
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("COMPUTER_NAME: fetched = ", (LPCSTR)comp_name.data());
+            #endif
+
+            if (compare("InsideTm") || compare("TU-4NH09SMCG1HC")) { // anubis
+                #ifdef __VMAWARE_DEBUG__
+                    debug("COMPUTER_NAME: detected Anubis");
+                #endif
+
+                return add(ANUBIS);
+            }
+
+            if (compare("klone_x64-pc") || compare("tequilaboomboom")) { // general
+                #ifdef __VMAWARE_DEBUG__
+                    debug("COMPUTER_NAME: detected general (VM but unknown)");
+                #endif
+
+                return true;
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("COMPUTER_NAME: catched error, returned false");
+        #endif
+
+        return false;
+    }
+
+
+    /**
+     * @brief Check if hostname is specific
+     * @author InviZzzible project
+     * @category Windows
+     */
+    [[nodiscard]] static bool hostname_match() try {
+        if (disabled(HOSTNAME)) {
+            return false;
+        }
+
+        #if (!MSVC)
+            return false;
+        #else
+            auto out_length = MAX_PATH;
+            std::vector<u8> dns_host_name(out_length, 0);
+            GetComputerNameExA(ComputerNameDnsHostname, (LPSTR)dns_host_name.data(), (LPDWORD)&out_length);
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("HOSTNAME: ", (LPCSTR)dns_host_name.data());
+            #endif
+
+            return (!lstrcmpiA((LPCSTR)dns_host_name.data(), "SystemIT"));
+        #endif
+    } catch (...) {
+        #ifdef __VMAWARE_DEBUG__
+            debug("HOSTNAME: catched error, returned false");
+        #endif
+
+        return false;
+    }
+
+
+    /**
+     * @brief Check if memory is too low
+     * @author Al-Khaser project
+     * @category x86?
+    */
+    [[nodiscard]] static bool low_memory_space() try {
+        if (disabled(MEMORY)) {
+            return false;
+        }
+
+        constexpr u64 min_ram_1gb = (1024LL * (1024LL * (1024LL * 1LL)));
+        const u64 ram = get_memory_space();
+
+        #ifdef __VMAWARE_DEBUG__
+            debug("MEMORY: ram size (GB) = ", ram);
+            debug("MEMORY: minimum ram size (GB) = ", min_ram_1gb);
+        #endif
+
+        return (ram < min_ram_1gb);
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("MEMORY: catched error, returned false");
+        #endif
+        return false; 
+    }
+
+
+    /**
+     * @brief Check for any VM processes that are active
+     * @category Windows
+     */
+    [[nodiscard]] static bool vm_processes() try {
+        if (disabled(VM_PROCESSES)) {
+            return false;
+        }
+
+        #if (!MSVC)
+            return false;
+        #else
+            auto check_proc = [](const char* proc) -> bool {
+                HANDLE hSnapshot;
+                PROCESSENTRY32 pe = {};
+
+                pe.dwSize = sizeof(pe);
+                bool present = false;
+                hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+                if (hSnapshot == INVALID_HANDLE_VALUE) {
+                    return false;
+                }
+
+                if (Process32First(hSnapshot, &pe)) {
+                    do {
+                        if (pe.szExeFile == proc) {
+                            present = true;
+                            break;
+                        }
+                    } while (Process32Next(hSnapshot, &pe));
+                }
+    
+                CloseHandle(hSnapshot);
+
+                return present;
+            };
+
+            auto ret = [](const char* str) -> bool {
+                #ifdef __VMAWARE_DEBUG__
+                    debug("VM_PROCESSES: found ", str);
+                #endif
+                return add(str);
+            };
+
+            if (check_proc("joeboxserver.exe") || check_proc("joeboxcontrol.exe")) {
+                return ret(JOEBOX);
+            }
+
+            if (check_proc("prl_cc.exe") || check_proc("prl_tools.exe")) {
+                return ret(PARALLELS);
+            }
+
+            if (check_proc("vboxservice.exe") || check_proc("vboxtray.exe")) {
+                return ret(VBOX);
+            }
+
+            if (check_proc("vmsrvc.exe") || check_proc("vmusrvc.exe")) {
+                return ret(VPC);
+            }
+
+            if (
+                check_proc("vmtoolsd.exe") ||
+                check_proc("vmacthlp.exe") ||
+                check_proc("vmwaretray.exe") ||
+                check_proc("vmwareuser.exe") ||
+                check_proc("vmware.exe") ||
+                check_proc("vmount2.exe")
+            ) {
+                return ret(VMWARE);
+            }
+
+            if (check_proc("xenservice.exe") || check_proc("xsvc_depriv.exe")) {
+                return ret(XEN);
+            }
+
+            return false;
+        #endif
+    } catch (...) { 
+        #ifdef __VMAWARE_DEBUG__
+            debug("VM_PROCESSES: catched error, returned false");
+        #endif
+        return false;
+    }
+
+
+    /**
+     * @brief Check for default VM username and hostname for linux
+     * @category Linux
+     */ 
+    [[nodiscard]] static bool linux_user_host() try {
+        if (disabled(LINUX_USER_HOST)) {
+            return false;
+        }
+
+        #if (!LINUX)
+            return false;
+        #else
+            const char* username = std::getenv("USER");
+            const char* hostname = std::getenv("HOSTNAME");
+
+            #ifdef __VMAWARE_DEBUG__
+                debug("LINUX_USER_HOST: user = ", username);
+                debug("LINUX_USER_HOST: host = ", hostname);
+            #endif
+
+            return (
+                (strcmp(username, "liveuser") == 0) &&
+                (strcmp(hostname, "localhost-live") == 0)
+            );
+        #endif
+    } catch (...) {
+        #ifdef __VMAWARE_DEBUG__
+            debug("LINUX_USER_HOST: catched error, returned false");
+        #endif
+        return false; 
+    }
+
+
+    // __LABEL  (ignore this, it's just a label so I can easily teleport to this line on my IDE with CTRL+F)
+
+
+    struct technique {
+        u8 points; 
+        bool(*ptr)(); // function pointer
+    };
+
+    // the points are debatable, but I think it's fine how it is. Feel free to disagree.
+    static const std::map<u64, technique> table;
+
+public:
+    /**
+     * @brief Check for a specific technique based on flag argument
+     * @param u64 (flags from VM wrapper)
+     * @return bool
+     * @link https://github.com/kernelwernel/VMAware/blob/main/docs/documentation.md#vmcheck
+     */
+    [[nodiscard]] static bool check(const u64 p_flags = 0ULL) {
+        i32 count = 0;
+
+        #if (CPP >= 20 && !MSVC)
+            count = std::popcount(p_flags);
+        #elif (CPP >= 14 && !MSVC)
+            count = std::__popcount(p_flags);
+        #else 
+            // compiler will optimise this with the x86 popcnt instruction (I hope)
+            for (u64 tmp = p_flags; tmp != 0; count++) {
+                tmp = (tmp & (tmp - 1));
+            }
+        #endif
+
+        if (p_flags == ALL) {
+            throw std::invalid_argument("Flag argument cannot be set to VM::ALL, consult the documentation's flag list");            
+        }
+
+        if (count > 1) {
+            throw std::invalid_argument("Flag argument must only contain a single option, consult the documentation's flag list");
+        }
+
+        if (count == 0) {
+            throw std::invalid_argument("Flag argument must contain at least a single option, consult the documentation's flag list");
+        }
+
+        if (p_flags & NO_MEMO) {
+            throw std::invalid_argument("Flag argument must be a technique flag and not a settings flag, consult the documentation's flag list");
+        }
+
+        // count should only have a single flag at this stage
+        assert(count == 1);
+
+        // temporarily enable all flags so that every technique is enabled
+        const u64 tmp_flags = VM::flags;
+        VM::flags = (DEFAULT | CURSOR);
+
+        bool result = false;
+
+        auto it = table.find(p_flags);
+
+        if (it == table.end()) {
+            throw std::invalid_argument("Flag is not known, consult the documentation's flag list");
+        }
+
+        const technique &pair = it->second;
+        result = pair.ptr();
+
+        VM::flags = tmp_flags;
+
+        return result;
+    }
+
+
+    /**
+     * @brief Fetch the VM brand
+     * @return std::string
+     * @returns VMware, VirtualBox, KVM, bhyve, QEMU, Microsoft Hyper-V, Microsoft x86-to-ARM, Parallels, Xen HVM, ACRN, QNX hypervisor, Hybrid Analysis, Sandboxie, Docker, Wine, Virtual Apple, Virtual PC, Unknown
+     * @link https://github.com/kernelwernel/VMAware/blob/main/docs/documentation.md#vmbrand
+     */
+    [[nodiscard]] static std::string brand(void) {
+        // check if result hasn't been memoized already
+        if (memo.find(true) == memo.end()) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("memoization: detect() called in brand");
+            #endif
+            detect();
+        }
+
+        // check if no VM was detected
+        if (memo[true].first == false) {
+            return "Unknown";
+        }
+
+        return (std::string(memo[true].second));
+    }
+
+
+    /**
+     * @brief Detect if running inside a VM
+     * @param u64 (any combination of flags in VM wrapper, can be optional)
+     * @return bool
+     * @link https://github.com/kernelwernel/VMAware/blob/main/docs/documentation.md#vmdetect
+     */
+    static bool detect(const u64 p_flags = DEFAULT) {
+        /**
+         * load memoized value if it exists from a previous
+         * execution of VM::detect(). This can save around
+         * 5~10x speed depending on the circumstances.
+         */
+        if (
+            disabled(NO_MEMO) && \
+            memo.find(true) != memo.end()
+        ) {
+            #ifdef __VMAWARE_DEBUG__
+                debug("memoization: returned cached result in detect()");
+            #endif
+            return memo[true].first;
+        }
+
+        // set local variables within struct scope
+        VM::flags = p_flags;
+
+        u8 points = 0;
+
+        #ifdef __VMAWARE_DEBUG__
+            debug("cpuid: is supported? : ", VM::cpuid_supported);
+        #endif
+    
+        for (auto it = table.cbegin(); it != table.cend(); ++it) {
+            const technique &pair = it->second;
+            if (pair.ptr()) { // equivalent to std::invoke, not used bc of C++11 compatibility
+                points += pair.points;
+            };
+        }
+
+        // threshold score
+        const bool result = (points >= 100);
+
+        const char* current_brand = "";
+
+        #ifdef __VMAWARE_DEBUG__
+            for (const auto p : scoreboard) {
+                debug("scoreboard: ", (int)p.second, " : ", p.first);
+            }
+        #endif
+
+        // fetch the brand with the most points in the scoreboard
+        #if (CPP >= 20)
+            auto it = std::ranges::max_element(scoreboard, {},
+                [](const auto &pair) {
+                    return pair.second;
+                }
+            );
+
+            if (it != scoreboard.end()) {
+                if (
+                    std::none_of(scoreboard.cbegin(), scoreboard.cend(),
+                        [](const auto &pair) {
+                            return pair.second;
+                        }
+                    )
+                ) {
+                    current_brand = "Unknown";
+                } else {
+                    current_brand = it->first;
+                }
+            } else {
+                current_brand = "Unknown";
+            }
+        #else
+            #if (MSVC)
+                int max = 0;
+            #else
+                u8 max = 0;
+            #endif
+
+            for (auto it = scoreboard.cbegin(); it != scoreboard.cend(); ++it) {
+                if (it->second > max) {
+                    current_brand = it->first;
+                    max = it->second;
+                }
+            }
+
+            if (max == 0) {
+                current_brand = "Unknown";
+            }
+        #endif
+
+        // memoize the result in case VM::detect() is executed again
+        if (disabled(NO_MEMO)) {
+            memo[true].first = result;
+            memo[true].second = current_brand;
+        }
+
+        return result;
+    }
+};
+
+
+// ============= EXTERNAL DEFINITIONS =============
+// These are added here due to warnings related to C++17 inline variables for C++ standards that are under 17.
+// It's easier to just group them together rather than having C++17<= preprocessors with inline stuff
+
+#if (MSVC)
+    std::map<const char*, int> VM::scoreboard {
+#else
+    std::map<const char*, VM::u8> VM::scoreboard {
+#endif
+    { VM::VMWARE, 0 },
+    { VM::VBOX, 0 },
+    { VM::KVM, 0 },
+    { VM::BHYVE, 0 },
+    { VM::QEMU, 0 },
+    { VM::HYPERV, 0 },
+    { VM::MSXTA, 0 },
+    { VM::PARALLELS, 0 },
+    { VM::XEN, 0 },
+    { VM::ACRN, 0 },
+    { VM::QNX, 0 },
+    { VM::HYBRID, 0 },
+    { VM::SANDBOXIE, 0 },
+    { VM::DOCKER, 0 },
+    { VM::WINE, 0 },
+    { VM::VAPPLE, 0 },
+    { VM::VPC, 0 },
+    { VM::ANUBIS, 0 },
+    { VM::JOEBOX, 0 }
+};
+
+
+VM::u64 VM::flags = 0;
+std::map<bool, std::pair<bool, const char*>> VM::memo;
+
+
+bool VM::cpuid_supported = []() -> bool {
+    #if \
+    ( \
+        !defined(__x86_64__) && \
+        !defined(__i386__) && \
+        !defined(_M_IX86) && \
+        !defined(_M_X64) \
+    )
+        return false;
+    #endif
+
+    #if (MSVC)
+        i32 info[4];
+        __cpuid(info, 0);
+        return (info[0] >= 1);
+    #elif (LINUX)
+        u32 ext = 0;
+        return (__get_cpuid_max(ext, nullptr) > 0);
+    #else
+        return false;
+    #endif
+}();
+
+
+const std::map<VM::u64, VM::technique> VM::table = {
+    { VM::VMID, { 100, VM::vmid }},
+    { VM::BRAND, { 50, VM::cpu_brand }},
+    { VM::HYPERV_BIT, { 95, VM::cpuid_hyperv }},
+    { VM::CPUID_0x4, { 70, VM::cpuid_0x4 }},
+    { VM::HYPERV_STR, { 45, VM::hyperv_brand }},
+    { VM::RDTSC, { 20, VM::rdtsc_check }},
+    { VM::SIDT, { 65, VM::sidt_check }},
+    { VM::VMWARE_PORT, { 80, VM::vmware_port }},
+    { VM::THREADCOUNT, { 35, VM::thread_count }},
+    { VM::MAC, { 90, VM::mac_address_check }},
+    { VM::TEMPERATURE, { 15, VM::temperature }},
+    { VM::SYSTEMD, { 70, VM::systemd_virt }},
+    { VM::CVENDOR, { 65, VM::chassis_vendor }},
+    { VM::CTYPE, { 10, VM::chassis_type }},
+    { VM::DOCKERENV, { 80, VM::dockerenv }},
+    { VM::DMIDECODE, { 55, VM::dmidecode }},
+    { VM::DMESG, { 55, VM::dmesg }},
+    { VM::HWMON, { 75, VM::hwmon }},
+    { VM::SIDT5, { 45, VM::sidt5 }},
+    { VM::CURSOR, { 10, VM::cursor_check }},
+    { VM::VMWARE_REG, { 65, VM::vmware_registry }},
+    { VM::VBOX_REG, { 65, VM::vbox_registry }},
+    { VM::USER, { 35, VM::user_check }},
+    { VM::DLL, { 50, VM::DLL_check }},
+    { VM::REGISTRY, { 75, VM::registry_key }},
+    { VM::SUNBELT, { 10, VM::sunbelt_check }},
+    { VM::WINE_CHECK, { 85, VM::wine }},
+    { VM::BOOT, { 5, VM::boot_time }},
+    { VM::VM_FILES, { 20, VM::vm_files }},
+    { VM::HWMODEL, { 75, VM::hwmodel }},
+    { VM::DISK_SIZE, { 60, VM::disk_size }},
+    { VM::VBOX_DEFAULT, { 55, VM::vbox_default_specs }},
+    { VM::VBOX_NETWORK, { 70, VM::vbox_network_share }},
+    { VM::COMPUTER_NAME, { 15, VM::computer_name_match }},
+    { VM::HOSTNAME, { 25, VM::hostname_match }},
+    { VM::MEMORY, { 35, VM::low_memory_space }},
+    { VM::VM_PROCESSES, { 30, VM::vm_processes }},
+    { VM::LINUX_USER_HOST, { 35, VM::linux_user_host }}
+
+    // { VM::, { ,  }}
+    // ^ line template for personal use
+};
+```
