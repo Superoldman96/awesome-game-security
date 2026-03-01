@@ -1,0 +1,436 @@
+Project Path: arc_gmh5225_valorant-offsets-autoupdater_3g_j9xk6
+
+Source Tree:
+
+```txt
+arc_gmh5225_valorant-offsets-autoupdater_3g_j9xk6
+├── Example.cpp
+├── README.md
+├── offsets.cpp
+├── offsets.hpp
+└── offsets.json
+
+```
+
+`Example.cpp`:
+
+```cpp
+#include "offsets.hpp"
+#pragma comment(lib,"urlmon.lib") //for urldownload
+
+int main(int argc, char** argv)
+{
+
+	const char* url = (argc > 1 ? argv[1] : "https://raw.githubusercontent.com/GLX-ILLUSION/offsets/main/offsets.json");
+	HRESULT result = URLDownloadToFileA(nullptr, url, "offsets.json", 0, nullptr);
+	if (result != S_OK)
+	{
+		std::cout << "[!] Could not update offsets. Error code: " << std::hex << result << std::endl;
+	}
+	else
+	{
+		std::cout << "[+] Offsets successfully downloaded." << std::endl;
+	}
+
+
+	offsets::initialize();
+}
+
+```
+
+`README.md`:
+
+```md
+# JSON Offsets for Automatic Offsets Updater in Cheat
+
+This project is an adaptation of an automatic offsets updater for cheats, based on a CS:GO codebase. It aims to simplify the process of maintaining and updating offsets in your cheats, ensuring that they are always up-to-date.
+
+## Credits
+
+The original offsets were sourced from the following repository: [Pinguu-dev](https://github.com/Pinguu-dev/)
+
+A special thanks to the contributors of the Pinguu-dev repository for their hard work and dedication to providing up-to-date offsets.
+
+## Usage
+
+Follow these steps to integrate the automatic offsets updater into your project:
+
+1. Download all the files from this repository.
+2. Add the `offsets.cpp` and `offsets.hpp` files to your project.
+3. Copy the example code provided in this repository to your `main.cpp` file or any other file where you want to call the offsets initializer.
+4. Modify the URL in the code as needed or use the provided URL.
+5. Compile your project.
+
+Feel free to submit pull requests or open issues for improvements, bug fixes, or new features. Your contributions are greatly appreciated!
+
+## License
+
+This project is licensed under the MIT License.
+
+## Show Your Support
+
+If you find this project useful, please consider giving it a star on GitHub to show your support and appreciation! 🌟
+
+```
+
+`offsets.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <fstream>
+#include "json.hpp"
+#include "offsets.hpp"
+#include <sstream>
+
+template <typename T>
+void readValue(const nlohmann::json& src, T& dest)
+{
+	if (!src.is_null())
+	{
+		if (src.is_string())
+		{
+			std::string value_str = src.get<std::string>();
+			if (value_str.substr(0, 2) == "0x") // hex prefix
+			{
+				dest = static_cast<T>(std::stoul(value_str.substr(2), nullptr, 16));
+			}
+			else
+			{
+				dest = static_cast<T>(std::stoul(value_str, nullptr, 10));
+			}
+		}
+		else
+		{
+			dest = src.get<T>();
+		}
+	}
+}
+
+void offsets::initialize()
+{
+	std::ifstream input_file{ "offsets.json" };
+	if (!input_file.good())
+		throw std::invalid_argument("Invalid offsets.json file");
+
+	nlohmann::json json;
+	input_file >> json;
+
+	readValue(json["offsets"]["uworld_state"], offsets::uworld_state);
+	readValue(json["offsets"]["uworld_key"], offsets::uworld_key);
+	readValue(json["offsets"]["gobj_state"], offsets::gobj_state);
+	readValue(json["offsets"]["gobj_key"], offsets::gobj_key);
+	readValue(json["offsets"]["fname_pool"], offsets::fname_pool);
+	readValue(json["offsets"]["fname_pool_state"], offsets::fname_pool_state);
+	readValue(json["offsets"]["fname_pool_key"], offsets::fname_pool_key);
+	readValue(json["offsets"]["fname_pool_decrypt_w"], offsets::fname_pool_decrypt_w);
+	readValue(json["offsets"]["fname_pool_decrypt_nw"], offsets::fname_pool_decrypt_nw);
+	readValue(json["offsets"]["find_object"], offsets::find_object);
+	readValue(json["offsets"]["process_event"], offsets::process_event);
+	readValue(json["offsets"]["bone_matrix"], offsets::bone_matrix);
+	readValue(json["offsets"]["line_of_sight"], offsets::line_of_sight);
+	readValue(json["offsets"]["skin_changer_decrypt"], offsets::skin_changer_decrypt);
+	readValue(json["offsets"]["veh_deref"], offsets::veh_deref);
+	readValue(json["offsets"]["enemy_outline_color"], offsets::enemy_outline_color);
+	readValue(json["offsets"]["ally_outline_color"], offsets::ally_outline_color);
+	readValue(json["offsets"]["ares_outline_mode"], offsets::ares_outline_mode);
+	readValue(json["offsets"]["proj_world_to_screen"], offsets::proj_world_to_screen);
+	readValue(json["offsets"]["get_actor_bounds"], offsets::get_actor_bounds);
+	readValue(json["offsets"]["persistent_level"], offsets::persistent_level);
+	readValue(json["offsets"]["owning_game_instance"], offsets::owning_game_instance);
+	readValue(json["offsets"]["game_state"], offsets::game_state);
+	readValue(json["offsets"]["levels"], offsets::levels);
+	readValue(json["offsets"]["local_players"], offsets::local_players);
+	readValue(json["offsets"]["actor_array"], offsets::actor_array);
+	readValue(json["offsets"]["viewport_client"], offsets::viewport_client);
+	readValue(json["offsets"]["player_controller"], offsets::player_controller);
+	readValue(json["offsets"]["acknowledged_pawn"], offsets::acknowledged_pawn);
+	readValue(json["offsets"]["player_camera"], offsets::player_camera);
+	readValue(json["offsets"]["control_rotation"], offsets::control_rotation);
+	readValue(json["offsets"]["root_component"], offsets::root_component);
+	readValue(json["offsets"]["damage_handler"], offsets::damage_handler);
+	readValue(json["offsets"]["actor_id"], offsets::actor_id);
+	readValue(json["offsets"]["fname_id"], offsets::fname_id);
+	readValue(json["offsets"]["dormant"], offsets::dormant);
+	readValue(json["offsets"]["player_state"], offsets::player_state);
+	readValue(json["offsets"]["current_mesh"], offsets::current_mesh);
+	readValue(json["offsets"]["inventory"], offsets::inventory);
+	readValue(json["offsets"]["outline_component"], offsets::outline_component);
+	readValue(json["offsets"]["portrait_map"], offsets::portrait_map);
+	readValue(json["offsets"]["character_map"], offsets::character_map);
+	readValue(json["offsets"]["current_equippable"], offsets::current_equippable);
+	readValue(json["offsets"]["local_observer"], offsets::local_observer);
+	readValue(json["offsets"]["is_visible"], offsets::is_visible);
+	readValue(json["offsets"]["component_to_world"], offsets::component_to_world);
+	readValue(json["offsets"]["bone_array"], offsets::bone_array);
+	readValue(json["offsets"]["bone_count"], offsets::bone_count);
+	readValue(json["offsets"]["last_submit_time"], offsets::last_submit_time);
+	readValue(json["offsets"]["last_render_time"], offsets::last_render_time);
+	readValue(json["offsets"]["outline_mode"], offsets::outline_mode);
+	readValue(json["offsets"]["attach_children"], offsets::attach_children);
+	readValue(json["offsets"]["attach_children_count"], offsets::attach_children_count);
+	readValue(json["offsets"]["team_component"], offsets::team_component);
+	readValue(json["offsets"]["team_id"], offsets::team_id);
+	readValue(json["offsets"]["current_health"], offsets::current_health);
+	readValue(json["offsets"]["max_life"], offsets::max_life);
+	readValue(json["offsets"]["relative_location"], offsets::relative_location);
+	readValue(json["offsets"]["relative_rotation"], offsets::relative_rotation);
+	readValue(json["offsets"]["default_fov"], offsets::default_fov);
+	readValue(json["offsets"]["camera_cache"], offsets::camera_cache);
+	readValue(json["offsets"]["pov"], offsets::pov);
+	readValue(json["offsets"]["location"], offsets::location);
+	readValue(json["offsets"]["rotation"], offsets::rotation);
+	readValue(json["offsets"]["current_fov"], offsets::current_fov);
+	readValue(json["offsets"]["enemy_outline"], offsets::enemy_outline);
+	readValue(json["offsets"]["bone_array_cache"], offsets::bone_array_cache);
+	readValue(json["offsets"]["current_defuse_section"], offsets::current_defuse_section);
+	readValue(json["offsets"]["magazine_ammo"], offsets::magazine_ammo);
+	readValue(json["offsets"]["auth_resource_amount"], offsets::auth_resource_amount);
+	readValue(json["offsets"]["max_ammo"], offsets::max_ammo);
+	readValue(json["offsets"]["spike_timer"], offsets::spike_timer);
+	readValue(json["offsets"]["my_hud"], offsets::my_hud);
+	
+	//you can print the offsets to see if it worked
+	
+	std::cout << "owning_game_instance: 0x" << offsets::owning_game_instance << std::endl;
+	std::cout << "game_state: 0x" << offsets::game_state << std::endl;
+	std::cout << "levels: 0x" << offsets::levels << std::endl;
+	std::cout << "local_players: 0x" << offsets::local_players << std::endl;
+	std::cout << "actor_array: 0x" << offsets::actor_array << std::endl;
+	std::cout << "viewport_client: 0x" << offsets::viewport_client << std::endl;
+	std::cout << "player_controller: 0x" << offsets::player_controller << std::endl;
+	std::cout << "acknowledged_pawn: 0x" << offsets::acknowledged_pawn << std::endl;
+	std::cout << "player_camera: 0x" << offsets::player_camera << std::endl;
+	std::cout << "control_rotation: 0x" << offsets::control_rotation << std::endl;
+	std::cout << "root_component: 0x" << offsets::root_component << std::endl;
+	std::cout << "damage_handler: 0x" << offsets::damage_handler << std::endl;
+	std::cout << "actor_id: 0x" << offsets::actor_id << std::endl;
+	std::cout << "fname_id: 0x" << offsets::fname_id << std::endl;
+	std::cout << "dormant: 0x" << offsets::dormant << std::endl;
+}
+
+```
+
+`offsets.hpp`:
+
+```hpp
+#pragma once
+
+#include <Windows.h>
+
+
+namespace offsets
+{
+	
+
+	inline DWORD
+		uworld_state,                    // @image_base 
+		uworld_key,          // @image_base + (uworld_state + 0x38)
+
+		gobj_state,                    // @image_base
+		gobj_key,            // @image_base + (gobj_state + 0x38)
+
+		fname_pool,                    // @image_base
+		fname_pool_state,                    // @image_base
+		fname_pool_key,      // @image_base
+		fname_pool_decrypt_w,                    // @image_base
+		fname_pool_decrypt_nw,                    // @image_base
+
+		find_object,                    // @image_base
+		process_event,                    // @image_base
+
+		bone_matrix,                    // @image_base
+
+		line_of_sight ,                    // @image_base
+		skin_changer_decrypt ,                    // @image_base
+		veh_deref,                    // deref_pointer_in_game_space_fn 
+
+		enemy_outline_color ,                    // @image_base (FLinearColor) 
+		ally_outline_color ,                    // @image_base (FLinearColor) 
+		ares_outline_mode ,                    // @image_base
+
+		proj_world_to_screen ,                    // @image_base (ProjectWorldToScreen)
+		get_actor_bounds ,                    // @image_base
+
+	   // VTables
+
+	   // World
+		persistent_level ,                  // @uworld (ULevel)
+		owning_game_instance ,                 // @uworld (UGameInstance)    
+		game_state,                 // @uworld (AGameStateBase)
+		levels,                 // @uworld (TArray<struct ULevel*>)
+
+	   // Game Instance
+		local_players,                  // @game_instance (TArray<struct ULocalPlayer*>)
+
+	   // Level
+		actor_array,                  // @level
+		actor_count,    // @level + (actor_array + 0x18)
+
+	   // Local Player
+		viewport_client,                  // @local_player (UGameViewportClient)
+		player_controller,                  // @local_player (APlayerController)
+
+	   // Player Controller
+		acknowledged_pawn,                 // @player_controller (APawn)
+		player_camera,                 // @player_controller (APlayerCameraManager)
+		control_rotation,                 // @player_controller (FRotator)
+
+	   // Player Pawn
+		root_component,                 // @player_pawn (USceneComponent)
+		damage_handler,                 // @player_pawn (UDamageableComponent)
+		actor_id,                  // @player_pawn (int)
+		fname_id,                  // @player_pawn (int)
+		dormant,                 // @player_pawn (bool)
+		player_state,                 // @player_pawn (APlayerState)
+		current_mesh,                 // @player_pawn (USkeletalMeshComponent)
+		inventory,                 // @player_pawn (UAresInventory)
+		outline_component,                // @player_pawn (UAresOutlineComponent)
+		portrait_map,                // @player_pawn (UCharacterPortraitMinimapComponent_C)
+		character_map,    // @player_pawn (UShooterCharacterMinimapComponent_C)
+
+	   // Inventory
+		current_equippable,                 // @inventory (AAresEquippable)
+
+	   // Minimap Component
+		local_observer,                 // @player_pawn (bool)
+		is_visible,                 // @player_pawn (bool)
+
+	   // Mesh
+		component_to_world,                 // @mesh (FTransform)
+		bone_array,                 // @mesh (FBoxSphereBounds)
+		bone_count,      // @mesh (int)
+		last_submit_time,
+		last_render_time,   // @mesh + (last_submit_time + 0x4) 
+		outline_mode,                 // @mesh (int)
+		attach_children,                 // @mesh (TArray<struct UMesh*>)
+		attach_children_count, // @mesh (int)
+
+	   // Player State
+		team_component,                 // @player_state (UBaseTeamComponent)
+
+	   // Team Component
+		team_id,                  // @team_component (int)
+
+	   // Damage Handler               
+		current_health,                 // @damage_handler (float)
+		max_life,  // @damange_handler + (current_health + 0x4)
+
+	   // Root Component
+		relative_location,                 // @root_component (FVector)
+		relative_rotation,                 // @root_component (FRotator)
+
+	   // Camera Manager
+		default_fov,                 // @camera (float)
+		camera_cache,                 // @camera (FCameraCacheEntry)
+
+	   // FCameraCacheEntry
+		pov,                  // @camera_cache (FMinimalViewInfo)
+
+	   // FMinimalViewInfo
+		location,                   // @view_info + 0x0 = Location (FVector)
+		rotation,                  // @view_info (FRotator)
+		current_fov,                  // @view_info (float)
+
+	   // Outline Component
+		enemy_outline,                 // @outline_component (int)
+
+		//offsets da sdk
+		bone_array_cache,
+		current_defuse_section, //PlantedBomb_classes.h current_defuse_section
+		magazine_ammo, //Gun_classes.h -> struct UAmmoComponent* magazine_ammo;
+		auth_resource_amount ,
+		max_ammo,
+		spike_timer, //PlantedBomb_classes.h DefuseProgress //TimeRemainingToExplode
+		my_hud;
+
+		void initialize();
+}
+
+
+```
+
+`offsets.json`:
+
+```json
+{
+  "offsets": {
+    "uworld_state": "0x8C495C0",
+    "uworld_key": "0x8C495F8",
+    "gobj_state": "0x8ABAA80",
+    "gobj_key": "0x8ABAAB8",
+    "fname_pool": "0x8A7FD80",
+    "fname_pool_state": "0x8AB2D40",
+    "fname_pool_key": "0x8AB2D78",
+    "fname_pool_decrypt_w": "0x311C250",
+    "fname_pool_decrypt_nw": "0x311C1E0",
+    "find_object": "0x338F740",
+    "process_event": "0x337B180",
+    "bone_matrix": "0x4A54980",
+    "line_of_sight": "0x4A83590",
+    "skin_changer_decrypt": "0x237E040",
+    "veh_deref": "0x1A8FDB0",
+    "enemy_outline_color": "0x8FA2880",
+    "ally_outline_color": "0x8B642B0",
+    "ares_outline_mode": "0x4A04500",
+    "proj_world_to_screen": "0x4BA1EB0",
+    "get_actor_bounds": "0x4830D60",
+    
+    "persistent_level": "0x38",
+    "owning_game_instance": "0x1A0",
+    "game_state": "0x140",
+    "levels": "0x158",
+    "local_players": "0x40",
+    "actor_array" : "0xA0",
+    "actor_count" : "0xB8",
+    "viewport_client": "0x78",
+    "player_controller": "0x38",
+    "acknowledged_pawn": "0x460",
+    "player_camera": "0x478",
+    "control_rotation": "0x440",
+    "root_component": "0x230",
+    "damage_handler": "0xA00",
+    "actor_id": "0x18",
+    "fname_id": "0x38",
+    "dormant": "0x100",
+    "player_state": "0x3F0",
+    "current_mesh": "0x430",
+    "inventory": "0x9A0",
+    "outline_component": "0x11C0",
+    "portrait_map": "0x1150",
+    "character_map": "0x1158",
+    "current_equippable" : "0x240",
+    "local_observer": "0x530",
+    "is_visible": "0x501",
+    "component_to_world": "0x250",
+    "bone_array": "0x5C0",
+    "bone_count": "0x5C8",
+    "last_submit_time": "0x378",
+    "last_render_time": "0x37C",
+    "outline_mode": "0x330",
+    "attach_children": "0x110",
+    "attach_children_count": "0x118",
+    "team_component": "0x628",
+    "team_id": "0xF8",
+    "current_health": "0x1B0",
+    "max_life": "0x1B4",
+    "relative_location": "0x164",
+    "relative_rotation": "0x170",
+    "default_fov": "0x3EC",
+    "camera_cache": "0x510",
+    "pov": "0x10",
+    "location": "0x0",
+    "rotation": "0xC",
+    "current_fov": "0x18",
+    
+    "enemy_outline": "0x2B1",
+    "bone_array_cache": "0x5D0",
+    "current_defuse_section": "0x500",
+    "magazine_ammo": "0xFF0",
+    "auth_resource_amount": "0x120",
+    "max_ammo": "0x120",
+    "spike_timer": "0x4D4",
+    "my_hud": "0x470"
+  }
+}
+
+```
