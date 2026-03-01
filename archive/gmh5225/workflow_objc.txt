@@ -1,0 +1,3311 @@
+Project Path: arc_gmh5225_workflow_objc_0vovaugv
+
+Source Tree:
+
+```txt
+arc_gmh5225_workflow_objc_0vovaugv
+├── ArchitectureHooks.cpp
+├── ArchitectureHooks.h
+├── BinaryNinja.h
+├── CMakeLists.txt
+├── CONTRIBUTING.md
+├── Commands.cpp
+├── Commands.h
+├── Constants.h
+├── Core
+│   ├── ABI.cpp
+│   ├── ABI.h
+│   ├── AbstractFile.cpp
+│   ├── AbstractFile.h
+│   ├── AnalysisInfo.cpp
+│   ├── AnalysisInfo.h
+│   ├── AnalysisProvider.cpp
+│   ├── AnalysisProvider.h
+│   ├── Analyzer.cpp
+│   ├── Analyzer.h
+│   ├── Analyzers
+│   │   ├── CFStringAnalyzer.cpp
+│   │   ├── CFStringAnalyzer.h
+│   │   ├── ClassAnalyzer.cpp
+│   │   ├── ClassAnalyzer.h
+│   │   ├── ClassRefAnalyzer.cpp
+│   │   ├── ClassRefAnalyzer.h
+│   │   ├── SelectorAnalyzer.cpp
+│   │   └── SelectorAnalyzer.h
+│   ├── BinaryViewFile.cpp
+│   ├── BinaryViewFile.h
+│   ├── TypeParser.cpp
+│   └── TypeParser.h
+├── CustomTypes.cpp
+├── CustomTypes.h
+├── DataRenderers.cpp
+├── DataRenderers.h
+├── GlobalState.cpp
+├── GlobalState.h
+├── InfoHandler.cpp
+├── InfoHandler.h
+├── LICENSE.txt
+├── Performance.h
+├── Plugin.cpp
+├── README.md
+├── Workflow.cpp
+└── Workflow.h
+
+```
+
+`ArchitectureHooks.cpp`:
+
+```cpp
+#include "ArchitectureHooks.h"
+
+using namespace BinaryNinja;
+
+std::string CFStringArchitectureHook::GetIntrinsicName(uint32_t intrinsic)
+{
+    if (intrinsic == CFSTRIntrinsicIndex)
+        return "CFSTR";
+
+    return ArchitectureHook::GetIntrinsicName(intrinsic);
+}
+
+std::vector<uint32_t> CFStringArchitectureHook::GetAllIntrinsics()
+{
+    auto parent = ArchitectureHook::GetAllIntrinsics();
+    parent.push_back(CFSTRIntrinsicIndex);
+    return parent;
+}
+
+std::vector<NameAndType> CFStringArchitectureHook::GetIntrinsicInputs(uint32_t intrinsic)
+{
+    if (intrinsic != CFSTRIntrinsicIndex)
+        return ArchitectureHook::GetIntrinsicInputs(intrinsic);
+
+    return { NameAndType(Type::PointerType(ArchitectureHook::GetAddressSize(), Type::IntegerType(1, false))) };
+}
+
+std::vector<Confidence<BinaryNinja::Ref<Type>>> CFStringArchitectureHook::GetIntrinsicOutputs(uint32_t intrinsic)
+{
+    if (intrinsic != CFSTRIntrinsicIndex)
+        return ArchitectureHook::GetIntrinsicOutputs(intrinsic);
+
+    return { Type::PointerType(ArchitectureHook::GetAddressSize(), Type::IntegerType(1, false)) };
+}
+
+```
+
+`ArchitectureHooks.h`:
+
+```h
+#pragma once
+
+#include <binaryninjaapi.h>
+
+constexpr uint32_t CFSTRIntrinsicIndex = UINT32_MAX - 64;
+
+class CFStringArchitectureHook : public BinaryNinja::ArchitectureHook
+{
+    virtual std::string GetIntrinsicName(uint32_t intrinsic) override;
+    virtual std::vector<uint32_t> GetAllIntrinsics() override;
+    virtual std::vector<BinaryNinja::NameAndType> GetIntrinsicInputs(uint32_t intrinsic) override;
+    virtual std::vector<BinaryNinja::Confidence<BinaryNinja::Ref<BinaryNinja::Type>>> GetIntrinsicOutputs(uint32_t intrinsic) override;
+
+public:
+    CFStringArchitectureHook(BinaryNinja::Ref<BinaryNinja::Architecture> base)
+        : BinaryNinja::ArchitectureHook(base) { };
+};
+
+```
+
+`BinaryNinja.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include <binaryninjaapi.h>
+
+using AnalysisContextRef = BinaryNinja::Ref<BinaryNinja::AnalysisContext>;
+using BinaryViewRef = BinaryNinja::Ref<BinaryNinja::BinaryView>;
+using LLILFunctionRef = BinaryNinja::Ref<BinaryNinja::LowLevelILFunction>;
+using SymbolRef = BinaryNinja::Ref<BinaryNinja::Symbol>;
+using TypeRef = BinaryNinja::Ref<BinaryNinja::Type>;
+
+using BinaryViewPtr = BinaryNinja::BinaryView*;
+using TypePtr = BinaryNinja::Type*;
+
+using BinaryViewID = std::size_t;
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
+
+project(workflow_objc)
+
+# Add subdirectory for the Binary Ninja C++ API if performing a public build,
+# and skip linking against the UI library since it isn't needed for this plugin.
+if(NOT BN_INTERNAL_BUILD)
+  set(HEADLESS ON CACHE BOOL "")
+  add_subdirectory(Vendor/BinaryNinjaAPI)
+endif()
+
+# Binary Ninja plugin ----------------------------------------------------------
+
+set(PLUGIN_SOURCE
+  Core/Analyzers/CFStringAnalyzer.h
+  Core/Analyzers/ClassAnalyzer.h
+  Core/Analyzers/SelectorAnalyzer.h
+  Core/Analyzers/ClassRefAnalyzer.h
+  Core/BinaryViewFile.h
+  Core/ABI.h
+  Core/AbstractFile.h
+  Core/AnalysisInfo.h
+  Core/AnalysisProvider.h
+  Core/Analyzer.h
+  Core/TypeParser.h
+  Core/Analyzers/CFStringAnalyzer.cpp
+  Core/Analyzers/ClassAnalyzer.cpp
+  Core/Analyzers/SelectorAnalyzer.cpp
+  Core/Analyzers/ClassRefAnalyzer.cpp
+  Core/BinaryViewFile.cpp
+  Core/ABI.cpp
+  Core/AbstractFile.cpp
+  Core/AnalysisInfo.cpp
+  Core/AnalysisProvider.cpp
+  Core/Analyzer.cpp
+  Core/TypeParser.cpp
+  ArchitectureHooks.cpp
+  ArchitectureHooks.h
+  Commands.h
+  Commands.cpp
+  CustomTypes.h
+  CustomTypes.cpp
+  DataRenderers.h
+  DataRenderers.cpp
+  GlobalState.h
+  GlobalState.cpp
+  InfoHandler.h
+  InfoHandler.cpp
+  Plugin.cpp
+  Workflow.h
+  Workflow.cpp)
+
+add_library(workflow_objc SHARED ${PLUGIN_SOURCE})
+target_link_libraries(workflow_objc binaryninjaapi)
+target_compile_features(workflow_objc PRIVATE cxx_std_17 c_std_99)
+
+# Library targets linking against the Binary Ninja API need to be compiled with
+# position-independent code on Linux.
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  target_compile_options(workflow_objc PRIVATE "-fPIC")
+endif()
+
+# Configure plugin output directory for internal builds, otherwise configure
+# plugin installation for public builds.
+if(BN_INTERNAL_BUILD)
+  set_target_properties(workflow_objc PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${BN_CORE_PLUGIN_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${BN_CORE_PLUGIN_DIR})
+else()
+  bn_install_plugin(workflow_objc)
+endif()
+
+```
+
+`CONTRIBUTING.md`:
+
+```md
+# Contribution Guidelines
+
+Contributions in the form of issues and pull requests are welcome! See the
+sections below if you are contributing code.
+
+## Conventions
+
+Refer to the [WebKit Style Guide](https://webkit.org/code-style-guidelines/)
+when in doubt.
+
+## Formatting
+
+Let `clang-format` take care of it. The built-in WebKit style is used.
+
+```sh
+clang-format -i --style=WebKit <file>
+```
+
+- Split long lines when it improves readability. 80 columns is the preferred
+maximum line length, but use some judgement and don't split lines just because a
+semicolon exceeds the length limit, etc.
+
+## Testing
+
+If you are making changes to the core analysis library, run the test suite and
+ensure that there are no unexpected changes to analysis behavior.
+
+```
+
+`Commands.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "Commands.h"
+
+#include "Constants.h"
+#include "CustomTypes.h"
+#include "GlobalState.h"
+#include "InfoHandler.h"
+#include "Performance.h"
+
+#include "Core/AnalysisProvider.h"
+#include "Core/BinaryViewFile.h"
+
+void Commands::defineTypes(BinaryViewRef bv)
+{
+    CustomTypes::defineAll(std::move(bv));
+}
+
+void Commands::analyzeStructures(BinaryViewRef bv)
+{
+    if (GlobalState::hasFlag(bv, Flag::DidRunWorkflow)
+        || GlobalState::hasFlag(bv, Flag::DidRunStructureAnalysis)) {
+        auto result = BinaryNinja::ShowMessageBox("Error",
+            "Structure analysis has already been performed on this binary. "
+            "Repeated analysis may cause unexpected behavior.* Continue?\n\n"
+            "*If you undid analysis, this message can be safely ignored.",
+            BNMessageBoxButtonSet::YesNoButtonSet,
+            BNMessageBoxIcon::QuestionIcon);
+
+        if (result != BNMessageBoxButtonResult::YesButton)
+            return;
+    }
+
+    SharedAnalysisInfo info;
+    CustomTypes::defineAll(bv);
+
+    try {
+        auto file = std::make_shared<ObjectiveNinja::BinaryViewFile>(bv);
+
+        auto start = Performance::now();
+        info = ObjectiveNinja::AnalysisProvider::infoForFile(file);
+        auto elapsed = Performance::elapsed<std::chrono::milliseconds>(start);
+
+        const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+        log->LogInfo("Structures analyzed in %lu ms", elapsed.count());
+
+        InfoHandler::applyInfoToView(info, bv);
+    } catch (...) {
+        const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+        log->LogError("Structure analysis failed; binary may be malformed.");
+        log->LogError("Objective-C analysis will not be applied due to previous errors.");
+    }
+
+    GlobalState::setFlag(bv, Flag::DidRunWorkflow);
+}
+
+void Commands::registerCommands()
+{
+    BinaryNinja::PluginCommand::Register("Objective-C \\ Define Types",
+        "", Commands::defineTypes);
+    BinaryNinja::PluginCommand::Register("Objective-C \\ Analyze Structures",
+        "", Commands::analyzeStructures);
+}
+
+```
+
+`Commands.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "BinaryNinja.h"
+
+/**
+ * Plugin commands.
+ */
+class Commands {
+public:
+    /**
+     * Define types for Objective-C structures.
+     */
+    static void defineTypes(BinaryViewRef);
+
+    /**
+     * Analyze all Objective-C structures in the binary.
+     */
+    static void analyzeStructures(BinaryViewRef);
+
+    /**
+     * Register plugin commands for all one-shot actions.
+     */
+    static void registerCommands();
+};
+
+```
+
+`Constants.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+constexpr auto PluginLoggerName = "Plugin.Objective-C";
+
+```
+
+`Core/ABI.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "ABI.h"
+
+namespace ObjectiveNinja::ABI {
+
+uint64_t decodePointer(uint64_t pointer, uint64_t imageBase)
+{
+    pointer &= PointerMask;
+    if (!pointer)
+        return 0;
+
+    // If the pointer --- after removing the tags --- is greater than the
+    // image base, it is likely a direct pointer.
+    if (pointer > imageBase) {
+        return pointer;
+    }
+
+    // Otherwise, it is likely to be an offset from the image base, meaning
+    // the absolute pointer needs to be calculated.
+    return pointer + imageBase;
+}
+
+}
+
+```
+
+`Core/ABI.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include <cstdint>
+
+namespace ObjectiveNinja::ABI {
+
+/**
+ * Bitmask used to remove the tags from a tagged pointer.
+ */
+constexpr uint64_t PointerMask = 0x7FFFFFFFF;
+
+/**
+ * Mask used to extract the flags from a Swift class data structure pointer.
+ */
+constexpr uint64_t FastPointerDataMask = 0b11;
+
+/**
+ * Automatically resolve a pointer.
+ *
+ * This procedure supports pointers that are
+ *
+ *   1. direct and untagged (x86_64);
+ *   2. direct and tagged (macOS 11, arm64e); and
+ *   3. direct and image-relative (macOS 12+, arm64e).
+ */
+uint64_t decodePointer(uint64_t pointer, uint64_t imageBase);
+
+}
+
+```
+
+`Core/AbstractFile.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "AbstractFile.h"
+
+namespace ObjectiveNinja {
+
+uint32_t AbstractFile::readInt(uint64_t offset)
+{
+    seek(offset);
+    return readInt();
+}
+
+uint64_t AbstractFile::readLong(uint64_t offset)
+{
+    seek(offset);
+    return readLong();
+}
+
+std::string AbstractFile::readString(size_t maxLength)
+{
+    std::string result;
+
+    while (maxLength == 0 || result.size() <= maxLength) {
+        char c = static_cast<char>(readByte());
+
+        if (c == 0)
+            break;
+
+        result += c;
+    }
+
+    return result;
+}
+
+std::string AbstractFile::readStringAt(uint64_t address, size_t maxLength)
+{
+    seek(address);
+    return readString(maxLength);
+}
+
+}
+
+```
+
+`Core/AbstractFile.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+
+namespace ObjectiveNinja {
+
+/**
+ * A common interface to wrap a file (or another data source) for reading.
+ *
+ * AbstractFile declares numerous APIs that must be implemented by consumers of
+ * the ObjectiveNinja core library. All methods must have a valid
+ * implementation in order for analysis to function correctly.
+ */
+class AbstractFile {
+public:
+    /**
+     * Seek the reader to the given offset.
+     */
+    virtual void seek(uint64_t) = 0;
+
+    /**
+     * Read a byte from the current reader offset.
+     */
+    virtual uint8_t readByte() = 0;
+
+    /**
+     * Read a 32-bit integer at the current reader offset.
+     */
+    virtual uint32_t readInt() = 0;
+
+    /**
+     * Read a 32-bit integer at the given offset.
+     */
+    uint32_t readInt(uint64_t offset);
+
+    /**
+     * Read a 64-bit integer at the current reader offset.
+     */
+    virtual uint64_t readLong() = 0;
+
+    /**
+     * Read a 64-bit integer at the given offset.
+     */
+    uint64_t readLong(uint64_t offset);
+
+    /**
+     * Read a string starting at the current reader offset. If no max length is
+     * specified, a null-terminated string will be read.
+     */
+    std::string readString(size_t maxLength = 512);
+
+    /**
+     * Read a string starting at the given offset. If no max length is
+     * specified, a null-terminated string will be read.
+     */
+    std::string readStringAt(uint64_t, size_t maxLength = 512);
+
+    /**
+     * Get the base offset of the image/file.
+     */
+    virtual uint64_t imageBase() const = 0;
+
+    /**
+     * Get the offset corresponding to the start of the given section.
+     */
+    virtual uint64_t sectionStart(const std::string&) const = 0;
+
+    /**
+     * Get the offset corresponding to the end of the given section.
+     */
+    virtual uint64_t sectionEnd(const std::string&) const = 0;
+
+    virtual bool addressIsMapped(uint64_t address, bool includeExtern) const = 0;
+
+    virtual bool hasImportedSymbolAtLocation(uint64_t address) const = 0;
+    virtual std::string symbolNameAtLocation(uint64_t address) const = 0;
+};
+
+}
+
+```
+
+`Core/AnalysisInfo.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "AnalysisInfo.h"
+#include "TypeParser.h"
+
+#include <sstream>
+
+namespace ObjectiveNinja {
+
+constexpr auto FlagsMask = 0xFFFF0000;
+
+std::vector<std::string> MethodInfo::selectorTokens() const
+{
+    std::stringstream r(selector);
+
+    std::string token;
+    std::vector<std::string> result;
+    while (std::getline(r, token, ':'))
+        result.push_back(token);
+
+    return result;
+}
+
+std::vector<QualifiedNameOrType> MethodInfo::decodedTypeTokens() const
+{
+    return TypeParser::parseEncodedType(type);
+}
+
+bool MethodListInfo::hasRelativeOffsets() const
+{
+    return (flags & FlagsMask) & 0x80000000;
+}
+
+bool MethodListInfo::hasDirectSelectors() const
+{
+    return (flags & FlagsMask) & 0x40000000;
+}
+
+QualifiedNameOrType IvarInfo::decodedTypeToken() const
+{
+    std::vector<QualifiedNameOrType> encodedTypes = TypeParser::parseEncodedType(type);
+
+    if (encodedTypes.size() > 0)
+        return encodedTypes.front();
+    else
+        return {};
+}
+
+std::string AnalysisInfo::dump() const
+{
+    return "<unimplemented>";
+}
+
+}
+
+```
+
+`Core/AnalysisInfo.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "TypeParser.h"
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+namespace ObjectiveNinja {
+
+/**
+ * A description of a CFString instance.
+ */
+struct CFStringInfo {
+    uint64_t address {};
+    uint64_t dataAddress {};
+    size_t size {};
+};
+
+/**
+ * A description of a selector reference.
+ */
+struct SelectorRefInfo {
+    uint64_t address {};
+
+    std::string name {};
+
+    uint64_t rawSelector {};
+    uint64_t nameAddress {};
+};
+
+using SharedSelectorRefInfo = std::shared_ptr<SelectorRefInfo>;
+
+/**
+ * A description of an Objective-C method.
+ */
+struct MethodInfo {
+    uint64_t address {};
+
+    std::string selector;
+    std::string type;
+
+    uint64_t nameAddress {};
+    uint64_t typeAddress {};
+    uint64_t implAddress {};
+
+    /**
+     * Get the selector as a series of tokens, split at ':' characters.
+     */
+    std::vector<std::string> selectorTokens() const;
+
+    /**
+     * Get the method's type as series of C-style tokens.
+     */
+    std::vector<QualifiedNameOrType> decodedTypeTokens() const;
+};
+
+/**
+ * A description of an Objective-C method list.
+ */
+struct MethodListInfo {
+    uint64_t address {};
+    uint32_t flags {};
+    std::vector<MethodInfo> methods {};
+
+    /**
+     * Tells whether the method list uses relative offsets or not.
+     */
+    bool hasRelativeOffsets() const;
+
+    /**
+     * Tells whether the method list uses direct selectors or not.
+     */
+    bool hasDirectSelectors() const;
+};
+
+struct MetaClassInfo;
+
+/**
+ * A description of an Objective-C instance variable (ivar).
+ */
+struct IvarInfo {
+    uint64_t address = {};
+
+    uint32_t offset;
+    std::string name;
+    std::string type;
+
+    uint64_t offsetAddress {};
+    uint64_t nameAddress {};
+    uint64_t typeAddress {};
+    uint32_t size {};
+
+    /**
+     * Get the instance variable's type as a C-style token.
+     */
+    QualifiedNameOrType decodedTypeToken() const;
+};
+
+/**
+ * A description of an Objective-C instance variable list.
+ */
+struct IvarListInfo {
+    uint64_t address {};
+
+    uint32_t count {};
+    std::vector<IvarInfo> ivars {};
+};
+
+/**
+ * A description of an Objective-C class.
+ */
+struct ClassInfo {
+    uint64_t address {};
+
+    bool isMetaClass;
+    MetaClassInfo* metaClassInfo;
+
+    std::string name {};
+    MethodListInfo methodList {};
+    IvarListInfo ivarList {};
+
+    uint64_t listPointer {};
+    uint64_t dataAddress {};
+    uint64_t nameAddress {};
+    uint64_t methodListAddress {};
+    uint64_t ivarListAddress {};
+};
+
+struct MetaClassInfo {
+    std::string name {};
+    bool imported;
+    ClassInfo info {};
+};
+
+struct ClassRefInfo {
+    uint64_t address;
+    uint64_t referencedAddress;
+};
+
+/**
+ * Analysis info storage.
+ *
+ * AnalysisInfo is intended to be a common structure for persisting information
+ * during and after analysis. All significant info obtained or produced through
+ * analysis should be stored here, ideally in the form of other *Info structs.
+ */
+struct AnalysisInfo {
+    std::vector<CFStringInfo> cfStrings {};
+
+    std::vector<ClassRefInfo> classRefs {};
+    std::vector<ClassRefInfo> superRefs {};
+    std::vector<SharedSelectorRefInfo> selectorRefs {};
+    std::unordered_map<uint64_t, SharedSelectorRefInfo> selectorRefsByKey {};
+
+    std::vector<ClassInfo> classes {};
+    std::unordered_map<uint64_t, uint64_t> methodImpls;
+
+    std::string dump() const;
+};
+
+}
+
+```
+
+`Core/AnalysisProvider.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "AnalysisProvider.h"
+
+#include "Analyzers/CFStringAnalyzer.h"
+#include "Analyzers/ClassAnalyzer.h"
+#include "Analyzers/ClassRefAnalyzer.h"
+#include "Analyzers/SelectorAnalyzer.h"
+
+namespace ObjectiveNinja {
+
+SharedAnalysisInfo AnalysisProvider::infoForFile(SharedAbstractFile file)
+{
+    auto info = std::make_shared<ObjectiveNinja::AnalysisInfo>();
+
+    std::vector<std::unique_ptr<ObjectiveNinja::Analyzer>> analyzers;
+    analyzers.emplace_back(new SelectorAnalyzer(info, file));
+    analyzers.emplace_back(new ClassAnalyzer(info, file));
+    analyzers.emplace_back(new CFStringAnalyzer(info, file));
+    analyzers.emplace_back(new ClassRefAnalyzer(info, file));
+
+    for (const auto& analyzer : analyzers)
+        analyzer->run();
+
+    return info;
+}
+
+}
+
+```
+
+`Core/AnalysisProvider.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "Analyzer.h"
+
+namespace ObjectiveNinja {
+
+/**
+ * Common analysis and info interface.
+ */
+class AnalysisProvider {
+public:
+    /**
+     * Run the default suite of analyzers on an abstract file and get the
+     * resulting AnalysisInfo.
+     */
+    static SharedAnalysisInfo infoForFile(SharedAbstractFile);
+};
+
+}
+
+```
+
+`Core/Analyzer.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "Analyzer.h"
+
+using namespace ObjectiveNinja;
+
+Analyzer::Analyzer(SharedAnalysisInfo info, SharedAbstractFile file)
+    : m_info(std::move(info))
+    , m_file(std::move(file))
+{
+}
+
+```
+
+`Core/Analyzer.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "ABI.h"
+#include "AbstractFile.h"
+#include "AnalysisInfo.h"
+
+#include <memory>
+
+namespace ObjectiveNinja {
+
+using SharedAnalysisInfo = std::shared_ptr<AnalysisInfo>;
+using SharedAbstractFile = std::shared_ptr<AbstractFile>;
+
+/**
+ * Abstract base class for analyzers.
+ */
+class Analyzer {
+protected:
+    std::shared_ptr<AnalysisInfo> m_info;
+    std::shared_ptr<AbstractFile> m_file;
+
+    /**
+     * Automatically resolve a pointer.
+     */
+    uint64_t arp(uint64_t pointer) const
+    {
+        return ABI::decodePointer(pointer, m_file->imageBase());
+    }
+
+public:
+    Analyzer(SharedAnalysisInfo, SharedAbstractFile);
+    virtual ~Analyzer() = default;
+
+    virtual void run() = 0;
+};
+
+}
+
+```
+
+`Core/Analyzers/CFStringAnalyzer.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "CFStringAnalyzer.h"
+
+using namespace ObjectiveNinja;
+
+CFStringAnalyzer::CFStringAnalyzer(SharedAnalysisInfo info,
+    SharedAbstractFile file)
+    : Analyzer(std::move(info), std::move(file))
+{
+}
+
+void CFStringAnalyzer::run()
+{
+    const auto sectionStart = m_file->sectionStart("__cfstring");
+    const auto sectionEnd = m_file->sectionEnd("__cfstring");
+    if (sectionStart == 0 || sectionEnd == 0)
+        return;
+
+    for (auto address = sectionStart; address < sectionEnd; address += 0x20) {
+        CFStringInfo cfString;
+        cfString.address = address;
+        cfString.dataAddress = arp(m_file->readLong(address + 0x10));
+        cfString.size = m_file->readLong(address + 0x18);
+
+        m_info->cfStrings.emplace_back(cfString);
+    }
+}
+
+```
+
+`Core/Analyzers/CFStringAnalyzer.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "../Analyzer.h"
+
+namespace ObjectiveNinja {
+
+/**
+ * Basic analyzer for identifying and recording CFString instances.
+ */
+class CFStringAnalyzer : public Analyzer {
+public:
+    CFStringAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
+
+    void run() override;
+};
+
+}
+
+```
+
+`Core/Analyzers/ClassAnalyzer.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "ClassAnalyzer.h"
+
+using namespace ObjectiveNinja;
+
+ClassAnalyzer::ClassAnalyzer(SharedAnalysisInfo info,
+    SharedAbstractFile file)
+    : Analyzer(std::move(info), std::move(file))
+{
+}
+
+MethodListInfo ClassAnalyzer::analyzeMethodList(uint64_t address)
+{
+    MethodListInfo mli;
+    mli.address = address;
+    mli.flags = m_file->readInt(mli.address);
+
+    auto methodCount = m_file->readInt(mli.address + 0x4);
+    auto methodSize = mli.hasRelativeOffsets() ? 12 : 24;
+
+    for (unsigned i = 0; i < methodCount; ++i) {
+        MethodInfo mi;
+        mi.address = mli.address + 8 + (i * methodSize);
+
+        m_file->seek(mi.address);
+
+        if (mli.hasRelativeOffsets()) {
+            mi.nameAddress = mi.address + static_cast<int32_t>(m_file->readInt());
+            mi.typeAddress = mi.address + 4 + static_cast<int32_t>(m_file->readInt());
+            mi.implAddress = mi.address + 8 + static_cast<int32_t>(m_file->readInt());
+        } else {
+            mi.nameAddress = arp(m_file->readLong());
+            mi.typeAddress = arp(m_file->readLong());
+            mi.implAddress = arp(m_file->readLong());
+        }
+
+        if (!mli.hasRelativeOffsets() || mli.hasDirectSelectors()) {
+            mi.selector = m_file->readStringAt(mi.nameAddress);
+        } else {
+            auto selectorNamePointer = arp(m_file->readLong(mi.nameAddress));
+            mi.selector = m_file->readStringAt(selectorNamePointer);
+        }
+
+        mi.type = m_file->readStringAt(mi.typeAddress);
+
+        m_info->methodImpls[mi.nameAddress] = mi.implAddress;
+
+        mli.methods.emplace_back(mi);
+    }
+
+    return mli;
+}
+
+IvarListInfo ClassAnalyzer::analyzeIvarList(uint64_t address)
+{
+    IvarListInfo ili;
+    ili.address = address;
+    auto ivarCount = m_file->readInt(ili.address + 4);
+
+    ili.ivars.reserve(ivarCount);
+
+    auto ivarSize = 32; // (Pointer Size * 3) + 8
+
+    for (unsigned i = 0; i < ivarCount; ++i) {
+        IvarInfo ii;
+        ii.address = ili.address + 8 + (i * ivarSize);
+
+        m_file->seek(ii.address);
+
+        ii.offsetAddress = arp(m_file->readLong());
+        ii.nameAddress = arp(m_file->readLong());
+        ii.typeAddress = arp(m_file->readLong());
+        m_file->readInt();
+        ii.size = m_file->readInt();
+
+        ii.offset = m_file->readInt(ii.offsetAddress);
+        ii.name = m_file->readStringAt(ii.nameAddress);
+        ii.type = m_file->readStringAt(ii.typeAddress);
+
+        ili.ivars.push_back(ii);
+    }
+
+    return ili;
+}
+
+MetaClassInfo* ClassAnalyzer::analyzeISAPointer(uint64_t isaPointer)
+{
+    uint64_t address = m_file->readLong(isaPointer);
+
+    // Check if this pointer is valid and doesn't point to extern or unmapped data (dsc).
+    if (address != 0 && m_file->addressIsMapped(address, false))
+    {
+        MetaClassInfo* info = new MetaClassInfo;
+
+        ClassInfo ci;
+        ci.listPointer = isaPointer;
+        ci.address = address;
+        ci.dataAddress = arp(m_file->readLong(ci.address + 0x20));
+
+        // Sometimes the lower two bits of the data address are used as flags
+        // for Swift/Objective-C classes. They should be ignored, unless you
+        // want incorrect analysis...
+        ci.dataAddress &= ~ABI::FastPointerDataMask;
+
+        ci.nameAddress = arp(m_file->readLong(ci.dataAddress + 0x18));
+        ci.name = m_file->readStringAt(ci.nameAddress);
+
+        ci.methodListAddress = arp(m_file->readLong(ci.dataAddress + 0x20));
+        if (ci.methodListAddress)
+            ci.methodList = analyzeMethodList(ci.methodListAddress);
+
+        ci.isMetaClass = true;
+
+        info->info = ci;
+        info->name = ci.name;
+        info->imported = false;
+        return info;
+    }
+
+    return nullptr;
+}
+
+void ClassAnalyzer::run()
+{
+    const auto sectionStart = m_file->sectionStart("__objc_classlist");
+    const auto sectionEnd = m_file->sectionEnd("__objc_classlist");
+    if (sectionStart == 0 || sectionEnd == 0)
+        return;
+
+    for (auto address = sectionStart; address < sectionEnd; address += 8) {
+        ClassInfo ci;
+        ci.listPointer = address;
+        ci.address = arp(m_file->readLong(address));
+        ci.dataAddress = arp(m_file->readLong(ci.address + 0x20));
+
+        ci.metaClassInfo = analyzeISAPointer(ci.address);
+
+        // Sometimes the lower two bits of the data address are used as flags
+        // for Swift/Objective-C classes. They should be ignored, unless you
+        // want incorrect analysis...
+        ci.dataAddress &= ~ABI::FastPointerDataMask;
+
+        ci.nameAddress = arp(m_file->readLong(ci.dataAddress + 0x18));
+        ci.name = m_file->readStringAt(ci.nameAddress);
+
+        ci.methodListAddress = arp(m_file->readLong(ci.dataAddress + 0x20));
+        if (ci.methodListAddress)
+            ci.methodList = analyzeMethodList(ci.methodListAddress);
+
+
+        ci.ivarListAddress = arp(m_file->readLong(ci.dataAddress + 0x30));
+        if (ci.ivarListAddress)
+            ci.ivarList = analyzeIvarList(ci.ivarListAddress);
+
+        ci.isMetaClass = false;
+        m_info->classes.emplace_back(ci);
+    }
+}
+
+```
+
+`Core/Analyzers/ClassAnalyzer.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "../Analyzer.h"
+
+namespace ObjectiveNinja {
+
+/**
+ * Analyzer for extracting Objective-C class information.
+ */
+class ClassAnalyzer : public Analyzer {
+    /**
+     * Analyze a method list.
+     */
+    MethodListInfo analyzeMethodList(uint64_t);
+
+    /**
+     * Analyze an ivar list.
+     */
+    IvarListInfo analyzeIvarList(uint64_t);
+    MetaClassInfo* analyzeISAPointer(uint64_t);
+
+public:
+    ClassAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
+
+    void run() override;
+};
+
+}
+
+```
+
+`Core/Analyzers/ClassRefAnalyzer.cpp`:
+
+```cpp
+#include "ClassRefAnalyzer.h"
+
+using namespace ObjectiveNinja;
+
+ClassRefAnalyzer::ClassRefAnalyzer(SharedAnalysisInfo info, SharedAbstractFile file)
+    : Analyzer(std::move(info), std::move(file))
+{
+}
+
+void ClassRefAnalyzer::run()
+{
+    const auto sectionStart = m_file->sectionStart("__objc_classrefs");
+    const auto sectionEnd = m_file->sectionEnd("__objc_classrefs");
+
+    // TODO: Dynamic Address size for armv7
+    if (sectionStart != 0 && sectionEnd != 0) {
+        for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
+            m_info->classRefs.push_back({ address, m_file->readLong(address) });
+        }
+    }
+
+    const auto superRefSectionStart = m_file->sectionStart("__objc_superrefs");
+    const auto superRefSectionEnd = m_file->sectionEnd("__objc_superrefs");
+
+    if (superRefSectionStart != 0 && superRefSectionEnd != 0) {
+        for (auto address = superRefSectionStart; address < superRefSectionEnd; address += 0x8) {
+            m_info->superRefs.push_back({ address, m_file->readLong(address) });
+        }
+    }
+}
+```
+
+`Core/Analyzers/ClassRefAnalyzer.h`:
+
+```h
+#pragma once
+
+#include "../Analyzer.h"
+
+namespace ObjectiveNinja {
+
+/**
+ * Analyzer for extracting Objective-C class information.
+ */
+class ClassRefAnalyzer : public Analyzer {
+
+public:
+    ClassRefAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
+
+    void run() override;
+};
+}
+```
+
+`Core/Analyzers/SelectorAnalyzer.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "SelectorAnalyzer.h"
+
+using namespace ObjectiveNinja;
+
+SelectorAnalyzer::SelectorAnalyzer(SharedAnalysisInfo info,
+    SharedAbstractFile file)
+    : Analyzer(std::move(info), std::move(file))
+{
+}
+
+void SelectorAnalyzer::run()
+{
+    const auto sectionStart = m_file->sectionStart("__objc_selrefs");
+    const auto sectionEnd = m_file->sectionEnd("__objc_selrefs");
+    if (sectionStart == 0 || sectionEnd == 0)
+        return;
+
+    for (auto address = sectionStart; address < sectionEnd; address += 0x8) {
+        auto ssri = std::make_shared<SelectorRefInfo>();
+        ssri->address = address;
+        ssri->rawSelector = m_file->readLong(address);
+        ssri->nameAddress = arp(ssri->rawSelector);
+        ssri->name = m_file->readStringAt(ssri->nameAddress);
+
+        m_info->selectorRefs.emplace_back(ssri);
+
+        m_info->selectorRefsByKey[ssri->rawSelector] = ssri;
+        m_info->selectorRefsByKey[ssri->address] = ssri;
+    }
+}
+
+```
+
+`Core/Analyzers/SelectorAnalyzer.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "../Analyzer.h"
+
+namespace ObjectiveNinja {
+
+/**
+ * Analyzer for parsing Objective-C selectors and selector references.
+ */
+class SelectorAnalyzer : public Analyzer {
+public:
+    SelectorAnalyzer(SharedAnalysisInfo, SharedAbstractFile);
+
+    void run() override;
+};
+
+}
+
+```
+
+`Core/BinaryViewFile.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "BinaryViewFile.h"
+
+namespace ObjectiveNinja {
+
+BinaryViewFile::BinaryViewFile(BinaryViewRef bv)
+    : m_bv(bv)
+    , m_reader(BinaryNinja::BinaryReader(bv))
+{
+}
+
+void BinaryViewFile::seek(uint64_t address)
+{
+    m_reader.Seek(address);
+}
+
+uint8_t BinaryViewFile::readByte()
+{
+    return m_reader.Read8();
+}
+
+uint32_t BinaryViewFile::readInt()
+{
+    return m_reader.Read32();
+}
+
+uint64_t BinaryViewFile::readLong()
+{
+    return m_reader.Read64();
+}
+
+uint64_t BinaryViewFile::imageBase() const
+{
+    return m_bv->GetStart();
+}
+
+uint64_t BinaryViewFile::sectionStart(const std::string& name) const
+{
+    auto section = m_bv->GetSectionByName(name);
+    if (!section)
+        return 0;
+
+    return section->GetStart();
+}
+
+uint64_t BinaryViewFile::sectionEnd(const std::string& name) const
+{
+    auto section = m_bv->GetSectionByName(name);
+    if (!section)
+        return 0;
+
+    return section->GetStart() + section->GetLength();
+}
+
+bool BinaryViewFile::addressIsMapped(uint64_t address, bool includeExtern) const
+{
+    if (!includeExtern)
+    {
+        uint64_t externStart = sectionStart(".extern");
+        uint64_t externEnd = sectionEnd(".extern");
+        if (externStart) {
+            if (externStart < address && externEnd > address) {
+                return false;
+            }
+        }
+    }
+
+    return m_bv->IsValidOffset(address);
+}
+
+
+bool BinaryViewFile::hasImportedSymbolAtLocation(uint64_t address) const
+{
+    BinaryNinja::Ref<BinaryNinja::Symbol> sym = m_bv->GetSymbolByAddress(address);
+
+    if (sym)
+        return (sym->GetType() == ImportedDataSymbol);
+
+    return false;
+}
+
+
+std::string BinaryViewFile::symbolNameAtLocation(uint64_t address) const
+{
+    BinaryNinja::Ref<BinaryNinja::Symbol> sym = m_bv->GetSymbolByAddress(address);
+
+    if (sym)
+        return sym->GetFullName();
+
+    return "";
+}
+
+}
+
+```
+
+`Core/BinaryViewFile.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "AbstractFile.h"
+
+#include <binaryninjaapi.h>
+
+using BinaryViewRef = BinaryNinja::Ref<BinaryNinja::BinaryView>;
+
+namespace ObjectiveNinja {
+
+/**
+ * AbstractFile implementation that wraps a BinaryView.
+ */
+class BinaryViewFile : public ObjectiveNinja::AbstractFile {
+    BinaryViewRef m_bv;
+    BinaryNinja::BinaryReader m_reader;
+
+public:
+    explicit BinaryViewFile(BinaryViewRef);
+    virtual ~BinaryViewFile() {}
+
+    void seek(uint64_t) override;
+
+    uint8_t readByte() override;
+    uint32_t readInt() override;
+    uint64_t readLong() override;
+
+    uint64_t imageBase() const override;
+    uint64_t sectionStart(const std::string& name) const override;
+    uint64_t sectionEnd(const std::string& name) const override;
+
+    bool addressIsMapped(uint64_t address, bool includeExtern) const override;
+
+    bool hasImportedSymbolAtLocation(uint64_t address) const override;
+
+    std::string symbolNameAtLocation(uint64_t address) const override;
+};
+
+}
+
+```
+
+`Core/TypeParser.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "TypeParser.h"
+
+#include <map>
+
+using namespace BinaryNinja;
+
+namespace ObjectiveNinja {
+
+std::vector<QualifiedNameOrType> TypeParser::parseEncodedType(const std::string& encodedType)
+{
+    std::vector<QualifiedNameOrType> result;
+    int pointerDepth = 0;
+
+    bool readingNamedType = false;
+    std::string namedType;
+    size_t readingStructDepth = 0;
+    std::string structType;
+    char last;
+
+    for (char c : encodedType) {
+
+        if (readingNamedType && c != '"') {
+            namedType.push_back(c);
+            last = c;
+            continue;
+        } else if (readingStructDepth > 0 && c != '{' && c != '}') {
+            structType.push_back(c);
+            last = c;
+            continue;
+        }
+
+        if (std::isdigit(c))
+            continue;
+
+        QualifiedNameOrType nameOrType;
+        std::string qualifiedName;
+
+        switch (c) {
+        case '^':
+            pointerDepth++;
+            last = c;
+            continue;
+
+        case '"':
+            if (!readingNamedType) {
+                readingNamedType = true;
+                if (last == '@')
+                    result.pop_back(); // We added an 'id' in the last cycle, remove it
+                last = c;
+                continue;
+            } else {
+                readingNamedType = false;
+                nameOrType.name = QualifiedName(namedType);
+                nameOrType.ptrCount = 1;
+                break;
+            }
+        case '{':
+            readingStructDepth++;
+            last = c;
+            continue;
+        case '}':
+            readingStructDepth--;
+
+            if (readingStructDepth == 0) {
+                // TODO: Emit real struct types
+                nameOrType.type = Type::PointerType(8, Type::VoidType());
+                break;
+            }
+            last = c;
+            continue;
+        case 'v':
+            nameOrType.type = Type::VoidType();
+            break;
+        case 'c':
+            nameOrType.type = Type::IntegerType(1, true);
+            break;
+        case 'A':
+        case 'C':
+            nameOrType.type = Type::IntegerType(1, false);
+            break;
+        case 's':
+            nameOrType.type = Type::IntegerType(2, true);
+            break;
+        case 'S':
+            nameOrType.type = Type::IntegerType(1, false);
+            break;
+        case 'i':
+            nameOrType.type = Type::IntegerType(4, true);
+            break;
+        case 'I':
+            nameOrType.type = Type::IntegerType(4, false);
+            break;
+        case 'l':
+            nameOrType.type = Type::IntegerType(8, true);
+            break;
+        case 'L':
+            nameOrType.type = Type::IntegerType(8, true);
+            break;
+        case 'f':
+            nameOrType.type = Type::IntegerType(4, true);
+            break;
+        case 'b':
+        case 'B':
+            nameOrType.type = Type::BoolType();
+            break;
+        case 'q':
+            qualifiedName = "NSInteger";
+            break;
+        case 'Q':
+            qualifiedName = "NSUInteger";
+            break;
+        case 'd':
+            qualifiedName = "CGFloat";
+            break;
+        case '*':
+            nameOrType.type = Type::PointerType(8, Type::IntegerType(1, true));
+            break;
+        case '@':
+            qualifiedName = "id";
+            // There can be a type after this, like @"NSString", that overrides this
+            // The handler for " will catch it and drop this "id" entry.
+            break;
+        case ':':
+            qualifiedName = "SEL";
+            break;
+        case '#':
+            qualifiedName = "objc_class_t";
+            break;
+        case '?':
+        case 'T':
+            nameOrType.type = Type::PointerType(8, Type::VoidType());
+            break;
+        default:
+            // BNLogWarn("Unknown type specifier %c", c);
+            last = c;
+            continue;
+        }
+
+        while (pointerDepth) {
+            if (nameOrType.type)
+                nameOrType.type = Type::PointerType(8, nameOrType.type);
+            else
+                nameOrType.ptrCount++;
+
+            pointerDepth--;
+        }
+
+        if (!qualifiedName.empty())
+            nameOrType.name = QualifiedName(qualifiedName);
+
+        if (nameOrType.type == nullptr && nameOrType.name.IsEmpty()) {
+            // BNLogError("Parsing Typestring item %c failed", c);
+            nameOrType.type = Type::VoidType();
+        }
+
+        // BNLogWarn("Pushing back a type %s on %c", nameOrType.type ? nameOrType.type->GetString().c_str() : nameOrType.name.GetString().c_str(), c);
+
+        result.push_back(nameOrType);
+        last = c;
+    }
+
+    return result;
+}
+
+}
+
+```
+
+`Core/TypeParser.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include <binaryninjaapi.h>
+#include <string>
+#include <vector>
+
+namespace ObjectiveNinja {
+
+struct QualifiedNameOrType {
+    BinaryNinja::Ref<BinaryNinja::Type> type = nullptr;
+    BinaryNinja::QualifiedName name;
+    size_t ptrCount = 0;
+};
+
+/**
+ * Parser for Objective-C type strings.
+ */
+class TypeParser {
+public:
+    /**
+     * Parse an encoded type string.
+     */
+    static std::vector<QualifiedNameOrType> parseEncodedType(const std::string&);
+};
+
+}
+
+```
+
+`CustomTypes.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "CustomTypes.h"
+
+namespace CustomTypes {
+
+using namespace BinaryNinja;
+
+/**
+ * Helper method for defining structure types.
+ */
+std::pair<QualifiedName, Ref<Type>> finalizeStructureBuilder(Ref<BinaryView> bv, StructureBuilder sb, std::string name)
+{
+    auto classTypeStruct = sb.Finalize();
+
+    QualifiedName classTypeName(name);
+    auto classTypeId = Type::GenerateAutoTypeId("objc", classTypeName);
+    auto classType = Type::StructureType(classTypeStruct);
+    auto classQualName = bv->DefineType(classTypeId, classTypeName, classType);
+
+    return {classQualName, classType};
+}
+
+/**
+ * Helper method for defining typedefs.
+ */
+inline void defineTypedef(Ref<BinaryView> bv, const QualifiedName name, Ref<Type> type)
+{
+    auto typeID = Type::GenerateAutoTypeId("objc", name);
+    bv->DefineType(typeID, name, type);
+}
+
+void defineAll(Ref<BinaryView> bv)
+{
+    int addrSize = bv->GetAddressSize();
+
+    defineTypedef(bv, {CustomTypes::TaggedPointer}, Type::PointerType(addrSize, Type::VoidType()));
+    defineTypedef(bv, {CustomTypes::FastPointer}, Type::PointerType(addrSize, Type::VoidType()));
+    defineTypedef(bv, {CustomTypes::RelativePointer}, Type::IntegerType(4, true));
+
+    defineTypedef(bv, {"id"}, Type::PointerType(addrSize, Type::VoidType()));
+    defineTypedef(bv, {"SEL"}, Type::PointerType(addrSize, Type::IntegerType(1, false)));
+
+    defineTypedef(bv, {"BOOL"}, Type::IntegerType(1, false));
+    defineTypedef(bv, {"NSInteger"}, Type::IntegerType(addrSize, true));
+    defineTypedef(bv, {"NSUInteger"}, Type::IntegerType(addrSize, false));
+    defineTypedef(bv, {"CGFloat"}, Type::FloatType(addrSize));
+
+    StructureBuilder cfstringStructBuilder;
+    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType() ), "isa");
+    cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "flags");
+    cfstringStructBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType() ), "data");
+    cfstringStructBuilder.AddMember(Type::IntegerType(addrSize, false), "size");
+    auto type = finalizeStructureBuilder(bv, cfstringStructBuilder, "CFString");
+
+    StructureBuilder methodEntry;
+    methodEntry.AddMember(Type::IntegerType(4, true), "name");
+    methodEntry.AddMember(Type::IntegerType(4, true), "types");
+    methodEntry.AddMember(Type::IntegerType(4, true), "imp");
+    type = finalizeStructureBuilder(bv, methodEntry, "objc_method_entry_t");
+
+    StructureBuilder method;
+    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
+    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "types");
+    method.AddMember(Type::PointerType(addrSize, Type::VoidType()), "imp");
+    type = finalizeStructureBuilder(bv, method, "objc_method_t");
+
+    StructureBuilder methList;
+    methList.AddMember(Type::IntegerType(4, false), "obsolete");
+    methList.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, methList, "objc_method_list_t");
+
+    StructureBuilder classROBuilder;
+    classROBuilder.AddMember(Type::IntegerType(4, false), "flags");
+    classROBuilder.AddMember(Type::IntegerType(4, false), "start");
+    classROBuilder.AddMember(Type::IntegerType(4, false), "size");
+    if (addrSize == 8)
+        classROBuilder.AddMember(Type::IntegerType(4, false), "reserved");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "ivar_layout");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "methods");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "protocols");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "ivars");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "weak_ivar_layout");
+    classROBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "properties");
+    type = finalizeStructureBuilder(bv, classROBuilder, "objc_class_ro_t");
+
+    StructureBuilder classBuilder;
+    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "isa");
+    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "super");
+    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "cache");
+    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "vtable");
+    classBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "data");
+    type = finalizeStructureBuilder(bv, classBuilder, "objc_class_t");
+
+    StructureBuilder ivarBuilder;
+    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::IntegerType(4, false)), "offset");
+    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "name");
+    ivarBuilder.AddMember(Type::PointerType(addrSize, Type::VoidType()), "type");
+    ivarBuilder.AddMember(Type::IntegerType(4, false), "alignment");
+    ivarBuilder.AddMember(Type::IntegerType(4, false), "size");
+    type = finalizeStructureBuilder(bv, ivarBuilder, "objc_ivar_t");
+
+    StructureBuilder ivarList;
+    ivarList.AddMember(Type::IntegerType(4, false), "entsize");
+    ivarList.AddMember(Type::IntegerType(4, false), "count");
+    type = finalizeStructureBuilder(bv, ivarList, "objc_ivar_list_t");
+
+}
+
+}
+
+```
+
+`CustomTypes.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "BinaryNinja.h"
+
+/**
+ * All type-related things.
+ */
+namespace CustomTypes {
+
+const std::string TaggedPointer = "tptr_t";
+const std::string FastPointer = "fptr_t";
+const std::string RelativePointer = "rptr_t";
+
+const std::string ID = "id";
+const std::string Selector = "SEL";
+
+const std::string CFString = "CFString";
+
+const std::string MethodList = "objc_method_list_t";
+const std::string Method = "objc_method_t";
+const std::string MethodListEntry = "objc_method_entry_t";
+const std::string IvarList = "objc_ivar_list_t";
+const std::string Ivar = "objc_ivar_t";
+const std::string Class = "objc_class_t";
+const std::string ClassRO = "objc_class_ro_t";
+
+/**
+ * Define all Objective-C-related types for a view.
+ */
+void defineAll(BinaryNinja::Ref<BinaryNinja::BinaryView>);
+
+}
+
+```
+
+`DataRenderers.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "DataRenderers.h"
+
+#include "CustomTypes.h"
+
+#include "Core/ABI.h"
+
+#include <cinttypes>
+#include <cstdio>
+
+using namespace BinaryNinja;
+
+/**
+ * Get the appropriate token type for a pointer to a given symbol.
+ */
+BNInstructionTextTokenType tokenTypeForSymbol(Ref<Symbol> symbol)
+{
+    switch (symbol->GetType()) {
+    case DataSymbol:
+        return DataSymbolToken;
+    case FunctionSymbol:
+        return CodeSymbolToken;
+    default:
+        return CodeRelativeAddressToken;
+    }
+}
+
+/**
+ * Get a line for a given pointer.
+ */
+DisassemblyTextLine lineForPointer(BinaryView* bv, uint64_t pointer,
+    uint64_t address, const std::vector<InstructionTextToken>& prefix)
+{
+    std::string tokenText = "???";
+    auto tokenType = CodeRelativeAddressToken;
+
+    Ref<Symbol> symbol = bv->GetSymbolByAddress(pointer);
+    if (pointer == 0 || pointer == bv->GetStart()) {
+        tokenText = "NULL";
+        tokenType = KeywordToken;
+    } else if (symbol) {
+        tokenText = symbol->GetFullName();
+        tokenType = tokenTypeForSymbol(symbol);
+    } else {
+        char addressBuffer[32];
+        snprintf(addressBuffer, sizeof(addressBuffer), "0x%" PRIx64, pointer);
+
+        tokenText = std::string(addressBuffer);
+        tokenType = CodeRelativeAddressToken;
+    }
+
+    DisassemblyTextLine line;
+    line.addr = address;
+    line.tokens = prefix;
+    line.tokens.emplace_back(tokenType, tokenText, pointer);
+
+    return { line };
+}
+
+/**
+ * Checks if the deepest type in the data renderer context is a named type with
+ * the given name.
+ */
+bool isType(const DataRendererContext& context, const std::string& name)
+{
+    if (context.empty())
+        return false;
+
+    auto [deepestType, size] = context.back();
+    if (!deepestType->IsNamedTypeRefer())
+        return false;
+
+    return deepestType->GetTypeName().GetString() == name;
+}
+
+/* ---- Tagged Pointer ------------------------------------------------------ */
+
+bool TaggedPointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
+    Type* type, DataRendererContext& context)
+{
+    return isType(context, CustomTypes::TaggedPointer);
+}
+
+std::vector<DisassemblyTextLine> TaggedPointerDataRenderer::GetLinesForData(
+    BinaryView* bv, uint64_t address, Type*,
+    const std::vector<InstructionTextToken>& prefix, size_t,
+    DataRendererContext&)
+{
+    BinaryReader reader(bv);
+    reader.Seek(address);
+
+    auto pointer = ObjectiveNinja::ABI::decodePointer(reader.Read64(), bv->GetStart());
+
+    return { lineForPointer(bv, pointer, address, prefix) };
+}
+
+void TaggedPointerDataRenderer::Register()
+{
+    DataRendererContainer::RegisterTypeSpecificDataRenderer(new TaggedPointerDataRenderer());
+}
+
+/* ---- Fast Pointer -------------------------------------------------------- */
+
+bool FastPointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
+    Type* type, DataRendererContext& context)
+{
+    return isType(context, CustomTypes::FastPointer);
+}
+
+std::vector<DisassemblyTextLine> FastPointerDataRenderer::GetLinesForData(
+    BinaryView* bv, uint64_t address, Type*,
+    const std::vector<InstructionTextToken>& prefix, size_t,
+    DataRendererContext&)
+{
+    BinaryReader reader(bv);
+    reader.Seek(address);
+
+    auto pointer = ObjectiveNinja::ABI::decodePointer(reader.Read64(), bv->GetStart());
+    pointer &= ~ObjectiveNinja::ABI::FastPointerDataMask;
+
+    return { lineForPointer(bv, pointer, address, prefix) };
+}
+
+void FastPointerDataRenderer::Register()
+{
+    DataRendererContainer::RegisterTypeSpecificDataRenderer(new FastPointerDataRenderer());
+}
+
+/* ---- Relative Pointer ---------------------------------------------------- */
+
+bool RelativePointerDataRenderer::IsValidForData(BinaryView* bv, uint64_t address,
+    Type* type, DataRendererContext& context)
+{
+    return isType(context, CustomTypes::RelativePointer);
+}
+
+std::vector<DisassemblyTextLine> RelativePointerDataRenderer::GetLinesForData(
+    BinaryView* bv, uint64_t address, Type*,
+    const std::vector<InstructionTextToken>& prefix, size_t,
+    DataRendererContext&)
+{
+    BinaryReader reader(bv);
+    reader.Seek(address);
+
+    auto pointer = (int32_t)reader.Read32() + address;
+
+    return { lineForPointer(bv, pointer, address, prefix) };
+}
+
+void RelativePointerDataRenderer::Register()
+{
+    DataRendererContainer::RegisterTypeSpecificDataRenderer(new RelativePointerDataRenderer());
+}
+
+```
+
+`DataRenderers.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "BinaryNinja.h"
+
+using DataRendererContext = std::vector<std::pair<TypePtr, size_t>>;
+
+/**
+ * Data renderer for tagged pointers.
+ */
+class TaggedPointerDataRenderer : public BinaryNinja::DataRenderer {
+    TaggedPointerDataRenderer() = default;
+
+public:
+    bool IsValidForData(BinaryViewPtr, uint64_t address, TypePtr,
+        DataRendererContext&) override;
+
+    std::vector<BinaryNinja::DisassemblyTextLine> GetLinesForData(
+        BinaryViewPtr, uint64_t address, TypePtr,
+        const std::vector<BinaryNinja::InstructionTextToken>& prefix,
+        size_t width, DataRendererContext&) override;
+
+    static void Register();
+};
+
+/**
+ * Data renderer for fast tagged pointers.
+ */
+class FastPointerDataRenderer : public BinaryNinja::DataRenderer {
+    FastPointerDataRenderer() = default;
+
+public:
+    bool IsValidForData(BinaryViewPtr, uint64_t address, TypePtr,
+        DataRendererContext&) override;
+
+    std::vector<BinaryNinja::DisassemblyTextLine> GetLinesForData(
+        BinaryViewPtr, uint64_t address, TypePtr,
+        const std::vector<BinaryNinja::InstructionTextToken>& prefix,
+        size_t width, DataRendererContext&) override;
+
+    static void Register();
+};
+
+/**
+ * Data renderer for relative offset pointers.
+ */
+class RelativePointerDataRenderer : public BinaryNinja::DataRenderer {
+    RelativePointerDataRenderer() = default;
+
+public:
+    bool IsValidForData(BinaryViewPtr, uint64_t address, TypePtr,
+        DataRendererContext&) override;
+
+    std::vector<BinaryNinja::DisassemblyTextLine> GetLinesForData(
+        BinaryViewPtr, uint64_t address, TypePtr,
+        const std::vector<BinaryNinja::InstructionTextToken>& prefix,
+        size_t width, DataRendererContext&) override;
+
+    static void Register();
+};
+
+```
+
+`GlobalState.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "GlobalState.h"
+
+#include <set>
+#include <unordered_map>
+
+static std::unordered_map<BinaryViewID, SharedAnalysisInfo> g_analysisRecords;
+static std::set<BinaryViewID> g_ignoredViews;
+
+BinaryViewID GlobalState::id(BinaryViewRef bv)
+{
+    return bv->GetFile()->GetSessionId();
+}
+
+void GlobalState::storeAnalysisInfo(BinaryViewRef bv, SharedAnalysisInfo records)
+{
+    g_analysisRecords[id(std::move(bv))] = std::move(records);
+}
+
+SharedAnalysisInfo GlobalState::analysisInfo(BinaryViewRef bv)
+{
+    if (hasAnalysisInfo(bv))
+        return g_analysisRecords[id(bv)];
+
+    return nullptr;
+}
+
+bool GlobalState::hasAnalysisInfo(BinaryViewRef bv)
+{
+    return g_analysisRecords.count(id(std::move(bv))) > 0;
+}
+
+void GlobalState::addIgnoredView(BinaryViewRef bv)
+{
+    g_ignoredViews.insert(id(std::move(bv)));
+}
+
+bool GlobalState::viewIsIgnored(BinaryViewRef bv)
+{
+    return g_ignoredViews.count(id(std::move(bv))) > 0;
+}
+
+bool GlobalState::hasFlag(BinaryViewRef bv, const std::string& flag)
+{
+    return bv->QueryMetadata(flag);
+}
+
+void GlobalState::setFlag(BinaryViewRef bv, const std::string& flag)
+{
+    bv->StoreMetadata(flag, new BinaryNinja::Metadata("YES"));
+}
+
+```
+
+`GlobalState.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "BinaryNinja.h"
+
+#include "Core/AnalysisInfo.h"
+
+using SharedAnalysisInfo = std::shared_ptr<ObjectiveNinja::AnalysisInfo>;
+
+/**
+ * Namespace to hold metadata flag key constants.
+ */
+namespace Flag {
+
+constexpr auto DidRunWorkflow = "objectiveNinja.didRunWorkflow";
+constexpr auto DidRunStructureAnalysis = "objectiveNinja.didRunStructureAnalysis";
+
+}
+
+/**
+ * Global state/storage interface.
+ */
+class GlobalState {
+    /**
+     * Get the ID for a view.
+     */
+    static BinaryViewID id(BinaryViewRef);
+
+public:
+    /**
+     * Get the analysis info for a view.
+     */
+    static SharedAnalysisInfo analysisInfo(BinaryViewRef);
+
+    /**
+     * Store analysis info for a view.
+     */
+    static void storeAnalysisInfo(BinaryViewRef, SharedAnalysisInfo);
+
+    /**
+     * Check if analysis info exists for a view.
+     */
+    static bool hasAnalysisInfo(BinaryViewRef);
+
+    /**
+     * Add a view to the list of ignored views.
+     */
+    static void addIgnoredView(BinaryViewRef);
+
+    /**
+     * Check if a view is ignored.
+     */
+    static bool viewIsIgnored(BinaryViewRef);
+
+    /**
+     * Check if the a metadata flag is present for a view.
+     */
+    static bool hasFlag(BinaryViewRef, const std::string&);
+
+    /**
+     * Set a metadata flag for a view.
+     */
+    static void setFlag(BinaryViewRef, const std::string&);
+};
+
+```
+
+`InfoHandler.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "InfoHandler.h"
+
+#include "Constants.h"
+#include "CustomTypes.h"
+#include "Performance.h"
+
+#include <algorithm>
+#include <cinttypes>
+#include <regex>
+
+using namespace BinaryNinja;
+
+std::string InfoHandler::sanitizeText(const std::string& text)
+{
+    std::string result;
+    std::string input = text.substr(0, 24);
+
+    std::regex re("[a-zA-Z0-9]+");
+    std::smatch sm;
+    while (std::regex_search(input, sm, re)) {
+        std::string part = sm[0];
+        part[0] = static_cast<char>(std::toupper(part[0]));
+
+        result += part;
+        input = sm.suffix();
+    }
+
+    return result;
+}
+
+std::string InfoHandler::sanitizeSelector(const std::string& text)
+{
+    auto result = text;
+    std::replace(result.begin(), result.end(), ':', '_');
+
+    return result;
+}
+
+TypeRef InfoHandler::namedType(BinaryViewRef bv, const std::string& name)
+{
+    return Type::NamedType(bv, name);
+}
+
+TypeRef InfoHandler::stringType(size_t size)
+{
+    return Type::ArrayType(Type::IntegerType(1, true), size + 1);
+}
+
+void InfoHandler::defineVariable(BinaryViewRef bv, uint64_t address, TypeRef type)
+{
+    bv->DefineUserDataVariable(address, type);
+}
+
+void InfoHandler::defineSymbol(BinaryViewRef bv, uint64_t address, const std::string& name,
+    const std::string& prefix, BNSymbolType symbolType)
+{
+    bv->DefineUserSymbol(new Symbol(symbolType, prefix + name, address));
+}
+
+void InfoHandler::defineReference(BinaryViewRef bv, uint64_t from, uint64_t to)
+{
+    bv->AddUserDataReference(from, to);
+}
+
+void InfoHandler::applyMethodType(BinaryViewRef bv, const ObjectiveNinja::ClassInfo& ci,
+    const BinaryNinja::QualifiedName& classTypeName, const ObjectiveNinja::MethodInfo& mi)
+{
+    auto selectorTokens = mi.selectorTokens();
+    std::vector<ObjectiveNinja::QualifiedNameOrType> typeTokens = mi.decodedTypeTokens();
+
+    // For safety, ensure out-of-bounds indexing is not about to occur. This has
+    // never happened and likely won't ever happen, but crashing the product is
+    // generally undesirable, so it's better to be safe than sorry.
+    if (selectorTokens.size() > typeTokens.size()) {
+        LogWarn("Cannot apply method type to %" PRIx64 " due to selector/type token size mismatch.", mi.implAddress);
+        return;
+    }
+
+    auto typeForQualifiedNameOrType = [bv](ObjectiveNinja::QualifiedNameOrType nameOrType) {
+        Ref<Type> type;
+
+        if (nameOrType.type) {
+            type = nameOrType.type;
+            if (!type)
+                type = Type::PointerType(bv->GetAddressSize(), Type::VoidType());
+
+        } else {
+            type = Type::NamedType(nameOrType.name, Type::PointerType(bv->GetAddressSize(), Type::VoidType()));
+            for (size_t i = nameOrType.ptrCount; i > 0; i--)
+                type = Type::PointerType(8, type);
+        }
+
+        return type;
+    };
+
+    BinaryNinja::QualifiedNameAndType nameAndType;
+    std::set<BinaryNinja::QualifiedName> typesAllowRedefinition;
+
+    auto retType = typeForQualifiedNameOrType(typeTokens[0]);
+
+    std::vector<BinaryNinja::FunctionParameter> params;
+    auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
+
+    params.push_back({ "self",
+        classTypeName.IsEmpty()
+            ? BinaryNinja::Type::NamedType(bv, { "id" })
+            : BinaryNinja::Type::NamedType(bv, classTypeName),
+        true,
+        BinaryNinja::Variable() });
+
+    params.push_back({ "sel",
+        namedType(bv, "SEL"),
+        true,
+        BinaryNinja::Variable() });
+
+    for (size_t i = 3; i < typeTokens.size(); i++) {
+        std::string suffix;
+
+        params.push_back({ selectorTokens.size() > i - 3 ? selectorTokens[i - 3] : "arg",
+            typeForQualifiedNameOrType(typeTokens[i]),
+            true,
+            BinaryNinja::Variable() });
+    }
+
+    auto funcType = BinaryNinja::Type::FunctionType(retType, cc, params);
+
+    // Search for the method's implementation function; apply the type if found.
+    auto f = bv->GetAnalysisFunction(bv->GetDefaultPlatform(), mi.implAddress);
+    if (f)
+        f->SetUserType(funcType);
+    else
+        BNLogError("Processing Type for function at %llx failed", mi.implAddress);
+
+    std::string prefix = ci.isMetaClass ? "+" : "-";
+
+    auto name = prefix + "[" + ci.name + " " + mi.selector + "]";
+    defineSymbol(bv, mi.implAddress, name, "", FunctionSymbol);
+}
+
+QualifiedName InfoHandler::createClassType(BinaryViewRef bv, const ObjectiveNinja::ClassInfo& info, const ObjectiveNinja::IvarListInfo& vi)
+{
+    StructureBuilder classTypeBuilder;
+    for (const auto& ivar : vi.ivars) {
+        ObjectiveNinja::QualifiedNameOrType encodedType = ivar.decodedTypeToken();
+        Ref<Type> type;
+
+        if (encodedType.type)
+            type = encodedType.type;
+        else
+        {
+            type = Type::NamedType(encodedType.name, Type::PointerType(bv->GetAddressSize(), Type::VoidType()));
+            for (size_t i = encodedType.ptrCount; i > 0; i--)
+                type = Type::PointerType(8, type);
+        }
+
+        if (!type)
+            type = Type::PointerType(bv->GetAddressSize(), Type::VoidType());
+
+        classTypeBuilder.AddMemberAtOffset(type, ivar.name, ivar.offset);
+    }
+
+    auto classTypeStruct = classTypeBuilder.Finalize();
+    QualifiedName classTypeName = "class_" + std::string(info.name);
+    std::string classTypeId = Type::GenerateAutoTypeId("objc", classTypeName);
+    Ref<Type> classType = Type::StructureType(classTypeStruct);
+    QualifiedName classQualName = bv->DefineType(classTypeId, classTypeName, classType);
+
+    std::string typeID = Type::GenerateAutoTypeId("objc", info.name);
+    bv->DefineType(typeID, info.name, Type::PointerType(bv->GetAddressSize(), Type::NamedType(bv, classTypeName)));
+
+    return info.name;
+}
+
+void InfoHandler::applyInfoToView(SharedAnalysisInfo info, BinaryViewRef bv)
+{
+    auto start = Performance::now();
+
+    bv->BeginUndoActions();
+
+    BinaryReader reader(bv);
+
+    auto taggedPointerType = namedType(bv, CustomTypes::TaggedPointer);
+    auto cfStringType = namedType(bv, CustomTypes::CFString);
+    auto classType = namedType(bv, CustomTypes::Class);
+    auto classDataType = namedType(bv, CustomTypes::ClassRO);
+    auto methodListType = namedType(bv, CustomTypes::MethodList);
+    auto ivarListType = namedType(bv, CustomTypes::IvarList);
+    auto ivarType = namedType(bv, CustomTypes::Ivar);
+
+    // Create data variables and symbols for all CFString instances.
+    for (const auto& csi : info->cfStrings) {
+        reader.Seek(csi.dataAddress);
+        auto text = reader.ReadString(csi.size + 1);
+        auto sanitizedText = sanitizeText(text);
+
+        defineVariable(bv, csi.address, cfStringType);
+        defineVariable(bv, csi.dataAddress, stringType(csi.size));
+        defineSymbol(bv, csi.address, sanitizedText, "cf_");
+        defineSymbol(bv, csi.dataAddress, sanitizedText, "as_");
+
+        defineReference(bv, csi.address, csi.dataAddress);
+    }
+
+    // Create data variables and symbols for selectors and selector references.
+    for (const auto& sr : info->selectorRefs) {
+        auto sanitizedSelector = sanitizeSelector(sr->name);
+
+        defineVariable(bv, sr->address, taggedPointerType);
+        defineVariable(bv, sr->nameAddress, stringType(sr->name.size()));
+        defineSymbol(bv, sr->address, sanitizedSelector, "sr_");
+        defineSymbol(bv, sr->nameAddress, sanitizedSelector, "sl_");
+
+        defineReference(bv, sr->address, sr->nameAddress);
+    }
+
+    unsigned totalMethods = 0;
+
+    std::map<uint64_t, std::string> addressToClassMap;
+
+    // Create data variables and symbols for the analyzed classes.
+    for (const auto& ci : info->classes) {
+        defineVariable(bv, ci.listPointer, taggedPointerType);
+        defineVariable(bv, ci.address, classType);
+        defineVariable(bv, ci.dataAddress, classDataType);
+        defineVariable(bv, ci.nameAddress, stringType(ci.name.size()));
+        defineSymbol(bv, ci.listPointer, ci.name, "cp_");
+        defineSymbol(bv, ci.address, ci.name, "cl_");
+        addressToClassMap[ci.address] = ci.name;
+        defineSymbol(bv, ci.dataAddress, ci.name, "ro_");
+        defineSymbol(bv, ci.nameAddress, ci.name, "nm_");
+
+        defineReference(bv, ci.listPointer, ci.address);
+        defineReference(bv, ci.address, ci.dataAddress);
+        defineReference(bv, ci.dataAddress, ci.nameAddress);
+        defineReference(bv, ci.dataAddress, ci.methodListAddress);
+
+        auto methodSelfType = createClassType(bv, ci, ci.ivarList);
+
+        if (ci.methodList.address == 0 || ci.methodList.methods.empty())
+            continue;
+
+        auto methodType = ci.methodList.hasRelativeOffsets()
+            ? bv->GetTypeByName(CustomTypes::MethodListEntry)
+            : bv->GetTypeByName(CustomTypes::Method);
+
+        // Create data variables for each method in the method list.
+        for (const auto& mi : ci.methodList.methods) {
+            ++totalMethods;
+
+            defineVariable(bv, mi.address, methodType);
+            defineSymbol(bv, mi.address, sanitizeSelector(mi.selector), "mt_");
+            defineVariable(bv, mi.typeAddress, stringType(mi.type.size()));
+
+            defineReference(bv, ci.methodList.address, mi.address);
+            defineReference(bv, mi.address, mi.nameAddress);
+            defineReference(bv, mi.address, mi.typeAddress);
+            defineReference(bv, mi.address, mi.implAddress);
+
+            applyMethodType(bv, ci, methodSelfType, mi);
+        }
+
+        if (ci.ivarListAddress != 0) {
+            defineVariable(bv, ci.ivarListAddress, ivarListType);
+            defineSymbol(bv, ci.ivarListAddress, ci.name, "vl_");
+
+            for (const auto& ii : ci.ivarList.ivars) {
+                defineVariable(bv, ii.address, ivarType);
+                defineSymbol(bv, ii.address, ii.name, "iv_");
+            }
+        }
+        if (ci.metaClassInfo) {
+            for (const auto& mi : ci.metaClassInfo->info.methodList.methods) {
+                ++totalMethods;
+
+                defineVariable(bv, mi.address, methodType);
+                defineSymbol(bv, mi.address, sanitizeSelector(mi.selector), "mt_");
+                defineVariable(bv, mi.typeAddress, stringType(mi.type.size()));
+
+                defineReference(bv, ci.metaClassInfo->info.methodList.address, mi.address);
+                defineReference(bv, mi.address, mi.nameAddress);
+                defineReference(bv, mi.address, mi.typeAddress);
+                defineReference(bv, mi.address, mi.implAddress);
+                applyMethodType(bv, ci.metaClassInfo->info, methodSelfType, mi);
+            }
+        }
+
+        // Create a data variable and symbol for the method list header.
+        defineVariable(bv, ci.methodListAddress, methodListType);
+        defineSymbol(bv, ci.methodListAddress, ci.name, "ml_");
+    }
+
+    for (const auto classRef : info->classRefs) {
+        bv->DefineDataVariable(classRef.address, taggedPointerType);
+
+        if (classRef.referencedAddress != 0) {
+            auto localClass = addressToClassMap.find(classRef.referencedAddress);
+            if (localClass != addressToClassMap.end())
+                defineSymbol(bv, classRef.address, localClass->second, "cr_");
+        }
+    }
+
+    for (const auto superRef : info->superRefs) {
+        bv->DefineDataVariable(superRef.address, taggedPointerType);
+
+        if (superRef.referencedAddress == 0)
+            continue;
+
+        auto localClass = addressToClassMap.find(superRef.referencedAddress);
+        if (localClass != addressToClassMap.end())
+            defineSymbol(bv, superRef.address, localClass->second, "su_");
+    }
+
+    bv->CommitUndoActions();
+    bv->UpdateAnalysis();
+
+    auto elapsed = Performance::elapsed<std::chrono::milliseconds>(start);
+
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+    log->LogInfo("Analysis results applied in %lu ms", elapsed.count());
+    log->LogInfo("Found %d classes, %d methods, %d selector references",
+        info->classes.size(), totalMethods, info->selectorRefs.size());
+    log->LogInfo("Found %d CFString instances", info->cfStrings.size());
+    log->LogInfo("Found %d class references, %d superclass references", info->classRefs.size(), info->superRefs.size());
+}
+
+```
+
+`InfoHandler.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "Core/AnalysisInfo.h"
+
+#include "BinaryNinja.h"
+
+using SharedAnalysisInfo = std::shared_ptr<ObjectiveNinja::AnalysisInfo>;
+
+/**
+ * Utility class for applying collected AnalysisInfo to a database.
+ *
+ * InfoHandler is meant to be used after all analyzers intended to run on a
+ * database have finished. The resulting AnalysisInfo will then be used to
+ * create data variables, symbols, etc. in the database.
+ */
+class InfoHandler {
+    /**
+     * Sanitize a string by searching for series of alphanumeric characters and
+     * concatenating the matches. The input string will first be truncated.
+     */
+    static std::string sanitizeText(const std::string&);
+
+    /**
+     * Sanitize a selector so that it round-trips the type parser. Colon
+     * characters will be replaced underscores.
+     */
+    static std::string sanitizeSelector(const std::string&);
+
+    /**
+     * Get the type with the given name defined inside the BinaryView.
+     */
+    static inline TypeRef namedType(BinaryViewRef, const std::string&);
+
+    /**
+     * Create a type for a string (character array) of the given size.
+     */
+    static inline TypeRef stringType(size_t);
+
+    /**
+     * Shorthand function for defining a user data variable.
+     */
+    static inline void defineVariable(BinaryViewRef, uint64_t, TypeRef);
+
+    /**
+     * Shorthand function for defining a user symbol, with an optional prefix.
+     */
+    static inline void defineSymbol(BinaryViewRef, uint64_t,
+        const std::string& name, const std::string& prefix = "",
+        BNSymbolType type = DataSymbol);
+
+    /**
+     * Shorthand function for defining a user data reference.
+     */
+    static inline void defineReference(BinaryViewRef bv, uint64_t from, uint64_t to);
+
+    /**
+     * Create a symbol and apply return/argument types for a method.
+     */
+    static void applyMethodType(BinaryViewRef, const ObjectiveNinja::ClassInfo&,
+        const BinaryNinja::QualifiedName& classTypeName, const ObjectiveNinja::MethodInfo&);
+
+    static BinaryNinja::QualifiedName createClassType(BinaryViewRef,
+        const ObjectiveNinja::ClassInfo&, const ObjectiveNinja::IvarListInfo&);
+
+public:
+    /**
+     * Apply AnalysisInfo to a BinaryView.
+     */
+    static void applyInfoToView(SharedAnalysisInfo, BinaryViewRef);
+};
+
+```
+
+`LICENSE.txt`:
+
+```txt
+Copyright (c) 2022-2023 Jon Palmisciano
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+```
+
+`Performance.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include <chrono>
+
+using high_res_clock = std::chrono::high_resolution_clock;
+
+/**
+ * Utilities for measuring performance.
+ */
+class Performance {
+public:
+    /**
+     * Get the current time.
+     */
+    static high_res_clock::time_point now()
+    {
+        return high_res_clock::now();
+    }
+
+    /**
+     * Get the current elapsed time from a given start time.
+     *
+     * Accepts a unit of measure template parameter for the result.
+     */
+    template <typename T>
+    static T elapsed(high_res_clock::time_point start)
+    {
+        auto end = high_res_clock::now();
+        return std::chrono::duration_cast<T>(end - start);
+    }
+};
+
+```
+
+`Plugin.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "Commands.h"
+#include "Constants.h"
+#include "DataRenderers.h"
+#include "Workflow.h"
+
+extern "C" {
+
+BN_DECLARE_CORE_ABI_VERSION
+
+BINARYNINJAPLUGIN bool CorePluginInit()
+{
+    TaggedPointerDataRenderer::Register();
+    FastPointerDataRenderer::Register();
+    RelativePointerDataRenderer::Register();
+
+    Workflow::registerActivities();
+    Commands::registerCommands();
+
+    BinaryNinja::LogRegistry::CreateLogger(PluginLoggerName);
+
+    return true;
+}
+}
+
+```
+
+`README.md`:
+
+```md
+# Objective-C Workflow
+
+This is the Objective-C plugin that ships with Binary Ninja. It provides
+additional support for analyzing Objective-C binaries.
+
+Some of the main features offered by this plugin are:
+
+- **Function Call Cleanup.** When using the Objective-C workflow, calls to
+  `objc_msgSend` can be replaced with direct calls to the relevant function's
+  implementation.
+
+- **Name and Type Recovery.** Using runtime information embedded in the
+  binary, Binary Ninja can automatically apply names and type information to
+  Objective-C functions.
+
+- **Structure Markup.** Data variables are automatically created for Objective-C
+  structures such as classes and method lists to enable easy navigation.
+
+- **Data Renderers.** Formatting of Objective-C types such as tagged and/or
+  (image-)relative pointers is improved via custom data renderers.
+
+- **CFString Handling.** Data variables are automatically created for all
+  `CFString` instances present in the binary.
+
+For more details and usage instructions, see the [user guide](https://dev-docs.binary.ninja/guide/objectivec.html).
+
+## Building
+
+This plugin can be built and installed separately from Binary Ninja via the
+following commands:
+
+```sh
+git clone https://github.com/Vector35/workflow_objc.git && cd workflow_objc
+git submodule update --init --recursive
+cmake -S . -B build -GNinja
+cmake --build build -t install
+```
+
+## Credits
+
+This plugin is a continuation of [Objective Ninja](https://github.com/jonpalmisc/ObjectiveNinja), originally made
+by [@jonpalmisc](https://twitter.com/jonpalmisc). The full terms of the
+Objective Ninja license are as follows:
+
+```
+Copyright (c) 2022-2023 Jon Palmisciano
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+```
+
+`Workflow.cpp`:
+
+```cpp
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#include "Workflow.h"
+
+#include "Constants.h"
+#include "CustomTypes.h"
+#include "GlobalState.h"
+#include "InfoHandler.h"
+#include "Performance.h"
+#include "ArchitectureHooks.h"
+
+#include "Core/AnalysisProvider.h"
+#include "Core/BinaryViewFile.h"
+
+#include <lowlevelilinstruction.h>
+
+#include <queue>
+
+static std::mutex g_initialAnalysisMutex;
+
+using SectionRef = BinaryNinja::Ref<BinaryNinja::Section>;
+using SymbolRef = BinaryNinja::Ref<BinaryNinja::Symbol>;
+
+std::set<uint64_t> Workflow::findMsgSendFunctions(BinaryViewRef bv)
+{
+    std::set<uint64_t> results;
+
+    const auto authStubsSection = bv->GetSectionByName("__auth_stubs");
+    const auto stubsSection = bv->GetSectionByName("__stubs");
+    const auto authGotSection = bv->GetSectionByName("__auth_got");
+    const auto gotSection = bv->GetSectionByName("__got");
+    const auto laSymbolPtrSection = bv->GetSectionByName("__la_symbol_ptr");
+
+    // Shorthand to check if a symbol lies in a given section.
+    auto sectionContains = [](SectionRef section, SymbolRef symbol) {
+        const auto start = section->GetStart();
+        const auto length = section->GetLength();
+        const auto address = symbol->GetAddress();
+
+        return (uint64_t)(address - start) <= length;
+    };
+
+    // There can be multiple `_objc_msgSend` symbols in the same binary; there
+    // may even be lots. Some of them are valid, others aren't. In order of
+    // preference, `_objc_msgSend` symbols in the following sections are
+    // preferred:
+    //
+    //   1. __auth_stubs
+    //   2. __stubs
+    //   3. __auth_got
+    //   4. __got
+    //   ?. __la_symbol_ptr
+    //
+    // There is often an `_objc_msgSend` symbol that is a stub function, found
+    // in the `__stubs` section, which will come with an imported symbol of the
+    // same name in the `__got` section. Not all `__objc_msgSend` calls will be
+    // routed through the stub function, making it important to make note of
+    // both symbols' addresses. Furthermore, on ARM64, the `__auth{stubs,got}`
+    // sections are preferred over their unauthenticated counterparts.
+    const auto candidates = bv->GetSymbolsByName("_objc_msgSend");
+    for (const auto& c : candidates) {
+        if ((authStubsSection && sectionContains(authStubsSection, c))
+            || (stubsSection && sectionContains(stubsSection, c))
+            || (authGotSection && sectionContains(authGotSection, c))
+            || (gotSection && sectionContains(gotSection, c))
+            || (laSymbolPtrSection && sectionContains(laSymbolPtrSection, c)))
+            results.insert(c->GetAddress());
+    }
+
+    return results;
+}
+
+void Workflow::rewriteMethodCall(LLILFunctionRef ssa, size_t insnIndex)
+{
+    const auto bv = ssa->GetFunction()->GetView();
+    const auto llil = ssa->GetNonSSAForm();
+    const auto insn = ssa->GetInstruction(insnIndex);
+    const auto params = insn.GetParameterExprs<LLIL_CALL_SSA>();
+
+    // The second parameter passed to the objc_msgSend call is the address of
+    // either the selector reference or the method's name, which in both cases
+    // is dereferenced to retrieve a selector.
+    const auto selectorRegister = params[1].GetSourceSSARegister<LLIL_REG_SSA>();
+    uint64_t rawSelector = ssa->GetSSARegisterValue(selectorRegister).value;
+
+    // Check the analysis info for a selector reference corresponding to the
+    // current selector. It is possible no such selector reference exists, for
+    // example, if the selector is for a method defined outside the current
+    // binary. If this is the case, there are no meaningful changes that can be
+    // made to the IL, and the operation should be aborted.
+    const auto info = GlobalState::analysisInfo(bv);
+    if (!info || !info->selectorRefsByKey.count(rawSelector))
+        return;
+    const auto selectorRef = info->selectorRefsByKey[rawSelector];
+
+    // Attempt to look up the implementation for the given selector, first by
+    // using the raw selector, then by the address of the selector reference. If
+    // the lookup fails in both cases, abort.
+    uint64_t implAddress = info->methodImpls[selectorRef->rawSelector];
+    if (!implAddress)
+        implAddress = info->methodImpls[selectorRef->address];
+    if (!implAddress)
+        return;
+
+    const auto llilIndex = ssa->GetNonSSAInstructionIndex(insnIndex);
+    auto llilInsn = llil->GetInstruction(llilIndex);
+
+    // Change the destination expression of the LLIL_CALL operation to point to
+    // the method implementation. This turns the "indirect call" piped through
+    // `objc_msgSend` and makes it a normal C-style function call.
+    auto callDestExpr = llilInsn.GetDestExpr<LLIL_CALL>();
+    callDestExpr.Replace(llil->ConstPointer(callDestExpr.size, implAddress, callDestExpr));
+    llilInsn.Replace(llil->Call(callDestExpr.exprIndex, llilInsn));
+
+    llil->GenerateSSAForm();
+}
+
+void Workflow::rewriteCFString(LLILFunctionRef ssa, size_t insnIndex)
+{
+    const auto bv = ssa->GetFunction()->GetView();
+    const auto llil = ssa->GetNonSSAForm();
+    const auto insn = ssa->GetInstruction(insnIndex);
+    const auto llilIndex = ssa->GetNonSSAInstructionIndex(insnIndex);
+    auto llilInsn = llil->GetInstruction(llilIndex);
+
+    auto sourceExpr = insn.GetSourceExpr<LLIL_SET_REG_SSA>();
+    auto destRegister = llilInsn.GetDestRegister();
+
+    auto addr = sourceExpr.GetValue().value;
+    auto stringPointer = addr + 0x10;
+    uint64_t dest;
+    bv->Read(&dest, stringPointer, bv->GetDefaultArchitecture()->GetAddressSize());
+
+    auto targetPointer = llil->ConstPointer(bv->GetAddressSize(), dest, llilInsn);
+    auto cfstrCall = llil->Intrinsic({ BinaryNinja::RegisterOrFlag(0, destRegister) }, CFSTRIntrinsicIndex, {targetPointer}, 0, llilInsn);
+
+    llilInsn.Replace(cfstrCall);
+
+    llil->GenerateSSAForm();
+    llil->Finalize();
+}
+
+void Workflow::inlineMethodCalls(AnalysisContextRef ac)
+{
+    const auto func = ac->GetFunction();
+    const auto arch = func->GetArchitecture();
+    const auto bv = func->GetView();
+
+    if (GlobalState::viewIsIgnored(bv))
+        return;
+
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
+    // Ignore the view if it has an unsupported architecture.
+    //
+    // The reasoning for querying the default architecture here rather than the
+    // architecture of the function being analyzed is that the view needs to
+    // have a default architecture for the Objective-C runtime types to be
+    // defined successfully.
+    auto defaultArch = bv->GetDefaultArchitecture();
+    auto defaultArchName = defaultArch ? defaultArch->GetName() : "";
+    if (defaultArchName != "aarch64" && defaultArchName != "x86_64") {
+        if (!defaultArch)
+            log->LogError("View must have a default architecture.");
+        else
+            log->LogError("Architecture '%s' is not supported", defaultArchName.c_str());
+
+        GlobalState::addIgnoredView(bv);
+        return;
+    }
+
+    // The workflow relies on some data acquired through analysis of Objective-C
+    // structures present in the binary. The structure analysis must run
+    // exactly once per binary. Until the Workflows API supports a "run once"
+    // idiom, this is accomplished through a mutex and a check for present
+    // analysis information.
+    {
+        std::scoped_lock<std::mutex> lock(g_initialAnalysisMutex);
+
+        if (!GlobalState::hasAnalysisInfo(bv)) {
+            SharedAnalysisInfo info;
+            CustomTypes::defineAll(bv);
+            CFStringArchitectureHook* currentHook = new CFStringArchitectureHook(bv->GetDefaultArchitecture());
+            bv->GetDefaultArchitecture()->Register(currentHook);
+
+            try {
+                auto file = std::make_shared<ObjectiveNinja::BinaryViewFile>(bv);
+
+                auto start = Performance::now();
+                info = ObjectiveNinja::AnalysisProvider::infoForFile(file);
+                auto elapsed = Performance::elapsed<std::chrono::milliseconds>(start);
+
+                const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+                log->LogInfo("Structures analyzed in %lu ms", elapsed.count());
+
+                InfoHandler::applyInfoToView(info, bv);
+
+                const auto msgSendFunctions = findMsgSendFunctions(bv);
+                for (auto addr : msgSendFunctions)
+                {
+                    BinaryNinja::QualifiedNameAndType nameAndType;
+                    std::string errors;
+                    std::set<BinaryNinja::QualifiedName> typesAllowRedefinition;
+
+                    // void *
+                    auto retType = BinaryNinja::Confidence<BinaryNinja::Ref<BinaryNinja::Type>>(
+                            BinaryNinja::Type::PointerType(bv->GetAddressSize(),BinaryNinja::Type::VoidType(), 
+                            0));
+
+                    std::vector<BinaryNinja::FunctionParameter> params;
+                    auto cc = bv->GetDefaultPlatform()->GetDefaultCallingConvention();
+
+                    params.push_back({"self",
+                        BinaryNinja::Type::NamedType(bv, {"id"}),
+                        true,
+                        BinaryNinja::Variable()});
+                    params.push_back({"sel",
+                        BinaryNinja::Type::PointerType(bv->GetAddressSize(), BinaryNinja::Type::IntegerType(1, false)),
+                        true,
+                        BinaryNinja::Variable()});
+
+                    auto funcType = BinaryNinja::Type::FunctionType(retType, cc, params, true);
+                    bv->DefineDataVariable(addr, BinaryNinja::Type::PointerType(bv->GetDefaultArchitecture(), funcType));
+                }
+            } catch (...) {
+                log->LogError("Structure analysis failed; binary may be malformed.");
+                log->LogError("Objective-C analysis will not be applied due to previous errors.");
+            }
+
+            GlobalState::setFlag(bv, Flag::DidRunStructureAnalysis);
+            GlobalState::storeAnalysisInfo(bv, info);
+        }
+    }
+
+    // Try to find the `objc_msgSend` functions(s), abort activity if missing.
+    //
+    // TODO: These results should be cached somehow as it can't be efficient to
+    // repeatedly search for all the usable function addresses.
+    const auto msgSendFunctions = findMsgSendFunctions(bv);
+    if (msgSendFunctions.empty()) {
+        log->LogError("Cannot perform Objective-C IL cleanup; no objc_msgSend candidates found");
+        GlobalState::addIgnoredView(bv);
+        return;
+    }
+
+    const auto llil = ac->GetLowLevelILFunction();
+    if (!llil) {
+        log->LogError("(Workflow) Failed to get LLIL for 0x%llx", func->GetStart());
+        return;
+    }
+    const auto ssa = llil->GetSSAForm();
+    if (!ssa) {
+        log->LogError("(Workflow) Failed to get LLIL SSA form for 0x%llx", func->GetStart());
+        return;
+    }
+
+    const auto rewriteIfEligible = [bv, msgSendFunctions, ssa](size_t insnIndex) {
+        auto insn = ssa->GetInstruction(insnIndex);
+
+        if (insn.operation == LLIL_CALL_SSA)
+        {
+            // Filter out calls that aren't to `objc_msgSend`.
+            auto callExpr = insn.GetDestExpr<LLIL_CALL_SSA>();
+            if (!msgSendFunctions.count(callExpr.GetValue().value))
+                return;
+
+            // By convention, the selector is the second argument to `objc_msgSend`,
+            // therefore two parameters are required for a proper rewrite; abort if
+            // this condition is not met.
+            auto params = insn.GetParameterExprs<LLIL_CALL_SSA>();
+            if (params.size() < 2
+                || params[0].operation != LLIL_REG_SSA
+                || params[1].operation != LLIL_REG_SSA)
+                return;
+
+            rewriteMethodCall(ssa, insnIndex);
+        }
+        else if (insn.operation == LLIL_SET_REG_SSA)
+        {
+            auto sourceExpr = insn.GetSourceExpr<LLIL_SET_REG_SSA>();
+            auto addr = sourceExpr.GetValue().value;
+            BinaryNinja::DataVariable var;
+            if (!bv->GetDataVariableAtAddress(addr, var) || var.type->GetString() != "struct CFString")
+                return;
+
+            rewriteCFString(ssa, insnIndex);
+        }
+    };
+
+    for (const auto& block : ssa->GetBasicBlocks())
+        for (size_t i = block->GetStart(), end = block->GetEnd(); i < end; ++i)
+            rewriteIfEligible(i);
+}
+
+static constexpr auto WorkflowInfo = R"({
+  "title": "Objective-C",
+  "description": "Enhanced analysis for Objective-C code.",
+  "capabilities": []
+})";
+
+void Workflow::registerActivities()
+{
+    const auto wf = BinaryNinja::Workflow::Instance()->Clone("core.function.objectiveC");
+    wf->RegisterActivity(new BinaryNinja::Activity(
+        ActivityID::ResolveMethodCalls, &Workflow::inlineMethodCalls));
+    wf->Insert("core.function.translateTailCalls", ActivityID::ResolveMethodCalls);
+
+    BinaryNinja::Workflow::RegisterWorkflow(wf, WorkflowInfo);
+}
+
+```
+
+`Workflow.h`:
+
+```h
+/*
+ * Copyright (c) 2022-2023 Jon Palmisciano. All rights reserved.
+ *
+ * Use of this source code is governed by the BSD 3-Clause license; the full
+ * terms of the license can be found in the LICENSE.txt file.
+ */
+
+#pragma once
+
+#include "BinaryNinja.h"
+
+/**
+ * Namespace to hold activity ID constants.
+ */
+namespace ActivityID {
+
+constexpr auto ResolveMethodCalls = "core.function.objectiveC.resolveMethodCalls";
+
+}
+
+/**
+ * Workflow-related procedures.
+ */
+class Workflow {
+
+    /**
+     * Get the addresses of all usable `_objc_msgSend` functions.
+     *
+     * Not all `_objc_msgSend` functions in the binary are usable, and there
+     * may also be more than one usable candidate. For additional details and
+     * specifics, see this function's implementation.
+     */
+    static std::set<uint64_t> findMsgSendFunctions(BinaryViewRef);
+
+    /**
+     * Attempt to rewrite the `objc_msgSend` call at `insnIndex` with a direct
+     * call to the requested method's implementation.
+     *
+     * @param insnIndex The index of the `LLIL_CALL` instruction to rewrite
+     */
+    static void rewriteMethodCall(LLILFunctionRef, size_t insnIndex);
+
+    /**
+     * Rewrite a CFString reference to a direct string reference and matching CFSTR intrinsic call.
+     *
+     * @param insnIndex The index of the `LLIL_CALL` instruction to rewrite
+     */
+    static void rewriteCFString(LLILFunctionRef, size_t insnIndex);
+
+public:
+    /**
+     * Attempt to inline all `objc_msgSend` calls in the given analysis context.
+     */
+    static void inlineMethodCalls(AnalysisContextRef);
+
+    /**
+     * Register the Objective Ninja workflow and all activities.
+     *
+     * This is named a bit strangely because `register` is a keyword in C++ and
+     * therefore an invalid method name, and I refuse to misspell it to appease
+     * the compiler and avoid the conflict.
+     */
+    static void registerActivities();
+};
+
+```
