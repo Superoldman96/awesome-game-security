@@ -1,0 +1,3751 @@
+Project Path: arc_gmh5225_RPGMakerDecrypter_0f4kskrw
+
+Source Tree:
+
+```txt
+arc_gmh5225_RPGMakerDecrypter_0f4kskrw
+├── CHANGELOG.MD
+├── Deploy
+│   ├── 7za-license.txt
+│   ├── 7za.exe
+│   └── deploy.bat
+├── LICENSE.txt
+├── README.MD
+├── RPGMakerDecrypter.Cli
+│   ├── CommandLineOptions.cs
+│   ├── Program.cs
+│   ├── RPGMakerDecrypter.Cli.csproj
+│   └── icon_256x256_cli.ico
+├── RPGMakerDecrypter.Common
+│   ├── ExceptionLogger.cs
+│   └── RPGMakerDecrypter.Common.csproj
+├── RPGMakerDecrypter.Decrypter
+│   ├── ArchiveFileNameUtils.cs
+│   ├── ArchivedFile.cs
+│   ├── BinaryUtils.cs
+│   ├── Constants.cs
+│   ├── Exceptions
+│   │   ├── InvalidArchiveException.cs
+│   │   └── UnsupportedArchiveException.cs
+│   ├── ProjectGenerator.cs
+│   ├── RGSSAD.cs
+│   ├── RGSSADv1.cs
+│   ├── RGSSADv3.cs
+│   ├── RPGMakerDecrypter.Decrypter.csproj
+│   └── RPGMakerVersion.cs
+├── RPGMakerDecrypter.Gui
+│   ├── AboutBox.Designer.cs
+│   ├── AboutBox.cs
+│   ├── AboutBox.resx
+│   ├── MainForm.Designer.cs
+│   ├── MainForm.cs
+│   ├── MainForm.resx
+│   ├── Program.cs
+│   ├── Properties
+│   │   ├── Resources.Designer.cs
+│   │   ├── Resources.resx
+│   │   ├── Settings.Designer.cs
+│   │   └── Settings.settings
+│   ├── RPGMakerDecrypter.Gui.csproj
+│   └── icon_256x256.ico
+├── RPGMakerDecrypter.Gui.Gtk
+│   ├── AboutWindow.cs
+│   ├── AboutWindow.glade
+│   ├── MainWindow.cs
+│   ├── MainWindow.glade
+│   ├── Program.cs
+│   ├── RPGMakerDecrypter.Gui.Gtk.csproj
+│   └── icon_256x256.ico
+├── RPGMakerDecrypter.Tests
+│   ├── BinaryUtilsTests.cs
+│   ├── EncryptedArchives
+│   │   ├── Game.rgss2a
+│   │   ├── Game.rgss3a
+│   │   └── Game.rgssad
+│   ├── FileHelpers.cs
+│   ├── RGSSADv1Tests.cs
+│   ├── RGSSADv3Tests.cs
+│   └── RPGMakerDecrypter.Tests.csproj
+├── RPGMakerDecrypter.sln
+├── Resources
+│   └── icon_256x256.pdn
+└── screenshots
+    └── gui1.png
+
+```
+
+`CHANGELOG.MD`:
+
+```MD
+# Changed in this release
+
+* **Add overwrite flag**: Add a CLI argument and GUI checkbox for controlling file overwriting behavior. Thank you @AhmedAhmedEG for your contribution!
+* **Spelling error fixes**: English is hard, thank you @punctdan for nitpicking and for the fixes!
+```
+
+`Deploy/7za-license.txt`:
+
+```txt
+      7-Zip Command line version
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~
+      License for use and distribution
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+      7-Zip Copyright (C) 1999-2010 Igor Pavlov.
+
+      7za.exe is distributed under the GNU LGPL license
+
+      Notes: 
+        You can use 7-Zip on any computer, including a computer in a commercial 
+        organization. You don't need to register or pay for 7-Zip.
+
+
+      GNU LGPL information
+      --------------------
+
+        This library is free software; you can redistribute it and/or
+        modify it under the terms of the GNU Lesser General Public
+        License as published by the Free Software Foundation; either
+        version 2.1 of the License, or (at your option) any later version.
+
+        This library is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+        Lesser General Public License for more details.
+
+        You can receive a copy of the GNU Lesser General Public License from 
+        http://www.gnu.org/
+
+```
+
+`Deploy/deploy.bat`:
+
+```bat
+@ECHO OFF
+
+IF NOT EXIST ..\RPGMakerDecrypter.Cli\bin\Release GOTO NOTCOMPILED
+IF NOT EXIST ..\RPGMakerDecrypter.Gui\bin\Release GOTO NOTCOMPILED
+
+IF NOT EXIST RPGMakerDecrypter MKDIR RPGMakerDecrypter
+
+COPY ..\RPGMakerDecrypter.Gui\bin\Release\RPGMakerDecrypter.exe RPGMakerDecrypter
+COPY ..\RPGMakerDecrypter.Gui\bin\Release\RPGMakerDecrypter.Decrypter.dll RPGMakerDecrypter
+COPY ..\RPGMakerDecrypter.Gui\bin\Release\RPGMakerDecrypter.exe.config RPGMakerDecrypter
+COPY ..\RPGMakerDecrypter.Cli\bin\Release\RPGMakerDecrypter-cli.exe RPGMakerDecrypter
+COPY ..\RPGMakerDecrypter.Cli\bin\Release\RPGMakerDecrypter-cli.exe.config RPGMakerDecrypter
+COPY ..\RPGMakerDecrypter.Cli\bin\Release\CommandLine.dll RPGMakerDecrypter
+
+IF NOT EXIST release MKDIR release
+
+7za a -tzip release\RPGMakerDecrypter.zip RPGMakerDecrypter
+
+RMDIR /Q /S RPGMakerDecrypter
+
+GOTO EXIT
+   
+:NOTCOMPILED
+ECHO Solution needs to be compiled in Release mode for deploy.
+
+:EXIT
+```
+
+`LICENSE.txt`:
+
+```txt
+The MIT License (MIT)
+
+Copyright (c) 2016 Mikko Uuksulainen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`README.MD`:
+
+```MD
+# RPG Maker Decrypter
+
+RPG Maker Decrypter can be used to extract encrypted archives created with RPG Maker XP, RPG Maker VX or RPG Maker VX Ace.
+Software can also generate correct type project file for decrypted data.
+
+## Usage
+
+RPG Maker Decrypter has a Windows application and a cli application which both provide the same functionality but with different interface.
+
+### RPG Maker Decrypter CLI
+
+Using RM2k2XP from commandline is simple. To get available commands, use:
+
+	RPGMakerDecrypter-cli
+	
+To extract archive to same directory where it exists, use
+
+	RPGMakerDecrypter-cli C:\MyRPGMakerGame\Game.rgssad
+	
+To extract archive to some other directory, use
+
+	RPGMakerDecrypter-cli C:\MyRPGMakerGame\Game.rgssad --output=C:\OtherDirectory
+	
+To create project file with decrypted files, use
+
+	RPGMakerDecrypter-cli C:\MyRPGMakerGame\Game.rgssad --project-file
+	
+### RPG Maker Decrypter GUI
+	
+Using Windows application is more straightforward. Open RGASSAD file by using File menu.
+
+If you want to extract single files, select file from list and press extract under file name and size.
+
+![Screenshots of the GUI application](/screenshots/gui1.png)
+
+### RPG Maker Decrypter GTK GUI (Experiemental)
+	
+Repository also contains [experiemental UI](https://github.com/uuksu/RPGMakerDecrypter/tree/master/RPGMakerDecrypter.Gui.Gtk) that uses GtkSharp under the hood.
+
+There is no prebuilt binary for this UI, but it is functional and can be built from the sources if needed.
+
+Thank you @tyrone-sudeium for porting the UI!
+
+## Requirements
+
+* GUI version works only on Windows, CLI version works with any platform .NET 6.0 targets.
+* .NET Runtime is not required for prebuilt binaries on selected platforms as it is packaged in the executable.
+
+## Binaries
+
+Prebuilt binaries are available for selected platforms. See [Releases](https://github.com/uuksu/RPGMakerDecrypter/releases).
+
+## Building
+
+RPGMakerDecrypter will compile with .NET 6.0 SDK.
+```
+
+`RPGMakerDecrypter.Cli/CommandLineOptions.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+using CommandLine;
+using CommandLine.Text;
+
+namespace RPGMakerDecrypter.Cli
+{
+    class CommandLineOptions
+    {
+        [Value(0, Required = true, HelpText = "Path to the RGSSAD file.")]
+        public string InputPath { get; set; }
+
+        [Option('o', "output", Required = false, HelpText = "Optional output directory path.")]
+        public string OutputDirectoryPath { get; set; }
+
+        [Option('p', "project-file", Required = false, HelpText = "If set to true then generates project file.")]
+        public bool GenerateProjectFile { get; set; }
+        
+        
+        [Option('w', "overwrite", Required = false, HelpText = "If set to true then it will overwrite files.")]
+        public bool Overwrite { get; set; }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Cli/Program.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using CommandLine;
+using RPGMakerDecrypter.Common;
+using RPGMakerDecrypter.Decrypter;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Cli
+{
+    static class Program
+    {
+        private static CommandLineOptions _commandLineOptions;
+
+        static void Main(string[] args)
+        {
+            var parsedResult = Parser.Default.ParseArguments<CommandLineOptions>(args);
+            _commandLineOptions = parsedResult.Value;
+
+            if (parsedResult.Errors.Any())
+            {
+                Environment.Exit(1);
+            }
+
+            if(!File.Exists(_commandLineOptions.InputPath))
+            {
+                Console.WriteLine($"RGSSAD file not found in path '{_commandLineOptions.InputPath}'");
+                Environment.Exit(1);
+            }
+
+            RPGMakerVersion version = RGSSAD.GetRPGMakerVersion(_commandLineOptions.InputPath);
+
+            if (version == RPGMakerVersion.Unknown)
+            {
+                Console.WriteLine("Unable to determinite RGSSAD RPG Maker version. " +
+                    "Please rename RGSSAD file with a extension corresponding to version: " +
+                    "XP: .rgssad, VX: .rgss2a, VX Ace: .rgss3a");
+                Environment.Exit(1);
+            }
+
+            string outputDirectoryPath;
+
+            if (_commandLineOptions.OutputDirectoryPath != null)
+            {
+                outputDirectoryPath = _commandLineOptions.OutputDirectoryPath;
+            }
+            else
+            {
+                FileInfo fi = new FileInfo(_commandLineOptions.InputPath);
+                outputDirectoryPath = fi.DirectoryName;
+            }
+
+            try
+            {
+                switch (version)
+                {
+                    case RPGMakerVersion.Xp:
+                    case RPGMakerVersion.Vx:
+                        RGSSADv1 rgssadv1 = new RGSSADv1(_commandLineOptions.InputPath);
+                        rgssadv1.ExtractAllFiles(outputDirectoryPath, _commandLineOptions.Overwrite);
+                        break;
+                    case RPGMakerVersion.VxAce:
+                        RGSSADv3 rgssadv2 = new RGSSADv3(_commandLineOptions.InputPath);
+                        rgssadv2.ExtractAllFiles(outputDirectoryPath, _commandLineOptions.Overwrite);
+                        break;
+                }
+            }
+            catch (InvalidArchiveException)
+            {
+                Console.WriteLine("Archive is invalid or corrupted. Reading failed.");
+                Console.WriteLine("Please create a issue: https://github.com/uuksu/RPGMakerDecrypter/issues");
+                Environment.Exit(1);
+            }
+            catch (UnsupportedArchiveException)
+            {
+                Console.WriteLine("Archive is not supported or it is corrupted.");
+                Console.WriteLine("Please create a issue: https://github.com/uuksu/RPGMakerDecrypter/issues");
+                Environment.Exit(1);
+            }
+            catch (Exception ex)
+            {
+                var logFilePath = ExceptionLogger.LogException(ex);
+                Console.WriteLine("Unexpected error happened while trying to extract the archive.");
+                Console.WriteLine($"Error log has been written to '{logFilePath}'");
+                Console.WriteLine("Please create a issue and include the log contents there: https://github.com/uuksu/RPGMakerDecrypter/issues");
+                Environment.Exit(1);
+            }
+
+            if (_commandLineOptions.GenerateProjectFile)
+            {
+                var outputSameAsArchivePath = new FileInfo(_commandLineOptions.InputPath).Directory.FullName == new DirectoryInfo(outputDirectoryPath).FullName;
+                ProjectGenerator.GenerateProject(version, outputDirectoryPath, !outputSameAsArchivePath);
+            }
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Cli/RPGMakerDecrypter.Cli.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>RPGMakerDecrypter-cli</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+	<EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>icon_256x256_cli.ico</ApplicationIcon>
+    <Title>RPG Maker Decrypter</Title>
+	<AssemblyTitle>RPG Maker Decrypter</AssemblyTitle>
+    <Description>Tool for decrypting RPG Maker XP, VX and VX Ace RGSSAD archives.</Description>
+    <Copyright>Mikko Uuksulainen © 2015-2023</Copyright>
+    <PackageProjectUrl>https://github.com/uuksu/RPGMakerDecrypter</PackageProjectUrl>
+	<Version>2.0.0</Version>
+	<MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RPGMakerDecrypter.Common\RPGMakerDecrypter.Common.csproj" />
+    <ProjectReference Include="..\RPGMakerDecrypter.Decrypter\RPGMakerDecrypter.Decrypter.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="icon_256x256_cli.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CommandLineParser" Version="2.9.1" />
+	<PackageReference Include="MinVer" Version="4.2.0">
+		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		<PrivateAssets>all</PrivateAssets>
+	</PackageReference>
+  </ItemGroup>
+</Project>
+```
+
+`RPGMakerDecrypter.Common/ExceptionLogger.cs`:
+
+```cs
+using System;
+using System.IO;
+
+namespace RPGMakerDecrypter.Common
+{
+    public static class ExceptionLogger
+    {
+        public static string LogException(Exception exception)
+        {
+            var outputFilePath = Path.Combine(Path.GetTempPath(), $"RPGMakerDecrypter-{Guid.NewGuid()}.log");
+            File.WriteAllText(outputFilePath, exception.ToString());
+
+            return outputFilePath;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Common/RPGMakerDecrypter.Common.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>
+
+```
+
+`RPGMakerDecrypter.Decrypter/ArchiveFileNameUtils.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    public static class ArchivedFileNameUtils
+    {
+        public static string GetFileName(string name)
+        {
+            return GetPathParts(name).Last();
+        }
+
+        public static string GetPlatformSpecificPath(string name)
+        {
+            var pathParts = GetPathParts(name);
+
+            pathParts = CleanUnicodeCharacters(pathParts);
+            pathParts = CleanInvalidPathCharacters(pathParts);
+
+            return Path.Combine(pathParts);
+        }
+
+        private static string[] GetPathParts(string name)
+        {
+            // Paths in RGSSAD file names are always with Windows-style delimeters
+            return name.Split('\\');
+        }
+
+        private static string[] CleanUnicodeCharacters(string[] pathParts)
+        {
+            var cleanedPathParts = new List<string>();
+            var unicodeConstantRegex = new Regex(@"(?i)\\(u|U)([0-9]|[A-F])([0-9]|[A-F])([0-9]|[A-F])([0-9]|[A-F])");
+
+            foreach (var pathPart in pathParts)
+            {
+                cleanedPathParts.Add(unicodeConstantRegex.Replace(pathPart, string.Empty));
+            }
+
+            return cleanedPathParts.ToArray();
+        }
+
+        private static string[] CleanInvalidPathCharacters(string[] pathParts)
+        {
+            var cleanedPathParts = new List<string>();
+
+            foreach (var pathPart in pathParts)
+            {
+                var cleanedPathPart = pathPart;
+
+                foreach(var invalidFileNameChar in Path.GetInvalidFileNameChars())
+                {
+                    cleanedPathPart = cleanedPathPart.Replace($"{invalidFileNameChar}", string.Empty);
+                }
+
+                cleanedPathParts.Add(cleanedPathPart);
+            }
+
+            return cleanedPathParts.ToArray();
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/ArchivedFile.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    public class ArchivedFile
+    {
+        public string Name { get; set; }
+
+        public int Size { get; set; }
+
+        public long Offset { get; set; }
+
+        public uint Key { get; set; }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/BinaryUtils.cs`:
+
+```cs
+using System.IO;
+using System.Text;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    public static class BinaryUtils
+    {
+        /// <summary>
+        /// Reads C style string from given binary reader.
+        /// Seeks to end of the string after reading.
+        /// </summary>
+        /// <param name="binaryReader">The binary reader.</param>
+        /// <param name="maxLength">The maximum length of the string</param>
+        /// <returns>Found string</returns>
+        public static string ReadCString(BinaryReader binaryReader, int maxLength)
+        {
+            long beginPosition = binaryReader.BaseStream.Position;
+            int stringLenght = 0;
+
+            // Searching for end of the C string (byte == 0, NUL character)
+            do
+            {
+                byte readByte = binaryReader.ReadByte();
+                if (readByte == 0)
+                    break;
+
+                stringLenght += 1;
+            } while (stringLenght < maxLength);
+
+            // Seeking back to beginning
+            binaryReader.BaseStream.Seek(beginPosition, SeekOrigin.Begin);
+
+            string result = Encoding.ASCII.GetString(binaryReader.ReadBytes(stringLenght));
+
+            // Seeking to end position of the string
+            binaryReader.BaseStream.Seek(beginPosition + stringLenght + 1, SeekOrigin.Begin);
+
+            return result;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/Constants.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    public class Constants
+    {
+        public const string RpgMakerXpArchiveName = "Game.rgssad";
+        public const string RpgMakerVxArchiveName = "Game.rgss2a";
+        public const string RpgMakerVxAceArchiveName = "Game.rgss3a";
+
+        public static string RpgMakerXpArchiveExtension = RpgMakerXpArchiveName.Split('.').Last();
+        public static string RpgMakerVxArchiveExtension = RpgMakerVxArchiveName.Split('.').Last();
+        public static string RpgMakerVxAceArchiveExtension = RpgMakerVxAceArchiveName.Split('.').Last();
+
+        public const string RpgMakerXpProjectFileContent = "RPGXP 1.02";
+        public const string RpgMakerVxProjectFileContent = "RPGVX 1.02";
+        public const string RpgMakerVxAceProjectFileContent = "RPGVXAce 1.00";
+
+        public const string RpgMakerXpProjectFileExtension = "rxproj";
+        public const string RpgMakerVxProjectFileExtension = "rvproj";
+        public const string RpgMakerVxAceProjectFileExtension = "rvproj2";
+
+        public static readonly string RGSSADHeader = "RGSSAD";
+
+        public const int RGASSDv1 = 1;
+        public const int RGASSDv3 = 3;
+
+        public static readonly int[] SupportedRGSSVersions = { RGASSDv1, RGASSDv3 };
+
+        public static readonly uint RGASSADv1Key = 0xDEADCAFE;
+
+        public const string RPGMakerXpIniFileContents =
+            "[Game]\r\nLibrary=RGSS104E.dll\r\nScripts=Data\\Scripts.rxdata\r\nTitle=DecryptedProject\r\nRTP1=Standard\r\nRTP2=\r\nRTP3=";
+
+        public const string RPGMakerVxIniFileContents =
+            "[Game]\r\nRTP=RPGVX\r\nLibrary=RGSS202E.dll\r\nScripts=Data\\Scripts.rvdata\r\nTitle=DecryptedProject";
+
+        public const string RPGMakerVxAceIniFileContents =
+            "[Game]\r\nRTP=RPGVXAce\r\nLibrary=System\\RGSS300.dll\r\nScripts=Data\\Scripts.rvdata2\r\nTitle=DecryptedProject";
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/Exceptions/InvalidArchiveException.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RPGMakerDecrypter.Decrypter.Exceptions
+{
+    public class InvalidArchiveException : Exception
+    {
+        public InvalidArchiveException(string message) : base(message)
+        {
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/Exceptions/UnsupportedArchiveException.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RPGMakerDecrypter.Decrypter.Exceptions
+{
+    public class UnsupportedArchiveException : Exception
+    {
+        public UnsupportedArchiveException(string message) : base(message)
+        {
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/ProjectGenerator.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    public static class ProjectGenerator
+    {
+        /// <summary>
+        /// Generates the project file and ini for given RPG Maker.
+        /// </summary>
+        /// <param name="version">The version.</param>
+        /// <param name="outputDirectoryPath">The output directory path.</param>
+        public static void GenerateProject(RPGMakerVersion version, string outputDirectoryPath, bool overwrite)
+        {
+            string projectFileContent = null;
+            string projectFileExtension = null;
+            string iniFileContent = null;
+
+            switch (version)
+            {
+                case RPGMakerVersion.Xp:
+                    projectFileContent = Constants.RpgMakerXpProjectFileContent;
+                    projectFileExtension = Constants.RpgMakerXpProjectFileExtension;
+                    iniFileContent = Constants.RPGMakerXpIniFileContents;
+                    break;
+                case RPGMakerVersion.Vx:
+                    projectFileContent = Constants.RpgMakerVxProjectFileContent;
+                    projectFileExtension = Constants.RpgMakerVxProjectFileExtension;
+                    iniFileContent = Constants.RPGMakerVxIniFileContents;
+                    break;
+                case RPGMakerVersion.VxAce:
+                    projectFileContent = Constants.RpgMakerVxAceProjectFileContent;
+                    projectFileExtension = Constants.RpgMakerVxAceProjectFileExtension;
+                    iniFileContent = Constants.RPGMakerVxAceIniFileContents;
+                    break;
+            }
+
+            var projectFilePath = Path.Combine(outputDirectoryPath, $"Game.{projectFileExtension}");
+            var iniFilePath = Path.Combine(outputDirectoryPath, "Game.ini");
+
+            if(overwrite)
+            {
+                File.WriteAllText(projectFilePath, projectFileContent);
+            }
+
+            if(overwrite)
+            {
+                File.WriteAllText(iniFilePath, iniFileContent);
+            }
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/RGSSAD.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    /// <summary>
+    /// Represents RPG Maker RGSS Encrypted Archive.
+    /// </summary>
+    public class RGSSAD : IDisposable
+    {
+        protected readonly string FilePath;
+        protected readonly BinaryReader BinaryReader;
+
+        public List<ArchivedFile> ArchivedFiles { get; set; }
+
+        public RGSSAD(string filePath)
+        {
+            this.FilePath = filePath;
+            BinaryReader = new BinaryReader(new FileStream(filePath, FileMode.Open));
+        }
+
+        /// <summary>
+        /// Gets the version of RGSSAD.
+        /// </summary>
+        /// <param name="path">FilePath to RGSSAD archive</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidArchiveException">
+        /// Archive is in invalid format.
+        /// or
+        /// Header was not found for archive.
+        /// </exception>
+        public int GetVersion()
+        {
+            string header;
+
+            try
+            {
+                header = BinaryUtils.ReadCString(BinaryReader, 7);
+            }
+            catch (Exception)
+            {
+                throw new InvalidArchiveException("Archive is in invalid format.");
+            }
+
+            if (header != Constants.RGSSADHeader)
+            {
+                throw new InvalidArchiveException("Header was not found for archive.");
+            }
+
+            int result = BinaryReader.ReadByte();
+
+            if (!Constants.SupportedRGSSVersions.Contains(result))
+            {
+                result =  -1;
+            }
+
+            BinaryReader.BaseStream.Seek(0, SeekOrigin.Begin);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Extracts all files.
+        /// </summary>
+        /// <param name="outputDirectoryPath">Output directory path</param>
+        /// <param name="overrideExisting">if set to true, overrides existing files</param>
+        public void ExtractAllFiles(string outputDirectoryPath, bool overrideExisting = false)
+        {
+            foreach (ArchivedFile archivedFile in ArchivedFiles)
+            {
+                ExtractFile(archivedFile, outputDirectoryPath, overrideExisting);
+            }
+        }
+
+        /// <summary>
+        /// Extracts single file from the file.
+        /// </summary>
+        /// <param name="archivedFile">Archived file</param>
+        /// <param name="outputDirectoryPath">Output directory path</param>
+        /// <param name="overrideExisting">If set to true, overrides existing files</param>
+        /// <param name="createDirectory">If set to true, creates directory specified in encrypted file name</param>
+        /// <exception cref="System.Exception">Invalid file path. Archive could be corrupted.</exception>
+        public void ExtractFile(ArchivedFile archivedFile, string outputDirectoryPath, bool overrideExisting = false, bool createDirectory = true)
+        {
+            var platformSpecificArchiveFilePath = ArchivedFileNameUtils.GetPlatformSpecificPath(archivedFile.Name);
+
+            string outputPath;
+
+            if (createDirectory)
+            {
+                string directoryPath = Path.GetDirectoryName(platformSpecificArchiveFilePath);
+
+                if (directoryPath == null)
+                {
+                    throw new Exception("Invalid file path. Archive could be corrupted.");
+                }
+
+                if (!Directory.Exists(Path.Combine(outputDirectoryPath, directoryPath)))
+                {
+                    Directory.CreateDirectory(Path.Combine(outputDirectoryPath, directoryPath));
+                }
+
+                outputPath = Path.Combine(outputDirectoryPath, platformSpecificArchiveFilePath);
+            }
+            else
+            {
+                string fileName = Path.GetFileName(platformSpecificArchiveFilePath);
+                outputPath = Path.Combine(outputDirectoryPath, fileName);
+            }
+
+            // Override existing file flag is set to true
+            if (File.Exists(outputPath) && !overrideExisting)
+            {
+                return;
+            }
+
+            BinaryReader.BaseStream.Seek(archivedFile.Offset, SeekOrigin.Begin);
+            byte[] data = BinaryReader.ReadBytes(archivedFile.Size);
+
+            BinaryWriter binaryWriter = new BinaryWriter(File.OpenWrite(outputPath));
+
+            binaryWriter.Write(DecryptFileData(data, archivedFile.Key));
+
+            binaryWriter.Close();
+        }
+
+        /// <summary>
+        /// Decrypts the file from given bytes using given key.
+        /// </summary>
+        /// <param name="encryptedFileData">The encrypted file data.</param>
+        /// <param name="key">The key.</param>
+        /// <returns></returns>
+        private byte[] DecryptFileData(byte[] encryptedFileData, uint key)
+        {
+            byte[] decryptedFileData = new byte[encryptedFileData.Length];
+
+            uint tempKey = key;
+            byte[] keyBytes = BitConverter.GetBytes(key);
+            int j = 0;
+
+            for (int i = 0; i <= encryptedFileData.Length - 1; i++)
+            {
+                if (j == 4)
+                {
+                    j = 0;
+                    tempKey *= 7;
+                    tempKey += 3;
+                    keyBytes = BitConverter.GetBytes(tempKey);
+                }
+
+                decryptedFileData[i] = (byte)(encryptedFileData[i] ^ keyBytes[j]);
+
+                j += 1;
+            }
+
+            return decryptedFileData;
+        }
+
+        public void Dispose()
+        {
+            BinaryReader.Close();
+            BinaryReader.Dispose();
+        }
+
+        /// <summary>
+        /// Gets the RPG Maker version based on RGASSD file extension.
+        /// </summary>
+        /// <param name="inputPath">Path to RGSSAD file</param>
+        public static RPGMakerVersion GetRPGMakerVersion(string inputPath)
+        {
+            FileInfo fi = new FileInfo(inputPath);
+
+            if(fi.Extension.EndsWith(Constants.RpgMakerXpArchiveExtension))
+            {
+                return RPGMakerVersion.Xp;
+            }
+
+            if (fi.Extension.EndsWith(Constants.RpgMakerVxArchiveExtension))
+            {
+                return RPGMakerVersion.Vx;
+            }
+
+            if (fi.Extension.EndsWith(Constants.RpgMakerVxAceArchiveExtension))
+            {
+                return RPGMakerVersion.VxAce;
+            }
+
+            return RPGMakerVersion.Unknown;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/RGSSADv1.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    /// <summary>
+    /// Represents RGSSAD format used in RPG Maker XP and VX.
+    /// </summary>
+    public class RGSSADv1 : RGSSAD
+    {
+        public RGSSADv1(string filePath) : base(filePath)
+        {
+            int version = GetVersion();
+
+            if (version != Constants.RGASSDv1)
+            {
+                throw new InvalidArchiveException("Archive is in invalid format.");
+            }
+
+            ReadRGSSAD();
+        }
+
+        /// <summary>
+        /// Reads the contents of RGSSAD archive and populates ArchivedFiles property.
+        /// </summary>
+        private void ReadRGSSAD()
+        {
+            uint key = Constants.RGASSADv1Key;
+
+            ArchivedFiles = new List<ArchivedFile>();
+
+            BinaryReader.BaseStream.Seek(8, SeekOrigin.Begin);
+            while (true)
+            {
+                ArchivedFile archivedFile = new ArchivedFile();
+
+                int length = DecryptInteger(BinaryReader.ReadInt32(), ref key);
+                archivedFile.Name = DecryptFilename(BinaryReader.ReadBytes(length), ref key);
+                archivedFile.Size = DecryptInteger(BinaryReader.ReadInt32(), ref key);
+                archivedFile.Offset = BinaryReader.BaseStream.Position;
+                archivedFile.Key = key;
+                ArchivedFiles.Add(archivedFile);
+
+                BinaryReader.BaseStream.Seek(archivedFile.Size, SeekOrigin.Current);
+                if (BinaryReader.BaseStream.Position == BinaryReader.BaseStream.Length)
+                    break;
+            }
+        }
+        /// <summary>
+        /// Decrypts integer from given value.
+        /// Proceeds key forward by calculating new value.
+        /// </summary>
+        /// <param name="value">Encrypted value</param>
+        /// <param name="key">Key</param>
+        /// <returns>Decrypted integer</returns>
+        private int DecryptInteger(int value, ref uint key)
+        {
+            long result = value ^ key;
+
+            key *= 7;
+            key += 3;
+
+            return (int)result;
+        }
+
+        /// <summary>
+        /// Decrypts file name from given bytes using given key.
+        /// Proceeds key forward by calculating new value.
+        /// </summary>
+        /// <param name="encryptedName">Encrypted filename</param>
+        /// <param name="key">Key</param>
+        /// <returns>Decrypted filename</returns>
+        private string DecryptFilename(byte[] encryptedName, ref uint key)
+        {
+            byte[] decryptedName = new byte[encryptedName.Length];
+
+            for (int i = 0; i <= encryptedName.Length - 1; i++)
+            {
+                decryptedName[i] = (byte)(encryptedName[i] ^ (key & 0xff));
+
+                key *= 7;
+                key += 3;
+            }
+
+            string result = Encoding.UTF8.GetString(decryptedName);
+
+            return result;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/RGSSADv3.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Decrypter
+{
+    /// <summary>
+    /// Represents RGSSAD format used in RPG Maker VX Ace.
+    /// </summary>
+    public class RGSSADv3 : RGSSAD
+    {
+        public RGSSADv3(string filePath) : base(filePath)
+        {
+            int version = GetVersion();
+
+            if (version != Constants.RGASSDv3)
+            {
+                throw new InvalidArchiveException("Archive is in invalid format.");
+            }
+
+            ReadRGSSAD();
+        }
+
+        /// <summary>
+        /// Reads the contents of RGSSAD archive and populates ArchivedFiles property.
+        /// </summary>
+        private void ReadRGSSAD()
+        {
+            BinaryReader.BaseStream.Seek(8, SeekOrigin.Begin);
+
+            uint key = (uint)BinaryReader.ReadInt32();
+            key *= 9;
+            key += 3;
+
+            ArchivedFiles = new List<ArchivedFile>();
+
+            while (true)
+            {
+                ArchivedFile archivedFile = new ArchivedFile();
+                archivedFile.Offset = DecryptInteger(BinaryReader.ReadInt32(), key);
+                archivedFile.Size = DecryptInteger(BinaryReader.ReadInt32(), key);
+                archivedFile.Key = (uint)DecryptInteger(BinaryReader.ReadInt32(), key);
+
+                int length = DecryptInteger(BinaryReader.ReadInt32(), key);
+
+                if (archivedFile.Offset == 0)
+                {
+                    break;
+                }
+
+                archivedFile.Name = DecryptFilename(BinaryReader.ReadBytes(length), key);
+
+                ArchivedFiles.Add(archivedFile);
+            }
+        }
+
+        /// <summary>
+        /// Decrypts integer from given value.
+        /// </summary>
+        /// <param name="value">Encrypted value</param>
+        /// <param name="key">Key</param>
+        /// <returns>Decrypted integer</returns>
+        private int DecryptInteger(int value, uint key)
+        {
+            long result = value ^ key;
+            return (int)result;
+        }
+
+        /// <summary>
+        /// Decrypts file name from given bytes using given key.
+        /// </summary>
+        /// <param name="encryptedName">Encrypted filename</param>
+        /// <param name="key">Key</param>
+        /// <returns>Decrypted filename</returns>
+        private string DecryptFilename(byte[] encryptedName, uint key)
+        {
+            byte[] decryptedName = new byte[encryptedName.Length];
+
+            byte[] keyBytes = BitConverter.GetBytes(key);
+
+            int j = 0;
+            for (int i = 0; i <= encryptedName.Length - 1; i++)
+            {
+                if (j == 4)
+                    j = 0;
+                decryptedName[i] = (byte)(encryptedName[i] ^ keyBytes[j]);
+                j += 1;
+            }
+
+            string result = Encoding.UTF8.GetString(decryptedName);
+
+            return result;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Decrypter/RPGMakerDecrypter.Decrypter.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<Title>RPG Maker Decrypter</Title>
+		<AssemblyTitle>RPG Maker Decrypter</AssemblyTitle>
+		<Description>Tool for decrypting RPG Maker XP, VX and VX Ace RGSSAD archives.</Description>
+		<Copyright>Mikko Uuksulainen © 2015-2023</Copyright>
+		<PackageProjectUrl>https://github.com/uuksu/RPGMakerDecrypter</PackageProjectUrl>
+		<Version>2.0.0</Version>
+	</PropertyGroup>
+
+</Project>
+
+```
+
+`RPGMakerDecrypter.Decrypter/RPGMakerVersion.cs`:
+
+```cs
+namespace RPGMakerDecrypter.Decrypter
+{
+    public enum RPGMakerVersion
+    {
+        Unknown,
+        Xp,
+        Vx,
+        VxAce
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/AboutWindow.cs`:
+
+```cs
+using System;
+using System.Linq;
+using System.Reflection;
+using Gtk;
+
+namespace RPGMakerDecrypter.Gui.Gtk
+{
+    class AboutWindow : AboutDialog
+    {
+        public AboutWindow() : this(new Builder("AboutWindow.glade")) { }
+        private AboutWindow(Builder builder) : base(builder.GetRawOwnedObject("AboutWindow"))
+        {
+            builder.Autoconnect(this);
+
+            AppDomain currentDomain = AppDomain.CurrentDomain;
+            var assemblies = currentDomain.GetAssemblies();
+
+            Assembly guiAssembly = assemblies.First(a => a.GetName().Name == "RPGMakerDecrypter.Gui.Gtk");
+            Assembly libraryAssembly = assemblies.First(a => a.GetName().Name == "RPGMakerDecrypter.Decrypter");
+
+            this.Version = String.Format("Version: GUI: {0}, Library: {1}",
+                guiAssembly.GetName().Version,
+                libraryAssembly.GetName().Version);
+
+            this.Close += (sender, e) => this.Dispose();            
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/AboutWindow.glade`:
+
+```glade
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.40.0 -->
+<interface>
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkAboutDialog" id="AboutWindow">
+    <property name="can-focus">False</property>
+    <property name="modal">True</property>
+    <property name="destroy-with-parent">True</property>
+    <property name="type-hint">dialog</property>
+    <property name="program-name">RPG Maker Decrypter</property>
+    <property name="version">2.0.10</property>
+    <property name="logo-icon-name">folder-open</property>
+    <property name="license-type">mit-x11</property>
+    <child internal-child="vbox">
+      <object class="GtkBox">
+        <property name="can-focus">False</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox">
+            <property name="can-focus">False</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/MainWindow.cs`:
+
+```cs
+using System;
+using System.Linq;
+using System.IO;
+using Gtk;
+using UI = Gtk.Builder.ObjectAttribute;
+using RPGMakerDecrypter.Decrypter;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Gui.Gtk
+{
+    class MainWindow : Window
+    {
+#pragma warning disable CS0169, CS0649, IDE0044
+        [UI] private Button fileButton = null;
+        [UI] private Button extractAllButton = null;
+        [UI] private Button aboutButton = null;
+        
+        [UI] private ListBox archivedFilesListBox = null;
+        [UI] private Label statusLabel = null;
+        [UI] private CheckButton generateProjectCheckBox = null;
+        [UI] private Entry fileNameTextBox = null;
+        [UI] private Entry sizeTextBox = null;
+        [UI] private Button extractFileButton = null;
+#pragma warning restore CS0649, IDE0044, CS0169
+
+        private RPGMakerVersion currentArchiveVersion;
+        private RGSSAD currentArchive;
+
+        public MainWindow() : this(new Builder("MainWindow.glade")) { }
+
+        private MainWindow(Builder builder) : base(builder.GetRawOwnedObject("MainWindow"))
+        {
+            builder.Autoconnect(this);
+
+            DeleteEvent += Window_DeleteEvent;
+            fileButton.Clicked += FileButton_Clicked;
+            extractAllButton.Clicked += ExtractAll_Clicked;
+            aboutButton.Clicked += About_Clicked;
+            extractFileButton.Clicked += ExtractFile_Clicked;
+            archivedFilesListBox.RowSelected += archivedFilesListBox_SelectedIndexChanged;
+        }
+
+        private void Window_DeleteEvent(object sender, DeleteEventArgs a)
+        {
+            Application.Quit();
+        }
+
+        private void FileButton_Clicked(object sender, EventArgs a)
+        {
+            FileChooserDialog openFileDialog = new FileChooserDialog("Open File", this, FileChooserAction.Open);
+            openFileDialog.AddButton(Stock.Cancel, ResponseType.Cancel);
+            openFileDialog.AddButton(Stock.Open, ResponseType.Ok);
+            openFileDialog.DefaultResponse = ResponseType.Ok;
+            openFileDialog.SelectMultiple = false;
+            {
+                FileFilter rgssFilter = new FileFilter();
+                rgssFilter.Name = "All RGSS Archives";
+                rgssFilter.AddPattern("*.rgssad");
+                rgssFilter.AddPattern("*.rgss2a");
+                rgssFilter.AddPattern("*.rgss3a");
+                openFileDialog.AddFilter(rgssFilter);
+            }
+            {
+                FileFilter xpFilter = new FileFilter();
+                xpFilter.Name = "RPG Maker XP Encrypted Archive (.rgssad)";
+                xpFilter.AddPattern("*.rgssad");
+                openFileDialog.AddFilter(xpFilter);
+            }
+            {
+                FileFilter vxFilter = new FileFilter();
+                vxFilter.Name = "RPG Maker VX Encrypted Archive (.rgss2a)";
+                vxFilter.AddPattern("*.rgss2a");
+                openFileDialog.AddFilter(vxFilter);
+            }
+
+            {
+                FileFilter vxaFilter = new FileFilter();
+                vxaFilter.Name = "RPG Maker VX Ace Encrypted Archive (.rgss3a)";
+                vxaFilter.AddPattern("*.rgss3a");
+                openFileDialog.AddFilter(vxaFilter);
+            }
+
+            {
+                FileFilter allFilter = new FileFilter();
+                allFilter.Name = "All Files";
+                allFilter.AddPattern("*.*");
+                openFileDialog.AddFilter(allFilter);
+            }
+
+            ResponseType response = (ResponseType) openFileDialog.Run();
+            if (response != ResponseType.Ok) {
+                openFileDialog.Dispose();
+                return;
+            }
+
+            Reset();
+
+            string inputFilePath = openFileDialog.Filename;
+            openFileDialog.Dispose();
+
+            currentArchiveVersion = RGSSAD.GetVersion(inputFilePath);
+            if (currentArchiveVersion == RPGMakerVersion.Invalid)
+            {
+                MessageDialog md = new MessageDialog(this, DialogFlags.DestroyWithParent, MessageType.Error, ButtonsType.Close, "Invalid input file.");
+                md.Run();
+                md.Destroy();
+                return;
+            }
+
+            try
+            {
+                switch (currentArchiveVersion)
+                {
+                    case RPGMakerVersion.Xp:
+                    case RPGMakerVersion.Vx:
+                        currentArchive = new RGSSADv1(inputFilePath);
+                        break;
+                    case RPGMakerVersion.VxAce:
+                        currentArchive = new RGSSADv3(inputFilePath);
+                        break;
+                }
+            }
+            catch (InvalidArchiveException)
+            {
+                MessageDialog md = new MessageDialog(this, DialogFlags.DestroyWithParent, MessageType.Error, ButtonsType.Ok, "Archive is invalid or corrupted. Reading failed.");
+                md.Run();
+                md.Destroy();
+                return;
+            }
+            catch (UnsupportedArchiveException)
+            {
+                MessageDialog md = new MessageDialog(this, DialogFlags.DestroyWithParent, MessageType.Error, ButtonsType.Close, "Archive is not supported or it is corrupted.");
+                md.Run();
+                md.Destroy();
+                return;
+            }
+            catch (Exception)
+            {
+                MessageDialog md = new MessageDialog(this, DialogFlags.DestroyWithParent, MessageType.Error, ButtonsType.Close, "Something went wrong with reading or extraction. Archive is likely invalid or corrupted.");
+                md.Run();
+                md.Destroy();
+                return;
+            }
+
+            int rowNum = 0;
+            foreach (ArchivedFile archivedFile in currentArchive.ArchivedFiles)
+            {
+                ListBoxRow r = new ListBoxRow();
+                Label l = new Label();
+                l.Text = archivedFile.Name;
+                l.Xalign = 0.0F;
+                r.Add(l);
+                archivedFilesListBox.Add(r);
+                if (rowNum == 0) {
+                    archivedFilesListBox.SelectRow(r);
+                }
+                rowNum++;
+            }
+            archivedFilesListBox.ShowAll();
+            SetClickableElementsEnabled(true);
+
+            statusLabel.Text = "Archive opened succesfully.";
+        }
+
+        private void SetClickableElementsEnabled(bool enabled)
+        {
+            archivedFilesListBox.Sensitive = enabled;
+            extractAllButton.Sensitive = enabled;
+        }
+
+        private void Reset()
+        {
+            archivedFilesListBox.Forall((child) => archivedFilesListBox.Remove(child));
+            archivedFilesListBox.ShowAll();
+            SetClickableElementsEnabled(false);
+            extractFileButton.Sensitive = false;
+
+            currentArchiveVersion = RPGMakerVersion.Invalid;
+
+            currentArchive?.Dispose();
+        }
+
+        private void ExtractAll_Clicked(object sender, EventArgs a)
+        {
+            if (currentArchive == null || currentArchive.ArchivedFiles.Count == 0)
+            {
+                return;
+            }
+            FileChooserDialog openFolderDialog = new FileChooserDialog("Choose Folder", this, FileChooserAction.SelectFolder);
+            openFolderDialog.AddButton(Stock.Cancel, ResponseType.Cancel);
+            openFolderDialog.AddButton(Stock.Save, ResponseType.Ok);
+            openFolderDialog.DefaultResponse = ResponseType.Ok;
+            openFolderDialog.SelectMultiple = false;
+
+            ResponseType response = (ResponseType) openFolderDialog.Run();
+            if (response != ResponseType.Ok) {
+                openFolderDialog.Dispose();
+                return;
+            }
+
+            string outputDirectoryPath = openFolderDialog.CurrentFolder;
+            openFolderDialog.Dispose();
+
+            try
+            {
+                currentArchive.ExtractAllFiles(outputDirectoryPath, true);
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Something went wrong with extraction. Archive is likely invalid or corrupted.");
+                return;
+            }
+
+            if (generateProjectCheckBox.Active)
+            {
+                ProjectGenerator.GenerateProject(currentArchiveVersion, outputDirectoryPath);
+            }
+
+            statusLabel.Text = "Archive extracted succesfully.";
+        }
+
+        private void About_Clicked(object sender, EventArgs a)
+        {
+            var win = new AboutWindow();
+            win.Run();
+            win.Dispose();
+        }
+
+        private void ExtractFile_Clicked(object sender, EventArgs a)
+        {
+            if (currentArchive == null || !currentArchive.ArchivedFiles.Any() || archivedFilesListBox.SelectedRow == null)
+            {
+                return;
+            }
+
+            ArchivedFile archivedFile = currentArchive.ArchivedFiles[archivedFilesListBox.SelectedRow.Index];
+
+            string fileName = archivedFile.Name.Split('\\').Last();
+            string extension = fileName.Split('.').Last();
+
+            FileChooserDialog saveFileDialog = new FileChooserDialog("Save File", this, FileChooserAction.Save);
+            saveFileDialog.AddButton(Stock.Cancel, ResponseType.Cancel);
+            saveFileDialog.AddButton(Stock.Save, ResponseType.Ok);
+            saveFileDialog.DefaultResponse = ResponseType.Ok;
+            saveFileDialog.SelectMultiple = false;
+            saveFileDialog.CurrentName = fileName;
+            var filter = new FileFilter();
+            filter = new FileFilter();
+            filter.Name = $"Data file (*.{extension})";
+            filter.AddPattern($"*.{extension}");
+            saveFileDialog.AddFilter(filter);
+
+            ResponseType response = (ResponseType) saveFileDialog.Run();
+            if (response != ResponseType.Ok) {
+                saveFileDialog.Dispose();
+                return;
+            }
+
+            FileInfo fileInfo = new FileInfo(saveFileDialog.Filename);
+            saveFileDialog.Dispose();
+            
+            try
+            {
+                currentArchive.ExtractFile(archivedFile, fileInfo.DirectoryName, true, false);
+            }
+            catch (Exception)
+            {
+                Console.WriteLine("Something went wrong with extraction. Archive is likely invalid or corrupted.");
+                return;
+            }
+
+            statusLabel.Text = $"Extracted {fileName} succesfully.";
+        }
+
+        private void archivedFilesListBox_SelectedIndexChanged(object sender, EventArgs a)
+        {
+            extractFileButton.Sensitive = false;
+
+            if (currentArchive == null || !currentArchive.ArchivedFiles.Any() || archivedFilesListBox.SelectedRow == null)
+            {
+                return;
+            }
+
+            ArchivedFile archivedFile = currentArchive.ArchivedFiles[archivedFilesListBox.SelectedRow.Index];
+
+            fileNameTextBox.Text = archivedFile.Name;
+            sizeTextBox.Text = archivedFile.Size.ToString();
+
+            extractFileButton.Sensitive = true;
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/MainWindow.glade`:
+
+```glade
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.40.0 -->
+<interface>
+  <requires lib="gtk+" version="3.18"/>
+  <object class="GtkWindow" id="MainWindow">
+    <property name="can-focus">False</property>
+    <property name="title" translatable="yes">RPG Maker Decrypter</property>
+    <property name="default-width">480</property>
+    <property name="default-height">300</property>
+    <child>
+      <object class="GtkBox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="margin-left">4</property>
+        <property name="margin-right">4</property>
+        <property name="margin-top">4</property>
+        <property name="margin-bottom">4</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">3</property>
+        <child>
+          <object class="GtkBox">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="valign">start</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+            <property name="spacing">1</property>
+            <child>
+              <object class="GtkButtonBox">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="layout-style">start</property>
+                <child>
+                  <object class="GtkButton" id="fileButton">
+                    <property name="label" translatable="yes">File</property>
+                    <property name="width-request">50</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">0</property>
+                    <property name="non-homogeneous">True</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="extractAllButton">
+                    <property name="label" translatable="yes">Extract All...</property>
+                    <property name="visible">True</property>
+                    <property name="sensitive">False</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">1</property>
+                    <property name="non-homogeneous">True</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkButton" id="aboutButton">
+                    <property name="label" translatable="yes">About...</property>
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="receives-default">True</property>
+                  </object>
+                  <packing>
+                    <property name="expand">True</property>
+                    <property name="fill">True</property>
+                    <property name="position">2</property>
+                    <property name="non-homogeneous">True</property>
+                  </packing>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkSeparator">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="padding">4</property>
+                <property name="position">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkCheckButton" id="generateProjectCheckBox">
+                <property name="label" translatable="yes">Generate Project</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="receives-default">False</property>
+                <property name="draw-indicator">True</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">5</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="margin-start">6</property>
+            <property name="margin-end">6</property>
+            <property name="spacing">8</property>
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="width-request">200</property>
+                <property name="visible">True</property>
+                <property name="can-focus">True</property>
+                <property name="shadow-type">in</property>
+                <child>
+                  <object class="GtkViewport">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkListBox" id="archivedFilesListBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkFrame">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="label-xalign">0</property>
+                <property name="shadow-type">in</property>
+                <child>
+                  <object class="GtkAlignment">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="left-padding">12</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="margin-end">8</property>
+                        <property name="orientation">vertical</property>
+                        <property name="spacing">8</property>
+                        <property name="baseline-position">top</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="label" translatable="yes">Name:</property>
+                            <property name="xalign">0</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkEntry" id="fileNameTextBox">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="editable">False</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">1</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="visible">True</property>
+                            <property name="can-focus">False</property>
+                            <property name="label" translatable="yes">Size (bytes):</property>
+                            <property name="xalign">0</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">2</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkEntry" id="sizeTextBox">
+                            <property name="visible">True</property>
+                            <property name="can-focus">True</property>
+                            <property name="editable">False</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">3</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="extractFileButton">
+                            <property name="label" translatable="yes">Extract File</property>
+                            <property name="visible">True</property>
+                            <property name="sensitive">False</property>
+                            <property name="can-focus">True</property>
+                            <property name="receives-default">True</property>
+                          </object>
+                          <packing>
+                            <property name="expand">False</property>
+                            <property name="fill">True</property>
+                            <property name="position">4</property>
+                          </packing>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child type="label">
+                  <object class="GtkLabel">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="label" translatable="yes">File Info</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkStatusbar">
+            <property name="name">0</property>
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="margin-start">10</property>
+            <property name="margin-end">10</property>
+            <property name="margin-top">6</property>
+            <property name="margin-bottom">6</property>
+            <property name="spacing">2</property>
+            <child>
+              <object class="GtkLabel" id="statusLabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-start">6</property>
+                <property name="margin-end">6</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/Program.cs`:
+
+```cs
+using System;
+using Gtk;
+
+namespace RPGMakerDecrypter.Gui.Gtk
+{
+    class Program
+    {
+        [STAThread]
+        public static void Main(string[] args)
+        {
+            Application.Init();
+
+            var app = new Application("org.RPGMakerDecrypter.Gui.Gtk.RPGMakerDecrypter.Gui.Gtk", GLib.ApplicationFlags.None);
+            app.Register(GLib.Cancellable.Current);
+            
+            var win = new MainWindow();
+            app.AddWindow(win);
+
+            win.Show();
+            Application.Run();
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui.Gtk/RPGMakerDecrypter.Gui.Gtk.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <ApplicationIcon>icon_256x256.ico</ApplicationIcon>
+    <Title>RPG Maker Decrypter</Title>
+    <AssemblyTitle>RPG Maker Decrypter</AssemblyTitle>
+    <Description>Tool for decrypting RPG Maker XP, VX and VX Ace RGSSAD archives.</Description>
+    <Copyright>Mikko Uuksulainen © 2015-2023</Copyright>
+    <PackageProjectUrl>https://github.com/uuksu/RPGMakerDecrypter</PackageProjectUrl>
+    <Version>2.0.0</Version>
+    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="**\*.glade" />
+    <EmbeddedResource Include="**\*.glade">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="icon_256x256.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GtkSharp" Version="3.24.24.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RPGMakerDecrypter.Decrypter\RPGMakerDecrypter.Decrypter.csproj" />
+  </ItemGroup>
+</Project>
+
+```
+
+`RPGMakerDecrypter.Gui/AboutBox.Designer.cs`:
+
+```cs
+namespace RPGMakerDecrypter.Gui
+{
+    partial class AboutBox
+    {
+        /// <summary>
+        /// Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        /// Clean up any resources being used.
+        /// </summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        /// Required method for Designer support - do not modify
+        /// the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AboutBox));
+            this.tableLayoutPanel = new System.Windows.Forms.TableLayoutPanel();
+            this.versionLabel = new System.Windows.Forms.Label();
+            this.labelProductName = new System.Windows.Forms.Label();
+            this.textBoxDescription = new System.Windows.Forms.TextBox();
+            this.okButton = new System.Windows.Forms.Button();
+            this.tableLayoutPanel.SuspendLayout();
+            this.SuspendLayout();
+            // 
+            // tableLayoutPanel
+            // 
+            this.tableLayoutPanel.ColumnCount = 1;
+            this.tableLayoutPanel.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.tableLayoutPanel.Controls.Add(this.versionLabel, 0, 1);
+            this.tableLayoutPanel.Controls.Add(this.labelProductName, 0, 0);
+            this.tableLayoutPanel.Controls.Add(this.textBoxDescription, 0, 2);
+            this.tableLayoutPanel.Controls.Add(this.okButton, 0, 3);
+            this.tableLayoutPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.tableLayoutPanel.Location = new System.Drawing.Point(10, 10);
+            this.tableLayoutPanel.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            this.tableLayoutPanel.Name = "tableLayoutPanel";
+            this.tableLayoutPanel.RowCount = 4;
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 12.42236F));
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 13.04348F));
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 62.11181F));
+            this.tableLayoutPanel.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 12.42236F));
+            this.tableLayoutPanel.Size = new System.Drawing.Size(487, 307);
+            this.tableLayoutPanel.TabIndex = 0;
+            // 
+            // versionLabel
+            // 
+            this.versionLabel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.versionLabel.Location = new System.Drawing.Point(7, 38);
+            this.versionLabel.Margin = new System.Windows.Forms.Padding(7, 0, 4, 0);
+            this.versionLabel.MaximumSize = new System.Drawing.Size(0, 20);
+            this.versionLabel.Name = "versionLabel";
+            this.versionLabel.Size = new System.Drawing.Size(476, 20);
+            this.versionLabel.TabIndex = 25;
+            this.versionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // 
+            // labelProductName
+            // 
+            this.labelProductName.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.labelProductName.Location = new System.Drawing.Point(7, 0);
+            this.labelProductName.Margin = new System.Windows.Forms.Padding(7, 0, 4, 0);
+            this.labelProductName.MaximumSize = new System.Drawing.Size(0, 20);
+            this.labelProductName.Name = "labelProductName";
+            this.labelProductName.Size = new System.Drawing.Size(476, 20);
+            this.labelProductName.TabIndex = 19;
+            this.labelProductName.Text = "RPG Maker Decrypter";
+            this.labelProductName.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // 
+            // textBoxDescription
+            // 
+            this.textBoxDescription.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.textBoxDescription.Location = new System.Drawing.Point(7, 81);
+            this.textBoxDescription.Margin = new System.Windows.Forms.Padding(7, 3, 4, 3);
+            this.textBoxDescription.Multiline = true;
+            this.textBoxDescription.Name = "textBoxDescription";
+            this.textBoxDescription.ReadOnly = true;
+            this.textBoxDescription.ScrollBars = System.Windows.Forms.ScrollBars.Both;
+            this.textBoxDescription.Size = new System.Drawing.Size(476, 184);
+            this.textBoxDescription.TabIndex = 23;
+            this.textBoxDescription.TabStop = false;
+            this.textBoxDescription.Text = resources.GetString("textBoxDescription.Text");
+            // 
+            // okButton
+            // 
+            this.okButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.okButton.DialogResult = System.Windows.Forms.DialogResult.Cancel;
+            this.okButton.Location = new System.Drawing.Point(395, 277);
+            this.okButton.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            this.okButton.Name = "okButton";
+            this.okButton.Size = new System.Drawing.Size(88, 27);
+            this.okButton.TabIndex = 24;
+            this.okButton.Text = "&OK";
+            // 
+            // AboutBox
+            // 
+            this.AcceptButton = this.okButton;
+            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.ClientSize = new System.Drawing.Size(507, 327);
+            this.Controls.Add(this.tableLayoutPanel);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
+            this.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.Name = "AboutBox";
+            this.Padding = new System.Windows.Forms.Padding(10);
+            this.ShowIcon = false;
+            this.ShowInTaskbar = false;
+            this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
+            this.Text = "About";
+            this.Load += new System.EventHandler(this.AboutBox_Load);
+            this.tableLayoutPanel.ResumeLayout(false);
+            this.tableLayoutPanel.PerformLayout();
+            this.ResumeLayout(false);
+
+        }
+
+        #endregion
+
+        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel;
+        private System.Windows.Forms.Label labelProductName;
+        private System.Windows.Forms.Button okButton;
+        private System.Windows.Forms.TextBox textBoxDescription;
+        private System.Windows.Forms.Label versionLabel;
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/AboutBox.cs`:
+
+```cs
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Windows.Forms;
+using RPGMakerDecrypter.Decrypter;
+
+namespace RPGMakerDecrypter.Gui
+{
+    partial class AboutBox : Form
+    {
+        public AboutBox()
+        {
+            InitializeComponent();
+        }
+
+        private void AboutBox_Load(object sender, EventArgs e)
+        {
+            AppDomain currentDomain = AppDomain.CurrentDomain;
+            var assemblies = currentDomain.GetAssemblies();
+
+            Assembly guiAssembly = assemblies.First(a => a.GetName().Name == "RPGMakerDecrypter");
+            Assembly libraryAssembly = assemblies.First(a => a.GetName().Name == "RPGMakerDecrypter.Decrypter");
+
+            versionLabel.Text = String.Format("Version: GUI: {0}, Library: {1}",
+                guiAssembly.GetName().Version,
+                libraryAssembly.GetName().Version);
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/AboutBox.resx`:
+
+```resx
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="textBoxDescription.Text" xml:space="preserve">
+    <value>The MIT License (MIT)
+
+Copyright (c) 2015-2023 Mikko Uuksulainen
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+</value>
+  </data>
+</root>
+```
+
+`RPGMakerDecrypter.Gui/MainForm.Designer.cs`:
+
+```cs
+namespace RPGMakerDecrypter.Gui
+{
+    partial class MainForm
+    {
+        /// <summary>
+        /// Required designer variable.
+        /// </summary>
+        private System.ComponentModel.IContainer components = null;
+
+        /// <summary>
+        /// Clean up any resources being used.
+        /// </summary>
+        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && (components != null))
+            {
+                components.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        #region Windows Form Designer generated code
+
+        /// <summary>
+        /// Required method for Designer support - do not modify
+        /// the contents of this method with the code editor.
+        /// </summary>
+        private void InitializeComponent()
+        {
+            menuStrip1 = new System.Windows.Forms.MenuStrip();
+            fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            openRGSSADToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            extractToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            statusStrip1 = new System.Windows.Forms.StatusStrip();
+            statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
+            tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
+            archivedFilesListBox = new System.Windows.Forms.ListBox();
+            tableLayoutPanel2 = new System.Windows.Forms.TableLayoutPanel();
+            groupBox1 = new System.Windows.Forms.GroupBox();
+            tableLayoutPanel3 = new System.Windows.Forms.TableLayoutPanel();
+            sizeTextBox = new System.Windows.Forms.TextBox();
+            label1 = new System.Windows.Forms.Label();
+            fileNameTextBox = new System.Windows.Forms.TextBox();
+            label2 = new System.Windows.Forms.Label();
+            extractFileButton = new System.Windows.Forms.Button();
+            generateProjectCheckBox = new System.Windows.Forms.CheckBox();
+            overwriteCheckBox = new System.Windows.Forms.CheckBox();
+            menuStrip1.SuspendLayout();
+            statusStrip1.SuspendLayout();
+            tableLayoutPanel1.SuspendLayout();
+            tableLayoutPanel2.SuspendLayout();
+            groupBox1.SuspendLayout();
+            tableLayoutPanel3.SuspendLayout();
+            SuspendLayout();
+            // 
+            // menuStrip1
+            // 
+            menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { fileToolStripMenuItem, extractToolStripMenuItem, aboutToolStripMenuItem });
+            menuStrip1.Location = new System.Drawing.Point(0, 0);
+            menuStrip1.Name = "menuStrip1";
+            menuStrip1.Padding = new System.Windows.Forms.Padding(7, 2, 0, 2);
+            menuStrip1.Size = new System.Drawing.Size(552, 24);
+            menuStrip1.TabIndex = 0;
+            menuStrip1.Text = "menuStrip1";
+            // 
+            // fileToolStripMenuItem
+            // 
+            fileToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] { openRGSSADToolStripMenuItem, exitToolStripMenuItem });
+            fileToolStripMenuItem.Name = "fileToolStripMenuItem";
+            fileToolStripMenuItem.Size = new System.Drawing.Size(37, 20);
+            fileToolStripMenuItem.Text = "File";
+            // 
+            // openRGSSADToolStripMenuItem
+            // 
+            openRGSSADToolStripMenuItem.Name = "openRGSSADToolStripMenuItem";
+            openRGSSADToolStripMenuItem.Size = new System.Drawing.Size(158, 22);
+            openRGSSADToolStripMenuItem.Text = "Open RGSSAD...";
+            openRGSSADToolStripMenuItem.Click += openRGSSADToolStripMenuItem_Click;
+            // 
+            // exitToolStripMenuItem
+            // 
+            exitToolStripMenuItem.Name = "exitToolStripMenuItem";
+            exitToolStripMenuItem.Size = new System.Drawing.Size(158, 22);
+            exitToolStripMenuItem.Text = "Exit";
+            exitToolStripMenuItem.Click += exitToolStripMenuItem_Click;
+            // 
+            // extractToolStripMenuItem
+            // 
+            extractToolStripMenuItem.Enabled = false;
+            extractToolStripMenuItem.Name = "extractToolStripMenuItem";
+            extractToolStripMenuItem.Size = new System.Drawing.Size(81, 20);
+            extractToolStripMenuItem.Text = "Extract All...";
+            extractToolStripMenuItem.Click += extractToolStripMenuItem_Click;
+            // 
+            // aboutToolStripMenuItem
+            // 
+            aboutToolStripMenuItem.Name = "aboutToolStripMenuItem";
+            aboutToolStripMenuItem.Size = new System.Drawing.Size(61, 20);
+            aboutToolStripMenuItem.Text = "About...";
+            aboutToolStripMenuItem.Click += aboutToolStripMenuItem_Click;
+            // 
+            // statusStrip1
+            // 
+            statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { statusLabel });
+            statusStrip1.Location = new System.Drawing.Point(0, 500);
+            statusStrip1.Name = "statusStrip1";
+            statusStrip1.Padding = new System.Windows.Forms.Padding(1, 0, 16, 0);
+            statusStrip1.Size = new System.Drawing.Size(552, 22);
+            statusStrip1.TabIndex = 1;
+            statusStrip1.Text = "statusStrip1";
+            // 
+            // statusLabel
+            // 
+            statusLabel.Name = "statusLabel";
+            statusLabel.Size = new System.Drawing.Size(39, 17);
+            statusLabel.Text = "Ready";
+            // 
+            // tableLayoutPanel1
+            // 
+            tableLayoutPanel1.ColumnCount = 2;
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
+            tableLayoutPanel1.Controls.Add(archivedFilesListBox, 0, 0);
+            tableLayoutPanel1.Controls.Add(tableLayoutPanel2, 1, 0);
+            tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
+            tableLayoutPanel1.Location = new System.Drawing.Point(0, 24);
+            tableLayoutPanel1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            tableLayoutPanel1.Name = "tableLayoutPanel1";
+            tableLayoutPanel1.RowCount = 1;
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 468F));
+            tableLayoutPanel1.Size = new System.Drawing.Size(552, 476);
+            tableLayoutPanel1.TabIndex = 2;
+            // 
+            // archivedFilesListBox
+            // 
+            archivedFilesListBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            archivedFilesListBox.Enabled = false;
+            archivedFilesListBox.FormattingEnabled = true;
+            archivedFilesListBox.ItemHeight = 15;
+            archivedFilesListBox.Location = new System.Drawing.Point(4, 3);
+            archivedFilesListBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            archivedFilesListBox.Name = "archivedFilesListBox";
+            archivedFilesListBox.Size = new System.Drawing.Size(268, 470);
+            archivedFilesListBox.TabIndex = 0;
+            archivedFilesListBox.SelectedIndexChanged += archivedFilesListBox_SelectedIndexChanged;
+            // 
+            // tableLayoutPanel2
+            // 
+            tableLayoutPanel2.ColumnCount = 1;
+            tableLayoutPanel2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            tableLayoutPanel2.Controls.Add(groupBox1, 0, 0);
+            tableLayoutPanel2.Dock = System.Windows.Forms.DockStyle.Fill;
+            tableLayoutPanel2.Location = new System.Drawing.Point(280, 3);
+            tableLayoutPanel2.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            tableLayoutPanel2.Name = "tableLayoutPanel2";
+            tableLayoutPanel2.RowCount = 1;
+            tableLayoutPanel2.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            tableLayoutPanel2.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 462F));
+            tableLayoutPanel2.Size = new System.Drawing.Size(268, 470);
+            tableLayoutPanel2.TabIndex = 1;
+            // 
+            // groupBox1
+            // 
+            groupBox1.Controls.Add(tableLayoutPanel3);
+            groupBox1.Dock = System.Windows.Forms.DockStyle.Fill;
+            groupBox1.Location = new System.Drawing.Point(4, 3);
+            groupBox1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            groupBox1.Name = "groupBox1";
+            groupBox1.Padding = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            groupBox1.Size = new System.Drawing.Size(260, 464);
+            groupBox1.TabIndex = 0;
+            groupBox1.TabStop = false;
+            groupBox1.Text = "File Info";
+            // 
+            // tableLayoutPanel3
+            // 
+            tableLayoutPanel3.ColumnCount = 1;
+            tableLayoutPanel3.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            tableLayoutPanel3.Controls.Add(sizeTextBox, 0, 3);
+            tableLayoutPanel3.Controls.Add(label1, 0, 0);
+            tableLayoutPanel3.Controls.Add(fileNameTextBox, 0, 1);
+            tableLayoutPanel3.Controls.Add(label2, 0, 2);
+            tableLayoutPanel3.Controls.Add(extractFileButton, 0, 4);
+            tableLayoutPanel3.Location = new System.Drawing.Point(7, 30);
+            tableLayoutPanel3.Margin = new System.Windows.Forms.Padding(4, 12, 4, 3);
+            tableLayoutPanel3.Name = "tableLayoutPanel3";
+            tableLayoutPanel3.RowCount = 5;
+            tableLayoutPanel3.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 25F));
+            tableLayoutPanel3.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel3.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 25F));
+            tableLayoutPanel3.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 32F));
+            tableLayoutPanel3.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 29F));
+            tableLayoutPanel3.Size = new System.Drawing.Size(255, 187);
+            tableLayoutPanel3.TabIndex = 0;
+            // 
+            // sizeTextBox
+            // 
+            sizeTextBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            sizeTextBox.Location = new System.Drawing.Point(4, 85);
+            sizeTextBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            sizeTextBox.Name = "sizeTextBox";
+            sizeTextBox.ReadOnly = true;
+            sizeTextBox.Size = new System.Drawing.Size(247, 23);
+            sizeTextBox.TabIndex = 3;
+            // 
+            // label1
+            // 
+            label1.AutoSize = true;
+            label1.Location = new System.Drawing.Point(4, 3);
+            label1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 0);
+            label1.Name = "label1";
+            label1.Size = new System.Drawing.Size(42, 15);
+            label1.TabIndex = 0;
+            label1.Text = "Name:";
+            // 
+            // fileNameTextBox
+            // 
+            fileNameTextBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            fileNameTextBox.Location = new System.Drawing.Point(4, 28);
+            fileNameTextBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            fileNameTextBox.Name = "fileNameTextBox";
+            fileNameTextBox.ReadOnly = true;
+            fileNameTextBox.Size = new System.Drawing.Size(247, 23);
+            fileNameTextBox.TabIndex = 1;
+            // 
+            // label2
+            // 
+            label2.AutoSize = true;
+            label2.Location = new System.Drawing.Point(4, 60);
+            label2.Margin = new System.Windows.Forms.Padding(4, 3, 4, 0);
+            label2.Name = "label2";
+            label2.Size = new System.Drawing.Size(69, 15);
+            label2.TabIndex = 2;
+            label2.Text = "Size (bytes):";
+            // 
+            // extractFileButton
+            // 
+            extractFileButton.Enabled = false;
+            extractFileButton.Location = new System.Drawing.Point(4, 117);
+            extractFileButton.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            extractFileButton.Name = "extractFileButton";
+            extractFileButton.Size = new System.Drawing.Size(88, 27);
+            extractFileButton.TabIndex = 4;
+            extractFileButton.Text = "Extract";
+            extractFileButton.UseVisualStyleBackColor = true;
+            extractFileButton.Click += extractFileButton_Click;
+            // 
+            // generateProjectCheckBox
+            // 
+            generateProjectCheckBox.AutoSize = true;
+            generateProjectCheckBox.Location = new System.Drawing.Point(360, 5);
+            generateProjectCheckBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            generateProjectCheckBox.Name = "generateProjectCheckBox";
+            generateProjectCheckBox.Size = new System.Drawing.Size(113, 19);
+            generateProjectCheckBox.TabIndex = 3;
+            generateProjectCheckBox.Text = "Generate Project";
+            generateProjectCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // overwriteCheckBox
+            // 
+            overwriteCheckBox.AutoSize = true;
+            overwriteCheckBox.Location = new System.Drawing.Point(474, 5);
+            overwriteCheckBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            overwriteCheckBox.Name = "overwriteCheckBox";
+            overwriteCheckBox.Size = new System.Drawing.Size(113, 19);
+            overwriteCheckBox.TabIndex = 3;
+            overwriteCheckBox.Text = "Overwrite";
+            overwriteCheckBox.UseVisualStyleBackColor = true;
+            // 
+            // MainForm
+            // 
+            AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            ClientSize = new System.Drawing.Size(552, 522);
+            Controls.Add(generateProjectCheckBox);
+            Controls.Add(overwriteCheckBox);
+            Controls.Add(tableLayoutPanel1);
+            Controls.Add(statusStrip1);
+            Controls.Add(menuStrip1);
+            MainMenuStrip = menuStrip1;
+            Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
+            Name = "MainForm";
+            Text = "RPG Maker Decrypter";
+            menuStrip1.ResumeLayout(false);
+            menuStrip1.PerformLayout();
+            statusStrip1.ResumeLayout(false);
+            statusStrip1.PerformLayout();
+            tableLayoutPanel1.ResumeLayout(false);
+            tableLayoutPanel2.ResumeLayout(false);
+            groupBox1.ResumeLayout(false);
+            tableLayoutPanel3.ResumeLayout(false);
+            tableLayoutPanel3.PerformLayout();
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        private System.Windows.Forms.MenuStrip menuStrip1;
+        private System.Windows.Forms.ToolStripMenuItem fileToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem openRGSSADToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem extractToolStripMenuItem;
+        private System.Windows.Forms.StatusStrip statusStrip1;
+        private System.Windows.Forms.ToolStripStatusLabel statusLabel;
+        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
+        private System.Windows.Forms.ListBox archivedFilesListBox;
+        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel2;
+        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.TableLayoutPanel tableLayoutPanel3;
+        private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.TextBox fileNameTextBox;
+        private System.Windows.Forms.CheckBox generateProjectCheckBox;
+        private System.Windows.Forms.CheckBox overwriteCheckBox;
+        private System.Windows.Forms.TextBox sizeTextBox;
+        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.Button extractFileButton;
+        private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
+    }
+}
+
+
+```
+
+`RPGMakerDecrypter.Gui/MainForm.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using RPGMakerDecrypter.Common;
+using RPGMakerDecrypter.Decrypter;
+using RPGMakerDecrypter.Decrypter.Exceptions;
+
+namespace RPGMakerDecrypter.Gui
+{
+    public partial class MainForm : Form
+    {
+        private RPGMakerVersion currentArchiveVersion;
+        private RGSSAD currentArchive;
+        private string inputFilePath;
+        private bool overwriteFlag = false;
+
+        public MainForm()
+        {
+            InitializeComponent();
+        }
+
+        private void openRGSSADToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+
+            StringBuilder fileTypesStringBuilder = new StringBuilder();
+            fileTypesStringBuilder.Append("RPG Maker XP Encrypted Archive (.rgssad)|*.rgssad|");
+            fileTypesStringBuilder.Append("RPG Maker VX Encrypted Archive (.rgss2a)|*.rgss2a|");
+            fileTypesStringBuilder.Append("RPG Maker VX Ace Encrypted Archive (.rgss3a)|*.rgss3a|");
+            fileTypesStringBuilder.Append("All Files (*.*)|*.*");
+
+            openFileDialog.Filter = fileTypesStringBuilder.ToString();
+
+            var result = openFileDialog.ShowDialog();
+
+            if (result == DialogResult.Abort || result == DialogResult.Cancel)
+            {
+                return;
+            }
+
+            // It's ok to reset here because user has decided to select other file
+            Reset();
+
+            inputFilePath = openFileDialog.FileName;
+
+            currentArchiveVersion = RGSSAD.GetRPGMakerVersion(inputFilePath);
+
+            if (currentArchiveVersion == RPGMakerVersion.Unknown)
+            {
+                MessageBox.Show(
+                    "Unable to determinate RGSSAD RPG Maker version. " +
+                    "Please rename RGSSAD file with an extension corresponding to version: " +
+                    "XP: .rgssad, VX: .rgss2a, VX Ace: .rgss3a",
+                    "Unknown RGSSAD file", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            try
+            {
+                switch (currentArchiveVersion)
+                {
+                    case RPGMakerVersion.Xp:
+                    case RPGMakerVersion.Vx:
+                        currentArchive = new RGSSADv1(inputFilePath);
+                        break;
+                    case RPGMakerVersion.VxAce:
+                        currentArchive = new RGSSADv3(inputFilePath);
+                        break;
+                }
+            }
+            catch (InvalidArchiveException)
+            {
+                MessageBox.Show("Archive is invalid or corrupted. " +
+                    "Reading failed. Please create an issue: https://github.com/uuksu/RPGMakerDecrypter/issues",
+                    "Invalid archive",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            catch (UnsupportedArchiveException)
+            {
+                MessageBox.Show("Archive is not supported or it is corrupted. " +
+                    "Please create an issue: https://github.com/uuksu/RPGMakerDecrypter/issues", 
+                    "Archive not supported",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            catch (Exception ex)
+            {
+                var logFilePath = ExceptionLogger.LogException(ex);
+                MessageBox.Show("Unexpected error occurred while trying to extract the archive. " +
+                    $"Error log has been written to '{logFilePath}' " +
+                    "Please create an issue and include the log contents there: https://github.com/uuksu/RPGMakerDecrypter/issues"
+                    , "Archive corrupted",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            foreach (ArchivedFile archivedFile in currentArchive.ArchivedFiles)
+            {
+                archivedFilesListBox.Items.Add(archivedFile.Name);
+            }
+
+            SetClickableElementsEnabled(true);
+
+            statusLabel.Text = "Archive opened successfully.";
+        }
+
+        private void SetClickableElementsEnabled(bool enabled)
+        {
+            archivedFilesListBox.Enabled = enabled;
+            extractToolStripMenuItem.Enabled = enabled;
+        }
+
+        private void Reset()
+        {
+            archivedFilesListBox.Items.Clear();
+            SetClickableElementsEnabled(false);
+            extractFileButton.Enabled = false;
+
+            currentArchiveVersion = RPGMakerVersion.Unknown;
+            inputFilePath = null;
+
+            currentArchive?.Dispose();
+        }
+
+        private void archivedFilesListBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            extractFileButton.Enabled = false;
+
+            if (currentArchive == null || !currentArchive.ArchivedFiles.Any() || archivedFilesListBox.SelectedIndex == -1)
+            {
+                return;
+            }
+
+            ArchivedFile archivedFile = currentArchive.ArchivedFiles[archivedFilesListBox.SelectedIndex];
+
+            fileNameTextBox.Text = ArchivedFileNameUtils.GetFileName(archivedFile.Name);
+            sizeTextBox.Text = archivedFile.Size.ToString();
+
+            extractFileButton.Enabled = true;
+        }
+
+        private void extractToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (currentArchive == null || !currentArchive.ArchivedFiles.Any())
+            {
+                return;
+            }
+
+            FolderBrowserDialog folderBrowserDialog = new FolderBrowserDialog();
+
+            var result = folderBrowserDialog.ShowDialog();
+
+            if (result == DialogResult.Abort || result == DialogResult.Cancel)
+            {
+                return;
+            }
+
+            string outputDirectoryPath = folderBrowserDialog.SelectedPath;
+            overwriteFlag = overwriteCheckBox.Checked;
+
+            try
+            {
+                currentArchive.ExtractAllFiles(outputDirectoryPath, overwriteFlag);
+            }
+            catch (Exception ex)
+            {
+                var logFilePath = ExceptionLogger.LogException(ex);
+                MessageBox.Show("Unexpected error occurred while trying to extract the archive. " +
+                    $"Error log has been written to '{logFilePath}' " +
+                    "Please create an issue and include the log contents there: https://github.com/uuksu/RPGMakerDecrypter/issues"
+                    , "Archive corrupted",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                statusLabel.Text = $"Archive extraction failed!";
+            }
+
+            if (generateProjectCheckBox.Checked)
+            {
+                var outputSameAsArchivePath = new FileInfo(inputFilePath).Directory.FullName == new DirectoryInfo(outputDirectoryPath).FullName;
+                ProjectGenerator.GenerateProject(currentArchiveVersion, outputDirectoryPath, !outputSameAsArchivePath);
+            }
+
+            statusLabel.Text = "Archive extracted successfully.";
+        }
+
+        private void extractFileButton_Click(object sender, EventArgs e)
+        {
+            if (currentArchive == null || !currentArchive.ArchivedFiles.Any() || archivedFilesListBox.SelectedIndex == -1)
+            {
+                return;
+            }
+
+            ArchivedFile archivedFile = currentArchive.ArchivedFiles[archivedFilesListBox.SelectedIndex];
+
+            string fileName = ArchivedFileNameUtils.GetFileName(archivedFile.Name);
+            string extension = fileName.Split('.').Last();
+
+            SaveFileDialog saveFileDialog = new SaveFileDialog();
+            saveFileDialog.FileName = fileName;
+            saveFileDialog.Filter = $"Data file (.{extension})|*.{extension}";
+
+            var result = saveFileDialog.ShowDialog();
+
+            if (result == DialogResult.Abort || result == DialogResult.Cancel)
+            {
+                return;
+            }
+
+            FileInfo fileInfo = new FileInfo(saveFileDialog.FileName);
+
+            try
+            {
+                currentArchive.ExtractFile(archivedFile, fileInfo.DirectoryName, overwriteFlag, false);
+            }
+            catch (Exception ex)
+            {
+                var logFilePath = ExceptionLogger.LogException(ex);
+                MessageBox.Show("Unexpected error occurred while trying to extract the archive. " +
+                    $"Error log has been written to '{logFilePath}' " +
+                    "Please create an issue and include the log contents there: https://github.com/uuksu/RPGMakerDecrypter/issues"
+                    , "Archive corrupted",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                statusLabel.Text = $"Extracting {fileName} failed!";
+
+                return;
+            }
+
+            statusLabel.Text = $"Extracted {fileName} successfully.";
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            currentArchive?.Dispose();
+            Environment.Exit(0);
+        }
+
+        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AboutBox aboutBox = new AboutBox();
+            aboutBox.ShowDialog();
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/MainForm.resx`:
+
+```resx
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    Microsoft ResX Schema 
+
+    Version 2.0
+
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
+    associated with the data types.
+
+    Example:
+
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+
+    There are any number of "resheader" rows that contain simple
+    name/value pairs.
+
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
+    mimetype set.
+
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
+    extensible. For a given mimetype the value must be set accordingly:
+
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
+    read any of the formats listed below.
+
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <metadata name="menuStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>17, 17</value>
+  </metadata>
+  <metadata name="statusStrip1.TrayLocation" type="System.Drawing.Point, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <value>132, 17</value>
+  </metadata>
+</root>
+```
+
+`RPGMakerDecrypter.Gui/Program.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace RPGMakerDecrypter.Gui
+{
+    static class Program
+    {
+        /// <summary>
+        /// The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            Application.EnableVisualStyles();
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainForm());
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/Properties/Resources.Designer.cs`:
+
+```cs
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by a tool.
+//     Runtime Version:4.0.30319.42000
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+namespace RPGMakerDecrypter.Gui.Properties {
+    using System;
+    
+    
+    /// <summary>
+    ///   A strongly-typed resource class, for looking up localized strings, etc.
+    /// </summary>
+    // This class was auto-generated by the StronglyTypedResourceBuilder
+    // class via a tool like ResGen or Visual Studio.
+    // To add or remove a member, edit your .ResX file then rerun ResGen
+    // with the /str option, or rebuild your VS project.
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+    [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+    internal class Resources {
+        
+        private static global::System.Resources.ResourceManager resourceMan;
+        
+        private static global::System.Globalization.CultureInfo resourceCulture;
+        
+        [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
+        internal Resources() {
+        }
+        
+        /// <summary>
+        ///   Returns the cached ResourceManager instance used by this class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        internal static global::System.Resources.ResourceManager ResourceManager {
+            get {
+                if (object.ReferenceEquals(resourceMan, null)) {
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("RPGMakerDecrypter.Gui.Properties.Resources", typeof(Resources).Assembly);
+                    resourceMan = temp;
+                }
+                return resourceMan;
+            }
+        }
+        
+        /// <summary>
+        ///   Overrides the current thread's CurrentUICulture property for all
+        ///   resource lookups using this strongly typed resource class.
+        /// </summary>
+        [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
+        internal static global::System.Globalization.CultureInfo Culture {
+            get {
+                return resourceCulture;
+            }
+            set {
+                resourceCulture = value;
+            }
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/Properties/Resources.resx`:
+
+```resx
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- 
+    Microsoft ResX Schema 
+    
+    Version 2.0
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
+    associated with the data types.
+    
+    Example:
+    
+    ... ado.net/XML headers & schema ...
+    <resheader name="resmimetype">text/microsoft-resx</resheader>
+    <resheader name="version">2.0</resheader>
+    <resheader name="reader">System.Resources.ResXResourceReader, System.Windows.Forms, ...</resheader>
+    <resheader name="writer">System.Resources.ResXResourceWriter, System.Windows.Forms, ...</resheader>
+    <data name="Name1"><value>this is my long string</value><comment>this is a comment</comment></data>
+    <data name="Color1" type="System.Drawing.Color, System.Drawing">Blue</data>
+    <data name="Bitmap1" mimetype="application/x-microsoft.net.object.binary.base64">
+        <value>[base64 mime encoded serialized .NET Framework object]</value>
+    </data>
+    <data name="Icon1" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
+        <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
+        <comment>This is a comment</comment>
+    </data>
+                
+    There are any number of "resheader" rows that contain simple 
+    name/value pairs.
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
+    mimetype set.
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
+    extensible. For a given mimetype the value must be set accordingly:
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
+    read any of the formats listed below.
+    
+    mimetype: application/x-microsoft.net.object.binary.base64
+    value   : The object must be serialized with 
+            : System.Serialization.Formatters.Binary.BinaryFormatter
+            : and then encoded with base64 encoding.
+    
+    mimetype: application/x-microsoft.net.object.soap.base64
+    value   : The object must be serialized with 
+            : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
+            : and then encoded with base64 encoding.
+
+    mimetype: application/x-microsoft.net.object.bytearray.base64
+    value   : The object must be serialized into a byte array 
+            : using a System.ComponentModel.TypeConverter
+            : and then encoded with base64 encoding.
+    -->
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+</root>
+```
+
+`RPGMakerDecrypter.Gui/Properties/Settings.Designer.cs`:
+
+```cs
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated by a tool.
+//     Runtime Version:4.0.30319.42000
+//
+//     Changes to this file may cause incorrect behavior and will be lost if
+//     the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+
+namespace RPGMakerDecrypter.Gui.Properties {
+    
+    
+    [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Microsoft.VisualStudio.Editors.SettingsDesigner.SettingsSingleFileGenerator", "17.3.0.0")]
+    internal sealed partial class Settings : global::System.Configuration.ApplicationSettingsBase {
+        
+        private static Settings defaultInstance = ((Settings)(global::System.Configuration.ApplicationSettingsBase.Synchronized(new Settings())));
+        
+        public static Settings Default {
+            get {
+                return defaultInstance;
+            }
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Gui/Properties/Settings.settings`:
+
+```settings
+<?xml version='1.0' encoding='utf-8'?>
+<SettingsFile xmlns="http://schemas.microsoft.com/VisualStudio/2004/01/settings" CurrentProfile="(Default)">
+  <Profiles>
+    <Profile Name="(Default)" />
+  </Profiles>
+  <Settings />
+</SettingsFile>
+
+```
+
+`RPGMakerDecrypter.Gui/RPGMakerDecrypter.Gui.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>RPGMakerDecrypter</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+	<EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>icon_256x256.ico</ApplicationIcon>
+	<Title>RPG Maker Decrypter</Title>
+	<AssemblyTitle>RPG Maker Decrypter</AssemblyTitle>
+	<Description>Tool for decrypting RPG Maker XP, VX and VX Ace RGSSAD archives.</Description>
+	<Copyright>Mikko Uuksulainen © 2015-2023</Copyright>
+	<PackageProjectUrl>https://github.com/uuksu/RPGMakerDecrypter</PackageProjectUrl>
+	<Version>2.0.0</Version>
+	<MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RPGMakerDecrypter.Common\RPGMakerDecrypter.Common.csproj" />
+    <ProjectReference Include="..\RPGMakerDecrypter.Decrypter\RPGMakerDecrypter.Decrypter.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="icon_256x256.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
+    <PackageReference Include="Microsoft.DotNet.UpgradeAssistant.Extensions.Default.Analyzers" Version="0.4.355802">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.Compatibility" Version="7.0.3" />
+	<PackageReference Include="MinVer" Version="4.2.0">
+		<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		<PrivateAssets>all</PrivateAssets>
+	</PackageReference>
+  </ItemGroup>
+</Project>
+```
+
+`RPGMakerDecrypter.Tests/BinaryUtilsTests.cs`:
+
+```cs
+using System;
+using System.IO;
+using System.Security.AccessControl;
+using NUnit;
+using NUnit.Framework;
+using RPGMakerDecrypter.Decrypter;
+
+namespace RPGMakerDecrypter.Tests
+{
+    public class BinaryUtilsTests
+    {
+        [Test]
+        public void RPGMakerXpArchiveVersionIsOne()
+        {
+            FileHelpers.CopyArchives();
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                byte version = binaryReader.ReadByte();
+
+                Assert.That(version, Is.EqualTo(1));
+            }
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void RPGMakerVxArchiveVersionIsOne()
+        {
+            FileHelpers.CopyArchives();
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                byte version = binaryReader.ReadByte();
+
+                Assert.That(version, Is.EqualTo(1));
+            }
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void RPGMakerVxAceArchiveVersionIsThree()
+        {
+            FileHelpers.CopyArchives();
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                byte version = binaryReader.ReadByte();
+
+                Assert.That(version, Is.EqualTo(3));
+            }
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void ReadCStringReturnsCorrectHeaderForArchives()
+        {
+            FileHelpers.CopyArchives();
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                Assert.That(s, Is.EqualTo(Constants.RGSSADHeader));
+            }
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                Assert.That(s, Is.EqualTo(Constants.RGSSADHeader));
+            }
+
+            using (BinaryReader binaryReader = new BinaryReader(new FileStream(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName), FileMode.Open)))
+            {
+                string s = BinaryUtils.ReadCString(binaryReader, 7);
+                Assert.That(s, Is.EqualTo(Constants.RGSSADHeader));
+            }
+
+            FileHelpers.Cleanup();
+        }
+
+
+    }
+}
+```
+
+`RPGMakerDecrypter.Tests/FileHelpers.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using RPGMakerDecrypter.Decrypter;
+
+namespace RPGMakerDecrypter.Tests
+{
+    static class FileHelpers
+    {
+        public static string TempDirectoryPath = "Temp";
+
+        public static void CopyArchives()
+        {
+            if (Directory.Exists(TempDirectoryPath))
+            {
+                Directory.Delete(TempDirectoryPath, true);
+            }
+
+            Directory.CreateDirectory(TempDirectoryPath);
+
+            File.Copy(Path.Combine("EncryptedArchives", Constants.RpgMakerXpArchiveName), Path.Combine(TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+            File.Copy(Path.Combine("EncryptedArchives", Constants.RpgMakerVxArchiveName), Path.Combine(TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+            File.Copy(Path.Combine("EncryptedArchives", Constants.RpgMakerVxAceArchiveName), Path.Combine(TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+        }
+
+        public static void Cleanup()
+        {
+            File.Delete(Path.Combine(TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+            File.Delete(Path.Combine(TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+            File.Delete(Path.Combine(TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            Directory.Delete(TempDirectoryPath);
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Tests/RGSSADv1Tests.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using RPGMakerDecrypter.Decrypter;
+
+namespace RPGMakerDecrypter.Tests
+{
+    public class RGSSADv1Tests
+    {
+        [Test]
+        public void CorrectAmountOfArchivedFilesIsReadFromXpArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+
+            Assert.That(rgssad.ArchivedFiles.Count, Is.EqualTo(16));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectFileNamesAreReadFromXpArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Name, Is.EqualTo(@"Data\Actors.rxdata"));
+            Assert.That(rgssad.ArchivedFiles[1].Name, Is.EqualTo(@"Data\Animations.rxdata"));
+            Assert.That(rgssad.ArchivedFiles[2].Name, Is.EqualTo(@"Data\Armors.rxdata"));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectOffsetsAreReadFromXpArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Offset, Is.EqualTo(34));
+            Assert.That(rgssad.ArchivedFiles[1].Offset, Is.EqualTo(11045));
+            Assert.That(rgssad.ArchivedFiles[2].Offset, Is.EqualTo(147314));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectSizesAreReadFromXpArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Size, Is.EqualTo(10981));
+            Assert.That(rgssad.ArchivedFiles[1].Size, Is.EqualTo(136243));
+            Assert.That(rgssad.ArchivedFiles[2].Size, Is.EqualTo(4285));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectKeysAreReadFromXpArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerXpArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Key, Is.EqualTo((uint)0x7B7448AE));
+            Assert.That(rgssad.ArchivedFiles[1].Key, Is.EqualTo((uint)0x366D564E));
+            Assert.That(rgssad.ArchivedFiles[2].Key, Is.EqualTo((uint)0x222699FE));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectFileNamesAreReadFromVxArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Name, Is.EqualTo(@"Data\Actors.rvdata"));
+            Assert.That(rgssad.ArchivedFiles[1].Name, Is.EqualTo(@"Data\Animations.rvdata"));
+            Assert.That(rgssad.ArchivedFiles[2].Name, Is.EqualTo(@"Data\Areas.rvdata"));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectOffsetsAreReadFromVxArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Offset, Is.EqualTo(34));
+            Assert.That(rgssad.ArchivedFiles[1].Offset, Is.EqualTo(10951));
+            Assert.That(rgssad.ArchivedFiles[2].Offset, Is.EqualTo(139280));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectSizesAreReadFromVxArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Size, Is.EqualTo(10887));
+            Assert.That(rgssad.ArchivedFiles[1].Size, Is.EqualTo(128304));
+            Assert.That(rgssad.ArchivedFiles[2].Size, Is.EqualTo(4));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectKeysAreReadFromVxArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv1 rgssad = new RGSSADv1(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Key, Is.EqualTo((uint)0x7B7448AE));
+            Assert.That(rgssad.ArchivedFiles[1].Key, Is.EqualTo((uint)0x366D564E));
+            Assert.That(rgssad.ArchivedFiles[2].Key, Is.EqualTo((uint)0x04E0F16D));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Tests/RGSSADv3Tests.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using RPGMakerDecrypter.Decrypter;
+
+namespace RPGMakerDecrypter.Tests
+{
+    public class RGSSADv3Tests
+    {
+        [Test]
+        public void CorrectAmountOfArchivedFilesIsReadFromVxAceArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv3 rgssad = new RGSSADv3(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            Assert.That(rgssad.ArchivedFiles.Count, Is.EqualTo(16));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectFileNamesAreReadFromVxAceArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv3 rgssad = new RGSSADv3(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Name, Is.EqualTo(@"Data\Actors.rvdata2"));
+            Assert.That(rgssad.ArchivedFiles[1].Name, Is.EqualTo(@"Data\Animations.rvdata2"));
+            Assert.That(rgssad.ArchivedFiles[2].Name, Is.EqualTo(@"Data\Armors.rvdata2"));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectOffsetsAreReadFromVxAceArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv3 rgssad = new RGSSADv3(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Offset, Is.EqualTo(605));
+            Assert.That(rgssad.ArchivedFiles[1].Offset, Is.EqualTo(3637));
+            Assert.That(rgssad.ArchivedFiles[2].Offset, Is.EqualTo(222096));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectSizesAreReadFromVxAceArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv3 rgssad = new RGSSADv3(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Size, Is.EqualTo(3032));
+            Assert.That(rgssad.ArchivedFiles[1].Size, Is.EqualTo(218459));
+            Assert.That(rgssad.ArchivedFiles[2].Size, Is.EqualTo(11472));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+
+        [Test]
+        public void CorrectKeysAreReadFromVxAceArchive()
+        {
+            FileHelpers.CopyArchives();
+
+            RGSSADv3 rgssad = new RGSSADv3(Path.Combine(FileHelpers.TempDirectoryPath, Constants.RpgMakerVxAceArchiveName));
+
+            // Verified with Falos RPG Maker Decrypter
+            Assert.That(rgssad.ArchivedFiles[0].Key, Is.EqualTo((uint)0x00000029));
+            Assert.That(rgssad.ArchivedFiles[1].Key, Is.EqualTo((uint)0x00004823));
+            Assert.That(rgssad.ArchivedFiles[2].Key, Is.EqualTo((uint)0x000018BE));
+
+            rgssad.Dispose();
+
+            FileHelpers.Cleanup();
+        }
+    }
+}
+
+```
+
+`RPGMakerDecrypter.Tests/RPGMakerDecrypter.Tests.csproj`:
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net6.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
+		<PackageReference Include="NUnit" Version="3.13.3" />
+		<PackageReference Include="NUnit3TestAdapter" Version="4.2.1" />
+		<PackageReference Include="NUnit.Analyzers" Version="3.3.0" />
+		<PackageReference Include="coverlet.collector" Version="3.1.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\RPGMakerDecrypter.Decrypter\RPGMakerDecrypter.Decrypter.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Properties\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="EncryptedArchives\Game.rgss2a">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="EncryptedArchives\Game.rgss3a">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="EncryptedArchives\Game.rgssad">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>
+
+```
+
+`RPGMakerDecrypter.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32901.215
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RPGMakerDecrypter.Decrypter", "RPGMakerDecrypter.Decrypter\RPGMakerDecrypter.Decrypter.csproj", "{BAEEE442-1888-4340-94BE-FE743C696AE1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RPGMakerDecrypter.Tests", "RPGMakerDecrypter.Tests\RPGMakerDecrypter.Tests.csproj", "{CDFB3E01-DE4D-4FC2-8369-21D9F70595C2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RPGMakerDecrypter.Cli", "RPGMakerDecrypter.Cli\RPGMakerDecrypter.Cli.csproj", "{D03BC34B-EEB1-4A26-B4FB-190CE153E06A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RPGMakerDecrypter.Gui", "RPGMakerDecrypter.Gui\RPGMakerDecrypter.Gui.csproj", "{3BAA8C8A-0AF9-483B-9581-BCE2BFD44262}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Resources", "Resources", "{48D60675-A06B-4683-99A2-F44188D93693}"
+	ProjectSection(SolutionItems) = preProject
+		Resources\icon_256x256.pdn = Resources\icon_256x256.pdn
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deploy", "Deploy", "{8682D407-DB4A-4955-970C-3464D694E3CC}"
+	ProjectSection(SolutionItems) = preProject
+		Deploy\7za-license.txt = Deploy\7za-license.txt
+		Deploy\7za.exe = Deploy\7za.exe
+		Deploy\deploy.bat = Deploy\deploy.bat
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RPGMakerDecrypter.Common", "RPGMakerDecrypter.Common\RPGMakerDecrypter.Common.csproj", "{41DB3BF6-A576-4D78-8E77-89A906C9A49A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BAEEE442-1888-4340-94BE-FE743C696AE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BAEEE442-1888-4340-94BE-FE743C696AE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BAEEE442-1888-4340-94BE-FE743C696AE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BAEEE442-1888-4340-94BE-FE743C696AE1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CDFB3E01-DE4D-4FC2-8369-21D9F70595C2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CDFB3E01-DE4D-4FC2-8369-21D9F70595C2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CDFB3E01-DE4D-4FC2-8369-21D9F70595C2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CDFB3E01-DE4D-4FC2-8369-21D9F70595C2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D03BC34B-EEB1-4A26-B4FB-190CE153E06A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D03BC34B-EEB1-4A26-B4FB-190CE153E06A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D03BC34B-EEB1-4A26-B4FB-190CE153E06A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D03BC34B-EEB1-4A26-B4FB-190CE153E06A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3BAA8C8A-0AF9-483B-9581-BCE2BFD44262}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BAA8C8A-0AF9-483B-9581-BCE2BFD44262}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3BAA8C8A-0AF9-483B-9581-BCE2BFD44262}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3BAA8C8A-0AF9-483B-9581-BCE2BFD44262}.Release|Any CPU.Build.0 = Release|Any CPU
+		{41DB3BF6-A576-4D78-8E77-89A906C9A49A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{41DB3BF6-A576-4D78-8E77-89A906C9A49A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{41DB3BF6-A576-4D78-8E77-89A906C9A49A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{41DB3BF6-A576-4D78-8E77-89A906C9A49A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {2B50EE10-517D-4BAE-A617-97CAD2922589}
+	EndGlobalSection
+EndGlobal
+
+```
