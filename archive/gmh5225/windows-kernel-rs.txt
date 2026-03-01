@@ -1,0 +1,3396 @@
+Project Path: arc_gmh5225_windows-kernel-rs_uk19jg7a
+
+Source Tree:
+
+```txt
+arc_gmh5225_windows-kernel-rs_uk19jg7a
+├── README.md
+├── delprotect-minifilter-rust
+│   ├── Cargo.toml
+│   ├── DelProtect.inf
+│   ├── Makefile.toml
+│   ├── build.rs
+│   ├── rust-toolchain.toml
+│   ├── rustfmt.toml
+│   └── src
+│       ├── cleaner.rs
+│       ├── ioctl_code.rs
+│       └── lib.rs
+├── kernel-alloc
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       └── lib.rs
+├── kernel-fast-mutex
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       ├── auto_lock.rs
+│       ├── fast_mutex.rs
+│       ├── lib.rs
+│       └── locker.rs
+├── kernel-init
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       └── lib.rs
+├── kernel-macros
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       └── lib.rs
+├── kernel-string
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       └── lib.rs
+├── km-api-sys
+│   ├── Cargo.toml
+│   ├── rustfmt.toml
+│   └── src
+│       ├── constants.rs
+│       ├── flt_kernel
+│       │   └── flt_parameters.rs
+│       ├── flt_kernel.rs
+│       ├── intrinsics.rs
+│       ├── lib.rs
+│       ├── ntddk
+│       │   └── process_info_class.rs
+│       ├── ntddk.rs
+│       ├── ntifs.rs
+│       ├── ntoskrnl.rs
+│       └── wmd.rs
+└── sysmon-driver-rust
+    ├── Cargo.toml
+    ├── Makefile.toml
+    ├── README.md
+    ├── build.rs
+    ├── rust-toolchain.toml
+    ├── rustfmt.toml
+    └── src
+        ├── cleaner.rs
+        ├── ioctl_code.rs
+        ├── item.rs
+        └── lib.rs
+
+```
+
+`README.md`:
+
+```md
+# windows-kernel-rs
+
+sysmon-driver-rust - rust driver based on https://github.com/zodiacon/windowskernelprogrammingbook/tree/master/chapter09/SysMon
+
+delprotect-minifilter-rust - rust driver based on https://github.com/zodiacon/windowskernelprogrammingbook/tree/master/chapter10/DelProtect3
+
+Some ideas taken from:  [Writing a kernel driver with Rust.](https://not-matthias.github.io/kernel-driver-with-rust/)
+
+todo:
+- create a Firewall, Antiransomware or kernel hook engine in Rust
+
+onhold
+- you mixed passing args by reference and pointer. What can you do about it?
+
+```
+
+`delprotect-minifilter-rust/Cargo.toml`:
+
+```toml
+[package]
+name = "delprotect"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+kernel-print    = "~0.1"
+km-api-sys       = { path = "../km-api-sys"}
+kernel-string   = { path = "../kernel-string"}
+kernel-macros   = { path = "../kernel-macros"}
+kernel-fast-mutex   = { path = "../kernel-fast-mutex"}
+kernel-init = { path = "../kernel-init"}
+
+[dependencies.winapi]
+git = "https://github.com/Trantect/winapi-rs.git"
+branch = "feature/km"
+features = [
+    "wdm",
+    "ntstatus",
+]
+
+[build-dependencies]
+winreg = "0.7.0"
+failure = "0.1.8"
+
+```
+
+`delprotect-minifilter-rust/DelProtect.inf`:
+
+```inf
+;;;
+;;; DelProtect
+;;;
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = "Undelete"
+ClassGuid   = {fe8f1572-c67a-48c0-bbac-0b5c6d66cafb}
+Provider    = %ManufacturerName%
+DriverVer = 01/03/2023,11.10.52.916
+CatalogFile = DelProtect.cat
+
+[DestinationDirs]
+DefaultDestDir          = 12
+MiniFilter.DriverFiles  = 12            ;%windir%\system32\drivers
+
+;;
+;; Default install sections
+;;
+
+[DefaultInstall]
+OptionDesc          = %ServiceDescription%
+CopyFiles           = MiniFilter.DriverFiles
+
+[DefaultInstall.Services]
+AddService          = %ServiceName%,,MiniFilter.Service
+
+;;
+;; Default uninstall sections
+;;
+
+[DefaultUninstall]
+DelFiles   = MiniFilter.DriverFiles
+
+[DefaultUninstall.Services]
+DelService = %ServiceName%,0x200      ;Ensure service is stopped before deleting
+
+;
+; Services Section
+;
+
+[MiniFilter.Service]
+DisplayName      = %ServiceName%
+Description      = %ServiceDescription%
+ServiceBinary    = %12%\%DriverName%.sys        ;%windir%\system32\drivers\
+Dependencies     = "FltMgr"
+ServiceType      = 2                            ;SERVICE_FILE_SYSTEM_DRIVER
+StartType        = 3                            ;SERVICE_DEMAND_START
+ErrorControl     = 1                            ;SERVICE_ERROR_NORMAL
+LoadOrderGroup = "FS Undelete filters"
+AddReg           = MiniFilter.AddRegistry
+
+;
+; Registry Modifications
+;
+
+[MiniFilter.AddRegistry]
+HKR,,"DebugFlags",0x00010001 ,0x0
+HKR,,"SupportedFeatures",0x00010001,0x3
+HKR,"Instances","DefaultInstance",0x00000000,%DefaultInstance%
+HKR,"Instances\"%Instance1.Name%,"Altitude",0x00000000,%Instance1.Altitude%
+HKR,"Instances\"%Instance1.Name%,"Flags",0x00010001,%Instance1.Flags%
+
+;
+; Copy Files
+;
+
+[MiniFilter.DriverFiles]
+DelProtect.sys
+
+[SourceDisksFiles]
+DelProtect.sys = 1,,
+
+[SourceDisksNames]
+1 = %DiskId1%,,,
+
+;;
+;; String Section
+;;
+
+[Strings]
+; TODO - Add your manufacturer
+ManufacturerName        = "WindowsDriversBook"
+ServiceDescription      = "DelProtect Mini-Filter Driver"
+ServiceName             = "DelProtect"
+DriverName              = "DelProtect"
+DiskId1                 = "DelProtect Device Installation Disk"
+
+;Instances specific information.
+DefaultInstance         = "DelProtect Instance"
+Instance1.Name          = "DelProtect Instance"
+Instance1.Altitude       = "345101"
+Instance1.Flags         = 0x0              ; Allow all attachments
+
+
+```
+
+`delprotect-minifilter-rust/Makefile.toml`:
+
+```toml
+[env]
+DRIVER_NAME = "DelProtect"
+OUTPUT_PATH = "output"
+DDK_PLATFORM = "x64"
+
+[env.development]
+TARGET_PATH = "target\\x86_64-pc-windows-msvc\\debug"
+
+[env.production]
+TARGET_PATH = "target\\x86_64-pc-windows-msvc\\release"
+BUILD_FLAGS = "--release"
+
+[tasks.build-driver]
+script = [
+    "cargo b %BUILD_FLAGS%"
+]
+
+[tasks.rename]
+dependencies = ["build-driver"]
+ignore_errors = true
+script = [
+    "cd %TARGET_PATH%",
+    "rename %DRIVER_NAME%.dll %DRIVER_NAME%.sys",
+]
+
+[tasks.sign]
+dependencies = ["build-driver", "rename"]
+script = [
+    # Load the Visual Studio Developer environment
+    "call \"%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Professional\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
+
+    # Create a self signed certificate (only if not already done)
+    "if not exist DriverCertificate.cer ( makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer ) else ( echo Certificate already exists. )",
+
+    # Sign the driver
+    "signtool sign /fd SHA256 /a /v /s PrivateCertStore /n DriverCertificate /t http://timestamp.digicert.com %TARGET_PATH%/%DRIVER_NAME%.sys"
+]
+
+[tasks.copy]
+script = [
+    "IF not exist myDirName (mkdir output)",
+    "COPY %TARGET_PATH%\\%DRIVER_NAME%.sys .\\output",
+    "COPY %DRIVER_NAME%.inf .\\output",
+]
+
+[tasks.inf2cat]
+dependencies = ["copy"]
+script = [
+    # Load the Visual Studio Developer environment
+    "call \"%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Professional\\VC\\Auxiliary\\Build\\vcvars32.bat\"",
+
+    "inf2cat /driver:%OUTPUT_PATH% /os:10_%DDK_PLATFORM%"
+]
+
+[tasks.all]
+dependencies = ["build-driver", "rename", "sign", "copy", "inf2cat"]
+
+[tasks.rebuild]
+script = [
+    "cargo make clean",
+    "cargo make all"
+]
+```
+
+`delprotect-minifilter-rust/build.rs`:
+
+```rs
+use std::env::var;
+use std::path::{Path, PathBuf};
+use winreg::enums::HKEY_LOCAL_MACHINE;
+use winreg::RegKey;
+
+/// `C:\Program Files (x86)\Windows Kits\10`.
+fn read_kits_path() -> PathBuf {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let key = r"SOFTWARE\Microsoft\Windows Kits\Installed Roots";
+    let dir: String = hklm.open_subkey(key).unwrap().get_value("KitsRoot10").unwrap();
+
+    dir.into()
+}
+
+/// Returns the path to the kernel mode libraries. The path may look like this:
+/// `C:\Program Files (x86)\Windows Kits\10\lib\10.0.18362.0\km`.
+fn find_km_dir(windows_kits_dir: &PathBuf) -> PathBuf {
+    let readdir = Path::new(windows_kits_dir).join("lib").read_dir().unwrap();
+
+    let max_libdir = readdir
+        .filter_map(|dir| dir.ok())
+        .map(|dir| dir.path())
+        .filter(|dir| {
+            dir.components()
+                .last()
+                .and_then(|c| c.as_os_str().to_str())
+                .map(|c| c.starts_with("10.") && dir.join("km").is_dir())
+                .unwrap_or(false)
+        })
+        .max()
+        .unwrap();
+
+    max_libdir.join("km")
+}
+
+fn get_target_architecture() -> String {
+    let target = var("TARGET").unwrap();
+    if target.contains("x86_64") {
+        "x64"
+    } else if target.contains("i686") {
+        "x86"
+    } else {
+        panic!("Only support x86_64 and i686!")
+    }.to_string()
+}
+
+
+fn get_kernel_library_dir() -> PathBuf {
+    let windows_kits_dir = read_kits_path();
+    let km_dir = find_km_dir(&windows_kits_dir);
+    let architecture = get_target_architecture();
+
+    km_dir.join(architecture)
+}
+
+fn main() {
+
+    let km_dir = get_kernel_library_dir();
+    println!(
+        "cargo:rustc-link-search=native={}",
+        km_dir.to_str().unwrap()
+    );
+}
+
+```
+
+`delprotect-minifilter-rust/rust-toolchain.toml`:
+
+```toml
+[toolchain]
+channel = "nightly-2022-09-23-x86_64-pc-windows-msvc"
+
+```
+
+`delprotect-minifilter-rust/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`delprotect-minifilter-rust/src/cleaner.rs`:
+
+```rs
+use kernel_string::{PCUNICODE_STRING, UNICODE_STRING};
+use km_api_sys::flt_kernel::{FltUnregisterFilter, PFLT_FILTER};
+use winapi::km::wdm::{IoDeleteDevice, IoDeleteSymbolicLink, PDEVICE_OBJECT};
+
+pub struct Cleaner {
+    device_object: Option<PDEVICE_OBJECT>,
+    sym_link: Option<PCUNICODE_STRING>,
+    filter_handle: Option<PFLT_FILTER>,
+}
+
+impl Cleaner {
+    pub fn new() -> Self {
+        Self {
+            device_object: None,
+            sym_link: None,
+            filter_handle: None,
+        }
+    }
+
+    pub fn init_device(&mut self, device: PDEVICE_OBJECT) {
+        self.device_object = Some(device);
+    }
+
+    pub fn init_symlink(&mut self, sym_link: &UNICODE_STRING) {
+        self.sym_link = Some(sym_link as PCUNICODE_STRING);
+    }
+
+    pub fn init_filter_handle(&mut self, callback: PFLT_FILTER) {
+        self.filter_handle = Some(callback);
+    }
+
+    pub fn clean(&mut self) {
+        unsafe {
+            if let Some(device) = self.device_object {
+                IoDeleteDevice(device);
+            }
+
+            if let Some(sym_link) = self.sym_link {
+                IoDeleteSymbolicLink(&(*sym_link).as_ntdef_unicode());
+            }
+
+            if let Some(filter_handle) = self.filter_handle {
+                FltUnregisterFilter(filter_handle);
+            }
+        }
+    }
+}
+
+```
+
+`delprotect-minifilter-rust/src/ioctl_code.rs`:
+
+```rs
+#![allow(unused)]
+use kernel_macros::CTL_CODE;
+use km_api_sys::wmd::{FILE_ANY_ACCESS, METHOD_BUFFERED, METHOD_NEITHER};
+use winapi::shared::ntdef::ULONG;
+
+pub(super) const IOCTL_DELPROTECT_ADD_EXE: ULONG = CTL_CODE!(0x8000, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
+pub(super) const IOCTL_DELPROTECT_REMOVE_EXE: ULONG =
+    CTL_CODE!(0x8000, 0x801, METHOD_BUFFERED, FILE_ANY_ACCESS);
+pub(super) const IOCTL_DELPROTECT_CLEAR: ULONG = CTL_CODE!(0x8000, 0x802, METHOD_NEITHER, FILE_ANY_ACCESS);
+
+```
+
+`delprotect-minifilter-rust/src/lib.rs`:
+
+```rs
+#![no_std]
+#![allow(non_snake_case)]
+
+mod cleaner;
+mod ioctl_code;
+
+extern crate alloc;
+
+use alloc::{collections::VecDeque, string::String};
+use core::ptr::null_mut;
+use kernel_fast_mutex::{auto_lock::AutoLock, fast_mutex::FastMutex, locker::Locker};
+
+/// kernel-init deliver a few elements (eg. panic implementation) necessary to run code in kernel
+#[allow(unused_imports)]
+use kernel_init;
+use kernel_macros::{NT_SUCCESS, PAGED_CODE};
+
+use kernel_init::kernel_alloc::POOL_TAG;
+use kernel_string::{PUNICODE_STRING, UNICODE_STRING};
+use km_api_sys::{
+    flt_kernel::*,
+    ntddk::{PFILE_DISPOSITION_INFORMATION, PROCESSINFOCLASS},
+    ntifs::{ObOpenObjectByPointer, PsGetThreadProcess},
+    ntoskrnl::{ExAllocatePool2, ExFreePoolWithTag, POOL_FLAG_PAGED},
+    wmd::{NtCurrentProcess, ZwClose, ZwQueryInformationProcess, FILE_DELETE_ON_CLOSE},
+};
+use winapi::{
+    km::wdm::{DEVICE_TYPE, DRIVER_OBJECT, KPROCESSOR_MODE},
+    shared::{
+        ntdef::{FALSE, HANDLE, NTSTATUS, OBJ_KERNEL_HANDLE, PVOID, ULONG, USHORT},
+        ntstatus::{STATUS_ACCESS_DENIED, STATUS_INSUFFICIENT_RESOURCES, STATUS_SUCCESS},
+    },
+};
+
+use crate::cleaner::Cleaner;
+use winapi::{
+    km::wdm::{
+        IoCompleteRequest, IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice,
+        IoDeleteSymbolicLink, IoGetCurrentIrpStackLocation, DEVICE_OBJECT, IRP, IRP_MJ,
+        PDEVICE_OBJECT,
+    },
+    shared::ntstatus::{
+        STATUS_INVALID_DEVICE_REQUEST, STATUS_INVALID_PARAMETER, STATUS_TOO_MANY_NAMES,
+    },
+};
+
+const MAX_ITEM_COUNT: usize = 32;
+
+const DEVICE_NAME: &str = "\\Device\\DelProtect";
+const SYM_LINK_NAME: &str = "\\??\\DelProtect";
+
+static mut G_PROCESS_NAMES: Option<VecDeque<String>> = None;
+static mut G_MUTEX: FastMutex = FastMutex::new();
+static mut G_FILTER_HANDLE: PFLT_FILTER = null_mut();
+
+const CALLBACKS: &'static [FLT_OPERATION_REGISTRATION] = {
+    &[
+        FLT_OPERATION_REGISTRATION::new()
+            .set_major_function(FLT_OPERATION_REGISTRATION::IRP_MJ_CREATE)
+            .set_preop(DelProtectPreCreate),
+        FLT_OPERATION_REGISTRATION::new()
+            .set_major_function(FLT_OPERATION_REGISTRATION::IRP_MJ_SET_INFORMATION)
+            .set_preop(DelProtectPreSetInformation),
+        FLT_OPERATION_REGISTRATION::new()
+            .set_major_function(FLT_OPERATION_REGISTRATION::IRP_MJ_OPERATION_END),
+    ]
+};
+
+const FILTER_REGISTRATION: FLT_REGISTRATION = FLT_REGISTRATION {
+    Size: ::core::mem::size_of::<FLT_REGISTRATION>() as USHORT, /*sizeof*/
+    Version: FLT_REGISTRATION_VERSION,
+    Flags: 0,
+    ContextRegistration: null_mut(),
+    OperationRegistration: CALLBACKS.as_ptr(),
+    FilterUnloadCallback: DelProtectUnload,
+    InstanceSetupCallback: DelProtectInstanceSetup,
+    InstanceQueryTeardownCallback: DelProtectInstanceQueryTeardown,
+    InstanceTeardownStartCallback: DelProtectInstanceTeardownStart,
+    InstanceTeardownCompleteCallback: DelProtectInstanceTeardownComplete,
+    GenerateFileNameCallback: null_mut(),
+    NormalizeNameComponentCallback: null_mut(),
+    NormalizeContextCleanupCallback: null_mut(),
+    TransactionNotificationCallback: null_mut(),
+    NormalizeNameComponentExCallback: null_mut(),
+    SectionNotificationCallback: null_mut(),
+};
+
+/*************************************************************************
+    MiniFilter initialization and unload routines.
+*************************************************************************/
+#[link_section = "INIT"]
+#[no_mangle]
+pub unsafe extern "system" fn DriverEntry(
+    driver: &mut DRIVER_OBJECT,
+    _path: *const UNICODE_STRING,
+) -> NTSTATUS {
+    kernel_print::kernel_println!("START DelProtect");
+
+    let hello_world = UNICODE_STRING::create("Hello World!");
+    kernel_print::kernel_println!("{}", hello_world.as_rust_string());
+
+    //--------------------GLOBALS-----------------------
+    G_MUTEX.Init();
+
+    //init processes vector
+    let mut events = VecDeque::new();
+    if let Err(e) = events.try_reserve_exact(MAX_ITEM_COUNT) {
+        kernel_print::kernel_println!(
+            "fail to reserve a {} bytes of memory. Err: {:?}",
+            ::core::mem::size_of::<String>() * MAX_ITEM_COUNT,
+            e
+        );
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    G_PROCESS_NAMES = Some(events);
+
+
+    //--------------------INIT VARIABLES-----------------------
+    let mut status = STATUS_SUCCESS;
+
+    let dev_name = UNICODE_STRING::from(DEVICE_NAME);
+    let sym_link = UNICODE_STRING::from(SYM_LINK_NAME);
+
+    let mut cleaner = Cleaner::new();
+    let mut device_object: PDEVICE_OBJECT = null_mut();
+
+    loop {
+        //--------------------DEVICE-----------------------
+        status = IoCreateDevice(
+            driver,
+            0,
+            dev_name.as_ptr(),
+            DEVICE_TYPE::FILE_DEVICE_UNKNOWN,
+            0,
+            FALSE,
+            &mut device_object,
+        );
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_device(device_object);
+        } else {
+            kernel_print::kernel_println!("failed to create device 0x{:08x}", status);
+            break;
+        }
+
+        //--------------------SYMLINK-----------------------
+        status = IoCreateSymbolicLink(&sym_link.as_ntdef_unicode(), &dev_name.as_ntdef_unicode());
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_symlink(&sym_link);
+        } else {
+            kernel_print::kernel_println!("failed to create sym_link 0x{:08x}", status);
+            break;
+        }
+
+        //--------------------FILTER_HANDLE-----------------------
+        status = FltRegisterFilter(driver, &FILTER_REGISTRATION, &mut G_FILTER_HANDLE);
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_filter_handle(G_FILTER_HANDLE);
+        } else {
+            kernel_print::kernel_println!("failed to create sym_link 0x{:08x}", status);
+            break;
+        }
+
+        //--------------------DISPATCH_ROUTINES-----------------------
+        driver.DriverUnload = Some(DelProtectUnloadDriver);
+        driver.MajorFunction[IRP_MJ::CREATE as usize] = Some(DispatchCreateClose);
+        driver.MajorFunction[IRP_MJ::CLOSE as usize] = Some(DispatchCreateClose);
+        driver.MajorFunction[IRP_MJ::DEVICE_CONTROL as usize] = Some(DispatchDeviceControl);
+
+        status = FltStartFiltering(G_FILTER_HANDLE);
+        break;
+    }
+
+    if NT_SUCCESS!(status) {
+        kernel_print::kernel_println!("SUCCESS");
+    } else {
+        cleaner.clean();
+    }
+
+    kernel_print::kernel_println!("SUCCESS: {}", status);
+    status
+}
+
+extern "system" fn DelProtectUnload(_flags: FLT_REGISTRATION_FLAGS) -> NTSTATUS {
+    kernel_print::kernel_println!("delprotect_unload");
+
+    PAGED_CODE!();
+    unsafe {
+        FltUnregisterFilter(G_FILTER_HANDLE);
+    }
+
+    STATUS_SUCCESS
+}
+
+#[link_section = "PAGE"]
+extern "system" fn DelProtectInstanceSetup(
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _flags: FLT_INSTANCE_SETUP_FLAGS,
+    _volume_device_type: DEVICE_TYPE,
+    _volume_filesystem_type: FLT_FILESYSTEM_TYPE,
+) -> NTSTATUS {
+    //kernel_print::kernel_println!("DelProtectInstanceSetup");
+    PAGED_CODE!();
+    STATUS_SUCCESS
+}
+
+#[link_section = "PAGE"]
+extern "system" fn DelProtectInstanceQueryTeardown(
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _flags: FLT_INSTANCE_QUERY_TEARDOWN_FLAGS,
+) -> NTSTATUS {
+    //kernel_print::kernel_println!("DelProtectInstanceQueryTeardown");
+
+    PAGED_CODE!();
+    unsafe {
+        FltUnregisterFilter(G_FILTER_HANDLE);
+    }
+    //kernel_print::kernel_println!("DelProtectInstanceQueryTeardown SUCCESS");
+    STATUS_SUCCESS
+}
+
+#[link_section = "PAGE"]
+extern "system" fn DelProtectInstanceTeardownStart(
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _flags: FLT_INSTANCE_TEARDOWN_FLAGS,
+) -> NTSTATUS {
+    //kernel_print::kernel_println!("DelProtectInstanceTeardownStart");
+
+    PAGED_CODE!();
+    //kernel_print::kernel_println!("DelProtectInstanceTeardownStart SUCCESS");
+    STATUS_SUCCESS
+}
+
+#[link_section = "PAGE"]
+extern "system" fn DelProtectInstanceTeardownComplete(
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _flags: FLT_INSTANCE_TEARDOWN_FLAGS,
+) -> NTSTATUS {
+    //kernel_print::kernel_println!("DelProtectInstanceTeardownComplete");
+
+    PAGED_CODE!();
+    //kernel_print::kernel_println!("DelProtectInstanceTeardownComplete SUCCESS");
+    STATUS_SUCCESS
+}
+
+/*************************************************************************
+    MiniFilter callback routines.
+*************************************************************************/
+extern "system" fn DelProtectPreCreate(
+    data: &mut FLT_CALLBACK_DATA,
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _reserved: *mut PVOID,
+) -> FLT_PREOP_CALLBACK_STATUS {
+    let mut status = FLT_PREOP_CALLBACK_STATUS::FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+    //let mut data = data as &mut FLT_CALLBACK_DATA;
+    if let KPROCESSOR_MODE::KernelMode = data.RequestorMode {
+        return status;
+    }
+    //kernel_print::kernel_println!("DelProtectPreCreate not in kernel");
+
+    unsafe {
+        let params = &(*data.Iopb).Parameters.Create;
+
+        if (params.Options & FILE_DELETE_ON_CLOSE) > 0 {
+            kernel_print::kernel_println!("Delete on close");
+            if !IsDeleteAllowed(NtCurrentProcess()) {
+                *data.IoStatus.__bindgen_anon_1.Status_mut() = STATUS_ACCESS_DENIED;
+                status = FLT_PREOP_CALLBACK_STATUS::FLT_PREOP_COMPLETE;
+                kernel_print::kernel_println!("Prevent delete by cmd.exe");
+            }
+        }
+    }
+
+    status
+}
+
+extern "system" fn DelProtectPreSetInformation(
+    data: &mut FLT_CALLBACK_DATA,
+    _flt_objects: PFLT_RELATED_OBJECTS,
+    _reserved: *mut PVOID,
+) -> FLT_PREOP_CALLBACK_STATUS {
+    //kernel_print::kernel_println!("DelProtectPreSetInformation");
+    let mut status = FLT_PREOP_CALLBACK_STATUS::FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+    let params = unsafe { &(*data.Iopb).Parameters.SetFileInformation };
+
+    match params.FileInformationClass {
+        FILE_INFORMATION_CLASS::FileDispositionInformation
+        | FILE_INFORMATION_CLASS::FileDispositionInformationEx => {},
+        _ => return status,
+    }
+
+    let info = params.InfoBuffer as PFILE_DISPOSITION_INFORMATION;
+    unsafe {
+        if (*info).DeleteFile == 0 {
+            return status;
+        }
+
+        let process = PsGetThreadProcess(data.Thread);
+        if process.is_null() {
+            //something is wrong
+            return status;
+        }
+
+        let mut h_process: HANDLE = usize::MAX as HANDLE;
+        let ret = ObOpenObjectByPointer(
+            process,
+            OBJ_KERNEL_HANDLE,
+            null_mut(),
+            0,
+            null_mut(),
+            KPROCESSOR_MODE::KernelMode,
+            &mut h_process,
+        );
+        if !NT_SUCCESS!(ret) {
+            return status;
+        }
+
+        if !IsDeleteAllowed(h_process) {
+            *data.IoStatus.__bindgen_anon_1.Status_mut() = STATUS_ACCESS_DENIED;
+            status = FLT_PREOP_CALLBACK_STATUS::FLT_PREOP_COMPLETE;
+            kernel_print::kernel_println!("Prevent delete by cmd.exe");
+        }
+        ZwClose(h_process);
+    }
+    status
+}
+
+unsafe fn IsDeleteAllowed(h_process: HANDLE) -> bool {
+    let process_name_size = 300;
+    let process_name =
+        ExAllocatePool2(POOL_FLAG_PAGED, process_name_size, POOL_TAG) as PUNICODE_STRING;
+
+    if process_name.is_null() {
+        kernel_print::kernel_println!("fail to reserve a {} bytes of memory", process_name_size);
+        return true;
+    }
+
+    let mut delete_allowed = true;
+    let mut return_length: ULONG = 0;
+    let status = ZwQueryInformationProcess(
+        h_process,
+        PROCESSINFOCLASS::ProcessImageFileName,
+        process_name as PVOID,
+        (process_name_size - 2) as u32,
+        &mut return_length,
+    );
+
+    kernel_print::kernel_println!(
+        "ZwQueryInformationProcess - status: {}, returnLength: {}",
+        status,
+        return_length
+    );
+
+    if NT_SUCCESS!(status) {
+        let process_name = &*process_name;
+        let rust_process_name = process_name.as_rust_string();
+        kernel_print::kernel_println!("Delete operation from {}", rust_process_name);
+
+        if process_name.Length != 0 {
+            let _locker = AutoLock::new(&mut G_MUTEX);
+            if let Some(process_names) = &G_PROCESS_NAMES {
+                for name in process_names {
+                    kernel_print::kernel_println!("process_names {:?}", name.as_bytes());
+                    kernel_print::kernel_println!("rust_process_name {:?}", rust_process_name.as_bytes());
+                    if rust_process_name.contains(name) {
+                        delete_allowed = false;
+                        kernel_print::kernel_println!("DELETE BLOCK ");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    ExFreePoolWithTag(process_name as PVOID, POOL_TAG);
+
+    delete_allowed
+}
+
+/*************************************************************************
+                    Dispatch  routines.
+*************************************************************************/
+extern "system" fn DelProtectUnloadDriver(driver: &mut DRIVER_OBJECT) {
+    kernel_print::kernel_println!("rust_unload");
+    unsafe {
+        IoDeleteDevice(driver.DeviceObject);
+
+        let sym_link = UNICODE_STRING::create(SYM_LINK_NAME);
+        IoDeleteSymbolicLink(&sym_link.as_ntdef_unicode());
+    }
+}
+
+extern "system" fn DispatchCreateClose(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    complete_irp_success(irp)
+}
+
+extern "system" fn DispatchDeviceControl(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    unsafe {
+        let stack = IoGetCurrentIrpStackLocation(irp);
+        let device_io = (*stack).Parameters.DeviceIoControl();
+
+        kernel_print::kernel_println!("device_io.IoControlCode: {} ", device_io.IoControlCode);
+        match device_io.IoControlCode {
+            ioctl_code::IOCTL_DELPROTECT_ADD_EXE => {
+                kernel_print::kernel_println!("IOCTL_DELPROTECT_ADD_EXE ");
+                let name: *mut u16 = *irp.AssociatedIrp.SystemBuffer() as PVOID as *mut u16;
+                if name.is_null() {
+                    return STATUS_INVALID_PARAMETER;
+                }
+
+                let name_len_in_bytes = device_io.InputBufferLength as usize;
+                let name_len  =  {
+                    let name_len = name_len_in_bytes / ::core::mem::size_of::<u16>();
+
+                    if *name.offset(name_len as isize - 1) == 0 {
+                        name_len - 1
+                    } else {
+                        name_len
+                    }
+                };
+
+                let buffer = core::slice::from_raw_parts::<u16>(
+                    name,
+                    name_len,
+                );
+                let proc_name = String::from_utf16_lossy(buffer);
+
+                kernel_print::kernel_println!("proc_name: {}", proc_name);
+
+                push_item_thread_safe(&proc_name);
+            },
+            ioctl_code::IOCTL_DELPROTECT_CLEAR => {
+                kernel_print::kernel_println!("before lock ");
+                let _locker = AutoLock::new(&mut G_MUTEX);
+                kernel_print::kernel_println!("after lock");
+                if let Some(events) = &mut G_PROCESS_NAMES {
+                    kernel_print::kernel_println!("before clear ");
+                    events.clear();
+                    kernel_print::kernel_println!("after clear ");
+                }
+            },
+            _ => {
+                kernel_print::kernel_println!("IOCTL_ other ");
+                return complete_irp_with_status(irp, STATUS_INVALID_DEVICE_REQUEST);
+            },
+        }
+    }
+
+    complete_irp_success(irp)
+}
+
+/*************************************************************************
+                    IRP functions
+*************************************************************************/
+fn complete_irp_with_status(irp: &mut IRP, status: NTSTATUS) -> NTSTATUS {
+    complete_irp(irp, status, 0)
+}
+
+fn complete_irp_success(irp: &mut IRP) -> NTSTATUS {
+    complete_irp_with_status(irp, STATUS_SUCCESS)
+}
+
+fn complete_irp(irp: &mut IRP, status: NTSTATUS, info: usize) -> NTSTATUS {
+    unsafe {
+        let s = irp.IoStatus.__bindgen_anon_1.Status_mut();
+        *s = status;
+        irp.IoStatus.Information = info;
+        IoCompleteRequest(irp, 0);
+    }
+
+    status
+}
+
+/*************************************************************************
+                    Thread safe operations.
+*************************************************************************/
+unsafe fn push_item_thread_safe(process_name: &str) {
+    let mut p_name = String::new();
+    if let Err(e) = p_name.try_reserve_exact(process_name.len()) {
+        kernel_print::kernel_println!(
+            "fail to reserve a {} bytes of memory. Err: {:?}",
+            process_name.len(),
+            e
+        );
+        return;
+    }
+    p_name.push_str(process_name);
+    let _locker = AutoLock::new(&mut G_MUTEX);
+    if let Some(process_names) = &mut G_PROCESS_NAMES {
+        if process_names.len() >= MAX_ITEM_COUNT {
+            process_names.pop_front();
+        }
+        process_names.push_back(p_name);
+    }
+}
+
+```
+
+`kernel-alloc/Cargo.toml`:
+
+```toml
+[package]
+name = "kernel-alloc"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+km-api-sys = { path = "../km-api-sys" }
+
+[features]
+default = ["alloc_panic", "paged_pool"]
+alloc_panic = []
+paged_pool = []
+
+```
+
+`kernel-alloc/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`kernel-alloc/src/lib.rs`:
+
+```rs
+#![no_std]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
+
+#[allow(unused_imports)]
+use alloc::alloc::handle_alloc_error;
+use core::alloc::{GlobalAlloc, Layout};
+use km_api_sys::ntoskrnl::{ExAllocatePool2, ExFreePool, POOL_FLAG_NON_PAGED, POOL_FLAG_PAGED};
+
+pub const POOL_TAG: u32 = u32::from_ne_bytes(*b"TSUR");
+
+pub struct KernelAlloc;
+
+unsafe impl GlobalAlloc for KernelAlloc {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        #[allow(unused)]
+        let pool_flags = POOL_FLAG_NON_PAGED;
+
+        #[cfg(feature = "paged_pool")]
+        let pool_flags = POOL_FLAG_PAGED;
+
+        let pool = ExAllocatePool2(pool_flags, layout.size(), POOL_TAG);
+
+        #[cfg(feature = "alloc_panic")]
+        if pool.is_null() {
+            handle_alloc_error(layout);
+        }
+
+        pool as _
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+        ExFreePool(ptr as _);
+    }
+}
+
+#[alloc_error_handler]
+fn alloc_error(layout: Layout) -> ! {
+    panic!("allocation error: {:?}", layout);
+}
+
+```
+
+`kernel-fast-mutex/Cargo.toml`:
+
+```toml
+[package]
+name = "kernel-fast-mutex"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+km-api-sys       = { path = "../km-api-sys"}
+```
+
+`kernel-fast-mutex/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`kernel-fast-mutex/src/auto_lock.rs`:
+
+```rs
+use crate::locker::Locker;
+
+pub struct AutoLock<'a, Lock: Locker> {
+    l: &'a mut Lock,
+}
+
+impl<'a, Lock: Locker> AutoLock<'a, Lock> {
+    pub fn new(locker: &'a mut Lock) -> Self {
+        locker.Lock();
+
+        Self { l: locker }
+    }
+}
+
+impl<'a, Lock: Locker> Drop for AutoLock<'a, Lock> {
+    fn drop(&mut self) {
+        self.l.Unlock();
+    }
+}
+
+```
+
+`kernel-fast-mutex/src/fast_mutex.rs`:
+
+```rs
+#![allow(non_snake_case)]
+
+use crate::locker::Locker;
+use km_api_sys::wmd::{ExAcquireFastMutex, ExInitializeFastMutex, ExReleaseFastMutex, FAST_MUTEX};
+
+pub struct FastMutex {
+    Mutex: FAST_MUTEX,
+}
+
+impl FastMutex {
+    pub const fn new() -> Self {
+        Self {
+            Mutex: FAST_MUTEX::new(),
+        }
+    }
+}
+
+impl Locker for FastMutex {
+    fn Init(&mut self) {
+        unsafe { ExInitializeFastMutex(&mut self.Mutex) }
+    }
+
+    fn Lock(&mut self) {
+        unsafe { ExAcquireFastMutex(&mut self.Mutex as *mut FAST_MUTEX) }
+    }
+
+    fn Unlock(&mut self) {
+        unsafe { ExReleaseFastMutex(&mut self.Mutex as *mut FAST_MUTEX) }
+    }
+}
+
+```
+
+`kernel-fast-mutex/src/lib.rs`:
+
+```rs
+#![no_std]
+
+pub mod auto_lock;
+pub mod fast_mutex;
+pub mod locker;
+
+```
+
+`kernel-fast-mutex/src/locker.rs`:
+
+```rs
+#![allow(non_snake_case)]
+pub trait Locker {
+    fn Init(&mut self);
+
+    fn Lock(&mut self);
+
+    fn Unlock(&mut self);
+}
+
+```
+
+`kernel-init/Cargo.toml`:
+
+```toml
+[package]
+name = "kernel-init"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+km-api-sys = { path = "../km-api-sys" }
+kernel-alloc = { path = "../kernel-alloc"}
+
+[features]
+default = []
+alloc_panic = []
+
+```
+
+`kernel-init/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`kernel-init/src/lib.rs`:
+
+```rs
+//source idea: https://os.phil-opp.com/minimal-rust-kernel/
+#![no_std]
+#![feature(lang_items)]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
+
+use alloc::string::ToString;
+use core::{ffi::c_void, panic::PanicInfo};
+
+#[cfg(not(test))]
+#[global_allocator]
+static GLOBAL: kernel_alloc::KernelAlloc = kernel_alloc::KernelAlloc;
+
+#[cfg(not(test))]
+#[export_name = "_fltused"]
+static _FLTUSED: i32 = 0;
+
+#[cfg(not(test))]
+#[no_mangle]
+extern "system" fn __CxxFrameHandler3(_: *mut u8, _: *mut u8, _: *mut u8, _: *mut u8) -> i32 {
+    unimplemented!()
+}
+
+/// Base code
+const BUGCHECK_CODE: u32 = 0xDEAD0000;
+
+#[cfg(not(test))]
+#[cfg_attr(all(target_env = "msvc", feature = "kernel"), link(name = "ntoskrnl"))]
+extern "system" {
+    fn KeBugCheckEx(
+        BugCheckCode: u32,
+        BugCheckParameter1: u32,
+        BugCheckParameter2: u32,
+        BugCheckParameter3: u32,
+        BugCheckParameter4: u32,
+    ) -> c_void;
+}
+
+#[cfg(not(test))]
+/// An unrecoverable error will cause the kernel to crash.
+fn unrecoverable_error(info: &PanicInfo) {
+    let msg = info.to_string();
+    unsafe {
+        KeBugCheckEx(BUGCHECK_CODE, msg.as_ptr() as u32, 0, 0, 0);
+    }
+}
+
+#[cfg(not(test))]
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    unrecoverable_error(info);
+    loop {}
+}
+
+#[cfg(not(test))]
+#[lang = "eh_personality"]
+extern "C" fn eh_personality() {}
+
+```
+
+`kernel-macros/Cargo.toml`:
+
+```toml
+[package]
+name = "kernel-macros"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+```
+
+`kernel-macros/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`kernel-macros/src/lib.rs`:
+
+```rs
+#![no_std]
+#![allow(non_snake_case)]
+
+#[macro_export]
+macro_rules! NT_SUCCESS {
+    ($status:expr) => {
+        $status as NTSTATUS >= 0
+    };
+}
+
+#[macro_export]
+macro_rules! CTL_CODE {
+    ($DeviceType:expr, $Function:expr, $Method:expr, $Access:expr) => {
+        ($DeviceType << 16) | ($Access << 14) | ($Function << 2) | $Method
+    };
+}
+
+#[macro_export]
+macro_rules! HandleToU32 {
+    ($Handle:expr) => {
+        ($Handle as u32)
+    };
+}
+
+#[macro_export]
+macro_rules! PAGED_CODE {
+    () => {
+        unsafe {
+            if u64::from(km_api_sys::wmd::KeGetCurrentIrql()) > km_api_sys::wmd::APC_LEVEL
+            {
+                return winapi::shared::ntstatus::STATUS_UNSUCCESSFUL;
+            }
+        }
+    };
+}
+
+```
+
+`kernel-string/Cargo.toml`:
+
+```toml
+[package]
+name = "kernel-string"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[dependencies.winapi]
+git = "https://github.com/Trantect/winapi-rs.git"
+branch = "feature/km"
+features = [
+    "wdm",
+    "ntstatus",
+]
+```
+
+`kernel-string/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`kernel-string/src/lib.rs`:
+
+```rs
+#![no_std]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+extern crate alloc;
+
+use alloc::string::String;
+use core::fmt::{Display, Formatter};
+use winapi::shared::ntdef::{self, BOOLEAN, LONG, NTSTATUS, TRUE, ULONG, ULONGLONG};
+type PCSZ = *const u8;
+type PCWSTR = *const u16;
+
+#[repr(C)]
+pub struct ANSI_STRING {
+    pub Length: u16,
+    pub MaximumLength: u16,
+    pub Buffer: *const u8,
+}
+pub type PANSI_STRING = *mut ANSI_STRING;
+
+impl ANSI_STRING {
+    fn create(buffer: &[u8]) -> Self {
+        ANSI_STRING::from(buffer)
+    }
+}
+
+impl<'a> From<&'a [u8]> for ANSI_STRING {
+    fn from(buffer: &'a [u8]) -> Self {
+        let mut str = ANSI_STRING::default();
+
+        let mut buffer = buffer.to_vec();
+        if *buffer.last().unwrap() != 0 {
+            //let mut buffer = buffer.to_vec();
+            buffer.push(0);
+        }
+
+        unsafe {
+            RtlInitAnsiString(&mut str, buffer.as_ptr());
+        }
+
+        ::core::mem::forget(buffer);
+        str
+    }
+}
+
+impl<'a> From<&str> for ANSI_STRING {
+    fn from(buffer: &str) -> Self {
+        ANSI_STRING::from(buffer.as_bytes())
+    }
+}
+
+impl Default for ANSI_STRING {
+    fn default() -> Self {
+        Self {
+            Length: 0,
+            MaximumLength: 0 as u16,
+            Buffer: ::core::ptr::null(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct UNICODE_STRING {
+    pub Length: u16,
+    pub MaximumLength: u16,
+    pub ptr: *const u16,
+}
+pub type PUNICODE_STRING = *mut UNICODE_STRING;
+pub type PCUNICODE_STRING = *const UNICODE_STRING;
+
+impl UNICODE_STRING {
+    pub fn create(buffer: &str) -> Self {
+        UNICODE_STRING::from(buffer.as_bytes())
+    }
+
+    pub fn as_ntdef_unicode(&self) -> ntdef::UNICODE_STRING {
+        ntdef::UNICODE_STRING {
+            Length: self.Length,
+            MaximumLength: self.MaximumLength,
+            Buffer: self.ptr as *mut u16,
+        }
+    }
+
+    pub fn as_rust_string(&self) -> String {
+        unsafe {
+            let ar = ::core::slice::from_raw_parts(self.ptr, self.Length as usize / 2);
+            if let Ok(s) = String::from_utf16(ar) {
+                s
+            } else {
+                String::new()
+            }
+        }
+    }
+
+    pub fn as_ptr(&self) -> *const ntdef::UNICODE_STRING {
+        self as *const Self as *const ntdef::UNICODE_STRING
+    }
+}
+
+impl From<ntdef::UNICODE_STRING> for UNICODE_STRING {
+    fn from(unicode: ntdef::UNICODE_STRING) -> Self {
+        UNICODE_STRING {
+            Length: unicode.Length,
+            MaximumLength: unicode.MaximumLength,
+            ptr: unicode.Buffer,
+        }
+    }
+}
+
+impl<'a> From<&'a [u8]> for UNICODE_STRING {
+    fn from(buffer: &'a [u8]) -> Self {
+        UNICODE_STRING::from(&ANSI_STRING::create(buffer))
+    }
+}
+
+impl<'a> From<&str> for UNICODE_STRING {
+    fn from(buffer: &str) -> Self {
+        UNICODE_STRING::from(buffer.as_bytes())
+    }
+}
+
+impl<'a> From<&'a [u16]> for UNICODE_STRING {
+    fn from(buffer: &'a [u16]) -> Self {
+        let mut str = UNICODE_STRING::default();
+
+        let mut buffer = buffer.to_vec();
+        if *buffer.last().unwrap() == 0 {
+            buffer.push(0);
+        }
+
+        unsafe {
+            RtlCreateUnicodeString(&mut str, buffer.as_ptr());
+        }
+        str
+    }
+}
+
+impl<'a> From<&ANSI_STRING> for UNICODE_STRING {
+    fn from(source: &ANSI_STRING) -> Self {
+        let mut u = UNICODE_STRING::default();
+        unsafe {
+            RtlAnsiStringToUnicodeString(&mut u, source, TRUE);
+        }
+        u
+    }
+}
+
+impl Display for UNICODE_STRING {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.as_rust_string())
+    }
+}
+
+impl Default for UNICODE_STRING {
+    fn default() -> Self {
+        Self {
+            Length: 0,
+            MaximumLength: 0 as u16,
+            ptr: ::core::ptr::null(),
+        }
+    }
+}
+
+impl Drop for UNICODE_STRING {
+    fn drop(&mut self) {
+        unsafe { RtlFreeUnicodeString(self) }
+    }
+}
+
+extern "system" {
+    pub fn RtlInitAnsiString(DestinationString: &mut ANSI_STRING, SourceString: PCSZ);
+
+    pub fn RtlCreateUnicodeString(
+        DestinationString: &mut UNICODE_STRING,
+        SourceString: PCWSTR,
+    ) -> BOOLEAN;
+
+    pub fn RtlIntegerToUnicodeString(
+        Value: ULONG,
+        Base: ULONG,
+        String: &mut UNICODE_STRING,
+    ) -> NTSTATUS;
+
+    pub fn RtlInt64ToUnicodeString(
+        Value: ULONGLONG,
+        Base: ULONG,
+        String: &mut UNICODE_STRING,
+    ) -> NTSTATUS;
+
+    pub fn RtlUnicodeStringToInteger(
+        String: &UNICODE_STRING,
+        Base: ULONG,
+        Value: &mut ULONG,
+    ) -> NTSTATUS;
+
+    pub fn RtlUnicodeStringToAnsiString(
+        DestinationString: &mut ANSI_STRING,
+        SourceString: &UNICODE_STRING,
+        AllocateDestination: BOOLEAN,
+    ) -> NTSTATUS;
+
+    pub fn RtlxUnicodeStringToAnsiSize(SourceString: &UNICODE_STRING) -> ULONG;
+
+    pub fn RtlAnsiStringToUnicodeString(
+        DestinationString: &mut UNICODE_STRING,
+        SourceString: &ANSI_STRING,
+        AllocateDestination: BOOLEAN,
+    ) -> NTSTATUS;
+
+    pub fn RtlxAnsiStringToUnicodeSize(SourceString: &ANSI_STRING) -> ULONG;
+
+    pub fn RtlCompareUnicodeString(
+        String1: &UNICODE_STRING,
+        String2: &UNICODE_STRING,
+        CaseInSensitive: BOOLEAN,
+    ) -> LONG;
+
+    pub fn RtlCompareString(
+        String1: &ANSI_STRING,
+        String2: &ANSI_STRING,
+        CaseInSensitive: BOOLEAN,
+    ) -> i32;
+
+    pub fn RtlEqualUnicodeString(String1: &UNICODE_STRING, String2: &UNICODE_STRING) -> bool;
+
+    pub fn RtlEqualString(String1: &ANSI_STRING, String2: &ANSI_STRING) -> bool;
+
+    pub fn RtlFreeAnsiString(UnicodeString: &mut ANSI_STRING);
+
+    pub fn RtlFreeUnicodeString(UnicodeString: &mut UNICODE_STRING);
+}
+
+#[allow(non_upper_case_globals)]
+pub const RtlUnicodeStringToAnsiSize: unsafe extern "system" fn(
+    SourceString: &UNICODE_STRING,
+) -> ULONG = RtlxUnicodeStringToAnsiSize;
+
+#[allow(non_upper_case_globals)]
+pub const RtlAnsiStringToUnicodeSize: unsafe extern "system" fn(
+    SourceString: &ANSI_STRING,
+) -> ULONG = RtlxAnsiStringToUnicodeSize;
+
+```
+
+`km-api-sys/Cargo.toml`:
+
+```toml
+[package]
+name = "km-api-sys"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kernel-string = { path = "../kernel-string"}
+
+[dependencies.winapi]
+git = "https://github.com/Trantect/winapi-rs.git"
+branch = "feature/km"
+features = [
+    "wdm",
+    "ntstatus",
+]
+```
+
+`km-api-sys/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`km-api-sys/src/constants.rs`:
+
+```rs
+pub const FILE_ANY_ACCESS: u32 = 0;
+
+pub const METHOD_BUFFERED: u32 = 0;
+pub const METHOD_IN_DIRECT: u32 = 1;
+pub const METHOD_OUT_DIRECT: u32 = 2;
+pub const METHOD_NEITHER: u32 = 3;
+
+pub const APC_LEVEL: u64 = 1;
+
+```
+
+`km-api-sys/src/flt_kernel.rs`:
+
+```rs
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+mod flt_parameters;
+pub use flt_parameters::*;
+
+use core::ptr::null_mut;
+use winapi::{
+    km::wdm::{
+        DEVICE_TYPE, IO_STATUS_BLOCK, KPROCESSOR_MODE, PDRIVER_OBJECT, PETHREAD, PFILE_OBJECT,
+    },
+    shared::ntdef::{LIST_ENTRY, NTSTATUS, PVOID, UCHAR, ULONG, USHORT},
+};
+
+#[link(name = "fltMgr")]
+extern "system" {
+    pub fn FltRegisterFilter(
+        Driver: PDRIVER_OBJECT,
+        Registration: &FLT_REGISTRATION,
+        RetFilter: &mut PFLT_FILTER,
+    ) -> NTSTATUS;
+
+    pub fn FltUnregisterFilter(Filter: PFLT_FILTER) -> NTSTATUS;
+
+    pub fn FltStartFiltering(Filter: PFLT_FILTER) -> NTSTATUS;
+}
+
+pub type FLT_REGISTRATION_FLAGS = ULONG;
+pub type FLT_POST_OPERATION_FLAGS = FLT_REGISTRATION_FLAGS;
+pub type FLT_INSTANCE_TEARDOWN_FLAGS = FLT_REGISTRATION_FLAGS;
+pub type FLT_INSTANCE_QUERY_TEARDOWN_FLAGS = FLT_REGISTRATION_FLAGS;
+pub type FLT_INSTANCE_SETUP_FLAGS = FLT_REGISTRATION_FLAGS;
+pub type FLT_FILTER_UNLOAD_FLAGS = FLT_REGISTRATION_FLAGS;
+
+#[repr(C)]
+pub struct FLT_FILTER {
+    Filler: [u8; 0x120],
+}
+pub type PFLT_FILTER = *mut FLT_FILTER;
+
+pub const FLT_REGISTRATION_VERSION: u16 = 0x0203;
+
+#[repr(C)]
+pub struct FLT_REGISTRATION {
+    pub Size: USHORT,
+    pub Version: USHORT,
+    pub Flags: FLT_REGISTRATION_FLAGS,
+    pub ContextRegistration: PVOID, /*PFLT_CONTEXT_REGISTRATION*/
+    pub OperationRegistration: PFLT_OPERATION_REGISTRATION,
+    pub FilterUnloadCallback: PFLT_FILTER_UNLOAD_CALLBACK,
+    pub InstanceSetupCallback: PFLT_INSTANCE_SETUP_CALLBACK,
+    pub InstanceQueryTeardownCallback: PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK,
+    pub InstanceTeardownStartCallback: PFLT_INSTANCE_TEARDOWN_CALLBACK,
+    pub InstanceTeardownCompleteCallback: PFLT_INSTANCE_TEARDOWN_CALLBACK,
+    pub GenerateFileNameCallback: PVOID,
+    pub NormalizeNameComponentCallback: PVOID,
+    pub NormalizeContextCleanupCallback: PVOID,
+    pub TransactionNotificationCallback: PVOID,
+    pub NormalizeNameComponentExCallback: PVOID,
+    pub SectionNotificationCallback: PVOID,
+}
+pub type PFLT_REGISTRATION = *mut FLT_REGISTRATION;
+
+#[repr(C)]
+pub enum FLT_PREOP_CALLBACK_STATUS {
+    FLT_PREOP_SUCCESS_WITH_CALLBACK,
+    FLT_PREOP_SUCCESS_NO_CALLBACK,
+    FLT_PREOP_PENDING,
+    FLT_PREOP_DISALLOW_FASTIO,
+    FLT_PREOP_COMPLETE,
+    FLT_PREOP_SYNCHRONIZE,
+    FLT_PREOP_DISALLOW_FSFILTER_IO,
+}
+
+#[repr(C)]
+pub enum FLT_POSTOP_CALLBACK_STATUS {
+    FLT_POSTOP_FINISHED_PROCESSING,
+    FLT_POSTOP_MORE_PROCESSING_REQUIRED,
+    FLT_POSTOP_DISALLOW_FSFILTER_IO,
+}
+
+pub type PFLT_PRE_OPERATION_CALLBACK = extern "system" fn(
+    Data: &mut FLT_CALLBACK_DATA,
+    FltObjects: PFLT_RELATED_OBJECTS,
+    CompletionContext: *mut PVOID,
+) -> FLT_PREOP_CALLBACK_STATUS;
+
+pub type PFLT_POST_OPERATION_CALLBACK = extern "system" fn(
+    Data: &mut FLT_CALLBACK_DATA,
+    FltObjects: PFLT_RELATED_OBJECTS,
+    CompletionContext: PVOID,
+    Flags: FLT_POST_OPERATION_FLAGS,
+) -> FLT_POSTOP_CALLBACK_STATUS;
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union PFLT_OPERATION_CALLBACK_UNION {
+    nullptr: PVOID,
+    preop_fn_ptr: PFLT_PRE_OPERATION_CALLBACK,
+    postop_fn_ptr: PFLT_POST_OPERATION_CALLBACK,
+}
+
+#[repr(C)]
+pub struct FLT_OPERATION_REGISTRATION {
+    MajorFunction: UCHAR,
+    Flags: FLT_REGISTRATION_FLAGS,
+    PreOperation: PFLT_OPERATION_CALLBACK_UNION,
+    PostOperation: PFLT_OPERATION_CALLBACK_UNION,
+    Reserved: PVOID,
+}
+pub type PFLT_OPERATION_REGISTRATION = *const FLT_OPERATION_REGISTRATION;
+
+impl FLT_OPERATION_REGISTRATION {
+    pub const IRP_MJ_CREATE: UCHAR = 0x00;
+    pub const IRP_MJ_SET_INFORMATION: UCHAR = 0x06;
+    pub const IRP_MJ_OPERATION_END: UCHAR = 0x80;
+
+    pub const fn new() -> Self {
+        FLT_OPERATION_REGISTRATION {
+            MajorFunction: 0,
+            Flags: 0,
+            PreOperation: PFLT_OPERATION_CALLBACK_UNION {
+                nullptr: null_mut(),
+            },
+            PostOperation: PFLT_OPERATION_CALLBACK_UNION {
+                nullptr: null_mut(),
+            },
+            Reserved: null_mut(),
+        }
+    }
+
+    pub const fn set_major_function(&self, major_function: UCHAR) -> Self {
+        FLT_OPERATION_REGISTRATION {
+            MajorFunction: major_function,
+            Flags: self.Flags,
+            PreOperation: self.PreOperation,
+            PostOperation: self.PostOperation,
+            Reserved: null_mut(),
+        }
+    }
+
+    pub const fn set_flags(&self, flags: FLT_REGISTRATION_FLAGS) -> Self {
+        FLT_OPERATION_REGISTRATION {
+            MajorFunction: self.MajorFunction,
+            Flags: flags,
+            PreOperation: self.PreOperation,
+            PostOperation: self.PostOperation,
+            Reserved: null_mut(),
+        }
+    }
+
+    pub const fn set_preop(&self, preop: PFLT_PRE_OPERATION_CALLBACK) -> Self {
+        FLT_OPERATION_REGISTRATION {
+            MajorFunction: self.MajorFunction,
+            Flags: self.Flags,
+            PreOperation: PFLT_OPERATION_CALLBACK_UNION {
+                preop_fn_ptr: preop,
+            },
+            PostOperation: self.PostOperation,
+            Reserved: null_mut(),
+        }
+    }
+
+    pub const fn set_postop(&self, postop: PFLT_POST_OPERATION_CALLBACK) -> Self {
+        FLT_OPERATION_REGISTRATION {
+            MajorFunction: self.MajorFunction,
+            Flags: self.Flags,
+            PreOperation: self.PreOperation,
+            PostOperation: PFLT_OPERATION_CALLBACK_UNION {
+                postop_fn_ptr: postop,
+            },
+            Reserved: null_mut(),
+        }
+    }
+}
+
+pub type FLT_CALLBACK_DATA_FLAGS = ULONG;
+
+#[repr(C)]
+pub struct PFLT_CALLBACK_DATA_UNION_STRUCT {
+    QueueLinks: LIST_ENTRY,
+    QueueContext: [PVOID; 2],
+}
+
+#[repr(C)]
+pub union PFLT_CALLBACK_DATA_UNION {
+    F1: ::core::mem::ManuallyDrop<PFLT_CALLBACK_DATA_UNION_STRUCT>,
+    F2: [PVOID; 4],
+}
+const _SIZE_CHECKER: [u8; 32] = [0; ::core::mem::size_of::<PFLT_CALLBACK_DATA_UNION>()];
+
+pub type PFLT_INSTANCE = PVOID;
+
+#[repr(C)]
+pub struct FLT_IO_PARAMETER_BLOCK {
+    pub IrpFlags: ULONG,
+    pub MajorFunction: UCHAR,
+    pub MinorFunction: UCHAR,
+    pub OperationFlags: UCHAR,
+    Reserved: UCHAR,
+    pub TargetFileObject: PFILE_OBJECT,
+    pub TargetInstance: PFLT_INSTANCE,
+    pub Parameters: FLT_PARAMETERS,
+}
+pub type PFLT_IO_PARAMETER_BLOCK = *mut FLT_IO_PARAMETER_BLOCK;
+
+#[repr(C)]
+pub struct FLT_CALLBACK_DATA {
+    pub Flags: FLT_CALLBACK_DATA_FLAGS,
+    pub Thread: PETHREAD,
+    pub Iopb: PFLT_IO_PARAMETER_BLOCK,
+    pub IoStatus: IO_STATUS_BLOCK,
+    pub RagData: PVOID, /* PFLT_TAG_DATA_BUFFER */
+    pub FieldUnion: PFLT_CALLBACK_DATA_UNION,
+    pub RequestorMode: KPROCESSOR_MODE,
+}
+pub type PFLT_CALLBACK_DATA = *mut FLT_CALLBACK_DATA;
+
+const _SIZE_CHECKER2: [u8; 88] = [0; ::core::mem::size_of::<FLT_CALLBACK_DATA>()];
+
+pub type PFLT_RELATED_OBJECTS = PVOID;
+
+pub type PFLT_FILTER_UNLOAD_CALLBACK =
+    extern "system" fn(Flags: FLT_FILTER_UNLOAD_FLAGS) -> NTSTATUS;
+
+pub type FLT_FILESYSTEM_TYPE = ULONG;
+pub type PFLT_INSTANCE_SETUP_CALLBACK = extern "system" fn(
+    FltObjects: PFLT_RELATED_OBJECTS,
+    Flags: FLT_INSTANCE_SETUP_FLAGS,
+    VolumeDeviceType: DEVICE_TYPE,
+    VolumeFilesystemType: FLT_FILESYSTEM_TYPE,
+) -> NTSTATUS;
+
+pub type PFLT_INSTANCE_QUERY_TEARDOWN_CALLBACK = extern "system" fn(
+    FltObjects: PFLT_RELATED_OBJECTS,
+    Reason: FLT_INSTANCE_QUERY_TEARDOWN_FLAGS,
+) -> NTSTATUS;
+
+pub type PFLT_INSTANCE_TEARDOWN_CALLBACK = extern "system" fn(
+    FltObjects: PFLT_RELATED_OBJECTS,
+    Reason: FLT_INSTANCE_TEARDOWN_FLAGS,
+) -> NTSTATUS;
+
+```
+
+`km-api-sys/src/flt_kernel/flt_parameters.rs`:
+
+```rs
+use winapi::{
+    km::{ndis::PMDL, wdm::PFILE_OBJECT},
+    shared::ntdef::{BOOLEAN, HANDLE, LARGE_INTEGER, PVOID, ULONG, USHORT},
+};
+
+#[repr(C)]
+pub union FLT_PARAMETERS {
+    pub Create: ::core::mem::ManuallyDrop<FLT_PARAMETERS_CREATE>,
+    //create_pipe: FTL_PARAMETERS_CREATE_PIPE,
+    //create_mail_slot: FTL_PARAMETERS_CREATE_MAIL_SLOT,
+    pub Read: ::core::mem::ManuallyDrop<FLT_PARAMETERS_READ>,
+    //pub Write: ::core::mem::ManuallyDrop<FLT_PARAMETERS_WRITE>,
+    //pub QueryFileInformation: ::core::mem::ManuallyDrop<FLT_PARAMETERS_QUERY_FILE_INFORMATION>,
+    pub SetFileInformation: ::core::mem::ManuallyDrop<FLT_PARAMETERS_SET_FILE_INFORMATION>,
+}
+
+pub type PIO_SECURITY_CONTEXT = PVOID;
+
+#[repr(C)]
+pub struct FLT_PARAMETERS_CREATE {
+    pub SecurityContext: PIO_SECURITY_CONTEXT,
+    pub Options: ULONG,
+    #[cfg(target_arch = "x86_64")]
+    PointerPadding1: u32,
+    pub FileAttributes: USHORT,
+    pub ShareAccess: USHORT,
+    #[cfg(target_arch = "x86_64")]
+    PointerPadding2: u32,
+    pub EaLength: ULONG,
+    pub EaBuffer: PVOID,
+    pub AllocationSize: LARGE_INTEGER,
+}
+
+#[repr(C)]
+pub struct FLT_PARAMETERS_READ {
+    Length: ULONG,
+    Key: ULONG,
+    ByteOffset: LARGE_INTEGER,
+    WriteBuffer: PVOID,
+    MdlAddress: PMDL,
+}
+
+#[repr(C)]
+pub struct FLT_PARAMETERS_SET_FILE_INFORMATION_UNION_STRUCT {
+    ReplaceIfExists: BOOLEAN,
+    AdvanceOnly: BOOLEAN,
+}
+
+#[repr(C)]
+pub union FLT_PARAMETERS_SET_FILE_INFORMATION_UNION {
+    StructUnion: ::core::mem::ManuallyDrop<FLT_PARAMETERS_SET_FILE_INFORMATION_UNION_STRUCT>,
+    ClusterCount: ULONG,
+    DeleteHandle: HANDLE,
+}
+
+#[repr(C)]
+pub struct FLT_PARAMETERS_SET_FILE_INFORMATION {
+    pub Length: ULONG,
+    #[cfg(target_arch = "x86_64")]
+    PointerPadding1: u32,
+    pub FileInformationClass: FILE_INFORMATION_CLASS,
+    pub ParentOfTarget: PFILE_OBJECT,
+    pub UnnamedUnion: FLT_PARAMETERS_SET_FILE_INFORMATION_UNION,
+    pub InfoBuffer: PVOID,
+}
+
+#[repr(C)]
+pub enum FILE_INFORMATION_CLASS {
+    FileDirectoryInformation = 1,
+    FileFullDirectoryInformation,            // 2
+    FileBothDirectoryInformation,            // 3
+    FileBasicInformation,                    // 4
+    FileStandardInformation,                 // 5
+    FileInternalInformation,                 // 6
+    FileEaInformation,                       // 7
+    FileAccessInformation,                   // 8
+    FileNameInformation,                     // 9
+    FileRenameInformation,                   // 10
+    FileLinkInformation,                     // 11
+    FileNamesInformation,                    // 12
+    FileDispositionInformation,              // 13
+    FilePositionInformation,                 // 14
+    FileFullEaInformation,                   // 15
+    FileModeInformation,                     // 16
+    FileAlignmentInformation,                // 17
+    FileAllInformation,                      // 18
+    FileAllocationInformation,               // 19
+    FileEndOfFileInformation,                // 20
+    FileAlternateNameInformation,            // 21
+    FileStreamInformation,                   // 22
+    FilePipeInformation,                     // 23
+    FilePipeLocalInformation,                // 24
+    FilePipeRemoteInformation,               // 25
+    FileMailslotQueryInformation,            // 26
+    FileMailslotSetInformation,              // 27
+    FileCompressionInformation,              // 28
+    FileObjectIdInformation,                 // 29
+    FileCompletionInformation,               // 30
+    FileMoveClusterInformation,              // 31
+    FileQuotaInformation,                    // 32
+    FileReparsePointInformation,             // 33
+    FileNetworkOpenInformation,              // 34
+    FileAttributeTagInformation,             // 35
+    FileTrackingInformation,                 // 36
+    FileIdBothDirectoryInformation,          // 37
+    FileIdFullDirectoryInformation,          // 38
+    FileValidDataLengthInformation,          // 39
+    FileShortNameInformation,                // 40
+    FileIoCompletionNotificationInformation, // 41
+    FileIoStatusBlockRangeInformation,       // 42
+    FileIoPriorityHintInformation,           // 43
+    FileSfioReserveInformation,              // 44
+    FileSfioVolumeInformation,               // 45
+    FileHardLinkInformation,                 // 46
+    FileProcessIdsUsingFileInformation,      // 47
+    FileNormalizedNameInformation,           // 48
+    FileNetworkPhysicalNameInformation,      // 49
+    FileIdGlobalTxDirectoryInformation,      // 50
+    FileIsRemoteDeviceInformation,           // 51
+    FileUnusedInformation,                   // 52
+    FileNumaNodeInformation,                 // 53
+    FileStandardLinkInformation,             // 54
+    FileRemoteProtocolInformation,           // 55
+
+    //
+    //  These are special versions of these operations (defined earlier)
+    //  which can be used by kernel mode drivers only to bypass security
+    //  access checks for Rename and HardLink operations.  These operations
+    //  are only recognized by the IOManager, a file system should never
+    //  receive these.
+    //
+    FileRenameInformationBypassAccessCheck, // 56
+    FileLinkInformationBypassAccessCheck,   // 57
+
+    //
+    // End of special information classes reserved for IOManager.
+    //
+    FileVolumeNameInformation,                    // 58
+    FileIdInformation,                            // 59
+    FileIdExtdDirectoryInformation,               // 60
+    FileReplaceCompletionInformation,             // 61
+    FileHardLinkFullIdInformation,                // 62
+    FileIdExtdBothDirectoryInformation,           // 63
+    FileDispositionInformationEx,                 // 64
+    FileRenameInformationEx,                      // 65
+    FileRenameInformationExBypassAccessCheck,     // 66
+    FileDesiredStorageClassInformation,           // 67
+    FileStatInformation,                          // 68
+    FileMemoryPartitionInformation,               // 69
+    FileStatLxInformation,                        // 70
+    FileCaseSensitiveInformation,                 // 71
+    FileLinkInformationEx,                        // 72
+    FileLinkInformationExBypassAccessCheck,       // 73
+    FileStorageReserveIdInformation,              // 74
+    FileCaseSensitiveInformationForceAccessCheck, // 75
+
+    FileMaximumInformation,
+}
+
+```
+
+`km-api-sys/src/intrinsics.rs`:
+
+```rs
+fn __readcr8() -> u64 {
+    #[allow(unused)]
+    let x: u64;
+    unsafe {
+        core::arch::asm!("mov {}, cr8", out(reg) x);
+    }
+    x
+}
+
+#[allow(non_upper_case_globals)]
+pub(crate) const ReadCR8: fn() -> u64 = __readcr8;
+
+```
+
+`km-api-sys/src/lib.rs`:
+
+```rs
+#![no_std]
+#![feature(const_mut_refs)]
+
+pub mod constants;
+pub mod flt_kernel;
+pub(crate) mod intrinsics;
+pub mod ntddk;
+pub mod ntifs;
+pub mod ntoskrnl;
+pub mod wmd;
+
+```
+
+`km-api-sys/src/ntddk.rs`:
+
+```rs
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+mod process_info_class;
+pub use process_info_class::*;
+
+pub use crate::constants::*;
+use crate::wmd::CLIENT_ID;
+use kernel_string::UNICODE_STRING;
+use winapi::{
+    km::wdm::{PEPROCESS, PFILE_OBJECT},
+    shared::{
+        basetsd::SIZE_T,
+        ntdef::{BOOLEAN, HANDLE, NTSTATUS, PVOID, ULONG},
+    },
+};
+
+pub const REG_NT_POST_SET_VALUE_KEY: u32 = 16;
+
+extern "system" {
+    pub fn MmIsAddressValid(VirtualAddress: PVOID) -> bool;
+
+    pub fn PsGetCurrentProcessId() -> HANDLE;
+
+    pub fn PsGetCurrentThreadId() -> HANDLE;
+
+    pub fn PsSetCreateProcessNotifyRoutineEx(
+        NotifyRoutine: PCREATE_PROCESS_NOTIFY_ROUTINE_EX,
+        Remove: BOOLEAN,
+    ) -> NTSTATUS;
+
+    pub fn PsSetCreateThreadNotifyRoutine(NotifyRoutine: PCREATE_THREAD_NOTIFY_ROUTINE)
+        -> NTSTATUS;
+
+    pub fn PsRemoveCreateThreadNotifyRoutine(
+        NotifyRoutine: PCREATE_THREAD_NOTIFY_ROUTINE,
+    ) -> NTSTATUS;
+
+    pub fn PsSetLoadImageNotifyRoutine(NotifyRoutine: PLOAD_IMAGE_NOTIFY_ROUTINE) -> NTSTATUS;
+
+    pub fn PsRemoveLoadImageNotifyRoutine(NotifyRoutine: PLOAD_IMAGE_NOTIFY_ROUTINE) -> NTSTATUS;
+}
+
+#[repr(C)]
+pub struct PS_CREATE_NOTIFY_INFO {
+    pub Size: SIZE_T,
+    pub Flags: ULONG,
+    pub ParentProcessId: HANDLE,
+    pub CreatingThreadId: CLIENT_ID,
+    pub FileObject: PFILE_OBJECT,
+    pub ImageFileName: *mut UNICODE_STRING,
+    pub CommandLine: *mut UNICODE_STRING,
+    pub CreationStatus: NTSTATUS,
+}
+
+pub type PPS_CREATE_NOTIFY_INFO = *mut PS_CREATE_NOTIFY_INFO;
+
+pub type PCREATE_PROCESS_NOTIFY_ROUTINE_EX =
+    extern "system" fn(Process: PEPROCESS, ProcessId: HANDLE, CreateInfo: PPS_CREATE_NOTIFY_INFO);
+
+pub type PCREATE_THREAD_NOTIFY_ROUTINE =
+    extern "system" fn(ProcessId: HANDLE, ThreadId: HANDLE, Create: BOOLEAN);
+
+#[repr(C)]
+pub struct IMAGE_INFO {
+    pub Properties: ULONG,
+    pub ImageBase: PVOID,
+    pub ImageSelector: ULONG,
+    pub ImageSize: SIZE_T,
+    pub ImageSectionNumber: ULONG,
+}
+
+pub type PIMAGE_INFO = *mut IMAGE_INFO;
+
+pub type PLOAD_IMAGE_NOTIFY_ROUTINE = extern "system" fn(
+    FullImageName: *mut UNICODE_STRING,
+    ProcessId: HANDLE,
+    ImageInfo: PIMAGE_INFO,
+);
+
+#[repr(C)]
+pub struct FILE_DISPOSITION_INFORMATION {
+    pub DeleteFile: BOOLEAN,
+}
+
+pub type PFILE_DISPOSITION_INFORMATION = *mut FILE_DISPOSITION_INFORMATION;
+
+```
+
+`km-api-sys/src/ntddk/process_info_class.rs`:
+
+```rs
+#[repr(C)]
+pub enum PROCESSINFOCLASS {
+    ProcessBasicInformation = 0,
+    ProcessQuotaLimits = 1,
+    ProcessIoCounters = 2,
+    ProcessVmCounters = 3,
+    ProcessTimes = 4,
+    ProcessBasePriority = 5,
+    ProcessRaisePriority = 6,
+    ProcessDebugPort = 7,
+    ProcessExceptionPort = 8,
+    ProcessAccessToken = 9,
+    ProcessLdtInformation = 10,
+    ProcessLdtSize = 11,
+    ProcessDefaultHardErrorMode = 12,
+    ProcessIoPortHandlers = 13, // Note: this is kernel mode only
+    ProcessPooledUsageAndLimits = 14,
+    ProcessWorkingSetWatch = 15,
+    ProcessUserModeIOPL = 16,
+    ProcessEnableAlignmentFaultFixup = 17,
+    ProcessPriorityClass = 18,
+    ProcessWx86Information = 19,
+    ProcessHandleCount = 20,
+    ProcessAffinityMask = 21,
+    ProcessPriorityBoost = 22,
+    ProcessDeviceMap = 23,
+    ProcessSessionInformation = 24,
+    ProcessForegroundInformation = 25,
+    ProcessWow64Information = 26,
+    ProcessImageFileName = 27,
+    ProcessLUIDDeviceMapsEnabled = 28,
+    ProcessBreakOnTermination = 29,
+    ProcessDebugObjectHandle = 30,
+    ProcessDebugFlags = 31,
+    ProcessHandleTracing = 32,
+    ProcessIoPriority = 33,
+    ProcessExecuteFlags = 34,
+    ProcessTlsInformation = 35,
+    ProcessCookie = 36,
+    ProcessImageInformation = 37,
+    ProcessCycleTime = 38,
+    ProcessPagePriority = 39,
+    ProcessInstrumentationCallback = 40,
+    ProcessThreadStackAllocation = 41,
+    ProcessWorkingSetWatchEx = 42,
+    ProcessImageFileNameWin32 = 43,
+    ProcessImageFileMapping = 44,
+    ProcessAffinityUpdateMode = 45,
+    ProcessMemoryAllocationMode = 46,
+    ProcessGroupInformation = 47,
+    ProcessTokenVirtualizationEnabled = 48,
+    ProcessOwnerInformation = 49,
+    ProcessWindowInformation = 50,
+    ProcessHandleInformation = 51,
+    ProcessMitigationPolicy = 52,
+    ProcessDynamicFunctionTableInformation = 53,
+    ProcessHandleCheckingMode = 54,
+    ProcessKeepAliveCount = 55,
+    ProcessRevokeFileHandles = 56,
+    ProcessWorkingSetControl = 57,
+    ProcessHandleTable = 58,
+    ProcessCheckStackExtentsMode = 59,
+    ProcessCommandLineInformation = 60,
+    ProcessProtectionInformation = 61,
+    ProcessMemoryExhaustion = 62,
+    ProcessFaultInformation = 63,
+    ProcessTelemetryIdInformation = 64,
+    ProcessCommitReleaseInformation = 65,
+    ProcessReserved1Information = 66,
+    ProcessReserved2Information = 67,
+    ProcessSubsystemProcess = 68,
+    ProcessInPrivate = 70,
+    ProcessRaiseUMExceptionOnInvalidHandleClose = 71,
+    ProcessSubsystemInformation = 75,
+    ProcessWin32kSyscallFilterInformation = 79,
+    ProcessEnergyTrackingState = 82,
+    MaxProcessInfoClass, // MaxProcessInfoClass should always be the last enum
+}
+
+```
+
+`km-api-sys/src/ntifs.rs`:
+
+```rs
+use winapi::{
+    km::wdm::{PEPROCESS, PETHREAD},
+    shared::ntdef::{HANDLE, NTSTATUS, PVOID, ULONG},
+    um::winnt::ACCESS_MASK,
+};
+
+use crate::wmd::IoGetCurrentProcess;
+use winapi::km::wdm::KPROCESSOR_MODE;
+
+extern "system" {
+    pub fn PsLookupProcessByProcessId(ProcessId: HANDLE, Process: *mut PEPROCESS) -> NTSTATUS;
+
+    pub fn PsGetThreadProcess(Thread: PETHREAD) -> PEPROCESS;
+
+    pub fn ObOpenObjectByPointer(
+        Object: PVOID,
+        HandleAttributes: ULONG,
+        PassedAccessState: PVOID,
+        DesiredAccess: ACCESS_MASK,
+        ObjectType: PVOID,
+        AccessMode: KPROCESSOR_MODE,
+        Handle: *mut HANDLE,
+    ) -> NTSTATUS;
+}
+
+#[allow(non_upper_case_globals)]
+pub const PsGetCurrentProcess: unsafe extern "system" fn() -> PEPROCESS = IoGetCurrentProcess;
+
+```
+
+`km-api-sys/src/ntoskrnl.rs`:
+
+```rs
+#![allow(unused)]
+
+use winapi::shared::ntdef::PVOID;
+
+#[repr(C)]
+pub enum PoolType {
+    NonPagedPool,
+    NonPagedPoolExecute,
+    PagedPool,
+}
+
+type PoolFlags = u64;
+
+pub const POOL_FLAG_NON_PAGED: PoolFlags = 0x0000000000000040u64; // Non paged pool NX
+pub const POOL_FLAG_NON_PAGED_EXECUTE: PoolFlags = 0x0000000000000080u64; // Non paged pool executable
+pub const POOL_FLAG_PAGED: PoolFlags = 0x0000000000000100u64; // Paged pool
+
+extern "system" {
+    pub fn ExAllocatePool(PoolType: PoolType, NumberOfBytes: usize) -> *mut u64;
+    pub fn ExAllocatePoolWithTag(PoolType: PoolType, NumberOfBytes: usize, Tag: u32) -> *mut u64;
+    pub fn ExAllocatePool2(PoolType: PoolFlags, NumberOfBytes: usize, Tag: u32) -> *mut u64;
+
+    pub fn ExFreePool(Pool: PVOID);
+    pub fn ExFreePoolWithTag(Pool: PVOID, Tag: u32);
+}
+
+```
+
+`km-api-sys/src/wmd.rs`:
+
+```rs
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+pub const FILE_DELETE_ON_CLOSE: u32 = 0x00001000;
+
+use crate::{intrinsics::ReadCR8, ntddk::PROCESSINFOCLASS};
+use core::{mem, ptr::null_mut};
+use winapi::{
+    km::{
+        ndis::PMDL,
+        wdm::{
+            SynchronizationEvent, DISPATCHER_HEADER, DRIVER_OBJECT, EVENT_TYPE, KEVENT,
+            KPROCESSOR_MODE, PEPROCESS, PKEVENT,
+        },
+    },
+    shared::{
+        basetsd::PULONG_PTR,
+        ntdef::{
+            BOOLEAN, FALSE, HANDLE, LIST_ENTRY, LONG, LONGLONG, NTSTATUS, PULONG, PVOID, UCHAR,
+            ULONG,
+        },
+    },
+};
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct LARGE_INTEGER_PARTS {
+    LowPart: ULONG,
+    HighPart: LONG,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LARGE_INTEGER {
+    u: ::core::mem::ManuallyDrop<LARGE_INTEGER_PARTS>,
+    QuadPart: LONGLONG,
+}
+
+impl LARGE_INTEGER {
+    pub const fn new() -> Self {
+        Self { QuadPart: 0 }
+    }
+}
+
+pub use crate::constants::*;
+use kernel_string::{PUNICODE_STRING, UNICODE_STRING};
+
+extern "system" {
+    pub fn ObfDereferenceObject(Object: PVOID);
+
+    //couldn't find such a function in library. Is it a macro???
+    //pub fn MmGetSystemAddressForMdlSafe(MemoryDescriptorList: PMDL, Priority: ULONG) -> PVOID;
+
+    pub fn MmMapLockedPagesSpecifyCache(
+        MemoryDescriptorList: PMDL,
+        AccessMode: KPROCESSOR_MODE,
+        CacheType: ULONG,
+        RequestedAddress: PVOID,
+        BugCheckOnFailure: ULONG,
+        Priority: ULONG,
+    ) -> PVOID;
+
+    pub fn CmRegisterCallbackEx(
+        Function: PVOID,
+        Altitude: &UNICODE_STRING,
+        Driver: &DRIVER_OBJECT,
+        Context: PVOID,
+        Cookie: &LARGE_INTEGER,
+        Reserved: PVOID,
+    ) -> NTSTATUS;
+
+    pub fn CmUnRegisterCallback(Cookie: LARGE_INTEGER) -> NTSTATUS;
+
+    //another macro
+    //pub fn ExInitializeFastMutex(mutex: PFAST_MUTEX);
+
+    pub fn ExAcquireFastMutex(Mutex: PFAST_MUTEX);
+
+    pub fn ExReleaseFastMutex(Mutex: PFAST_MUTEX);
+
+    pub fn KeInitializeEvent(Mutex: PKEVENT, Type: EVENT_TYPE, State: BOOLEAN);
+
+    pub fn CmCallbackGetKeyObjectIDEx(
+        Cookie: &LARGE_INTEGER,
+        Object: PVOID,
+        ObjectId: PULONG_PTR,
+        Object_name: &mut PUNICODE_STRING,
+        Flags: ULONG,
+    ) -> NTSTATUS;
+
+    pub fn CmCallbackReleaseKeyObjectIDEx(ObjectName: PUNICODE_STRING);
+
+    pub fn IoGetCurrentProcess() -> PEPROCESS;
+
+    pub fn ZwQueryInformationProcess(
+        ProcessHandle: HANDLE,
+        ProcessInformationClass: PROCESSINFOCLASS,
+        ProcessInformation: PVOID,
+        ProcessInformationLength: ULONG,
+        ReturnLength: PULONG,
+    ) -> NTSTATUS;
+
+    pub fn ZwClose(Handle: HANDLE);
+}
+
+pub type KIRQL = UCHAR;
+pub unsafe fn KeGetCurrentIrql() -> KIRQL {
+    ReadCR8() as KIRQL
+}
+
+pub unsafe fn ExInitializeFastMutex(Mutex: &mut FAST_MUTEX) {
+    Mutex.Count = 1;
+    Mutex.Owner = null_mut();
+    Mutex.Contention = 0;
+
+    KeInitializeEvent(&mut Mutex.Event as PKEVENT, SynchronizationEvent, FALSE);
+}
+
+//structures are defined for x64. I'm not sure it will works for x86. So fail to compile on x86
+const _SIZE_CHECKER: [u8; 8] = [0; mem::size_of::<usize>()];
+
+#[repr(C)]
+pub struct FAST_MUTEX {
+    pub(crate) Count: LONG,
+    pub(crate) Owner: PVOID,
+    pub(crate) Contention: ULONG,
+    pub(crate) Event: KEVENT,
+    pub(crate) OldIrql: ULONG,
+}
+
+impl FAST_MUTEX {
+    pub const fn new() -> Self {
+        Self {
+            Count: 0,
+            Owner: null_mut(),
+            Contention: 9,
+            Event: KEVENT {
+                Header: DISPATCHER_HEADER {
+                    Type: 0,
+                    Absolute: 0,
+                    Size: 0,
+                    Inserted: 0,
+                    SignalState: 0,
+                    WaitListHead: LIST_ENTRY {
+                        Blink: null_mut(),
+                        Flink: null_mut(),
+                    },
+                },
+            },
+            OldIrql: 0,
+        }
+    }
+}
+type PFAST_MUTEX = *mut FAST_MUTEX;
+
+#[repr(C)]
+pub struct CLIENT_ID {
+    pub UniqueProcess: HANDLE,
+    pub UniqueThread: HANDLE,
+}
+
+#[repr(C)]
+pub struct MDL {
+    pub Next: *mut MDL,
+    pub Size: u16,
+    pub MdlFlags: u16,
+    pub Process: PVOID,
+    pub MappedSystemVa: PVOID,
+    pub StartVa: PVOID,
+    pub ByteCount: ULONG,
+    pub ByteOffset: ULONG,
+}
+
+pub const MDL_SOURCE_IS_NONPAGED_POOL: u16 = 0x0004;
+pub const MDL_MAPPED_TO_SYSTEM_VA: u16 = 0x0001;
+
+pub fn MmGetSystemAddressForMdlSafe(Mdl: *mut MDL, Priority: ULONG) -> PVOID {
+    if Mdl.is_null() {
+        return null_mut();
+    }
+
+    unsafe {
+        if ((*Mdl).MdlFlags & (MDL_MAPPED_TO_SYSTEM_VA | MDL_SOURCE_IS_NONPAGED_POOL)) != 0 {
+            (*Mdl).MappedSystemVa
+        } else {
+            MmMapLockedPagesSpecifyCache(
+                Mdl as PVOID,
+                KPROCESSOR_MODE::KernelMode,
+                1, /*MmCached*/
+                null_mut(),
+                0,
+                Priority,
+            )
+        }
+    }
+}
+
+#[repr(C)]
+pub struct REG_POST_OPERATION_INFORMATION {
+    pub Object: PVOID,
+    pub Status: NTSTATUS,
+    pub PreInformation: PVOID,
+    pub ReturnStatus: NTSTATUS,
+    pub CallContext: PVOID,
+    pub ObjectContext: PVOID,
+    pub Reserved: PVOID,
+}
+pub type PREG_POST_OPERATION_INFORMATION = *mut REG_POST_OPERATION_INFORMATION;
+
+#[repr(C)]
+pub struct REG_SET_VALUE_KEY_INFORMATION {
+    pub Object: PVOID,
+    pub ValueName: PUNICODE_STRING,
+    pub TitleIndex: ULONG,
+    pub DataType: ULONG,
+    pub Data: PVOID,
+    pub DataSize: ULONG,
+    pub CallContext: PVOID,
+    pub ObjectContext: PVOID,
+    pub Reserved: PVOID,
+}
+pub type PREG_SET_VALUE_KEY_INFORMATION = *mut REG_SET_VALUE_KEY_INFORMATION;
+
+pub const fn NtCurrentProcess() -> HANDLE {
+    usize::MAX as HANDLE
+}
+
+```
+
+`sysmon-driver-rust/Cargo.toml`:
+
+```toml
+[package]
+name = "sysmon"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+kernel-print    = "~0.1"
+km-api-sys       = { path = "../km-api-sys"}
+kernel-string   = { path = "../kernel-string"}
+kernel-macros   = { path = "../kernel-macros"}
+kernel-fast-mutex   = { path = "../kernel-fast-mutex"}
+kernel-init = { path = "../kernel-init"}
+
+[dependencies.winapi]
+git = "https://github.com/Trantect/winapi-rs.git"
+branch = "feature/km"
+features = [
+    "wdm",
+    "ntstatus",
+]
+
+[build-dependencies]
+winreg = "0.7.0"
+failure = "0.1.8"
+
+```
+
+`sysmon-driver-rust/Makefile.toml`:
+
+```toml
+[env]
+DRIVER_NAME = "sysmon"
+
+[env.development]
+TARGET_PATH = "target\\x86_64-pc-windows-msvc\\debug"
+
+[env.production]
+TARGET_PATH = "target\\x86_64-pc-windows-msvc\\release"
+BUILD_FLAGS = "--release"
+
+[tasks.build-driver]
+script = [
+    "cargo b %BUILD_FLAGS%"
+]
+
+[tasks.rename]
+dependencies = ["build-driver"]
+ignore_errors = true
+script = [
+    "cd %TARGET_PATH%",
+    "rename %DRIVER_NAME%.dll %DRIVER_NAME%.sys",
+]
+
+[tasks.sign]
+dependencies = ["build-driver", "rename"]
+script = [
+    # Load the Visual Studio Developer environment
+    "call \"%ProgramFiles(x86)%\\Microsoft Visual Studio\\2019\\Professional\\VC\\Auxiliary\\Build\\vcvars64.bat\"",
+
+    # Create a self signed certificate (only if not already done)
+    "if not exist DriverCertificate.cer ( makecert -r -pe -ss PrivateCertStore -n CN=DriverCertificate DriverCertificate.cer ) else ( echo Certificate already exists. )",
+
+    # Sign the driver
+    "signtool sign /fd SHA256 /a /v /s PrivateCertStore /n DriverCertificate /t http://timestamp.digicert.com %TARGET_PATH%/%DRIVER_NAME%.sys"
+]
+
+[tasks.copy]
+script = [
+    "IF not exist myDirName (mkdir output)",
+    "COPY %TARGET_PATH%\\%DRIVER_NAME%.sys .\\output"
+]
+
+[tasks.all]
+dependencies = ["build-driver", "rename", "sign", "copy"]
+
+[tasks.rebuild]
+script = [
+    "cargo make clean",
+    "cargo make all"
+]
+```
+
+`sysmon-driver-rust/README.md`:
+
+```md
+# TODO
+
+```
+
+`sysmon-driver-rust/build.rs`:
+
+```rs
+use std::env::var;
+use std::path::{Path, PathBuf};
+use winreg::enums::HKEY_LOCAL_MACHINE;
+use winreg::RegKey;
+
+/// `C:\Program Files (x86)\Windows Kits\10`.
+fn read_kits_path() -> PathBuf {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let key = r"SOFTWARE\Microsoft\Windows Kits\Installed Roots";
+    let dir: String = hklm.open_subkey(key).unwrap().get_value("KitsRoot10").unwrap();
+
+    dir.into()
+}
+
+/// Returns the path to the kernel mode libraries. The path may look like this:
+/// `C:\Program Files (x86)\Windows Kits\10\lib\10.0.18362.0\km`.
+fn find_km_dir(windows_kits_dir: &PathBuf) -> PathBuf {
+    let readdir = Path::new(windows_kits_dir).join("lib").read_dir().unwrap();
+
+    let max_libdir = readdir
+        .filter_map(|dir| dir.ok())
+        .map(|dir| dir.path())
+        .filter(|dir| {
+            dir.components()
+                .last()
+                .and_then(|c| c.as_os_str().to_str())
+                .map(|c| c.starts_with("10.") && dir.join("km").is_dir())
+                .unwrap_or(false)
+        })
+        .max()
+        .unwrap();
+
+    max_libdir.join("km")
+}
+
+fn get_target_architecture() -> String {
+    let target = var("TARGET").unwrap();
+    if target.contains("x86_64") {
+        "x64"
+    } else if target.contains("i686") {
+        "x86"
+    } else {
+        panic!("Only support x86_64 and i686!")
+    }.to_string()
+}
+
+
+fn get_kernel_library_dir() -> PathBuf {
+    let windows_kits_dir = read_kits_path();
+    let km_dir = find_km_dir(&windows_kits_dir);
+    let architecture = get_target_architecture();
+
+    km_dir.join(architecture)
+}
+
+fn main() {
+
+    let km_dir = get_kernel_library_dir();
+    println!(
+        "cargo:rustc-link-search=native={}",
+        km_dir.to_str().unwrap()
+    );
+}
+
+```
+
+`sysmon-driver-rust/rust-toolchain.toml`:
+
+```toml
+[toolchain]
+channel = "nightly-2022-09-23-x86_64-pc-windows-msvc"
+
+```
+
+`sysmon-driver-rust/rustfmt.toml`:
+
+```toml
+# Invoke using 'cargo +nightly fmt'.
+edition = "2021"
+unstable_features = true
+imports_granularity = "Crate"
+newline_style = "Windows"
+reorder_modules = true
+reorder_imports = true
+format_strings = true
+match_block_trailing_comma = true
+merge_derives = true
+```
+
+`sysmon-driver-rust/src/cleaner.rs`:
+
+```rs
+use crate::{PsSetCreateProcessNotifyRoutineEx, UNICODE_STRING};
+use km_api_sys::{
+    ntddk::{
+        PsRemoveCreateThreadNotifyRoutine, PsRemoveLoadImageNotifyRoutine,
+        PCREATE_PROCESS_NOTIFY_ROUTINE_EX, PCREATE_THREAD_NOTIFY_ROUTINE,
+        PLOAD_IMAGE_NOTIFY_ROUTINE,
+    },
+    wmd::{CmUnRegisterCallback, LARGE_INTEGER},
+};
+use winapi::{
+    km::wdm::{IoDeleteDevice, IoDeleteSymbolicLink, PDEVICE_OBJECT},
+    shared::ntdef::TRUE,
+};
+
+pub struct Cleaner {
+    device_object: Option<PDEVICE_OBJECT>,
+    sym_link: Option<*const UNICODE_STRING>,
+    create_process_callback: Option<PCREATE_PROCESS_NOTIFY_ROUTINE_EX>,
+    thread_process_callback: Option<PCREATE_THREAD_NOTIFY_ROUTINE>,
+    load_image_callback: Option<PLOAD_IMAGE_NOTIFY_ROUTINE>,
+    registry_callback: Option<LARGE_INTEGER>,
+}
+
+impl Cleaner {
+    pub fn new() -> Self {
+        Self {
+            device_object: None,
+            sym_link: None,
+            create_process_callback: None,
+            thread_process_callback: None,
+            load_image_callback: None,
+            registry_callback: None,
+        }
+    }
+
+    pub fn init_device(&mut self, device: PDEVICE_OBJECT) {
+        self.device_object = Some(device);
+    }
+
+    pub fn init_symlink(&mut self, sym_link: &UNICODE_STRING) {
+        self.sym_link = Some(sym_link as *const UNICODE_STRING);
+    }
+
+    pub fn init_process_create_callback(&mut self, callback: PCREATE_PROCESS_NOTIFY_ROUTINE_EX) {
+        self.create_process_callback = Some(callback);
+    }
+
+    pub fn init_thread_create_callback(&mut self, callback: PCREATE_THREAD_NOTIFY_ROUTINE) {
+        self.thread_process_callback = Some(callback);
+    }
+
+    pub fn init_image_load_callback(&mut self, callback: PLOAD_IMAGE_NOTIFY_ROUTINE) {
+        self.load_image_callback = Some(callback);
+    }
+
+    pub fn init_registry_callback(&mut self, cookie: LARGE_INTEGER) {
+        self.registry_callback = Some(cookie);
+    }
+
+    pub fn clean(&mut self) {
+        unsafe {
+            if let Some(device) = self.device_object {
+                IoDeleteDevice(device);
+            }
+
+            if let Some(sym_link) = self.sym_link {
+                IoDeleteSymbolicLink(&(*sym_link).as_ntdef_unicode());
+            }
+
+            if let Some(routine) = self.create_process_callback {
+                PsSetCreateProcessNotifyRoutineEx(routine, TRUE);
+            }
+
+            if let Some(routine) = self.thread_process_callback {
+                PsRemoveCreateThreadNotifyRoutine(routine);
+            }
+
+            if let Some(routine) = self.load_image_callback {
+                PsRemoveLoadImageNotifyRoutine(routine);
+            }
+
+            if let Some(cookie) = self.registry_callback {
+                CmUnRegisterCallback(cookie);
+            }
+        }
+    }
+}
+
+```
+
+`sysmon-driver-rust/src/ioctl_code.rs`:
+
+```rs
+#![allow(unused)]
+use kernel_macros::CTL_CODE;
+use km_api_sys::wmd::{FILE_ANY_ACCESS, METHOD_BUFFERED};
+use winapi::shared::ntdef::ULONG;
+
+pub(super) const IOCTL_REQUEST: ULONG = CTL_CODE!(0x8000, 0x800, METHOD_BUFFERED, FILE_ANY_ACCESS);
+
+```
+
+`sysmon-driver-rust/src/item.rs`:
+
+```rs
+#![allow(dead_code)]
+use crate::PVOID;
+use alloc::{string::String, vec::Vec};
+
+#[derive(Debug)]
+pub(crate) enum ItemInfo {
+    ProcessCreate {
+        pid: u32,
+        parent_pid: u32,
+        command_line: String,
+    },
+    ProcessExit {
+        pid: u32,
+    },
+    ThreadCreate {
+        pid: u32,
+        tid: u32,
+    },
+    ThreadExit {
+        pid: u32,
+        tid: u32,
+    },
+    ImageLoad {
+        pid: u32,
+        load_address: PVOID,
+        image_size: usize,
+        image_file_name: String,
+    },
+    RegistrySetValue {
+        pid: u32,
+        tid: u32,
+        key_name: String,
+        value_name: String,
+        data_type: u32,
+        data: Vec<u8>,
+    },
+}
+
+```
+
+`sysmon-driver-rust/src/lib.rs`:
+
+```rs
+#![no_std]
+#![allow(non_snake_case)]
+extern crate alloc;
+
+mod cleaner;
+mod ioctl_code;
+mod item;
+
+/// kernel-init deliver a few elements (eg. panic implementation) necessary to run code in kernel
+#[allow(unused_imports)]
+use kernel_init;
+
+use alloc::{collections::VecDeque, string::ToString, vec::Vec};
+use core::mem::forget;
+
+use winapi::{
+    km::wdm::{
+        IoCompleteRequest, IoCreateDevice, IoCreateSymbolicLink, IoDeleteDevice,
+        IoDeleteSymbolicLink, IoGetCurrentIrpStackLocation, DEVICE_OBJECT, DEVICE_TYPE,
+        DRIVER_OBJECT, IO_STACK_LOCATION, IRP, IRP_MJ, PDEVICE_OBJECT, PEPROCESS,
+        _IO_STACK_LOCATION_READ,
+    },
+    shared::{
+        ntdef::{BOOLEAN, FALSE, HANDLE, NTSTATUS, PVOID, TRUE},
+        ntstatus::{
+            STATUS_INSUFFICIENT_RESOURCES, STATUS_INVALID_BUFFER_SIZE,
+            STATUS_INVALID_DEVICE_REQUEST, STATUS_SUCCESS, STATUS_UNSUCCESSFUL,
+        },
+    },
+};
+
+use kernel_fast_mutex::{auto_lock::AutoLock, fast_mutex::FastMutex, locker::Locker};
+
+use core::ptr::null_mut;
+use kernel_macros::{HandleToU32, NT_SUCCESS};
+use kernel_print::kernel_print;
+use kernel_string::{PUNICODE_STRING, UNICODE_STRING};
+
+use km_api_sys::{
+    ntddk::{
+        PsGetCurrentProcessId, PsGetCurrentThreadId, PsRemoveCreateThreadNotifyRoutine,
+        PsRemoveLoadImageNotifyRoutine, PsSetCreateProcessNotifyRoutineEx,
+        PsSetCreateThreadNotifyRoutine, PsSetLoadImageNotifyRoutine, PIMAGE_INFO,
+        PPS_CREATE_NOTIFY_INFO, PS_CREATE_NOTIFY_INFO, REG_NT_POST_SET_VALUE_KEY,
+    },
+    wmd::{
+        CmCallbackGetKeyObjectIDEx, CmCallbackReleaseKeyObjectIDEx, CmRegisterCallbackEx,
+        CmUnRegisterCallback, MmGetSystemAddressForMdlSafe, LARGE_INTEGER, MDL,
+        PREG_POST_OPERATION_INFORMATION, PREG_SET_VALUE_KEY_INFORMATION,
+    },
+};
+use winapi::km::wdm::DEVICE_FLAGS::DO_DIRECT_IO;
+
+use crate::{cleaner::Cleaner, item::ItemInfo};
+
+use crate::ItemInfo::{
+    ImageLoad, ProcessCreate, ProcessExit, RegistrySetValue, ThreadCreate, ThreadExit,
+};
+
+const DEVICE_NAME: &str = "\\Device\\SysMon";
+const SYM_LINK_NAME: &str = "\\??\\SysMon";
+
+const MAX_ITEM_COUNT: usize = 256;
+
+static mut G_EVENTS: Option<VecDeque<ItemInfo>> = None;
+static mut G_MUTEX: FastMutex = FastMutex::new();
+static mut G_COOKIE: LARGE_INTEGER = LARGE_INTEGER::new();
+
+#[no_mangle]
+pub unsafe extern "system" fn DriverEntry(
+    driver: &mut DRIVER_OBJECT,
+    _path: *const UNICODE_STRING,
+) -> NTSTATUS {
+    kernel_print::kernel_println!("START");
+
+    G_MUTEX.Init();
+
+    let mut events = VecDeque::new();
+
+    if let Err(e) = events.try_reserve_exact(MAX_ITEM_COUNT) {
+        kernel_print::kernel_println!(
+            "fail to reserve a {} bytes of memory. Err: {:?}",
+            ::core::mem::size_of::<ItemInfo>() * MAX_ITEM_COUNT,
+            e
+        );
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    G_EVENTS = Some(events);
+
+    driver.DriverUnload = Some(DriverUnload);
+
+    driver.MajorFunction[IRP_MJ::CREATE as usize] = Some(DispatchCreateClose);
+    driver.MajorFunction[IRP_MJ::CLOSE as usize] = Some(DispatchCreateClose);
+    driver.MajorFunction[IRP_MJ::DEVICE_CONTROL as usize] = Some(DispatchDeviceControl);
+    driver.MajorFunction[IRP_MJ::READ as usize] = Some(DispatchRead);
+    driver.MajorFunction[IRP_MJ::WRITE as usize] = Some(DispatchWrite);
+
+    #[allow(unused_assignments)]
+    let mut status = STATUS_SUCCESS;
+
+    let hello_world = UNICODE_STRING::create("Hello World!");
+    kernel_print::kernel_println!("{}", hello_world.as_rust_string());
+
+    let dev_name = UNICODE_STRING::from(DEVICE_NAME);
+    let sym_link = UNICODE_STRING::from(SYM_LINK_NAME);
+
+    let mut cleaner = Cleaner::new();
+    let mut device_object: PDEVICE_OBJECT = null_mut();
+
+    loop {
+        //--------------------DEVICE-----------------------
+        status = IoCreateDevice(
+            driver,
+            0,
+            dev_name.as_ptr(),
+            DEVICE_TYPE::FILE_DEVICE_UNKNOWN,
+            0,
+            FALSE,
+            &mut device_object,
+        );
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_device(device_object);
+        } else {
+            kernel_print::kernel_println!("failed to create device 0x{:08x}", status);
+            break;
+        }
+
+        (*device_object).Flags |= DO_DIRECT_IO as u32;
+
+        //--------------------SYMLINK-----------------------
+        status = IoCreateSymbolicLink(&sym_link.as_ntdef_unicode(), &dev_name.as_ntdef_unicode());
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_symlink(&sym_link);
+        } else {
+            kernel_print::kernel_println!("failed to create sym_link 0x{:08x}", status);
+            break;
+        }
+
+        //--------------------PROCESS NOTIFY-----------------------
+        status = PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, FALSE);
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_process_create_callback(OnProcessNotify);
+        } else {
+            kernel_print::kernel_println!(
+                "failed to create process nofity rountine 0x{:08x}",
+                status
+            );
+            break;
+        }
+
+        //--------------------THREAD NOTIFY-----------------------
+        status = PsSetCreateThreadNotifyRoutine(OnThreadNotify);
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_thread_create_callback(OnThreadNotify);
+        } else {
+            kernel_print::kernel_println!(
+                "failed to create thread nofity rountine 0x{:08x}",
+                status
+            );
+            break;
+        }
+
+        //--------------------IMAGE NOTIFY-----------------------
+        status = PsSetLoadImageNotifyRoutine(OnImageLoadNotify);
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_image_load_callback(OnImageLoadNotify);
+        } else {
+            kernel_print::kernel_println!("failed to create image load routine 0x{:08x}", status);
+            break;
+        }
+
+        //--------------------REGISTRY NOTIFY-----------------------
+        let altitude = UNICODE_STRING::create("7657.124");
+        status = CmRegisterCallbackEx(
+            OnRegistryNotify as PVOID,
+            &altitude,
+            driver,
+            null_mut(),
+            &G_COOKIE,
+            null_mut(),
+        );
+
+        if NT_SUCCESS!(status) {
+            cleaner.init_registry_callback(G_COOKIE);
+        } else {
+            kernel_print::kernel_println!("failed to create registry routine 0x{:08x}", status);
+            break;
+        }
+        break;
+    }
+
+    if NT_SUCCESS!(status) {
+        kernel_print::kernel_println!("SUCCESS");
+    } else {
+        cleaner.clean();
+    }
+
+    status
+}
+
+extern "system" fn DriverUnload(driver: &mut DRIVER_OBJECT) {
+    kernel_print::kernel_println!("rust_unload");
+    unsafe {
+        IoDeleteDevice(driver.DeviceObject);
+
+        let sym_link = UNICODE_STRING::create(SYM_LINK_NAME);
+        IoDeleteSymbolicLink(&sym_link.as_ntdef_unicode());
+
+        PsSetCreateProcessNotifyRoutineEx(OnProcessNotify, TRUE);
+
+        PsRemoveCreateThreadNotifyRoutine(OnThreadNotify);
+
+        PsRemoveLoadImageNotifyRoutine(OnImageLoadNotify);
+
+        CmUnRegisterCallback(G_COOKIE);
+    }
+}
+
+extern "system" fn DispatchCreateClose(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    complete_irp_success(irp)
+}
+
+extern "system" fn DispatchDeviceControl(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    unsafe {
+        let stack = IoGetCurrentIrpStackLocation(irp);
+        let device_io = (*stack).Parameters.DeviceIoControl();
+
+        match device_io.IoControlCode {
+            ioctl_code::IOCTL_REQUEST => kernel_print::kernel_println!("device control success"),
+            _ => {
+                return complete_irp_with_status(irp, STATUS_INVALID_DEVICE_REQUEST);
+            },
+        }
+    }
+
+    complete_irp_success(irp)
+}
+
+extern "system" fn DispatchRead(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    kernel_print::kernel_println!("DispatchRead begin");
+
+    unsafe {
+        let stack = IoGetCurrentIrpStackLocation(irp);
+        let parameters_read = (*stack).ParametersRead();
+        let len = parameters_read.Length;
+
+        kernel_print::kernel_println!("read len: {}", len);
+
+        if len == 0 {
+            kernel_print::kernel_println!("len is zero");
+            return complete_irp_with_status(irp, STATUS_INVALID_BUFFER_SIZE);
+        }
+
+        let buffer = MmGetSystemAddressForMdlSafe(
+            irp.MdlAddress as *mut MDL,
+            16, /*NormalPagePriority*/
+        );
+        if buffer.is_null() {
+            kernel_print::kernel_println!("buffer is null");
+            return complete_irp_with_status(irp, STATUS_INSUFFICIENT_RESOURCES);
+        }
+
+        let buffer = buffer as *mut u8;
+        for i in 0..len {
+            *buffer.offset(i as isize) = 5;
+        }
+        kernel_print::kernel_println!("DispatchRead success");
+
+        print_items();
+
+        complete_irp(irp, STATUS_SUCCESS, len as usize)
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub type _IO_STACK_LOCATION_WRITE = _IO_STACK_LOCATION_READ;
+pub fn ParametersWrite(stack_loc: &mut IO_STACK_LOCATION) -> &mut _IO_STACK_LOCATION_WRITE {
+    stack_loc.ParametersRead()
+}
+
+extern "system" fn DispatchWrite(_driver: &mut DEVICE_OBJECT, irp: &mut IRP) -> NTSTATUS {
+    kernel_print::kernel_println!("DispatchWrite begin");
+
+    unsafe {
+        let stack = IoGetCurrentIrpStackLocation(irp);
+        let stack = &mut *stack;
+        let parameters_write = ParametersWrite(stack);
+
+        let len = parameters_write.Length;
+
+        complete_irp(irp, STATUS_SUCCESS, len as usize)
+    }
+}
+fn complete_irp(irp: &mut IRP, status: NTSTATUS, info: usize) -> NTSTATUS {
+    unsafe {
+        let s = irp.IoStatus.__bindgen_anon_1.Status_mut();
+        *s = status;
+        irp.IoStatus.Information = info;
+        IoCompleteRequest(irp, 0);
+    }
+
+    status
+}
+
+extern "system" fn OnProcessNotify(
+    _process: PEPROCESS,
+    process_id: HANDLE,
+    create_info: PPS_CREATE_NOTIFY_INFO,
+) {
+    unsafe {
+        kernel_print!("process create");
+
+        let item = if !create_info.is_null() {
+            let create_info: &PS_CREATE_NOTIFY_INFO = &*create_info;
+            let create_info: &PS_CREATE_NOTIFY_INFO = &*create_info;
+
+            let image_file_name = &*create_info.ImageFileName;
+            ProcessCreate {
+                pid: HandleToU32!(process_id),
+                parent_pid: HandleToU32!(create_info.ParentProcessId),
+                command_line: image_file_name.as_rust_string(),
+            }
+        } else {
+            ProcessExit {
+                pid: HandleToU32!(process_id),
+            }
+        };
+
+        push_item_thread_safe(item);
+    }
+}
+
+extern "system" fn OnThreadNotify(process_id: HANDLE, thread_id: HANDLE, create: BOOLEAN) {
+    unsafe {
+        kernel_print!("thread create");
+
+        let item = if create == TRUE {
+            ThreadCreate {
+                pid: HandleToU32!(process_id),
+                tid: HandleToU32!(thread_id),
+            }
+        } else {
+            ThreadExit {
+                pid: HandleToU32!(process_id),
+                tid: HandleToU32!(thread_id),
+            }
+        };
+
+        push_item_thread_safe(item);
+    }
+}
+
+extern "system" fn OnImageLoadNotify(
+    full_image_name: PUNICODE_STRING,
+    process_id: HANDLE,
+    image_info: PIMAGE_INFO,
+) {
+    if process_id.is_null() {
+        // system image, ignore
+        return;
+    }
+
+    unsafe {
+        kernel_print!("image load");
+
+        let image_name = if full_image_name.is_null() {
+            "(unknown)".to_string()
+        } else {
+            (*full_image_name).as_rust_string()
+        };
+
+        let image_info = &*image_info;
+        let item = ImageLoad {
+            pid: HandleToU32!(process_id),
+            load_address: image_info.ImageBase,
+            image_size: image_info.ImageSize,
+            image_file_name: image_name,
+        };
+
+        push_item_thread_safe(item);
+    }
+}
+
+extern "system" fn OnRegistryNotify(_context: PVOID, arg1: PVOID, arg2: PVOID) -> NTSTATUS {
+    let reg_notify = HandleToU32!(arg1);
+    if reg_notify == REG_NT_POST_SET_VALUE_KEY {
+        kernel_print!("RegNtPostSetValueKey");
+        unsafe {
+            let op_info = &*(arg2 as PREG_POST_OPERATION_INFORMATION);
+            if !NT_SUCCESS!(op_info.Status) {
+                return STATUS_SUCCESS;
+            }
+
+            let mut name: PUNICODE_STRING = null_mut();
+            let status =
+                CmCallbackGetKeyObjectIDEx(&G_COOKIE, op_info.Object, null_mut(), &mut name, 0);
+            if !NT_SUCCESS!(status) {
+                return STATUS_SUCCESS;
+            }
+
+            if name.is_null() {
+                //something wrong
+                return STATUS_UNSUCCESSFUL;
+            }
+
+            loop {
+                let key_name = (*name).as_rust_string();
+                let registry_machine = "\\REGISTRY\\MACHINE";
+
+                // filter out none-HKLM writes
+                if key_name.contains(registry_machine) {
+                    if op_info.PreInformation.is_null() {
+                        //something wrong
+                        break;
+                    }
+
+                    let pre_info = &*(op_info.PreInformation as PREG_SET_VALUE_KEY_INFORMATION);
+                    let value_name = (*pre_info.ValueName).as_rust_string();
+                    let v = Vec::from_raw_parts(
+                        pre_info.Data as *mut u8,
+                        pre_info.DataSize as usize,
+                        pre_info.DataSize as usize,
+                    );
+
+                    let item = RegistrySetValue {
+                        pid: HandleToU32!(PsGetCurrentProcessId()),
+                        tid: HandleToU32!(PsGetCurrentThreadId()),
+                        key_name,
+                        value_name,
+                        data_type: pre_info.DataType,
+                        data: v.clone(),
+                    };
+
+                    forget(v);
+                    push_item_thread_safe(item);
+                }
+                break;
+            }
+            CmCallbackReleaseKeyObjectIDEx(name);
+        }
+    }
+
+    STATUS_SUCCESS
+}
+
+unsafe fn push_item_thread_safe(item: ItemInfo) {
+    let _locker = AutoLock::new(&mut G_MUTEX);
+    if let Some(events) = &mut G_EVENTS {
+        if events.len() >= MAX_ITEM_COUNT {
+            events.pop_front();
+        }
+        events.push_back(item);
+    }
+}
+
+unsafe fn print_items() {
+    let _locker = AutoLock::new(&mut G_MUTEX);
+    if let Some(events) = &mut G_EVENTS {
+        for elem in events {
+            kernel_print!("{:?}", elem);
+        }
+    }
+}
+
+fn complete_irp_with_status(irp: &mut IRP, status: NTSTATUS) -> NTSTATUS {
+    complete_irp(irp, status, 0)
+}
+
+fn complete_irp_success(irp: &mut IRP) -> NTSTATUS {
+    complete_irp_with_status(irp, STATUS_SUCCESS)
+}
+
+```
