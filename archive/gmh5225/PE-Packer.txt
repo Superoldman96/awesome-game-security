@@ -1,0 +1,4549 @@
+Project Path: arc_gmh5225_PE-Packer_0ir6ild6
+
+Source Tree:
+
+```txt
+arc_gmh5225_PE-Packer_0ir6ild6
+├── CMakeLists.txt
+├── LICENSE
+├── README-CN.md
+├── README.md
+├── build.ps1
+├── docs
+│   ├── Doxygen
+│   │   ├── entry_shell.h
+│   │   ├── main_page.h
+│   │   └── new_import_table.h
+│   ├── Set the Property of the .ASM File in Visual Studio.md
+│   ├── badges
+│   │   ├── C-17.svg
+│   │   ├── License-GPL-3.0.svg
+│   │   ├── MASM-8.svg
+│   │   ├── Made-with-CMake.svg
+│   │   └── Microsoft-Windows.svg
+│   └── screenshots
+│       ├── code.png
+│       ├── import-table.png
+│       ├── packed-code.png
+│       ├── packed-import-table.png
+│       ├── packed-string.png
+│       ├── string.png
+│       └── test-helloworld.png
+├── include
+│   ├── extra_data.h
+│   ├── image.h
+│   ├── import_table.h
+│   ├── section.h
+│   ├── shell
+│   │   └── install_shell.h
+│   └── utility
+│       ├── encrypt.h
+│       ├── error_handling.h
+│       ├── file_access.h
+│       └── platform_check.h
+├── src
+│   ├── CMakeLists.txt
+│   ├── extra_data.c
+│   ├── image.c
+│   ├── import_table.c
+│   ├── main.c
+│   ├── section.c
+│   ├── shell
+│   │   ├── CMakeLists.txt
+│   │   ├── entry_export.h
+│   │   ├── entry_x86.asm
+│   │   └── install_shell.c
+│   └── utility
+│       ├── CMakeLists.txt
+│       ├── encrypt.c
+│       ├── error_handling.c
+│       ├── file_access.c
+│       ├── platform_check_x64.c
+│       └── platform_check_x86.c
+└── test
+    ├── CMakeLists.txt
+    └── main.c
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.18.0)
+
+project(PE-Packer LANGUAGES C)
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message(FATAL_ERROR "[!] Must configuring on/for Windows")
+endif()
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+
+add_subdirectory(src)
+add_subdirectory(test)
+```
+
+`LICENSE`:
+
+```
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    <program>  Copyright (C) <year>  <name of author>
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details.
+
+The hypothetical commands `show w' and `show c' should show the appropriate
+parts of the General Public License.  Of course, your program's commands
+might be different; for a GUI interface, you would use an "about box".
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+<https://www.gnu.org/licenses/>.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+<https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+```
+
+`README-CN.md`:
+
+```md
+# PE-Packer
+
+![C](docs/badges/C-17.svg)
+![MASM](docs/badges/MASM-8.svg)
+[![CMake](docs/badges/Made-with-CMake.svg)](https://cmake.org)
+[![Windows](docs/badges/Microsoft-Windows.svg)](https://www.microsoft.com/en-ie/windows)
+[![License](docs/badges/License-GPL-3.0.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![DOI](https://zenodo.org/badge/231357933.svg)](https://zenodo.org/badge/latestdoi/231357933)
+
+## 翻译
+
+- [English](https://github.com/czs108/PE-Packer/blob/master/README.md)
+- [简体中文](https://github.com/czs108/PE-Packer/blob/master/README-CN.md)
+
+## 简介
+
+![test-helloworld](docs/screenshots/test-helloworld.png)
+
+***PE-Packer***是一款针对**Windows *PE***文件的简单加壳程序，加壳后的可执行文件可以对逆向分析过程造成干扰。
+
+对*PE*文件加壳时，程序会进行如下工作：
+
+- 转换导入表结构。
+- 加密节区数据。
+- 清除节区名称。
+- 安装*解密模块*。
+
+加壳后的文件启动时，*解密模块*会加载原始数据及代码：
+
+- 解密节区数据。
+- 初始化导入表。
+- 重定位。
+
+*PE*文件加壳前，使用一些反汇编工具可以自动分析其汇编代码及数据，例如[*IDA Pro*](https://www.hex-rays.com/products/ida)。
+
+- 反汇编代码。
+
+  ![code](docs/screenshots/code.png)
+
+- 搜索常量字符串。
+
+  ![string](docs/screenshots/string.png)
+
+- 分析导入表。
+
+  ![import-table](docs/screenshots/import-table.png)
+
+加壳后，逆向分析过程会受到干扰。
+
+- 反汇编代码。
+
+  ![packed-code](docs/screenshots/packed-code.png)
+
+- 搜索常量字符串。
+
+  ![packed-string](docs/screenshots/packed-string.png)
+
+- 分析导入表。
+
+  ![packed-import-table](docs/screenshots/packed-import-table.png)
+
+### 警告
+
+> 该项目目前仅用于初学者学习*Windows PE格式*和*汇编语言*，其仍存在兼容性问题及其他Bug，尚不能用于实际生产环境。
+
+## 开始
+
+### 前置条件
+
+该项目必须编译为**Windows 32位**版本，目前也只支持针对**32位**`.exe`文件的加壳处理。
+
+- 安装[*MASM32*](http://www.masm32.com)。
+- 安装[*MinGW-w64*](https://www.mingw-w64.org)，选择`i686`架构。
+- 安装[*CMake*](https://cmake.org)。
+- 配置这三个工具的`PATH`环境变量。
+
+### 构建
+
+```bash
+mkdir -p build
+cd build
+cmake .. -D CMAKE_C_COMPILER=gcc -G "MinGW Makefiles"
+cmake --build .
+```
+
+或直接执行`build.ps1`文件:
+
+```console
+PS> .\build.ps1
+```
+
+## 使用
+
+对可执行文件加壳时，需要指定其*输入路径*和*输出路径*。
+
+```console
+PE-Packer <input-file> <output-file>
+```
+
+例如：
+
+```console
+PE-Packer hello.exe hello-pack.exe
+```
+
+## 文档
+
+可以使用[*Doxygen*](http://www.doxygen.nl)生成项目文档。
+
+## 参考
+
+[*《加密与解密（第3版）》段钢*](https://book.douban.com/subject/3091212)
+
+[*PE Format - Windows Dev Center*](https://docs.microsoft.com/en-us/windows/win32/debug/pe-format)
+
+## 许可证
+
+使用*GNU General Public*协议，请参考`LICENSE`文件。
+
+## 引用
+
+```tex
+@software{chenzs108_2021_4698355,
+  author       = {Chen Zhenshuo},
+  title        = {czs108/PE-Packer: v1.0.0-beta},
+  month        = apr,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {v1.0.0-beta},
+  doi          = {10.5281/zenodo.4698355},
+  url          = {https://doi.org/10.5281/zenodo.4698355}
+}
+```
+
+## 作者
+
+***GitHub***：https://github.com/czs108
+
+***E-Mail***：chenzs108@outlook.com
+
+***微信***：chenzs108
+```
+
+`README.md`:
+
+```md
+# PE-Packer
+
+![C](docs/badges/C-17.svg)
+![MASM](docs/badges/MASM-8.svg)
+[![CMake](docs/badges/Made-with-CMake.svg)](https://cmake.org)
+[![Windows](docs/badges/Microsoft-Windows.svg)](https://www.microsoft.com/en-ie/windows)
+[![License](docs/badges/License-GPL-3.0.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![DOI](https://zenodo.org/badge/231357933.svg)](https://zenodo.org/badge/latestdoi/231357933)
+
+## Languages
+
+- [English](https://github.com/czs108/PE-Packer/blob/master/README.md)
+- [简体中文](https://github.com/czs108/PE-Packer/blob/master/README-CN.md)
+
+## About The Project
+
+![test-helloworld](docs/screenshots/test-helloworld.png)
+
+***PE-Packer*** is a simple packer for **Windows *PE*** files. The new *PE* file after packing can obstruct the process of reverse engineering.
+
+It will do the following things when packing a *PE* file:
+
+- Transforming the original import table.
+- Encrypting sections.
+- Clearing section names.
+- Installing the *shell-entry*.
+
+When running a packed *PE* file, the *shell-entry* will decrypt and load the original program as follows:
+
+- Decrypting sections.
+- Initializing the original import table.
+- Relocation.
+
+Before packing, using some disassembly tools can disassemble the executable file to analyze the code, such as [*IDA Pro*](https://www.hex-rays.com/products/ida).
+
+- Disassembling the code.
+
+  ![code](docs/screenshots/code.png)
+
+- Searching constant strings.
+
+  ![string](docs/screenshots/string.png)
+
+- Analyzing the import table.
+
+  ![import-table](docs/screenshots/import-table.png)
+
+After packing, the reverse analysis will be obstructed.
+
+- Disassembling the code.
+
+  ![packed-code](docs/screenshots/packed-code.png)
+
+- Searching constant strings.
+
+  ![packed-string](docs/screenshots/packed-string.png)
+
+- Analyzing the import table.
+
+  ![packed-import-table](docs/screenshots/packed-import-table.png)
+
+### Warning
+
+> This project is just a demo for beginners to study *Windows PE Format* and *Assembly Language*. It still has some compatibility problems and bugs that cannot be used in practice.
+
+## Getting Started
+
+### Prerequisites
+
+The project must configure on/for **Windows 32-bit** and can only process **32-bit** `.exe` programs now.
+
+- Install [*MASM32*](http://www.masm32.com).
+- Install [*MinGW-w64*](https://www.mingw-w64.org), select `i686` architecture.
+- Install [*CMake*](https://cmake.org).
+- Set the `PATH` environment variables of these three tools.
+
+### Building
+
+```bash
+mkdir -p build
+cd build
+cmake .. -D CMAKE_C_COMPILER=gcc -G "MinGW Makefiles"
+cmake --build .
+```
+
+Or run the `build.ps1` file directly:
+
+```console
+PS> .\build.ps1
+```
+
+## Usage
+
+To pack a program, you must specify its *input name* and the *output name*.
+
+```console
+PE-Packer <input-file> <output-file>
+```
+
+For example:
+
+```console
+PE-Packer hello.exe hello-pack.exe
+```
+
+## Documents
+
+You can use [*Doxygen*](http://www.doxygen.nl) to generate the document.
+
+## References
+
+[*《加密与解密（第3版）》段钢*](https://book.douban.com/subject/3091212)
+
+[*PE Format - Windows Dev Center*](https://docs.microsoft.com/en-us/windows/win32/debug/pe-format)
+
+## License
+
+Distributed under the *GNU General Public License*. See `LICENSE` for more information.
+
+## Citing
+
+```tex
+@software{chenzs108_2021_4698355,
+  author       = {Chen Zhenshuo},
+  title        = {czs108/PE-Packer: v1.0.0-beta},
+  month        = apr,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {v1.0.0-beta},
+  doi          = {10.5281/zenodo.4698355},
+  url          = {https://doi.org/10.5281/zenodo.4698355}
+}
+```
+
+## Contact
+
+***GitHub***: https://github.com/czs108
+
+***E-Mail***: chenzs108@outlook.com
+
+***WeChat***: chenzs108
+```
+
+`build.ps1`:
+
+```ps1
+New-Item -Name 'bin' -ItemType 'Directory' -Force
+New-Item -Name 'build' -ItemType 'Directory' -Force
+Set-Location -Path 'build'
+
+Start-Process -FilePath 'cmake' -ArgumentList '..', '-D CMAKE_C_COMPILER=gcc', '-G "MinGW Makefiles"' -NoNewWindow -Wait
+Start-Process -FilePath 'cmake' -ArgumentList '--build', '.' -NoNewWindow -Wait
+
+$Bin = Join-Path -Path '..' -ChildPath 'bin'
+Move-Item -Path (Join-Path -Path 'bin' -ChildPath '*.exe') -Destination $Bin -Force
+```
+
+`docs/Doxygen/entry_shell.h`:
+
+```h
+/**
+ * @file entry_shell.h
+ * @brief The Doxygen page about the entry code of the shell.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-14
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+/**
+ * @page entry-code-of-shell The Entry Code of the Shell
+ * @brief Documents about the entry code of the shell
+ * @details The entry code is written in Microsoft Assembly Language in `.asm` files.
+ *
+ * @section set-src-property How to Set the Property of the .ASM File in Visual Studio
+ * 1. Right-click this file and open "Properties" -> "General" page.
+ *   - Set `Excluded From Build` to `No`.
+ *   - Set `Item Type` to `Custom Build Tool`.
+ * 2. Right-click this file and open "Properties" -> "Custom Build Tool" page.
+ *   - Set `Command Line` to `"ml /c /coff /Fo $(SolutionDir)$(ProjectName)\$(Configuration)\%(FileName).obj $(SolutionDir)$(ProjectName)\%(FileName).asm"`.
+ *   - Set `Outputs` to `"$(SolutionDir)$(ProjectName)\$(Configuration)\%(FileName).obj"`.
+ * 3. Right-click the project and open "Properties" -> "Linker" -> "Advanced" page.
+ *   - Set `Image Has Safe Exception Handlers` to `No (/SAFESEH:NO)`.
+ *
+ * @section process-of-entry-code The Process of the Entry Code
+ * - The *Boot* Segment
+ *   1. Decrypt and run the *Load* segment.
+ * - The *Load* Segment
+ *   1. Decrypt sections.
+ *   2. Initialize the original import table.
+ *   3. Relocation.
+ */
+```
+
+`docs/Doxygen/main_page.h`:
+
+```h
+/**
+ * @file main_page.h
+ * @brief The main page of Doxygen.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-20
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+/**
+ * @mainpage PE-Packer
+ *
+ * @section about-the-project About The Project
+ *
+ * ***PE-Packer*** is a simple packer for **Windows *PE*** files. The new *PE* file after packing can obstruct the process of reverse engineering.
+ *
+ * It will do the following things when packing a *PE* file:
+ *
+ * - Transforming the original import table.
+ * - Encrypting sections.
+ * - Clearing section names.
+ * - Installing the *shell-entry*.
+ *
+ * When running a packed *PE* file, the *shell-entry* will decrypt and load the original program as follows:
+ *
+ * - Decrypting sections.
+ * - Initializing the original import table.
+ * - Relocation.
+ *
+ * @subsection warning Warning
+ *
+ * > This project is just a demo for beginners to study *Windows PE Format* and *Assembly Language*. It still has some compatibility problems and bugs that cannot be used in practice.
+ *
+ * @section getting-started Getting Started
+ *
+ * @subsection prerequisites Prerequisites
+ *
+ * The project must configure on/for **Windows 32-bit** and can only process **32-bit** `.exe` programs now.
+ *
+ * - Install [*MASM32*](http://www.masm32.com).
+ * - Install [*MinGW-w64*](https://www.mingw-w64.org), select `i686` architecture.
+ * - Install [*CMake*](https://cmake.org).
+ * - Set the `PATH` environment variables of these three tools.
+ *
+ * @subsection building Building
+ *
+ * ```bash
+ * mkdir -p build
+ * cd build
+ * cmake .. -D CMAKE_C_COMPILER=gcc -G "MinGW Makefiles"
+ * cmake --build .
+ * ```
+ *
+ * Or run the `build.ps1` file directly:
+ *
+ * ```console
+ * PS> .\build.ps1
+ * ```
+ *
+ * @section usage Usage
+ *
+ * To pack a program, you must specify its *input name* and the *output name*.
+ *
+ * ```console
+ * PE-Packer <input-file> <output-file>
+ * ```
+ *
+ * For example:
+ *
+ * ```console
+ * PE-Packer hello.exe hello-pack.exe
+ * ```
+ *
+ * @section documents Documents
+ *
+ * You can use [*Doxygen*](http://www.doxygen.nl) to generate the document.
+ *
+ * @section references References
+ *
+ * [*《加密与解密（第3版）》段钢*](https://book.douban.com/subject/3091212)
+ *
+ * [*PE Format - Windows Dev Center*](https://docs.microsoft.com/en-us/windows/win32/debug/pe-format)
+ *
+ * @section license License
+ *
+ * Distributed under the *GNU General Public License*. See `LICENSE` for more information.
+ *
+ * @section contact Contact
+ *
+ * ***GitHub***: https://github.com/czs108
+ *
+ * ***E-Mail***: chenzs108@outlook.com
+ *
+ * ***WeChat***: chenzs108
+ */
+```
+
+`docs/Doxygen/new_import_table.h`:
+
+```h
+/**
+ * @file new_import_table.h
+ * @brief The Doxygen page about the new format of the import table.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-10
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+/**
+ * @page new-import-table The New Format of the Import Table
+ * @brief The new format of the import table, constructed by `TransformImpTab()` method.
+ *
+    <table border="1" align="center" cellspacing="5" cellpadding="5">
+        <caption>The New Format of the Import Table</caption>
+        <tr>
+            <th>Field</th>
+            <th>Type</th>
+        </tr>
+        <tr align="center">
+            <td>FirstThunk</td>
+            <td>IMAGE_THUNK_DATA</td>
+        </tr>
+        <tr align="center">
+            <td>The size of DLL name</td>
+            <td>BYTE</td>
+        </tr>
+        <tr align="center">
+            <td>The DLL name</td>
+            <td>C-Style String</td>
+        </tr>
+        <tr align="center">
+            <td>The number of functions</td>
+            <td>DWORD</td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <table border="1" cellspacing="5" cellpadding="5">
+                    <caption><b>Each function has two possible formats</b></caption>
+                    <tr>
+                        <th>By Name</th>
+                        <th>By Order</th>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table border="1" cellspacing="5" cellpadding="5">
+                                <tr align="center">
+                                    <td>The size of function(1) name</td>
+                                    <td>BYTE</td>
+                                </tr>
+                                <tr align="center">
+                                    <td>The function(1) name</td>
+                                    <td>C-Style String</td>
+                                </tr>
+                                <tr align="center">
+                                    <td colspan="2">......</td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td>
+                            <table border="1" cellspacing="5" cellpadding="5">
+                                <tr align="center">
+                                    <td>0x00</td>
+                                    <td>BYTE</td>
+                                </tr>
+                                <tr align="center">
+                                    <td>The function(1) order</td>
+                                    <td>VOID*</td>
+                                </tr>
+                                <tr align="center">
+                                    <td colspan="2">......</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+ *
+ * @attention The size of C-Style String includes the '\0'.
+ */
+```
+
+`docs/Set the Property of the .ASM File in Visual Studio.md`:
+
+```md
+# Set the Property of the .ASM File in Visual Studio
+
+The entry code of the shell is written in Microsoft Assembly Language in `.asm` files.
+
+1. Right-click the `.asm` file and open "***Properties***" -> "***General***" page.
+   - Set `Excluded From Build` to `No`.
+   - Set `Item Type` to `Custom Build Tool`.
+2. Right-click the `.asm` file and open "***Properties***" -> "***Custom Build Tool***" page.
+   - Set `Command Line` to `"ml /c /coff /Fo $(SolutionDir)$(ProjectName)\$(Configuration)\%(FileName).obj $(SolutionDir)$(ProjectName)\%(FileName).asm"`.
+   - Set `Outputs` to `"$(SolutionDir)$(ProjectName)\$(Configuration)\%(FileName).obj"`.
+3. Right-click the project and open "***Properties***" -> "***Linker***" -> "***Advanced***" page.
+   - Set `Image Has Safe Exception Handlers` to `No (/SAFESEH:NO)`.
+```
+
+`docs/badges/C-17.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="40" height="20" role="img" aria-label="C: 17"><title>C: 17</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="40" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="17" height="20" fill="#a8b9cc"/><rect x="17" width="23" height="20" fill="#555"/><rect width="40" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="95" y="150" fill="#ccc" fill-opacity=".3" transform="scale(.1)" textLength="70">C</text><text x="95" y="140" transform="scale(.1)" fill="#333" textLength="70">C</text><text aria-hidden="true" x="275" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="130">17</text><text x="275" y="140" transform="scale(.1)" fill="#fff" textLength="130">17</text></g></svg>
+```
+
+`docs/badges/License-GPL-3.0.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="106" height="20" role="img" aria-label="License: GPL-3.0"><title>License: GPL-3.0</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="106" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="51" height="20" fill="#555"/><rect x="51" width="55" height="20" fill="#007ec6"/><rect width="106" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="265" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="410">License</text><text x="265" y="140" transform="scale(.1)" fill="#fff" textLength="410">License</text><text aria-hidden="true" x="775" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="450">GPL-3.0</text><text x="775" y="140" transform="scale(.1)" fill="#fff" textLength="450">GPL-3.0</text></g></svg>
+```
+
+`docs/badges/MASM-8.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="60" height="20" role="img" aria-label="MASM: 8"><title>MASM: 8</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="60" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="43" height="20" fill="#5e5e5e"/><rect x="43" width="17" height="20" fill="#555"/><rect width="60" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="225" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="330">MASM</text><text x="225" y="140" transform="scale(.1)" fill="#fff" textLength="330">MASM</text><text aria-hidden="true" x="505" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="70">8</text><text x="505" y="140" transform="scale(.1)" fill="#fff" textLength="70">8</text></g></svg>
+```
+
+`docs/badges/Made-with-CMake.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="114" height="20" role="img" aria-label="Made with: CMake"><title>Made with: CMake</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="114" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="67" height="20" fill="#555"/><rect x="67" width="47" height="20" fill="#064f8c"/><rect width="114" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="345" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="570">Made with</text><text x="345" y="140" transform="scale(.1)" fill="#fff" textLength="570">Made with</text><text aria-hidden="true" x="895" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="370">CMake</text><text x="895" y="140" transform="scale(.1)" fill="#fff" textLength="370">CMake</text></g></svg>
+```
+
+`docs/badges/Microsoft-Windows.svg`:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="120" height="20" role="img" aria-label="Microsoft: Windows"><title>Microsoft: Windows</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="120" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="61" height="20" fill="#555"/><rect x="61" width="59" height="20" fill="#0078d6"/><rect width="120" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="315" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="510">Microsoft</text><text x="315" y="140" transform="scale(.1)" fill="#fff" textLength="510">Microsoft</text><text aria-hidden="true" x="895" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="490">Windows</text><text x="895" y="140" transform="scale(.1)" fill="#fff" textLength="490">Windows</text></g></svg>
+```
+
+`include/extra_data.h`:
+
+```h
+/**
+ * @file extra_data.h
+ * @brief Process the extra data behind the PE image.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-12
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#pragma once
+
+#include <windows.h>
+
+#include <stdbool.h>
+
+/**
+ * @brief The view of extra data.
+ *
+ * @see LoadPeImage()
+ */
+typedef struct _EXTRA_DATA_VIEW {
+    //! The base address of the data.
+    const BYTE* base;
+
+    //! The size of the data.
+    DWORD size;
+
+} EXTRA_DATA_VIEW;
+
+
+/**
+ * @brief Write extra data to a file.
+ *
+ * @param data  The extra data.
+ * @param file  The file.
+ * @return @p true if the method succeeds, otherwise @p false.
+ */
+bool WriteExtraDataToFile(const EXTRA_DATA_VIEW* data, HANDLE file);
+```
+
+`include/image.h`:
+
+```h
+/**
+ * @file image.h
+ * @brief Basic PE image methods.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-07
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#pragma once
+
+#include "extra_data.h"
+
+#include <windows.h>
+
+#include <stdbool.h>
+
+/**
+ * @brief Store PE image information, most methods are based on this structure.
+ *
+ * @see https://docs.microsoft.com/en-us/windows/win32/debug/pe-format
+ */
+typedef struct _PE_IMAGE_INFO {
+    //! The size of the PE image.
+    DWORD image_size;
+
+    //! The base address of the PE image when it is loaded in memory.
+    BYTE* image_base;
+
+    //! The base address of the @p IMAGE_NT_HEADERS structure.
+    IMAGE_NT_HEADERS* nt_header;
+
+    //! The base address of the first @p IMAGE_SECTION_HEADER structure.
+    IMAGE_SECTION_HEADER* section_header;
+
+    //! The thread-local storage table.
+    IMAGE_TLS_DIRECTORY tls_table;
+
+    //! If the image is a DLL.
+    bool is_dll;
+
+} PE_IMAGE_INFO;
+
+
+/**
+ * @brief Load a PE file to memory.
+ *
+ * @param file_base         The base address of the file content.
+ * @param file_size         The size of the file.
+ * @param[out] image_info   The PE image related to the file.
+ * @param[out] extra_data   The extra data behind the PE image.
+ * @return @p true if the method succeeded, otherwise @p false.
+ *
+ * @note The constructor of @p _PE_IMAGE_INFO structure.
+ * @note The constructor of @p _EXTRA_DATA_VIEW structure.
+ */
+bool LoadPeImage(const BYTE* file_base, DWORD file_size,
+                 PE_IMAGE_INFO* image_info, EXTRA_DATA_VIEW* extra_data);
+
+
+/**
+ * @brief Free the memory of a PE image.
+ *
+ * @param image_info    The PE image.
+ *
+ * @note The destructor of @p _PE_IMAGE_INFO structure.
+ */
+void FreePeImage(const PE_IMAGE_INFO* image_info);
+
+
+/**
+ * @brief Write a PE image to a new file.
+ *
+ * @param image_info    The PE image.
+ * @param file          The file.
+ * @return @p true if the method succeeded, otherwise @p false.
+ */
+bool WriteImageToFile(const PE_IMAGE_INFO* image_info, HANDLE file);
+
+
+/**
+ * @brief Convert a relative virtual address to a virtual address.
+ *
+ * @param image_info    The PE image.
+ * @param rva           A relative virtual address.
+ * @return The virtual address.
+ */
+BYTE* RvaToVa(const PE_IMAGE_INFO* image_info, DWORD rva);
+
+
+/**
+ * @brief Check whether a PE image is x64 or x86.
+ *
+ * @param image_info    The PE image.
+ * @return @p true if the image is a x64 file, otherwise @p false.
+ */
+bool IsPe64(const PE_IMAGE_INFO* image_info);
+
+
+/**
+ * @brief Align a value according to the alignment.
+ *
+ * @param value     A value to be aligned.
+ * @param align     A value of alignment.
+ * @return The value after alignment.
+ */
+DWORD Align(DWORD value, DWORD align);
+
+
+/**
+ * @brief Check if a file is a PE file.
+ *
+ * @param file_base The base address of the file content.
+ * @return @p true if the file is a PE file, otherwise @p false.
+ */
+bool IsPeFile(const BYTE* file_base);
+
+
+/**
+ * @brief
+ * Calculate the size of PE headers,
+ * including @p IMAGE_DOS_HEADER, @p IMAGE_NT_HEADERS and all @p IMAGE_SECTION_HEADER structures.
+ *
+ * @param file_base             The base address of the file content.
+ * @param[out] dos_header_size  The size of the @p IMAGE_DOS_HEADER structure. It's optional.
+ * @param[out] nt_header_size   The size of the @p IMAGE_NT_HEADERS structure. It's optional.
+ * @return The size of PE headers.
+ */
+DWORD CalcHeadersSize(const BYTE* file_base, DWORD* dos_header_size,
+                      DWORD* nt_header_size);
+```
+
+`include/import_table.h`:
+
+```h
+/**
+ * @file import_table.h
+ * @brief Transform the import table.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-10
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @see @ref new-import-table
+ */
+
+#pragma once
+
+#include "image.h"
+
+#include <windows.h>
+
+#include <stdbool.h>
+
+/**
+ * @brief Calculate the size required for the import table of the new format.
+ *
+ * @param image_info    The PE image.
+ * @return The required size.
+ */
+DWORD CalcNewImpTableSize(const PE_IMAGE_INFO* image_info);
+
+
+/**
+ * @brief Transform the import table into the new format.
+ *
+ * @param image_info    The PE image.
+ * @param new_table
+ * The space where the new table will be constructed,
+ * and its size must be larger than the value returned by @p CalcNewImpTableSize() method.
+ * Set this to @p NULL to get the required size.
+ *
+ * @return The required size for the new import table.
+ *
+ * @see @ref new-import-table
+ */
+DWORD TransformImpTable(const PE_IMAGE_INFO* image_info, BYTE* new_table);
+
+
+/**
+ * @brief Clear the original import table.
+ *
+ * @param image_info    The PE image.
+ */
+void ClearImpTable(const PE_IMAGE_INFO* image_info);
+```
+
+`include/section.h`:
+
+```h
+/**
+ * @file section.h
+ * @brief Modify sections.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-12
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#pragma once
+
+#include "image.h"
+#include "utility/encrypt.h"
+
+#include <windows.h>
+
+/**
+ * @brief The encryption information of a section.
+ */
+typedef struct _ENCRY_INFO {
+    //! The relative virtual address of the section.
+    DWORD rva;
+
+    //! The size of the encrypted data.
+    DWORD size;
+
+} ENCRY_INFO;
+
+
+/**
+ * @brief Check if a new section can be appended to the PE image.
+ *
+ * @param image_info    The PE image.
+ * @return @p true or @p false.
+ */
+bool CanAppendNewSection(const PE_IMAGE_INFO* image_info);
+
+
+/**
+ * @brief Append a new section to the PE image.
+ *
+ * @param image_info    The PE image.
+ * @param name          The name of the new section.
+ * @param size          The size of the new section.
+ * @param[out] header   The @p IMAGE_SECTION_HEADER structure of the new section.
+ * @return @p true if the method succeeds, otherwise @p false.
+ */
+bool AppendNewSection(PE_IMAGE_INFO* image_info, const CHAR* name, DWORD size,
+                      IMAGE_SECTION_HEADER* header);
+
+
+/**
+ * @brief Get the number of sections that can be encrypted.
+ *
+ * @param image_info    The PE image.
+ * @return The number of sections that can be encrypted.
+ */
+WORD GetEncryptableSectionNumber(const PE_IMAGE_INFO* image_info);
+
+
+/**
+ * @brief Encrypt sections.
+ *
+ * @param image_info    The PE image.
+ * @param encry_info
+ * An array where the encryption information will be saved,
+ * and its length must be larger than the value returned by @p GetNumOfSectionsCanBeEncrypted() method.
+ * Set this to @p NULL to get the required length.
+ * @return The number of sections can be encrypted.
+ */
+WORD EncryptSections(const PE_IMAGE_INFO* image_info, ENCRY_INFO* encry_info);
+
+
+/**
+ * @brief Clear section names.
+ *
+ * @param image_info    The PE image.
+ */
+void ClearSectionNames(const PE_IMAGE_INFO* image_info);
+```
+
+`include/shell/install_shell.h`:
+
+```h
+/**
+ * @file install_shell.h
+ * @brief Install the shell.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-15
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @see @ref entry-code-of-shell
+ */
+
+#pragma once
+
+#include "../image.h"
+#include "../section.h"
+
+#include <windows.h>
+
+#include <stdbool.h>
+
+/**
+ * @brief Get the size of the shell.
+ *
+ * @param new_imp_table_size    The size of the transformed import table.
+ * @return The size of the shell.
+ */
+DWORD CalcShellSize(DWORD new_imp_table_size);
+
+
+/**
+ * @brief Install the shell.
+ *
+ * @param image_info            The PE image.
+ * @param new_imp_table         The transformed import table.
+ * @param new_imp_table_size    The size of the transformed import table.
+ * @param encry_info            The encryption information of sections.
+ * @param encry_count           The count of encryption information.
+ * @return @p true if the method succeeds, otherwise @p false.
+ *
+ * @see @ref entry-code-of-shell
+ */
+bool InstallShell(const PE_IMAGE_INFO* image_info, const BYTE* new_imp_table,
+                  DWORD new_imp_table_size, const ENCRY_INFO* encry_info,
+                  DWORD encry_count);
+```
+
+`include/utility/encrypt.h`:
+
+```h
+/**
+ * @file encrypt.h
+ * @brief Encrypt data.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-13
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#pragma once
+
+#include <windows.h>
+
+/**
+ * @brief Encrypt data.
+ *
+ * @param base  The base address of the data.
+ * @param size  The size of the data.
+ */
+void EncryptData(BYTE* base, DWORD size);
+```
+
+`include/utility/error_handling.h`:
+
+```h
+/**
+ * @file error_handling.h
+ * @brief Error handling.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-09
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @see https://docs.microsoft.com/en-us/windows/win32/debug/system-error-codes
+ */
+
+#pragma once
+
+#include <windows.h>
+
+/**
+ * @brief Get the last-error code.
+ *
+ * @return The last-error code.
+ */
+DWORD GetLastErrorCode();
+
+
+/**
+ * @brief Set the last-error code got from @p GetLastError API.
+ *
+ * @warning This method can only and must be called after a direct Windows API call failed.
+ *
+ * @attention
+ * Do not recommend using this method when freeing resources like memory and handles.
+ * The failure of related APIs may cover the error during initialization.
+ */
+void SetLastErrorCode();
+
+
+/**
+ * @brief Reset the last-error code to @p ERROR_SUCCESS.
+ */
+void ResetLastErrorCode();
+
+
+/**
+ * @brief Get the message from an error code.
+ *
+ * @param error_code    An error code got from @p GetLastErrorCode method.
+ * @return A message or @p NULL if the method failed.
+ *
+ * @warning The reture value must be free by @p FreeErrorMessage() method if it is not @p NULL.
+ */
+TCHAR* FormatErrorMessage(const DWORD error_code);
+
+
+/**
+ * @brief Free the memory of a message.
+ *
+ * @param message   A message got from @p FormatErrorMessage() method.
+ */
+void FreeErrorMessage(TCHAR* const message);
+```
+
+`include/utility/file_access.h`:
+
+```h
+/**
+ * @file file_access.h
+ * @brief File reading and writing.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-10
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#pragma once
+
+#include <windows.h>
+
+#include <stdbool.h>
+
+/**
+ * @brief The view of a file.
+ */
+typedef struct _FILE_VIEW {
+    //! The file-mapping returned by @p CreateFileMapping API.
+    HANDLE map;
+
+    //! The base address of the file content returned by @p MapViewOfFile API.
+    const BYTE* base;
+
+    //! The size of the file.
+    DWORD size;
+
+} FILE_VIEW;
+
+
+/**
+ * @brief Write all data to a file.
+ *
+ * @param file  The file.
+ * @param data  The base address of the data.
+ * @param size  The size of the data.
+ * @return @p true if the method succeeds, otherwise @p false.
+ */
+bool WriteAllToFile(HANDLE file, const BYTE* data, DWORD size);
+
+
+/**
+ * @brief Open a read-only view for a file.
+ *
+ * @param file              The file.
+ * @param[out] file_view    The read-only view.
+ * @return @p true if the method succeeds, otherwise @p false.
+ *
+ * @note The constructor of @p _FILE_VIEW structure.
+ */
+bool OpenReadViewOfFile(HANDLE file, FILE_VIEW* file_view);
+
+
+/**
+ * @brief Close the view of a file.
+ *
+ * @param file_view The view.
+ *
+ * @note The destructor of @p _FILE_VIEW structure.
+ */
+void CloseViewOfFile(const FILE_VIEW* file_view);
+
+
+/**
+ * @brief Check if the size of a file is smaller than 2GB.
+ *
+ * @param file  The file.
+ * @return @p true if the size of the file is smaller than 2GB, otherwise @p false.
+ *
+ * @warning The program can only process files smaller than 2GB.
+ */
+bool IsFileSmallerThan2G(HANDLE file);
+```
+
+`include/utility/platform_check.h`:
+
+```h
+/**
+ * @file platform_check.h
+ * @brief Check if the PE image matches the program platform.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-14
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @note The implementation is different between x64 and x86 platforms.
+ */
+
+#pragma once
+
+#include "../image.h"
+
+#include <stdbool.h>
+
+/**
+ * @brief Check if the PE image matches the program platform.
+ *
+ * @param image_info    The PE image.
+ * @return @p true if the PE image matches the program platform, otherwise @p false.
+ */
+bool IsPeMatchPlatform(const PE_IMAGE_INFO* image_info);
+```
+
+`src/CMakeLists.txt`:
+
+```txt
+add_subdirectory(utility)
+add_subdirectory(shell)
+
+add_executable(PE-Packer)
+
+target_compile_definitions(PE-Packer PRIVATE -D_UNICODE -DUNICODE)
+
+set(HEADER_PATH ${PROJECT_SOURCE_DIR}/include)
+
+target_include_directories(PE-Packer PRIVATE ${HEADER_PATH})
+
+target_sources(PE-Packer
+    PRIVATE
+        main.c
+        extra_data.c
+        image.c
+        import_table.c
+        section.c
+        ${HEADER_PATH}/extra_data.h
+        ${HEADER_PATH}/image.h
+        ${HEADER_PATH}/import_table.h
+        ${HEADER_PATH}/section.h
+)
+
+target_link_libraries(PE-Packer PRIVATE utility)
+target_link_libraries(PE-Packer PRIVATE shell)
+```
+
+`src/extra_data.c`:
+
+```c
+/**
+ * @file extra_data.c
+ * @brief Process the extra data behind the PE image.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-12
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "extra_data.h"
+#include "utility/file_access.h"
+
+#include <assert.h>
+
+
+bool WriteExtraDataToFile(const EXTRA_DATA_VIEW* const data,
+                          const HANDLE file) {
+    assert(data != NULL);
+    assert(file != INVALID_HANDLE_VALUE);
+
+    if (data->size > 0) {
+        assert(data->base != NULL);
+
+        return WriteAllToFile(file, data->base, data->size);
+    } else {
+        return true;
+    }
+}
+```
+
+`src/image.c`:
+
+```c
+/**
+ * @file image.c
+ * @brief Basic PE image methods.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-07
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "image.h"
+#include "utility/error_handling.h"
+#include "utility/file_access.h"
+
+#include <assert.h>
+
+/**
+ * @brief Get the base address of the @p IMAGE_NT_HEADERS structure.
+ *
+ * @param file_base The base address of the file content.
+ * @return The base address of the @p IMAGE_NT_HEADERS structure, @p NULL if it is not a PE file.
+ */
+static IMAGE_NT_HEADERS* GetNtHeader(const BYTE* file_base);
+
+
+bool LoadPeImage(const BYTE* const file_base, const DWORD file_size,
+                 PE_IMAGE_INFO* const image_info,
+                 EXTRA_DATA_VIEW* const extra_data) {
+    assert(IsPeFile(file_base));
+    assert(image_info != NULL);
+    assert(extra_data != NULL);
+
+    bool success = false;
+    ZeroMemory(image_info, sizeof(PE_IMAGE_INFO));
+    ZeroMemory(extra_data, sizeof(EXTRA_DATA_VIEW));
+
+    // Get the size of the PE image and allocate memory.
+    const IMAGE_NT_HEADERS* const nt_header = GetNtHeader(file_base);
+    image_info->image_size = nt_header->OptionalHeader.SizeOfImage;
+    image_info->image_base = (BYTE*)VirtualAlloc(
+        NULL, image_info->image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (image_info->image_base == NULL) {
+        SetLastErrorCode();
+        goto _Exit;
+    }
+
+    // Copy PE headers.
+    DWORD dos_header_size = 0, nt_header_size = 0;
+    const DWORD headers_size =
+        CalcHeadersSize(file_base, &dos_header_size, &nt_header_size);
+    CopyMemory(image_info->image_base, file_base, headers_size);
+
+    image_info->nt_header =
+        (IMAGE_NT_HEADERS*)(image_info->image_base + dos_header_size);
+    image_info->section_header =
+        (IMAGE_SECTION_HEADER*)((BYTE*)image_info->nt_header + nt_header_size);
+
+    image_info->is_dll =
+        image_info->nt_header->FileHeader.Characteristics & IMAGE_FILE_DLL;
+
+    // Map section data to memory.
+    const WORD section_num = image_info->nt_header->FileHeader.NumberOfSections;
+    const IMAGE_SECTION_HEADER* const section_header =
+        (IMAGE_SECTION_HEADER*)(file_base + dos_header_size + nt_header_size);
+    for (WORD i = 0; i != section_num; ++i) {
+        if (section_header[i].SizeOfRawData == 0) {
+            continue;
+        }
+
+        const BYTE* const src = file_base + section_header[i].PointerToRawData;
+        BYTE* const dest =
+            image_info->image_base + section_header[i].VirtualAddress;
+        CopyMemory(dest, src, section_header[i].SizeOfRawData);
+    }
+
+    // Save the thread-local storage table.
+    const IMAGE_DATA_DIRECTORY* const tls_dir =
+        &nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    if (tls_dir->VirtualAddress != 0 && tls_dir->Size > 0) {
+        const IMAGE_TLS_DIRECTORY* const tls_table =
+            (IMAGE_TLS_DIRECTORY*)RvaToVa(image_info, tls_dir->VirtualAddress);
+        CopyMemory(&image_info->tls_table, tls_table,
+                   sizeof(IMAGE_TLS_DIRECTORY));
+    }
+
+    // Save extra data.
+    const IMAGE_SECTION_HEADER* const last_section_header =
+        &section_header[section_num - 1];
+    const BYTE* const last_section_end = file_base
+                                         + last_section_header->PointerToRawData
+                                         + last_section_header->SizeOfRawData;
+    extra_data->size = file_size - (last_section_end - file_base);
+    if (extra_data->size > 0) {
+        // It's a read-only view.
+        extra_data->base = last_section_end;
+    }
+
+    success = true;
+
+_Exit:
+    if (!success) {
+        FreePeImage(image_info);
+        ZeroMemory(image_info, sizeof(PE_IMAGE_INFO));
+        ZeroMemory(extra_data, sizeof(EXTRA_DATA_VIEW));
+    }
+
+    return success;
+}
+
+
+bool WriteImageToFile(const PE_IMAGE_INFO* const image_info,
+                      const HANDLE file) {
+    assert(image_info != NULL);
+    assert(file != INVALID_HANDLE_VALUE);
+
+    bool success = false;
+
+    // Save PE headers.
+    const DWORD header_size =
+        CalcHeadersSize(image_info->image_base, NULL, NULL);
+    if (WriteAllToFile(file, image_info->image_base, header_size) == false) {
+        goto _Exit;
+    }
+
+    // Save the data of all sections.
+    const WORD section_num = image_info->nt_header->FileHeader.NumberOfSections;
+    const IMAGE_SECTION_HEADER* const section_header =
+        image_info->section_header;
+    for (WORD i = 0; i != section_num; ++i) {
+        if (section_header[i].SizeOfRawData == 0) {
+            continue;
+        }
+
+        const DWORD rva = section_header[i].VirtualAddress;
+        const BYTE* const data = RvaToVa(image_info, rva);
+
+        // Sometimes the SizeOfRawData is zero, but the section still has its space in the file.
+        // So we must set the file pointer to the beginning of each section to write data.
+        SetFilePointer(file, section_header[i].PointerToRawData, NULL,
+                       FILE_BEGIN);
+        if (WriteAllToFile(file, data, section_header[i].SizeOfRawData)
+            == false) {
+            goto _Exit;
+        }
+    }
+
+    success = true;
+
+_Exit:
+    return success;
+}
+
+
+bool IsPe64(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    const WORD magic = image_info->nt_header->OptionalHeader.Magic;
+
+    assert(magic != IMAGE_ROM_OPTIONAL_HDR_MAGIC);
+
+    return magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+}
+
+
+void FreePeImage(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    if (image_info->image_base != NULL) {
+        VirtualFree(image_info->image_base, 0, MEM_RELEASE);
+    }
+}
+
+
+bool IsPeFile(const BYTE* const file_base) {
+    assert(file_base != NULL);
+
+    const IMAGE_NT_HEADERS* const nt_header = GetNtHeader(file_base);
+    if (nt_header == NULL) {
+        return false;
+    }
+
+    // Check the "PE" field and the number of sections.
+    if (nt_header->Signature != IMAGE_NT_SIGNATURE
+        || nt_header->FileHeader.NumberOfSections <= 1) {
+        return false;
+    }
+
+    return true;
+}
+
+
+DWORD Align(const DWORD value, const DWORD align) {
+    assert(align != 0);
+
+    return ((value + align - 1) / align * align);
+}
+
+
+BYTE* RvaToVa(const PE_IMAGE_INFO* const image_info, const DWORD rva) {
+    assert(image_info != NULL);
+
+    return image_info->image_base + rva;
+}
+
+
+IMAGE_NT_HEADERS* GetNtHeader(const BYTE* const file_base) {
+    assert(file_base != NULL);
+
+    // Check the "MZ" field.
+    const IMAGE_DOS_HEADER* const dos_header = (IMAGE_DOS_HEADER*)file_base;
+    if (dos_header->e_magic != IMAGE_DOS_SIGNATURE) {
+        return NULL;
+    }
+
+    const DWORD _dos_header_size = dos_header->e_lfanew;
+    return (IMAGE_NT_HEADERS*)((BYTE*)dos_header + _dos_header_size);
+}
+
+
+DWORD CalcHeadersSize(const BYTE* const file_base, DWORD* const dos_header_size,
+                      DWORD* const nt_header_size) {
+    assert(file_base != NULL);
+
+    // Get the size of the `IMAGE_DOS_HEADER` structure.
+    const DWORD _dos_header_size = ((IMAGE_DOS_HEADER*)file_base)->e_lfanew;
+    if (dos_header_size != NULL) {
+        *dos_header_size = _dos_header_size;
+    }
+
+    // Get the size of the `IMAGE_NT_HEADERS` structure.
+    const IMAGE_NT_HEADERS* const nt_header = GetNtHeader(file_base);
+    const DWORD _nt_header_size = sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER)
+                                  + nt_header->FileHeader.SizeOfOptionalHeader;
+    if (nt_header_size != NULL) {
+        *nt_header_size = _nt_header_size;
+    }
+
+    // Get the size of all `IMAGE_SECTION_HEADER` structures.
+    const WORD section_num = nt_header->FileHeader.NumberOfSections;
+    const DWORD section_header_size =
+        section_num * sizeof(IMAGE_SECTION_HEADER);
+
+    return _dos_header_size + _nt_header_size + section_header_size;
+}
+```
+
+`src/import_table.c`:
+
+```c
+/**
+ * @file import_table.c
+ * @brief Transform the import table.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-10
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "import_table.h"
+
+#include <assert.h>
+#include <string.h>
+
+/**
+ * @brief A callback method, called when enumerating the import table.
+ *
+ * @param image_info    The PE image.
+ * @param descriptor    The @p IMAGE_IMPORT_DESCRIPTOR structure.
+ * @param arg           An optional custom argument.
+ * @return An optional custom value.
+ *
+ * @see EnumImpTable()
+ */
+typedef DWORD (*LPFN_ENUM_IMP_CALLBACK)(const PE_IMAGE_INFO* image_info,
+                                        IMAGE_IMPORT_DESCRIPTOR* descriptor,
+                                        void* arg);
+
+
+/******************************************************************************/
+// Callback methods
+/******************************************************************************/
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_IMP_CALLBACK method,
+ * used to calculate the size required for the import table of the new format.
+ *
+ * @param image_info    The PE image.
+ * @param descriptor    The @p IMAGE_IMPORT_DESCRIPTOR structure.
+ * @param[in, out] size The required size.
+ * @return Useless.
+ */
+static DWORD CalcSizeCallBack(const PE_IMAGE_INFO* image_info,
+                              IMAGE_IMPORT_DESCRIPTOR* descriptor, void* size);
+
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_IMP_CALLBACK method,
+ * used to clear the original import table.
+ *
+ * @param image_info    The PE image.
+ * @param descriptor    The @p IMAGE_IMPORT_DESCRIPTOR structure.
+ * @param arg           Useless.
+ * @return Useless.
+ */
+static DWORD ClearCallBack(const PE_IMAGE_INFO* image_info,
+                           IMAGE_IMPORT_DESCRIPTOR* descriptor, void* arg);
+
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_IMP_CALLBACK method,
+ * used to transform the import table into the new format.
+ *
+ * @param image_info            The PE image.
+ * @param descriptor            The @p IMAGE_IMPORT_DESCRIPTOR structure.
+ * @param[in, out] new_table    The space where the new table will be constructed.
+ * @return Useless.
+ */
+static DWORD TransformCallBack(const PE_IMAGE_INFO* image_info,
+                               IMAGE_IMPORT_DESCRIPTOR* descriptor,
+                               void* new_table);
+
+/******************************************************************************/
+
+/**
+ * @brief Enumerate the import table.
+ *
+ * @param image_info    The PE image.
+ * @param callback
+ * A @p ::LPFN_ENUM_IMP_CALLBACK method,
+ * it will be called on each @p IMAGE_IMPORT_DESCRIPTOR structure.
+ * @param arg           An optional custom argument, it will be passed to @p callback.
+ */
+static void EnumImpTable(const PE_IMAGE_INFO* image_info,
+                         LPFN_ENUM_IMP_CALLBACK callback, void* arg);
+
+
+DWORD CalcNewImpTableSize(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    DWORD size = 0;
+    EnumImpTable(image_info, &CalcSizeCallBack, &size);
+    return size;
+}
+
+
+DWORD TransformImpTable(const PE_IMAGE_INFO* const image_info,
+                        BYTE* const new_table) {
+    assert(image_info != NULL);
+
+    const DWORD new_size = CalcNewImpTableSize(image_info);
+    if (new_table != NULL) {
+        EnumImpTable(image_info, &TransformCallBack, (void*)&new_table);
+    }
+
+    return new_size;
+}
+
+
+void ClearImpTable(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    // Clear the import table.
+    EnumImpTable(image_info, &ClearCallBack, NULL);
+
+    /* Clear the `DataDirectory`. */
+
+    // Get the base address of the `DataDirectory` array.
+    IMAGE_DATA_DIRECTORY* const dirs =
+        image_info->nt_header->OptionalHeader.DataDirectory;
+
+    // Clear the `DataDirectory` of the bound import table.
+    IMAGE_DATA_DIRECTORY* const bound_dir =
+        &dirs[IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT];
+    if (bound_dir->VirtualAddress != 0 && bound_dir->Size > 0) {
+        void* const data = RvaToVa(image_info, bound_dir->VirtualAddress);
+        ZeroMemory(data, bound_dir->Size);
+    }
+
+    ZeroMemory(bound_dir, sizeof(IMAGE_DATA_DIRECTORY));
+
+    // Clear the `DataDirectory` of the import address table (IAT).
+    IMAGE_DATA_DIRECTORY* const iat_dir = &dirs[IMAGE_DIRECTORY_ENTRY_IAT];
+    if (iat_dir->VirtualAddress != 0 && iat_dir->Size > 0) {
+        void* const data = RvaToVa(image_info, iat_dir->VirtualAddress);
+        ZeroMemory(data, iat_dir->Size);
+    }
+
+    ZeroMemory(iat_dir, sizeof(IMAGE_DATA_DIRECTORY));
+
+    // Clear the `DataDirectory` of the delay import table.
+    IMAGE_DATA_DIRECTORY* const delay_dir =
+        &dirs[IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT];
+    ZeroMemory(delay_dir, sizeof(IMAGE_DATA_DIRECTORY));
+}
+
+
+void EnumImpTable(const PE_IMAGE_INFO* const image_info,
+                  const LPFN_ENUM_IMP_CALLBACK callback, void* const arg) {
+    assert(image_info != NULL);
+    assert(callback != NULL);
+
+    const IMAGE_DATA_DIRECTORY* const imp_dir =
+        &image_info->nt_header->OptionalHeader
+             .DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
+    if (imp_dir->VirtualAddress != 0 && imp_dir->Size > 0) {
+        IMAGE_IMPORT_DESCRIPTOR* descriptor = (IMAGE_IMPORT_DESCRIPTOR*)RvaToVa(
+            image_info, imp_dir->VirtualAddress);
+        for (; descriptor->Name != 0; ++descriptor) {
+            callback(image_info, descriptor, arg);
+        }
+    }
+}
+
+
+DWORD CalcSizeCallBack(const PE_IMAGE_INFO* const image_info,
+                       IMAGE_IMPORT_DESCRIPTOR* const descriptor,
+                       void* const size) {
+    assert(image_info != NULL);
+    assert(descriptor != NULL);
+    assert(size != NULL);
+
+    // Get the accumulative size.
+    DWORD curr_size = *(DWORD*)size;
+
+    // The `FirstThunk` structure.
+    curr_size += sizeof(IMAGE_THUNK_DATA);
+
+    // The size of the DLL name, including the '\0'.
+    curr_size += sizeof(BYTE);
+
+    // The DLL name.
+    const CHAR* const dll_name = RvaToVa(image_info, descriptor->Name);
+    curr_size += (strlen(dll_name) + 1) * sizeof(CHAR);
+
+    // The number of functions.
+    curr_size += sizeof(DWORD);
+
+    // Get the import name table (INT) or import address table (IAT).
+    const IMAGE_THUNK_DATA* thunk = NULL;
+    if (descriptor->OriginalFirstThunk != 0) {
+        thunk = (IMAGE_THUNK_DATA*)RvaToVa(image_info,
+                                           descriptor->OriginalFirstThunk);
+    } else {
+        thunk = (IMAGE_THUNK_DATA*)RvaToVa(image_info, descriptor->FirstThunk);
+    }
+
+    for (; thunk->u1.AddressOfData != 0; ++thunk) {
+        // The size of the function name, including the '\0'.
+        // Or the flag 0x00.
+        curr_size += sizeof(BYTE);
+
+        if (IMAGE_SNAP_BY_ORDINAL(thunk->u1.Ordinal)) {
+            // The function order.
+            curr_size += sizeof(VOID*);
+        } else {
+            // The function name.
+            const IMAGE_IMPORT_BY_NAME* const func_name =
+                (IMAGE_IMPORT_BY_NAME*)RvaToVa(image_info,
+                                               thunk->u1.AddressOfData);
+            curr_size += (strlen((CHAR*)func_name->Name) + 1) * sizeof(CHAR);
+        }
+    }
+
+    // Update the accumulative size.
+    *(DWORD*)size = curr_size;
+    return 0;
+}
+
+
+DWORD ClearCallBack(const PE_IMAGE_INFO* const image_info,
+                    IMAGE_IMPORT_DESCRIPTOR* const descriptor,
+                    void* const arg) {
+    assert(image_info != NULL);
+    assert(descriptor != NULL);
+
+    // Clear the DLL name.
+    CHAR* const dll_name = RvaToVa(image_info, descriptor->Name);
+    ZeroMemory(dll_name, strlen(dll_name) * sizeof(CHAR));
+
+    // Clear the import name table (INT).
+    if (descriptor->OriginalFirstThunk != 0) {
+        for (IMAGE_THUNK_DATA* thunk = (IMAGE_THUNK_DATA*)RvaToVa(
+                 image_info, descriptor->OriginalFirstThunk);
+             thunk->u1.AddressOfData != 0; ++thunk) {
+            if (!IMAGE_SNAP_BY_ORDINAL(thunk->u1.Ordinal)) {
+                // Clear the function name.
+                IMAGE_IMPORT_BY_NAME* const func_name =
+                    (IMAGE_IMPORT_BY_NAME*)RvaToVa(image_info,
+                                                   thunk->u1.AddressOfData);
+                ZeroMemory(func_name,
+                           sizeof(WORD)
+                               + strlen((CHAR*)func_name->Name) * sizeof(CHAR));
+            }
+
+            ZeroMemory(thunk, sizeof(IMAGE_THUNK_DATA));
+        }
+    }
+
+    // Clear the import address table (IAT).
+    for (IMAGE_THUNK_DATA* thunk =
+             (IMAGE_THUNK_DATA*)RvaToVa(image_info, descriptor->FirstThunk);
+         thunk->u1.AddressOfData != 0; ++thunk) {
+        ZeroMemory(thunk, sizeof(IMAGE_THUNK_DATA));
+    }
+
+    // Clear the `IMAGE_IMPORT_DESCRIPTOR` structure.
+    ZeroMemory(descriptor, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+
+    return 0;
+}
+
+
+DWORD TransformCallBack(const PE_IMAGE_INFO* const image_info,
+                        IMAGE_IMPORT_DESCRIPTOR* const descriptor,
+                        void* const new_table) {
+    assert(image_info != NULL);
+    assert(descriptor != NULL);
+    assert(new_table != NULL);
+
+    // Get the current address of the new table.
+    BYTE* buffer = *(BYTE**)new_table;
+
+    // Save the `FirstThunk` structure.
+    CopyMemory(buffer, &descriptor->FirstThunk, sizeof(IMAGE_THUNK_DATA));
+    buffer += sizeof(IMAGE_THUNK_DATA);
+
+    // Save the size of the DLL name, including the '\0'.
+    const CHAR* const dll_name = RvaToVa(image_info, descriptor->Name);
+    const BYTE dll_name_size = (strlen(dll_name) + 1) * sizeof(CHAR);
+    *buffer = dll_name_size;
+    buffer += sizeof(BYTE);
+
+    // Save the DLL name.
+    CopyMemory(buffer, dll_name, dll_name_size);
+    buffer += dll_name_size;
+
+    // Get the location where the number of functions being saved.
+    DWORD* const func_num = (DWORD*)buffer;
+    *func_num = 0;
+    buffer += sizeof(DWORD);
+
+    // Get the import name table (INT) or import address table (IAT).
+    const IMAGE_THUNK_DATA* thunk = NULL;
+    if (descriptor->OriginalFirstThunk != 0) {
+        thunk = (IMAGE_THUNK_DATA*)RvaToVa(image_info,
+                                           descriptor->OriginalFirstThunk);
+    } else {
+        thunk = (IMAGE_THUNK_DATA*)RvaToVa(image_info, descriptor->FirstThunk);
+    }
+
+    for (; thunk->u1.AddressOfData != 0; ++thunk) {
+        if (IMAGE_SNAP_BY_ORDINAL(thunk->u1.Ordinal)) {
+            // Save the flag 0x00.
+            *buffer = 0;
+            buffer += sizeof(BYTE);
+
+            // Save the function order.
+            *(VOID**)buffer = (VOID*)IMAGE_ORDINAL(thunk->u1.Ordinal);
+            buffer += sizeof(VOID*);
+        } else {
+            // Save the size of the function name, including the '\0'.
+            const IMAGE_IMPORT_BY_NAME* const func_name =
+                (IMAGE_IMPORT_BY_NAME*)RvaToVa(image_info,
+                                               thunk->u1.AddressOfData);
+            const BYTE func_name_size =
+                (strlen(func_name->Name) + 1) * sizeof(CHAR);
+            *buffer = func_name_size;
+            buffer += sizeof(BYTE);
+
+            // Save the function name.
+            CopyMemory(buffer, func_name->Name, func_name_size);
+            buffer += func_name_size;
+        }
+
+        // Update the number of functions.
+        ++*func_num;
+    }
+
+    // Update the current address.
+    *(BYTE**)new_table = buffer;
+    return 0;
+}
+```
+
+`src/main.c`:
+
+```c
+/**
+ * @file main.c
+ * @brief The main program.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-19
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "image.h"
+#include "import_table.h"
+#include "install_shell.h"
+#include "section.h"
+#include "utility/error_handling.h"
+#include "utility/file_access.h"
+#include "utility/platform_check.h"
+
+#include <windows.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+
+int main(int argc, char* argv[]) {
+    int arg_size = 0;
+    const LPWSTR* const args = CommandLineToArgvW(GetCommandLineW(), &arg_size);
+    if (arg_size < 3) {
+        wprintf(L" [!] Usage: PE-Packer <input-file> <output-file>\r\n");
+        return EXIT_SUCCESS;
+    }
+
+    const WCHAR* const in_file_name = args[1];
+    const WCHAR* const out_file_name = args[2];
+
+    bool success = false;
+    bool api_error = false;
+
+    FILE_VIEW in_file_view = { 0 };
+    PE_IMAGE_INFO image_info = { 0 };
+    EXTRA_DATA_VIEW extra_data = { 0 };
+    BYTE* new_imp_table = NULL;
+    ENCRY_INFO* encry_info = NULL;
+    IMAGE_SECTION_HEADER shell_section_header = { 0 };
+    HANDLE out_file = INVALID_HANDLE_VALUE;
+
+    HANDLE in_file =
+        CreateFile(in_file_name, GENERIC_READ, FILE_SHARE_READ, NULL,
+                   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (in_file == INVALID_HANDLE_VALUE) {
+        SetLastErrorCode();
+        api_error = true;
+        goto _Exit;
+    }
+
+    if (IsFileSmallerThan2G(in_file) != true) {
+        wprintf(L" [!] ERROR: The program can only process files smaller than "
+                L"2GB.\r\n");
+        goto _Exit;
+    }
+
+    if (OpenReadViewOfFile(in_file, &in_file_view) != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    if (IsPeFile(in_file_view.base) != true) {
+        wprintf(L" [!] ERROR: The input file is not a PE file.\r\n");
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Load the PE image.\r\n");
+    DWORD file_size = GetFileSize(in_file, NULL);
+    if (LoadPeImage(in_file_view.base, file_size, &image_info, &extra_data)
+        != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    if (image_info.is_dll) {
+        wprintf(L" [!] ERROR: The program cannot process a DLL file.\r\n");
+        goto _Exit;
+    }
+
+    if (IsPeMatchPlatform(&image_info) != true) {
+        wprintf(L" [!] ERROR: The PE image doesn't match the program "
+                L"platform.\r\n");
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Transform the import table.\r\n");
+    const DWORD new_imp_table_size = CalcNewImpTableSize(&image_info);
+    new_imp_table = (BYTE*)VirtualAlloc(
+        NULL, new_imp_table_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (new_imp_table == NULL) {
+        SetLastErrorCode();
+        api_error = true;
+        goto _Exit;
+    }
+
+    ZeroMemory(new_imp_table, new_imp_table_size);
+    TransformImpTable(&image_info, new_imp_table);
+    ClearImpTable(&image_info);
+
+    wprintf(L" [*] Encrypt sections.\r\n");
+    const DWORD encry_count = GetEncryptableSectionNumber(&image_info);
+    encry_info =
+        (ENCRY_INFO*)VirtualAlloc(NULL, encry_count * sizeof(ENCRY_INFO),
+                                  MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (encry_info == NULL) {
+        SetLastErrorCode();
+        api_error = true;
+        goto _Exit;
+    }
+
+    ZeroMemory(encry_info, encry_count * sizeof(ENCRY_INFO));
+    EncryptSections(&image_info, encry_info);
+
+    wprintf(L" [*] Clear section names.\r\n");
+    ClearSectionNames(&image_info);
+
+    if (CanAppendNewSection(&image_info) != true) {
+        wprintf(
+            L" [!] ERROR: The PE image has no space for a new section.\r\n");
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Append a new section for the shell.\r\n");
+    const DWORD shell_size = CalcShellSize(new_imp_table_size);
+    if (AppendNewSection(&image_info, ".shell", shell_size,
+                         &shell_section_header)
+        != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Install the shell.\r\n");
+    if (InstallShell(&image_info, new_imp_table, new_imp_table_size, encry_info,
+                     encry_count)
+        != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Write the new PE image to the output file.\r\n");
+    out_file = CreateFile(out_file_name, GENERIC_WRITE, FILE_SHARE_READ, NULL,
+                          CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (out_file == INVALID_HANDLE_VALUE) {
+        SetLastErrorCode();
+        api_error = true;
+        goto _Exit;
+    }
+
+    if (WriteImageToFile(&image_info, out_file) != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    wprintf(L" [*] Write the extra data to the output file.\r\n");
+    if (WriteExtraDataToFile(&extra_data, out_file) != true) {
+        api_error = true;
+        goto _Exit;
+    }
+
+    wprintf(L" [*] The packing has finished.\r\n");
+    success = true;
+
+_Exit:
+    if (!success) {
+        if (api_error) {
+            const DWORD error_code = GetLastErrorCode();
+            TCHAR* error_message = FormatErrorMessage(error_code);
+            wprintf(L" [!] ERROR: %ls\r\n", error_message);
+            FreeErrorMessage(error_message);
+            error_message = NULL;
+        }
+
+        DeleteFile(out_file_name);
+    }
+
+    if (new_imp_table != NULL) {
+        VirtualFree(new_imp_table, 0, MEM_RELEASE);
+        new_imp_table = NULL;
+    }
+
+    if (encry_info != NULL) {
+        VirtualFree(encry_info, 0, MEM_RELEASE);
+        encry_info = NULL;
+    }
+
+    FreePeImage(&image_info);
+
+    CloseViewOfFile(&in_file_view);
+
+    if (in_file != INVALID_HANDLE_VALUE) {
+        CloseHandle(in_file);
+        in_file = INVALID_HANDLE_VALUE;
+    }
+
+    if (out_file != INVALID_HANDLE_VALUE) {
+        CloseHandle(out_file);
+        out_file = INVALID_HANDLE_VALUE;
+    }
+
+    return EXIT_SUCCESS;
+}
+```
+
+`src/section.c`:
+
+```c
+/**
+ * @file section.c
+ * @brief Modify sections.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-12
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "section.h"
+#include "utility/error_handling.h"
+
+#include <assert.h>
+#include <stdbool.h>
+#include <string.h>
+
+/**
+ * @brief A callback method, called when enumerating sections.
+ *
+ * @param image_info    The PE image.
+ * @param header        The @p IMAGE_SECTION_HEADER structure.
+ * @param arg           An optional custom argument.
+ * @return An optional custom value.
+ *
+ * @see EnumSection()
+ */
+typedef DWORD (*LPFN_ENUM_SECTION_CALLBACK)(const PE_IMAGE_INFO* image_info,
+                                            IMAGE_SECTION_HEADER* header,
+                                            void* arg);
+
+
+/******************************************************************************/
+// Callback methods
+/******************************************************************************/
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_SECTION_CALLBACK method,
+ * used to clear section names.
+ *
+ * @param image_info    The PE image.
+ * @param header        The @p IMAGE_SECTION_HEADER structure.
+ * @param arg           Useless.
+ * @return Useless.
+ */
+static DWORD ClearNameCallBack(const PE_IMAGE_INFO* image_info,
+                               IMAGE_SECTION_HEADER* header, void* arg);
+
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_SECTION_CALLBACK method,
+ * used to get the number of sections that can be encrypted.
+ *
+ * @param image_info        The PE image.
+ * @param header            The @p IMAGE_SECTION_HEADER structure.
+ * @param[in, out] count    The number of sections that can be encrypted.
+ * @return Useless.
+ */
+static DWORD CheckEncryptableCallBack(const PE_IMAGE_INFO* image_info,
+                                      IMAGE_SECTION_HEADER* header,
+                                      void* count);
+
+
+/**
+ * @brief
+ * A @p ::LPFN_ENUM_SECTION_CALLBACK method,
+ * used to Encrypt sections.
+ *
+ * @param image_info            The PE image.
+ * @param header                The @p IMAGE_SECTION_HEADER structure.
+ * @param[in, out] encry_info   The space where the encryption information will be saved.
+ * @return Useless.
+ */
+static DWORD EncryCallBack(const PE_IMAGE_INFO* image_info,
+                           IMAGE_SECTION_HEADER* header, void* encry_info);
+
+/******************************************************************************/
+
+/**
+ * @brief Enumerate sections.
+ *
+ * @param image_info    The PE image.
+ * @param callback
+ * A @p ::LPFN_ENUM_SECTION_CALLBACK method,
+ * it will be called on each @p IMAGE_SECTION_HEADER structure.
+ * @param arg           An optional custom argument, it will be passed to @p callback.
+ */
+static void EnumSections(const PE_IMAGE_INFO* image_info,
+                         LPFN_ENUM_SECTION_CALLBACK callback, void* arg);
+
+
+/**
+ * @brief Check if a section can be encrypted.
+ *
+ * @param header    The @p IMAGE_SECTION_HEADER structure.
+ * @return @p true if the section can be encrypted, otherwise @p false.
+ */
+static bool IsEncryptable(const IMAGE_SECTION_HEADER* header);
+
+
+/**
+ * @brief Calculate the size of a section, not including the zero at the end.
+ *
+ * @param image_info    The PE image.
+ * @param header        The @p IMAGE_SECTION_HEADER structure.
+ * @return The minimum size of the section.
+ */
+static DWORD CalcMinSize(const PE_IMAGE_INFO* image_info,
+                         const IMAGE_SECTION_HEADER* header);
+
+
+/**
+ * @brief Save the encryption information of a section.
+ *
+ * @param buffer    A buffer where the information will be saved.
+ * @param rva       The relative virtual address of the section.
+ * @param size      The size of the section.
+ * @return The new address to save information.
+ */
+static ENCRY_INFO* SaveEncryInfo(ENCRY_INFO* buffer, DWORD rva, DWORD size);
+
+
+bool CanAppendNewSection(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    const DWORD section_align =
+        image_info->nt_header->OptionalHeader.SectionAlignment;
+
+    // Get the size of the current headers.
+    const DWORD headers_size =
+        CalcHeadersSize(image_info->image_base, NULL, NULL);
+    const DWORD headers_virtual_size = Align(headers_size, section_align);
+
+    // Calculate the new size of headers after appending a section.
+    const DWORD new_headers_size = headers_size + sizeof(IMAGE_SECTION_HEADER);
+    const DWORD new_headers_virtual_size =
+        Align(new_headers_size, section_align);
+
+    // Check the change of size after appending a section.
+    return new_headers_virtual_size == headers_virtual_size;
+}
+
+
+bool AppendNewSection(PE_IMAGE_INFO* const image_info, const CHAR* const name,
+                      const DWORD size, IMAGE_SECTION_HEADER* const header) {
+    assert(image_info != NULL);
+    assert(header != NULL);
+    assert(CanAppendNewSection(image_info));
+
+    ZeroMemory(header, sizeof(IMAGE_SECTION_HEADER));
+
+    const WORD section_num = image_info->nt_header->FileHeader.NumberOfSections;
+    assert(section_num > 0);
+
+    // Set the section attribute.
+    header->Characteristics = IMAGE_SCN_CNT_INITIALIZED_DATA
+                              | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_READ
+                              | IMAGE_SCN_MEM_EXECUTE;
+
+    // Set the section name.
+    if (name != NULL) {
+        const size_t name_length = strnlen(name, IMAGE_SIZEOF_SHORT_NAME);
+        CopyMemory(header->Name, name, name_length);
+    }
+
+    // Align the section size.
+    const DWORD file_align =
+        image_info->nt_header->OptionalHeader.FileAlignment;
+    const DWORD section_align =
+        image_info->nt_header->OptionalHeader.SectionAlignment;
+
+    const DWORD raw_size = Align(size, file_align);
+    const DWORD virtual_size = Align(size, section_align);
+
+    header->SizeOfRawData = raw_size;
+    header->Misc.VirtualSize = size;
+
+    // Get the size of the current headers.
+    const DWORD headers_size =
+        CalcHeadersSize(image_info->image_base, NULL, NULL);
+    const DWORD headers_raw_size = Align(headers_size, file_align);
+
+    // Calculate the new size of headers after appending a section.
+    const DWORD new_headers_size = headers_size + sizeof(IMAGE_SECTION_HEADER);
+    const DWORD new_headers_raw_size = Align(new_headers_size, file_align);
+
+    // Get the offset of headers.
+    assert(new_headers_raw_size >= headers_raw_size);
+    const DWORD headers_raw_offset = new_headers_raw_size - headers_raw_size;
+
+    // Set the address of the section.
+    const IMAGE_SECTION_HEADER* const last_section_header =
+        &image_info->section_header[section_num - 1];
+    const DWORD last_section_end = last_section_header->PointerToRawData
+                                   + last_section_header->SizeOfRawData;
+
+    header->VirtualAddress = image_info->image_size;
+    header->PointerToRawData = last_section_end + headers_raw_offset;
+
+    /* Adjust the `PE_IMAGE_INFO` structure. */
+
+    // Allocate a new image.
+    const DWORD new_image_size = image_info->image_size + virtual_size;
+    BYTE* const new_image_base = (BYTE*)VirtualAlloc(
+        NULL, new_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (new_image_base == NULL) {
+        SetLastErrorCode();
+        return false;
+    }
+
+    // Move the image.
+    MoveMemory(new_image_base, image_info->image_base, image_info->image_size);
+    VirtualFree(image_info->image_base, 0, MEM_RELEASE);
+
+    image_info->nt_header = (IMAGE_NT_HEADERS*)(new_image_base
+                                                + ((BYTE*)image_info->nt_header
+                                                   - image_info->image_base));
+    image_info->section_header =
+        (IMAGE_SECTION_HEADER*)(new_image_base
+                                + ((BYTE*)image_info->section_header
+                                   - image_info->image_base));
+
+    image_info->image_base = new_image_base;
+    image_info->image_size = new_image_size;
+    image_info->nt_header->OptionalHeader.CheckSum = 0;
+    image_info->nt_header->OptionalHeader.SizeOfImage = new_image_size;
+    image_info->nt_header->OptionalHeader.SizeOfInitializedData += raw_size;
+    image_info->nt_header->OptionalHeader.SizeOfHeaders = new_headers_raw_size;
+
+    if (headers_raw_offset > 0) {
+        // Adjust the address of sections.
+        for (WORD i = 0; i != section_num; ++i) {
+            image_info->section_header[i].PointerToRawData +=
+                headers_raw_offset;
+        }
+    }
+
+    CopyMemory(&image_info->section_header[section_num], header,
+               sizeof(IMAGE_SECTION_HEADER));
+    ++image_info->nt_header->FileHeader.NumberOfSections;
+    return true;
+}
+
+
+WORD GetEncryptableSectionNumber(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    WORD count = 0;
+    EnumSections(image_info, &CheckEncryptableCallBack, &count);
+    return count;
+}
+
+
+WORD EncryptSections(const PE_IMAGE_INFO* const image_info,
+                     ENCRY_INFO* const encry_info) {
+    assert(image_info != NULL);
+
+    const WORD encry_count = GetEncryptableSectionNumber(image_info);
+    if (encry_info != NULL) {
+        EnumSections(image_info, &EncryCallBack, (void*)&encry_info);
+    }
+
+    return encry_count;
+}
+
+
+void ClearSectionNames(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    EnumSections(image_info, &ClearNameCallBack, NULL);
+}
+
+
+void EnumSections(const PE_IMAGE_INFO* const image_info,
+                  const LPFN_ENUM_SECTION_CALLBACK callback, void* const arg) {
+    assert(image_info != NULL);
+    assert(callback != NULL);
+
+    const WORD section_num = image_info->nt_header->FileHeader.NumberOfSections;
+    IMAGE_SECTION_HEADER* const header = image_info->section_header;
+    for (WORD i = 0; i != section_num; ++i) {
+        callback(image_info, header + i, arg);
+    }
+}
+
+
+DWORD CalcMinSize(const PE_IMAGE_INFO* const image_info,
+                  const IMAGE_SECTION_HEADER* const header) {
+    assert(image_info != NULL);
+    assert(header != NULL);
+
+    DWORD size = header->SizeOfRawData;
+    const BYTE* data = RvaToVa(image_info, header->VirtualAddress) + (size - 1);
+    while (size > 0 && *data == 0) {
+        --data;
+        --size;
+    }
+
+    return size;
+}
+
+
+ENCRY_INFO* SaveEncryInfo(ENCRY_INFO* const buffer, const DWORD rva,
+                          const DWORD size) {
+    assert(buffer != NULL);
+
+    buffer->rva = rva;
+    buffer->size = size;
+    return buffer + 1;
+}
+
+
+DWORD ClearNameCallBack(const PE_IMAGE_INFO* const image_info,
+                        IMAGE_SECTION_HEADER* const header, void* const arg) {
+    assert(header != NULL);
+
+    ZeroMemory(header->Name, sizeof(header->Name));
+    return 0;
+}
+
+
+DWORD CheckEncryptableCallBack(const PE_IMAGE_INFO* const image_info,
+                               IMAGE_SECTION_HEADER* const header,
+                               void* const count) {
+    assert(header != NULL);
+    assert(count != NULL);
+
+    if (IsEncryptable(header)) {
+        *(WORD*)count += 1;
+    }
+
+    return 0;
+}
+
+
+DWORD EncryCallBack(const PE_IMAGE_INFO* const image_info,
+                    IMAGE_SECTION_HEADER* const header,
+                    void* const encry_info) {
+    assert(image_info != NULL);
+    assert(header != NULL);
+    assert(encry_info != NULL);
+
+    if (IsEncryptable(header) != true) {
+        return 0;
+    }
+
+    DWORD min_size = CalcMinSize(image_info, header);
+    if (min_size > 0) {
+        // Encrypt the section.
+        const DWORD rva = header->VirtualAddress;
+        EncryptData(RvaToVa(image_info, rva), min_size);
+
+        // Save the encryption information.
+        ENCRY_INFO* buffer = *(ENCRY_INFO**)encry_info;
+        *(ENCRY_INFO**)encry_info = SaveEncryInfo(buffer, rva, min_size);
+        header->Characteristics |= IMAGE_SCN_MEM_WRITE;
+    }
+
+    return 0;
+}
+
+
+bool IsEncryptable(const IMAGE_SECTION_HEADER* const header) {
+    assert(header != NULL);
+
+    // The sections can be encrypted.
+    static const CHAR* const names[] = { ".text", ".data", ".rdata", "CODE",
+                                         "DATA" };
+
+    for (size_t i = 0; i != sizeof(names) / sizeof(names[0]); ++i) {
+        if (strncmp((CHAR*)header->Name, names[i], IMAGE_SIZEOF_SHORT_NAME)
+            == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+```
+
+`src/shell/CMakeLists.txt`:
+
+```txt
+enable_language(ASM_MASM)
+
+add_library(shell)
+
+target_compile_definitions(shell PRIVATE -D_UNICODE -DUNICODE)
+
+set(HEADER_PATH ${PROJECT_SOURCE_DIR}/include/shell)
+
+target_include_directories(shell PUBLIC ${HEADER_PATH})
+
+target_sources(shell
+    PUBLIC
+        ${HEADER_PATH}/install_shell.h
+    PRIVATE
+        install_shell.c
+        entry_export.h
+)
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "[!] Must configuring on/for x86 platform")
+else()
+    target_sources(shell
+        PRIVATE
+            entry_x86.asm
+    )
+
+    set_source_files_properties(entry_x86.asm PROPERTIES COMPILE_FLAGS "/c /coff")
+    set_source_files_properties(entry_x86.asm PROPERTIES LINKER_FLAGS "/SAFESEH:NO")
+endif()
+```
+
+`src/shell/entry_export.h`:
+
+```h
+/**
+ * @file entry_export.h
+ * @brief The fields and structures exported by the entry shell.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-15
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @warning
+ * All exported data fields are just lables in the `.asm` shell file,
+ * they need to be relocated by `&` operator.
+ */
+
+#pragma once
+
+#include "../section.h"
+
+#include <windows.h>
+
+
+//! The maximum number of encrypted sections supported by the program.
+#define MAX_ENCRY_SECTION_COUNT 0x40
+
+
+/**
+ * @brief The encryption information of a segment of the shell.
+ */
+typedef struct _SEG_ENCRY_INFO {
+    //! The offset, relative to the shell.
+    DWORD seg_offset;
+
+    //! The size.
+    DWORD seg_size;
+
+} SEG_ENCRY_INFO;
+
+
+/**
+ * @brief The original PE information.
+ */
+typedef struct _ORIGIN_PE_INFO {
+    //! The offset, relative to the shell.
+    DWORD entry_point;
+
+    //! The offset of the original import table, relative to the load segment.
+    DWORD imp_table_offset;
+
+    //! The relative virtual address of the relocation table.
+    DWORD reloc_table_rva;
+
+    //! The image base.
+    VOID* image_base;
+
+    //! The encryption information of sections, up to 0x40 sections and a blank structure.
+    ENCRY_INFO section_encry_info[MAX_ENCRY_SECTION_COUNT + 1];
+
+} ORIGIN_PE_INFO;
+
+
+//! The beginning of the shell template.
+extern DWORD shell_begin_lbl;
+
+
+//! The beginning of the import table template of the shell itself.
+extern DWORD imp_table_begin_lbl;
+//! The end of the import table template of the shell itself.
+extern DWORD imp_table_end_lbl;
+
+
+//! The beginning of the boot segment template.
+extern DWORD boot_seg_begin_lbl;
+//! The end of the boot segment template.
+extern DWORD boot_seg_end_lbl;
+
+
+//! The beginning of the load segment template.
+extern DWORD load_seg_begin_lbl;
+//! The end of the load segment template.
+extern DWORD load_seg_end_lbl;
+
+
+//! The encryption information of the load segment.
+extern SEG_ENCRY_INFO load_seg_encry_info;
+
+
+//! The original PE information.
+extern ORIGIN_PE_INFO origin_pe_info;
+
+
+//! The thread-local storage table.
+extern IMAGE_TLS_DIRECTORY tls_table;
+```
+
+`src/shell/entry_x86.asm`:
+
+```asm
+; @file entry_x86.asm
+; @brief The entry code of the shell.
+;
+; @author Chen Zhenshuo (chenzs108@outlook.com)
+; @version 1.0
+; @date 2020-01-07
+; @par GitHub
+; https://github.com/czs108
+
+; @note This implementation is for x86 platforms.
+
+.586p
+.model flat, stdcall
+option casemap: none
+
+include /masm32/include/windows.inc
+
+
+; The maximum number of encrypted sections supported by the program.
+MAX_ENCRY_SECTION_COUNT     equ     040h
+
+
+; ----- The exported data, used to relocation and data storage. -----
+
+; The beginning of the shell template.
+public shell_begin_lbl
+
+
+; The beginning of the import table template of the shell itself.
+public imp_table_begin_lbl
+; The end of the import table template of the shell itself.
+public imp_table_end_lbl
+
+
+; The beginning of the boot segment template.
+public boot_seg_begin_lbl
+; The end of the boot segment template.
+public boot_seg_end_lbl
+
+
+; The beginning of the load segment template.
+public load_seg_begin_lbl
+; The end of the load segment template.
+public load_seg_end_lbl
+
+
+; The encryption information of the load segment.
+public load_seg_encry_info
+
+
+; The original PE information.
+public origin_pe_info
+
+
+; The thread-local storage table.
+public tls_table
+
+
+; @brief The encryption information of a segment.
+SEG_ENCRY_INFO      struct
+    ; The offset, relative to the shell.
+    seg_offset          dword   ?
+    ; The size.
+    seg_size            dword   ?
+SEG_ENCRY_INFO      ends
+
+
+; @brief The encryption information of a section.
+SECTION_ENCRY_INFO  struct
+    ; The relative virtual address.
+    sec_rva             dword   ?
+    ; The size.
+    sec_size            dword   ?
+SECTION_ENCRY_INFO  ends
+
+
+; @brief The original PE information.
+ORIGIN_PE_INFO      struct
+    ; The entry point.
+    entry_point         dword   ?
+    ; The offset of the original import table, relative to the load segment.
+    imp_table_offset    dword   ?
+    ; The relative virtual address of the relocation table.
+    reloc_table_rva     dword   ?
+    ; The image base.
+    image_base          dword   ?
+    ; The encryption information of sections, up to 0x40 sections and a blank structure.
+    section_encry_info  SEG_ENCRY_INFO  MAX_ENCRY_SECTION_COUNT + 1 dup(<?>)
+ORIGIN_PE_INFO      ends
+
+
+; @brief Decrypt data.
+;
+; @param src    The base address of the encrypted data.
+; @param dest   The space where the decrypted data will be saved.
+; @param count  The size of the data.
+;
+; @see `EncryptData()`
+DecryptData         proto   src: dword, dest: dword, count: dword
+
+
+; @brief Set the protection of sections.
+;
+; @param virtual_protect_addr   The address of `VirtualProtect` API.
+; @param module                 The PE image.
+; @param new_protect
+; The base address of a DWORD array, saving the new protection of each section.
+; @param[out] old_protect
+; The base address of a DWORD array, saving the old protection of each section.
+SetSectionProtect   proto   virtual_protect_addr: dword, module: dword, new_protect: dword, old_protect: dword
+
+
+; @brief Get the information of sections.
+;
+; @param module The PE image.
+; @return eax   The base address of the `IMAGE_SECTION_HEADER` array.
+; @return ecx   The number of sections.
+GetSectionHeader    proto   module: dword
+
+
+assume fs: nothing
+
+.code
+shell_begin_lbl     label   dword
+
+; ------------------------ Boot Segment ------------------------
+boot_seg_begin_lbl  label   dword
+    pushad
+    call    _boot
+
+    ; ------------------------ Import Table ------------------------
+    imp_table_begin_lbl     label   dword
+
+        ; All relative virtual addresses are relative to the beginning of the import table,
+        ; the adjustment will be done when installing the shell.
+        import_table        IMAGE_IMPORT_DESCRIPTOR     <<first_thunk - imp_table_begin_lbl>, 0, 0, dll_name - imp_table_begin_lbl, first_thunk - imp_table_begin_lbl>
+                            IMAGE_IMPORT_DESCRIPTOR     <<0>, 0, 0, 0, 0>
+
+        first_thunk         IMAGE_THUNK_DATA            <<first_func_name - imp_table_begin_lbl>>
+        second_thunk        IMAGE_THUNK_DATA            <<second_func_name - imp_table_begin_lbl>>
+        third_thunk         IMAGE_THUNK_DATA            <<third_func_name - imp_table_begin_lbl>>
+                            IMAGE_THUNK_DATA            <<0>>
+
+        dll_name            db      'Kernel32.dll', 0
+
+        ; The `IMAGE_IMPORT_BY_NAME` structures.
+        first_func_name     dw      0
+                            db      'GetProcAddress', 0
+        second_func_name    dw      0
+                            db      'GetModuleHandleA', 0
+        third_func_name     dw      0
+                            db      'LoadLibraryA', 0
+
+    imp_table_end_lbl       label   dword
+    ; --------------------------------------------------------------
+
+    ; The handle of the current process, just used in the boot segment.
+    process_handle_boot         dd      0
+
+    load_seg_encry_info     SEG_ENCRY_INFO  <?>
+
+    tls_table               IMAGE_TLS_DIRECTORY     <?>
+
+    get_current_process_name    db      'GetCurrentProcess', 0
+
+    ; The address of `GetCurrentProcess` API.
+    get_current_process_addr    dd      0
+
+    virtual_alloc_name          db      'VirtualAlloc', 0
+
+    ; The address of `VirtualAlloc` API, just used in the boot segment.
+    virtual_alloc_addr_boot     dd      0
+
+    flush_instruction_cache_name        db      'FlushInstructionCache', 0
+
+    ; The address of `FlushInstructionCache` API, just used in the boot segment.
+    flush_instruction_cache_addr_boot   dd      0
+
+    ; The base address of the load segment after decryption.
+    load_seg_base               dd      0
+
+_boot:
+    ; Self-relocation.
+    pop     ebp
+    ; `ebp` is the base address of the boot segment.
+    sub     ebp, imp_table_begin_lbl - boot_seg_begin_lbl
+
+    ; Get the address of `GetCurrentProcess` API.
+    lea     esi, [ebp + (dll_name - boot_seg_begin_lbl)]
+    push    esi
+    call    dword ptr [ebp + (second_thunk - boot_seg_begin_lbl)]
+    lea     esi, [ebp + (get_current_process_name - boot_seg_begin_lbl)]
+    push    esi
+    push    eax
+    call    dword ptr [ebp + (first_thunk - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (get_current_process_addr - boot_seg_begin_lbl)], eax
+
+    ; Get the address of `VirtualAlloc` API.
+    lea     esi, [ebp + (dll_name - boot_seg_begin_lbl)]
+    push    esi
+    call    dword ptr [ebp + (second_thunk - boot_seg_begin_lbl)]
+    lea     esi, [ebp + (virtual_alloc_name - boot_seg_begin_lbl)]
+    push    esi
+    push    eax
+    call    dword ptr [ebp + (first_thunk - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (virtual_alloc_addr_boot - boot_seg_begin_lbl)], eax
+
+    ; Get the address of `FlushInstructionCache` API.
+    lea     esi, [ebp + (dll_name - boot_seg_begin_lbl)]
+    push    esi
+    call    dword ptr [ebp + (second_thunk - boot_seg_begin_lbl)]
+    lea     esi, [ebp + (flush_instruction_cache_name - boot_seg_begin_lbl)]
+    push    esi
+    push    eax
+    call    dword ptr [ebp + (first_thunk - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (flush_instruction_cache_addr_boot - boot_seg_begin_lbl)], eax
+
+    ; Allocate memory for the load segment.
+    push    PAGE_EXECUTE_READWRITE
+    push    MEM_COMMIT or MEM_RESERVE
+    mov     eax, load_seg_encry_info - boot_seg_begin_lbl
+    add     eax, ebp
+    assume  eax: ptr SEG_ENCRY_INFO
+    push    [eax].seg_size
+    assume  eax: nothing
+    push    NULL
+    call    dword ptr [ebp + (virtual_alloc_addr_boot - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (load_seg_base - boot_seg_begin_lbl)], eax
+
+    ; Decrypt the load segment.
+    mov     ecx, load_seg_encry_info - boot_seg_begin_lbl
+    add     ecx, ebp
+    assume  ecx: ptr SEG_ENCRY_INFO
+    push    [ecx].seg_size
+    assume  ecx: nothing
+    push    eax
+    mov     ebx, load_seg_encry_info - boot_seg_begin_lbl
+    add     ebx, ebp
+    assume  ebx: ptr SEG_ENCRY_INFO
+    mov     ebx, [ebx].seg_offset
+    add     ebx, ebp
+    assume  ebx: nothing
+    push    ebx
+    call    DecryptData
+
+    ; Format a jump instruction to the load segment.
+    push    ebp     ; Save the base address of the boot segment.
+    mov     eax, dword ptr [ebp + (load_seg_base - boot_seg_begin_lbl)]
+    mov     edx, ebp
+    add     edx, (_jmp_load_seg - boot_seg_begin_lbl) + sizeof(BYTE) * 5
+    sub     eax, edx
+    mov     dword ptr [ebp + (_jmp_load_seg - boot_seg_begin_lbl) + sizeof(BYTE)], eax
+
+    call    dword ptr [ebp + (get_current_process_addr - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (process_handle_boot - boot_seg_begin_lbl)], eax
+    push    0
+    push    NULL
+    push    eax
+    call    dword ptr [ebp + (flush_instruction_cache_addr_boot - boot_seg_begin_lbl)]
+
+_jmp_load_seg:
+    ; Jump to the load segment.
+    DB      0E9h, 0FFh, 0FFh, 0FFh, 0FFh
+
+    DecryptData proc    src: dword, dest: dword, count: dword
+        pushad
+        mov     ecx, count
+        mov     esi, src
+        mov     edi, dest
+        .while  ecx != 0
+            lodsb
+            sub     al, 0CCh
+            stosb
+            dec     ecx
+        .endw
+        popad
+        ret
+    DecryptData endp
+
+boot_seg_end_lbl    label   dword
+; --------------------------------------------------------------
+
+
+; ------------------------ Load Segment ------------------------
+load_seg_begin_lbl  label   dword
+    call    _next
+_next:
+    ; Self-relocation.
+    pop     ebp
+    ; `ebp` is the base address of the load segment.
+    sub     ebp, _next - load_seg_begin_lbl
+    ; `edx` is the base address of the boot segment.
+    pop     edx
+
+    ; Copy some data of the boot segment to the load segment.
+    mov     ecx, 3
+    lea     esi, [edx + (first_thunk - boot_seg_begin_lbl)]
+    lea     edi, [ebp + (get_proc_address_addr - load_seg_begin_lbl)]
+    cld
+    rep     movsd
+
+    mov     eax, dword ptr [edx + (process_handle_boot - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (process_handle - load_seg_begin_lbl)], eax
+    lea     eax, [edx + (DecryptData - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (decrypt_data_addr - load_seg_begin_lbl)], eax
+    mov     eax, dword ptr [edx + (virtual_alloc_addr_boot - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (virtual_alloc_addr - load_seg_begin_lbl)], eax
+    mov     eax, dword ptr [edx + (flush_instruction_cache_addr_boot - boot_seg_begin_lbl)]
+    mov     dword ptr [ebp + (flush_instruction_cache_addr - load_seg_begin_lbl)], eax
+
+    ; Get the address of `VirtualProtect` API.
+    lea     esi, [ebp + (kernel32_name - load_seg_begin_lbl)]
+    push    esi
+    call    dword ptr [ebp + (get_module_handle_addr - load_seg_begin_lbl)]
+    lea     esi, [ebp + (virtual_protect_name - load_seg_begin_lbl)]
+    push    esi
+    push    eax
+    call    dword ptr [ebp + (get_proc_address_addr - load_seg_begin_lbl)]
+    mov     dword ptr [ebp + (virtual_protect_addr - load_seg_begin_lbl)], eax
+
+    ; Get the actual base address of the PE image after loading.
+    push    NULL
+    call    dword ptr [ebp + (get_module_handle_addr - load_seg_begin_lbl)]
+    mov     dword ptr [ebp + (module - load_seg_begin_lbl)], eax
+
+    ; Set the protection of sections.
+    mov     ecx, lengthof section_protections
+    mov     eax, PAGE_EXECUTE_READWRITE
+    lea     edi, [ebp + (section_protections - load_seg_begin_lbl)]
+    cld
+    rep     stosd
+
+    lea     esi, [ebp + (section_protections - load_seg_begin_lbl)]
+    lea     edi, [ebp + (section_protections - load_seg_begin_lbl)]
+    push    edi
+    push    esi
+    push    dword ptr [ebp + (module - load_seg_begin_lbl)]
+    push    dword ptr [ebp + (virtual_protect_addr - load_seg_begin_lbl)]
+    call    SetSectionProtect
+
+    ; Decrypt sections.
+    mov     edx, origin_pe_info - load_seg_begin_lbl
+    add     edx, ebp
+    assume  edx: ptr ORIGIN_PE_INFO
+    lea     edx, [edx].section_encry_info
+    assume  edx: ptr SECTION_ENCRY_INFO
+    mov     eax, [edx].sec_rva
+    .while  eax != NULL
+        ; Get the virtual address.
+        mov     esi, dword ptr [ebp + (module - load_seg_begin_lbl)]
+        add     esi, eax
+        mov     edi, esi
+        ; Get the size.
+        mov     ecx, [edx].sec_size
+        push    ecx
+        push    edi
+        push    esi
+        call    dword ptr [ebp + (decrypt_data_addr - load_seg_begin_lbl)]
+        add     edx, sizeof(SECTION_ENCRY_INFO)
+        mov     eax, [edx].sec_rva
+    .endw
+    assume  edx: nothing
+
+    ; Initialize the original import table.
+    mov     esi, origin_pe_info - load_seg_begin_lbl
+    add     esi, ebp
+    assume  esi: ptr ORIGIN_PE_INFO
+    mov     esi, [esi].imp_table_offset
+    add     esi, ebp
+    assume  esi: ptr nothing
+    mov     edi, [esi]
+    ; The `FirstThunk`.
+    .while  edi != NULL
+        add     edi, dword ptr [ebp + (module - load_seg_begin_lbl)]
+        ; The DLL name.
+        add     esi, sizeof(DWORD) + sizeof(BYTE)
+        ; Load the DLL.
+        push    esi
+        call    dword ptr [ebp + (get_module_handle_addr - load_seg_begin_lbl)]
+        .if     eax == NULL
+            push    esi
+            call    dword ptr [ebp + (load_library_addr - load_seg_begin_lbl)]
+        .endif
+        mov     edx, eax
+        movzx   ecx, byte ptr [esi - sizeof(BYTE)]
+        add     esi, ecx
+        ; The number of functions.
+        mov     ecx, dword ptr [esi]
+        add     esi, sizeof(DWORD)
+        .while  ecx != 0
+            push    ecx
+            push    edx
+            ; The size of the function name.
+            movzx   ebx, byte ptr [esi]
+            inc     esi
+            ; Imported by the order.
+            .if     ebx == 0
+                ; The function order
+                mov     ebx, dword ptr [esi]
+                add     esi, sizeof(DWORD)
+                push    ebx
+            ; Imported by the name.
+            .else
+                ; The function name.
+                push    esi
+                add     esi, ebx
+            .endif
+            push    edx
+            ; Get the address of the function.
+            call    dword ptr [ebp + (get_proc_address_addr - load_seg_begin_lbl)]
+            ; Save the address to the import address table (IAT).
+            mov     dword ptr [edi], eax
+            add     edi, sizeof(DWORD)
+            pop     edx
+            pop     ecx
+            dec     ecx
+        .endw
+        mov     edi, dword ptr [esi]
+    .endw
+
+    ; Relocation.
+    mov     edx, origin_pe_info - load_seg_begin_lbl
+    add     edx, ebp
+    assume  edx: ptr ORIGIN_PE_INFO
+    ; `edx` is the default base address of the PE image.
+    mov     edx, [edx].image_base
+    assume  edx: ptr nothing
+    mov     ebx, dword ptr [ebp + (module - load_seg_begin_lbl)]
+    .if     ebx != edx
+        mov     esi, origin_pe_info - load_seg_begin_lbl
+        add     esi, ebp
+        assume  esi: ptr ORIGIN_PE_INFO
+        mov     esi, [esi].reloc_table_rva
+        assume  esi: ptr nothing
+        .if     esi != NULL
+            add     esi, ebx
+            assume  esi: ptr IMAGE_BASE_RELOCATION
+            mov     edi, [esi].VirtualAddress
+            .while  edi != NULL
+                mov     ecx, [esi].SizeOfBlock
+                sub     ecx, sizeof(IMAGE_BASE_RELOCATION)
+                shr     ecx, 1
+                add     esi, sizeof(IMAGE_BASE_RELOCATION)
+                .while  ecx != 0
+                    xor     eax, eax
+                    mov     ax, word ptr [esi]
+                    and     ax, 0F000h
+                    shr     ax, 12
+                    ; Check the relocation type.
+                    .if     ax == IMAGE_REL_BASED_HIGHLOW
+                        xor     eax, eax
+                        mov     ax, word ptr [esi]
+                        ; Get the relocation offset.
+                        and     ax, 0FFFh
+                        push    edi
+                        add     edi, eax
+                        add     edi, ebx
+                        ; Adjust the address.
+                        mov     eax, dword ptr [edi]
+                        sub     eax, edx
+                        add     eax, ebx
+                        mov     dword ptr [edi], eax
+                        pop     edi
+                    .endif
+                    add     esi, sizeof(WORD)
+                    dec     ecx
+                .endw
+                mov     edi, [esi].VirtualAddress
+            .endw
+            assume  esi: nothing
+        .endif
+    .endif
+
+    ; Recover the original protection of sections.
+    lea     esi, [ebp + (section_protections - load_seg_begin_lbl)]
+    lea     edi, [ebp + (section_protections - load_seg_begin_lbl)]
+    push    edi
+    push    esi
+    push    dword ptr [ebp + (module - load_seg_begin_lbl)]
+    push    dword ptr [ebp + (virtual_protect_addr - load_seg_begin_lbl)]
+    call    SetSectionProtect
+
+    ; Jump to the original entry.
+    mov     eax, origin_pe_info - load_seg_begin_lbl
+    add     eax, ebp
+    assume  eax: ptr ORIGIN_PE_INFO
+    mov     eax, [eax].entry_point
+    assume  eax: ptr nothing
+    add     eax, dword ptr [ebp + (module - load_seg_begin_lbl)]
+    mov     dword ptr [ebp + (_ret_oep - load_seg_begin_lbl) + sizeof(BYTE)], eax
+
+    push    0
+    push    NULL
+    mov     eax, dword ptr [ebp + (process_handle - load_seg_begin_lbl)]
+    push    eax
+    call    dword ptr [ebp + (flush_instruction_cache_addr - load_seg_begin_lbl)]
+
+    popad
+
+_ret_oep:
+    ; Push the entry point.
+    DB      68h, 0FFh, 0FFh, 0FFh, 0FFh
+    ret
+
+
+    GetSectionHeader        proc    module: dword
+        mov     eax, module
+        assume  eax: ptr IMAGE_DOS_HEADER
+        add     eax, [eax].e_lfanew
+        assume  eax: ptr IMAGE_NT_HEADERS
+        ; `ecx` is the number of sections.
+        movzx   ecx, [eax].FileHeader.NumberOfSections
+        add     ax, [eax].FileHeader.SizeOfOptionalHeader
+        add     eax, sizeof(DWORD)
+        add     eax, sizeof(IMAGE_FILE_HEADER)
+        assume  eax: nothing
+        ret
+    GetSectionHeader        endp
+
+
+    SetSectionProtect       proc   virtual_protect_addr: dword, module: dword, new_protect: dword, old_protect: dword
+        pushad
+        push    module
+        call    GetSectionHeader
+        ; `ecx` is the number of sections.
+        ; `edx` is base address of the `IMAGE_SECTION_HEADER` array.
+        mov     ebx, eax
+        assume  ebx: ptr IMAGE_SECTION_HEADER
+        mov     esi, new_protect
+        mov     edi, old_protect
+        xor     edx, edx
+        .while  edx != ecx
+            pushad
+            lea     eax, [edi + sizeof(DWORD) * edx]
+            push    eax
+            mov     eax, dword ptr [esi + sizeof(DWORD) * edx]
+            push    eax
+            push    [ebx].Misc.VirtualSize
+            mov     eax, [ebx].VirtualAddress
+            add     eax, module
+            push    eax
+            call    virtual_protect_addr
+            popad
+            add     ebx, sizeof(IMAGE_SECTION_HEADER)
+            inc     edx
+        .endw
+        assume  ebx: nothing
+        popad
+        ret
+    SetSectionProtect       endp
+
+
+    origin_pe_info          ORIGIN_PE_INFO  <>
+
+    ; The order of the following 3 variables is the same as that of APIs in the import table,
+    ; it's convenient for data copy.
+    get_proc_address_addr   dd      0
+    get_module_handle_addr  dd      0
+    load_library_addr       dd      0
+
+    flush_instruction_cache_addr    dd      0
+    virtual_alloc_addr              dd      0
+    virtual_protect_addr            dd      0
+    decrypt_data_addr               dd      0
+
+    ; The handle of the current process.
+    process_handle          dd      0
+
+    ; The actual base address of the PE image after loading.
+    module                  dd      0
+
+    ; The protection of sections.
+    section_protections     dd      MAX_ENCRY_SECTION_COUNT dup(?)
+
+    kernel32_name           db      'Kernel32.dll', 0
+    virtual_protect_name    db      'VirtualProtect', 0
+
+load_seg_end_lbl    label   dword
+; --------------------------------------------------------------
+
+end
+```
+
+`src/shell/install_shell.c`:
+
+```c
+/**
+ * @file install_shell.c
+ * @brief Install the shell.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-15
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "install_shell.h"
+#include "../utility/encrypt.h"
+#include "../utility/error_handling.h"
+#include "entry_export.h"
+
+#include <assert.h>
+
+/**
+ * @brief Get the information about the import table of the shell.
+ *
+ * @param[out] offset   The offset, relative to the shell. It's optional.
+ * @param[out] size     The size. It's optional.
+ * @return The beginning of the segment template.
+ */
+static BYTE* GetShellImpTable(DWORD* offset, DWORD* size);
+
+
+/**
+ * @brief Adjust the import table of the shell.
+ *
+ * @param shell_base    The base address of the shell.
+ * @param shell_section
+ * The @p IMAGE_SECTION_HEADER structure of the section where the shell is installed.
+ */
+static void AdjustShellImpTable(BYTE* shell_base,
+                                const IMAGE_SECTION_HEADER* shell_section);
+
+
+/**
+ * @brief Get the information about the boot segment.
+ *
+ * @param[out] offset   The offset, relative to the shell. It's optional.
+ * @param[out] size     The size. It's optional.
+ * @return The beginning of the segment template.
+ */
+static BYTE* GetBootSegment(DWORD* offset, DWORD* size);
+
+
+/**
+ * @brief Get the information about the load segment.
+ *
+ * @param[out] offset   The offset, relative to the shell. It's optional.
+ * @param[out] size     The size. It's optional.
+ * @return The beginning of the segment template.
+ */
+static BYTE* GetLoadSegment(DWORD* offset, DWORD* size);
+
+
+/**
+ * @brief Get the encryption information of the load segment.
+ *
+ * @param shell_base    The base address of the shell.
+ * @return The encryption information.
+ */
+static SEG_ENCRY_INFO* GetLoadSegmentEncryInfo(const BYTE* shell_base);
+
+
+/**
+ * @brief Get the original PE information.
+ *
+ * @param shell_base    The base address of the shell.
+ * @return The original PE information.
+ */
+static ORIGIN_PE_INFO* GetOriginPeInfo(const BYTE* shell_base);
+
+
+/**
+ * @brief Get the thread-local storage table in the shell.
+ *
+ * @param shell_base    The base address of the shell.
+ * @param[out] offset   The offset, relative to the shell. It's optional.
+ * @return The thread-local storage table.
+ */
+static IMAGE_TLS_DIRECTORY* GetShellTlsTable(const BYTE* shell_base,
+                                             DWORD* offset);
+
+
+bool InstallShell(const PE_IMAGE_INFO* const image_info,
+                  const BYTE* const new_imp_table,
+                  const DWORD new_imp_table_size,
+                  const ENCRY_INFO* const encry_info, const DWORD encry_count) {
+    assert(image_info != NULL);
+    assert(new_imp_table != NULL);
+    assert(encry_info != NULL);
+
+    IMAGE_NT_HEADERS* const nt_header = image_info->nt_header;
+    const WORD section_num = nt_header->FileHeader.NumberOfSections;
+    IMAGE_SECTION_HEADER* const shell_section_header =
+        &image_info->section_header[section_num - 1];
+
+    // Calculate the size of the entire shell.
+    const DWORD shell_size = CalcShellSize(new_imp_table_size);
+    BYTE* const shell_base = (BYTE*)VirtualAlloc(
+        NULL, shell_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (shell_base == NULL) {
+        SetLastErrorCode();
+        return false;
+    }
+
+    // Copy the boot segment.
+    DWORD boot_seg_size = 0;
+    DWORD boot_seg_offset = 0;
+    const BYTE* const boot_seg_begin =
+        GetBootSegment(&boot_seg_offset, &boot_seg_size);
+    BYTE* const boot_seg_base = shell_base + boot_seg_offset;
+    CopyMemory(boot_seg_base, boot_seg_begin, boot_seg_size);
+
+    // Copy the load segment.
+    DWORD load_seg_size = 0;
+    DWORD load_seg_offset = 0;
+    const BYTE* const load_seg_begin =
+        GetLoadSegment(&load_seg_offset, &load_seg_size);
+    BYTE* const load_seg_base = shell_base + load_seg_offset;
+    CopyMemory(load_seg_base, load_seg_begin, load_seg_size);
+
+    // Copy the transformed import table.
+    CopyMemory(load_seg_base + load_seg_size, new_imp_table,
+               new_imp_table_size);
+
+    // Set the values of the fields used by the shell.
+    ORIGIN_PE_INFO* const pe_info = GetOriginPeInfo(shell_base);
+    ZeroMemory(pe_info, sizeof(ORIGIN_PE_INFO));
+    pe_info->entry_point = nt_header->OptionalHeader.AddressOfEntryPoint;
+    pe_info->imp_table_offset = load_seg_size;
+    pe_info->reloc_table_rva =
+        nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC]
+            .VirtualAddress;
+    pe_info->image_base = (void*)nt_header->OptionalHeader.ImageBase;
+
+    // Copy the thread-local storage table.
+    IMAGE_DATA_DIRECTORY* const tls_dir =
+        &nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_TLS];
+    if (tls_dir->VirtualAddress != 0 && tls_dir->Size > 0) {
+        DWORD offset = 0;
+        IMAGE_TLS_DIRECTORY* const table =
+            GetShellTlsTable(shell_base, &offset);
+        CopyMemory(table, &image_info->tls_table, sizeof(IMAGE_TLS_DIRECTORY));
+
+        tls_dir->VirtualAddress = shell_section_header->VirtualAddress + offset;
+        tls_dir->Size = sizeof(IMAGE_TLS_DIRECTORY);
+    }
+
+    // Copy the encryption information of sections.
+    assert(encry_count <= MAX_ENCRY_SECTION_COUNT);
+
+    CopyMemory(pe_info->section_encry_info, encry_info,
+               encry_count * sizeof(ENCRY_INFO));
+    ZeroMemory(pe_info->section_encry_info + encry_count, sizeof(ENCRY_INFO));
+
+    // Encrypt the load segment and transformed import table.
+    EncryptData(load_seg_base, load_seg_size + new_imp_table_size);
+
+    // Save the encryption information of the segment and import table.
+    SEG_ENCRY_INFO* const seg_encry_info = GetLoadSegmentEncryInfo(shell_base);
+    seg_encry_info->seg_offset = load_seg_offset;
+    seg_encry_info->seg_size = load_seg_size + new_imp_table_size;
+
+    // Adjust the import table of the shell.
+    AdjustShellImpTable(shell_base, shell_section_header);
+
+    // Install the shell to the section.
+    CopyMemory(image_info->image_base + shell_section_header->VirtualAddress,
+               shell_base, shell_size);
+
+    const DWORD file_align = nt_header->OptionalHeader.FileAlignment;
+    const DWORD section_align = nt_header->OptionalHeader.SectionAlignment;
+
+    shell_section_header->SizeOfRawData = Align(shell_size, file_align);
+    shell_section_header->Misc.VirtualSize = Align(shell_size, section_align);
+
+    // Change the entry point to the shell.
+    nt_header->OptionalHeader.AddressOfEntryPoint =
+        shell_section_header->VirtualAddress;
+    nt_header->OptionalHeader.CheckSum = 0;
+
+    // Change the import table directory to the shell.
+    DWORD imp_table_offset = 0;
+    DWORD imp_table_size = 0;
+    GetShellImpTable(&imp_table_offset, &imp_table_size);
+    nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT]
+        .VirtualAddress =
+        shell_section_header->VirtualAddress + imp_table_offset;
+    nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size =
+        imp_table_size;
+
+    ZeroMemory(
+        &nt_header->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG],
+        sizeof(IMAGE_DATA_DIRECTORY));
+    ZeroMemory(&nt_header->OptionalHeader
+                    .DataDirectory[IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG],
+               sizeof(IMAGE_DATA_DIRECTORY));
+    ZeroMemory(&nt_header->OptionalHeader
+                    .DataDirectory[IMAGE_DIRECTORY_ENTRY_ARCHITECTURE],
+               sizeof(IMAGE_DATA_DIRECTORY));
+    ZeroMemory(&nt_header->OptionalHeader
+                    .DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC],
+               sizeof(IMAGE_DATA_DIRECTORY));
+
+    return true;
+}
+
+
+DWORD CalcShellSize(const DWORD new_imp_table_size) {
+    DWORD boot_seg_size = 0;
+    DWORD load_seg_size = 0;
+    GetBootSegment(NULL, &boot_seg_size);
+    GetLoadSegment(NULL, &load_seg_size);
+    return boot_seg_size + load_seg_size + new_imp_table_size;
+}
+
+
+BYTE* GetShellImpTable(DWORD* const offset, DWORD* const size) {
+    if (size != NULL) {
+        *size = (BYTE*)&imp_table_end_lbl - (BYTE*)&imp_table_begin_lbl;
+    }
+
+    if (offset != NULL) {
+        DWORD boot_seg_offset = 0;
+        GetBootSegment(&boot_seg_offset, NULL);
+        *offset = boot_seg_offset
+                  + ((BYTE*)&imp_table_begin_lbl - (BYTE*)&boot_seg_begin_lbl);
+    }
+
+    return (BYTE*)&imp_table_begin_lbl;
+}
+
+
+void AdjustShellImpTable(BYTE* const shell_base,
+                         const IMAGE_SECTION_HEADER* const shell_section) {
+    assert(shell_base != NULL);
+    assert(shell_section != NULL);
+
+    DWORD imp_offset = 0;
+    GetShellImpTable(&imp_offset, NULL);
+
+    const DWORD imp_rva_base = shell_section->VirtualAddress + imp_offset;
+    for (IMAGE_IMPORT_DESCRIPTOR* descriptor =
+             (IMAGE_IMPORT_DESCRIPTOR*)(shell_base + imp_offset);
+         descriptor->Name != 0; ++descriptor) {
+        if (descriptor->OriginalFirstThunk != 0) {
+            descriptor->OriginalFirstThunk += imp_rva_base;
+        }
+
+        descriptor->Name += imp_rva_base;
+
+        IMAGE_THUNK_DATA* thunk = (IMAGE_THUNK_DATA*)(shell_base + imp_offset
+                                                      + descriptor->FirstThunk);
+
+        descriptor->FirstThunk += imp_rva_base;
+
+        for (; thunk->u1.AddressOfData != 0; ++thunk) {
+            thunk->u1.AddressOfData += imp_rva_base;
+        }
+    }
+}
+
+
+SEG_ENCRY_INFO* GetLoadSegmentEncryInfo(const BYTE* const shell_base) {
+    assert(shell_base != NULL);
+
+    // Relocation.
+    DWORD seg_offset = 0;
+    const BYTE* const seg_begin = GetBootSegment(&seg_offset, NULL);
+    const BYTE* const seg_base = shell_base + seg_offset;
+    const DWORD info_offset = (BYTE*)&load_seg_encry_info - seg_begin;
+    return (SEG_ENCRY_INFO*)(seg_base + info_offset);
+}
+
+
+ORIGIN_PE_INFO* GetOriginPeInfo(const BYTE* const shell_base) {
+    assert(shell_base != NULL);
+
+    // Relocation.
+    DWORD seg_offset = 0;
+    const BYTE* const seg_begin = GetLoadSegment(&seg_offset, NULL);
+    const BYTE* const seg_base = shell_base + seg_offset;
+    const DWORD info_offset = (BYTE*)&origin_pe_info - seg_begin;
+    return (ORIGIN_PE_INFO*)(seg_base + info_offset);
+}
+
+
+IMAGE_TLS_DIRECTORY* GetShellTlsTable(const BYTE* const shell_base,
+                                      DWORD* const offset) {
+    assert(shell_base != NULL);
+
+    // Relocation.
+    DWORD seg_offset = 0;
+    const BYTE* const seg_begin = GetBootSegment(&seg_offset, NULL);
+    const BYTE* const seg_base = shell_base + seg_offset;
+    const DWORD info_offset = (BYTE*)&tls_table - seg_begin;
+
+    if (offset != NULL) {
+        *offset = seg_offset + info_offset;
+    }
+
+    return (IMAGE_TLS_DIRECTORY*)(seg_base + info_offset);
+}
+
+
+BYTE* GetBootSegment(DWORD* const offset, DWORD* const size) {
+    if (size != NULL) {
+        *size = (BYTE*)&boot_seg_end_lbl - (BYTE*)&boot_seg_begin_lbl;
+    }
+
+    if (offset != NULL) {
+        *offset = (BYTE*)&boot_seg_begin_lbl - (BYTE*)&shell_begin_lbl;
+    }
+
+    return (BYTE*)&boot_seg_begin_lbl;
+}
+
+
+BYTE* GetLoadSegment(DWORD* const offset, DWORD* const size) {
+    if (size != NULL) {
+        *size = (BYTE*)&load_seg_end_lbl - (BYTE*)&load_seg_begin_lbl;
+    }
+
+    if (offset != NULL) {
+        *offset = (BYTE*)&load_seg_begin_lbl - (BYTE*)&shell_begin_lbl;
+    }
+
+    return (BYTE*)&load_seg_begin_lbl;
+}
+```
+
+`src/utility/CMakeLists.txt`:
+
+```txt
+add_library(utility)
+
+target_compile_definitions(utility PRIVATE -D_UNICODE -DUNICODE)
+
+set(HEADER_PATH ${PROJECT_SOURCE_DIR}/include/utility)
+
+target_include_directories(utility PUBLIC ${HEADER_PATH})
+
+target_sources(utility
+    PUBLIC
+        ${HEADER_PATH}/error_handling.h
+        ${HEADER_PATH}/file_access.h
+        ${HEADER_PATH}/platform_check.h
+        ${HEADER_PATH}/encrypt.h
+    PRIVATE
+        error_handling.c
+        file_access.c
+        encrypt.c
+)
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    target_sources(utility
+        PRIVATE
+            platform_check_x64.c
+    )
+else()
+    target_sources(utility
+        PRIVATE
+            platform_check_x86.c
+    )
+endif()
+```
+
+`src/utility/encrypt.c`:
+
+```c
+/**
+ * @file encrypt.c
+ * @brief Encrypt data.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-13
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "encrypt.h"
+
+#include <assert.h>
+
+
+void EncryptData(BYTE* const base, const DWORD size) {
+    if (size == 0) {
+        return;
+    }
+
+    assert(base != NULL);
+
+    for (DWORD i = 0; i != size; ++i) {
+        base[i] += 0xCC;
+    }
+}
+```
+
+`src/utility/error_handling.c`:
+
+```c
+/**
+ * @file error_handling.c
+ * @brief Error handling.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-09
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @see https://docs.microsoft.com/en-us/windows/win32/debug/system-error-codes
+ */
+
+#include "error_handling.h"
+
+static DWORD last_error_code = ERROR_SUCCESS;
+
+
+DWORD GetLastErrorCode() {
+    return last_error_code;
+}
+
+
+void SetLastErrorCode() {
+    last_error_code = GetLastError();
+}
+
+
+void ResetLastErrorCode() {
+    last_error_code = ERROR_SUCCESS;
+}
+
+
+TCHAR* FormatErrorMessage(const DWORD error_code) {
+    TCHAR* const message = NULL;
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM
+                      | FORMAT_MESSAGE_IGNORE_INSERTS,
+                  NULL, error_code,
+                  MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                  (LPTSTR)&message, 0, NULL);
+    return message;
+}
+
+
+void FreeErrorMessage(TCHAR* const message) {
+    if (message != NULL) {
+        LocalFree(message);
+    }
+}
+```
+
+`src/utility/file_access.c`:
+
+```c
+/**
+ * @file file_access.c
+ * @brief File reading and writing.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-10
+ * @par GitHub
+ * https://github.com/czs108
+ */
+
+#include "file_access.h"
+#include "error_handling.h"
+
+#include <assert.h>
+
+
+bool WriteAllToFile(const HANDLE file, const BYTE* const data,
+                    const DWORD size) {
+    assert(file != INVALID_HANDLE_VALUE);
+
+    if (size == 0) {
+        return true;
+    }
+
+    assert(data != NULL);
+
+    DWORD remaining = size;
+    const BYTE* current = data;
+    while (remaining > 0) {
+        DWORD written = 0;
+        if (WriteFile(file, current, remaining, &written, NULL) == FALSE) {
+            SetLastErrorCode();
+            return false;
+        }
+
+        remaining -= written;
+        current += written;
+    }
+
+    return true;
+}
+
+
+bool OpenReadViewOfFile(const HANDLE file, FILE_VIEW* const file_view) {
+    assert(IsFileSmallerThan2G(file));
+    assert(file_view != NULL);
+
+    bool success = false;
+    ZeroMemory(file_view, sizeof(file_view));
+
+    file_view->size = GetFileSize(file, NULL);
+    file_view->map = CreateFileMapping(file, NULL, PAGE_READONLY, 0, 0, NULL);
+    if (file_view->map == NULL) {
+        SetLastErrorCode();
+        goto _Exit;
+    }
+
+    file_view->base =
+        (BYTE*)MapViewOfFile(file_view->map, FILE_MAP_READ, 0, 0, 0);
+    if (file_view->base == NULL) {
+        SetLastErrorCode();
+        goto _Exit;
+    }
+
+    success = true;
+
+_Exit:
+    if (!success) {
+        CloseViewOfFile(file_view);
+        ZeroMemory(file_view, sizeof(file_view));
+    }
+
+    return success;
+}
+
+
+void CloseViewOfFile(const FILE_VIEW* const file_view) {
+    assert(file_view != NULL);
+
+    if (file_view->base != NULL) {
+        UnmapViewOfFile(file_view->base);
+    }
+
+    if (file_view->map != NULL) {
+        CloseHandle(file_view->map);
+    }
+}
+
+
+bool IsFileSmallerThan2G(const HANDLE file) {
+    assert(file != INVALID_HANDLE_VALUE);
+
+    DWORD size_low = GetFileSize(file, NULL);
+    return !(size_low & 0x80000000);
+}
+```
+
+`src/utility/platform_check_x64.c`:
+
+```c
+/**
+ * @file platform_check_x64.c
+ * @brief Check if the PE image matches the program platform.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-14
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @note This implementation is for x64 platforms.
+ */
+
+#include "platform_check.h"
+
+#include <assert.h>
+
+
+bool IsPeMatchPlatform(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    return IsPe64(image_info);
+}
+```
+
+`src/utility/platform_check_x86.c`:
+
+```c
+/**
+ * @file platform_check_x86.c
+ * @brief Check if the PE image matches the program platform.
+ *
+ * @author Chen Zhenshuo (chenzs108@outlook.com)
+ * @version 1.0
+ * @date 2020-01-14
+ * @par GitHub
+ * https://github.com/czs108
+ *
+ * @note This implementation is for x86 platforms.
+ */
+
+#include "platform_check.h"
+
+#include <assert.h>
+
+
+bool IsPeMatchPlatform(const PE_IMAGE_INFO* const image_info) {
+    assert(image_info != NULL);
+
+    return IsPe64(image_info) != true;
+}
+```
+
+`test/CMakeLists.txt`:
+
+```txt
+add_executable(hello "")
+
+target_compile_definitions(hello PRIVATE -D_UNICODE -DUNICODE)
+
+target_sources(hello
+    PRIVATE
+        main.c
+)
+```
+
+`test/main.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    printf("Hello World!\n");
+    return EXIT_SUCCESS;
+}
+```
