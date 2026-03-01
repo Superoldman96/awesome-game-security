@@ -1,0 +1,2497 @@
+Project Path: arc_gmh5225_wrappe_ys0iql6d
+
+Source Tree:
+
+```txt
+arc_gmh5225_wrappe_ys0iql6d
+├── Cargo.toml
+├── LICENSE
+├── README.md
+├── build.rs
+├── src
+│   ├── args.rs
+│   ├── compress.rs
+│   ├── main.rs
+│   └── types.rs
+└── startpe
+    ├── Cargo.toml
+    ├── Cross.toml
+    └── src
+        ├── decompress.rs
+        ├── main.rs
+        ├── permissions.rs
+        ├── types.rs
+        └── versioning.rs
+
+```
+
+`Cargo.toml`:
+
+```toml
+[package]
+
+authors = ["Christian Sdunek <me@systemcluster.me>"]
+build = "build.rs"
+categories = ["compression", "filesystem", "command-line-utilities"]
+description = "Packer for Executables"
+edition = "2021"
+include = [
+  "Cargo.toml",
+  "src/**/*",
+  "startpe/**/*",
+  "build.rs",
+  "LICENSE",
+]
+license = "BSD-2-Clause"
+name = "wrappe"
+readme = "README.md"
+repository = "https://github.com/Systemcluster/wrappe"
+version = "0.0.0"
+
+[[bin]]
+
+name = "wrappe"
+path = "src/main.rs"
+
+[workspace]
+
+members = [
+  ".",
+  "startpe",
+]
+
+[profile.release]
+
+codegen-units = 1
+debug = false
+debug-assertions = false
+incremental = false
+lto = "fat"
+opt-level = 's'
+panic = "abort"
+strip = "symbols"
+
+[dependencies]
+
+staticfilemap = {version = "0.4.1", default-features = false, features = ["zstd", "multithread"]}
+
+clap = {version = "3.1.12", features = ["std", "color", "suggestions", "derive", "unicode", "wrap_help"]}
+color-backtrace = "0.5.1"
+console = "0.15.0"
+indicatif = "0.17.0-rc.10"
+jwalk = "0.6.0"
+num_cpus = "1.13.1"
+path-slash = "0.1.4"
+rand = "0.8.5"
+rayon = "1.5.2"
+sysinfo = "0.23.11"
+twox-hash = {version = "1.6.2", default-features = false}
+zerocopy = "0.6.1"
+zstd = {version = "0.11.1", default-features = false, features = ["arrays", "zstdmt"]}
+
+[build-dependencies]
+jwalk = "0.6.0"
+which = "4.2.5"
+
+```
+
+`LICENSE`:
+
+```
+Copyright (c) 2020 Christian Sdunek <me@systemcluster.me> and the wrappe contributors
+
+Redistribution and use in source and binary forms, with or without modification, are permitted
+provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions
+and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of
+conditions and the following disclaimer in the documentation and/or other materials provided with
+the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
+OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+```
+
+`README.md`:
+
+```md
+# wrappe
+
+Packer to create self-contained single-binary applications from executables and directory trees.
+
+## Features
+
+* Packing of executables and their dependencies into single self-contained binaries
+* Compression of packed payloads with Zstandard
+* Streaming decompression with minimal memory overhead
+* Compression and decompression of files in parallel
+* Decompression only when necessary by checking existing files
+
+## Usage
+
+### Example
+
+```shell
+wrappe --compression 16 dist dist/diogenes.exe packed.exe
+```
+
+### Details
+
+Running wrappe requires specifying the path to the input, the executable to run, and the name of the output executable.
+
+`input` specifies the path to a directory or a file. `command` has to specify a file inside the input directory, or in case of an input file, the input file itself. `output` specifies a filename or path to a file. It will be overwritten if it already exists.
+
+```shell
+wrappe [FLAGS] [OPTIONS] <input> <command> <output>
+
+ARGS:
+    <input>      Path to the input directory
+    <command>    Path to the executable to start after unpacking
+    <output>     Path to or filename of the output executable
+
+FLAGS:
+    -w, --current-dir     Set the current dir of the target to the unpack directory
+    -h, --help            Prints help information
+    -l, --list-runners    Prints available runners
+    -s, --show-console    Unconditionally show a console window on Windows
+    -V, --version         Prints version information
+
+OPTIONS:
+    -c, --compression <compression>
+            Zstd compression level (0-21) [default: 8]
+    -r, --runner <runner>
+            Which runner to use [default: native]
+    -d, --unpack-directory <unpack-directory>
+            Unpack directory name [default: inferred from input directory]
+    -t, --unpack-target <unpack-target>
+            Unpack directory target (temp, local, cwd) [default: temp]
+    -e, --verification <verification>
+            Verification of existing unpacked data (existence, checksum, none) [default: existence]
+    -v, --versioning <versioning>
+            Versioning strategy (sidebyside, replace, none) [default: sidebyside]
+    -V, --version <version>
+            Version specifier override [default: randomly generated]
+    -i, --show-information <show-information>
+            Information output details (title, verbose, none) [default: title]
+```
+
+### Flags and Options
+
+#### current-dir
+
+By default the working directory of the unpacked executable is set to the working directory of the runner executable. This flag changes the working directory to the unpack directory.
+
+#### show-console
+
+This option controls if a console window should be kept open when launching a windows-subsystem application from the Windows explorer.
+
+#### compression
+
+This option controls the Zstandard compression level. Accepted values range from `0` to `21`.
+
+#### runner
+
+This option specifies which runner will be used for the output executable. It defaults to the native runner for the current platform. Additional runners have to be included at compile time, see the compilation section for more info.
+
+Partial matches are accepted if unambiguous, for instance `windows` will be accepted if only one runner for Windows is available.
+
+#### unpack-directory
+
+This option specifies the unpack directory name inside the `unpack-target`. It defaults to the name of the input file or directory.
+
+#### unpack-target
+
+This option specifies the directory the packed files are unpacked to. Accepted values are:
+
+* `temp`: The files will be unpacked to the systems temporary directory.
+* `local`: The files will be unpacked to the local data directory, usually `User/AppData/Local` on Windows and `/home/user/.local/share` on Linux.
+* `cwd`: The files will be unpacked to the working directory of the runner executable.
+
+It defaults to `temp`.
+
+#### verification
+
+This option specifies the verification of the unpacked payload before skipping extraction. Accepted values are:
+
+* `existence`: All files in the payload will be checked for existence.
+* `checksum`: A checksum for all files will be calculated and compared with the checksum calculated during the packing process.
+* `none`: No verification will be performed.
+
+It defaults to `existence`.
+
+#### versioning
+
+This option specifies the versioning strategy. Accepted values are:
+
+* `sidebyside`: An individual directory will be created for every version. The version is determined by a unique identifier created during the packing process, so different runner executables will be unpacked to different directories, unless manually specified. An already unpacked version will not be unpacked again.
+* `replace`: Already unpacked files from a different version will be overwritten. Unpacked files from the same version will not be upacked again.
+* `none`: Packed files are always unpacked and already unpacked files will be overwritten.
+
+It defaults to `sidebyside`.
+
+#### version
+
+This option specifies the version string. It defaults to a randomly generated string of 8 characters.
+
+#### show-information
+
+This option controls the information output of the runner. Accepted values are:
+
+* `title`: The runner will output the `wrappe` version and the unpack directory.
+* `verbose`: The runner will output various additional details like unpack status, configuration and payload size.
+* `none`: The runner will show no additional output.
+
+It defaults to `title`. Error information is always shown when applicable.
+
+## Download
+
+A snapshot build of the latest version can be found on the [release page](https://github.com/Systemcluster/wrappe/releases).
+
+Snapshot builds contain runners for Windows (`x86_64-pc-windows-gnu`), macOS (`x86_64-apple-darwin` and `aarch64-apple-darwin`) and Linux (`x86_64-unknown-linux-musl`).
+
+## Compilation
+
+Compiling wrappe will also compile a runner for your current platform by default.
+
+```shell
+cargo build --release
+```
+
+To compile and include additional runners for other platforms, specify the desired [target triplets](https://doc.rust-lang.org/stable/rustc/targets/) in the `WRAPPE_TARGETS` environment variable.
+
+```shell
+WRAPPE_TARGETS=x86_64-unknown-linux-gnu;x86_64-pc-windows-msvc cargo build --release
+```
+
+Cross compilation of additional runners is performed through [cross](https://github.com/rust-embedded/cross) if available.
+To disable compilation through cross, set the `WRAPPE_NO_CROSS` environment variable to `true`.
+
+```
+
+`build.rs`:
+
+```rs
+use std::{env::var, path::PathBuf, process::Command, vec::Vec};
+
+use jwalk::WalkDir;
+use which::which;
+
+
+const TARGETS_ENV: &str = "WRAPPE_TARGETS";
+const FILES_ENV: &str = "WRAPPE_FILES";
+const NO_CROSS_ENV: &str = "WRAPPE_NO_CROSS";
+const OSXCROSS_WORKAROUND_ENV: &str = "WRAPPE_OSXCROSS_WORKAROUND";
+const STARTER_NAME: &str = "startpe";
+
+
+fn get_runner_targets() -> Vec<String> {
+    let rustc = var("RUSTC").unwrap();
+    let native_target = var("TARGET").unwrap();
+    let mut active_targets = Vec::from([native_target]);
+    let requested_targets = var(TARGETS_ENV);
+    if let Ok(requested_targets) = requested_targets {
+        let mut requested_targets = requested_targets.split(';').collect::<Vec<&str>>();
+        requested_targets.sort_unstable();
+        requested_targets.dedup();
+        let available_targets = Command::new(rustc)
+            .arg("--print")
+            .arg("target-list")
+            .output()
+            .expect("couldn't get available build target triples");
+        let available_targets = String::from_utf8(available_targets.stdout)
+            .expect("couldn't get available build target triples, output invalid");
+        let available_targets = available_targets.lines().collect::<Vec<&str>>();
+        for target in requested_targets {
+            if active_targets.contains(&target.to_string()) {
+                continue;
+            }
+            if !available_targets.contains(&target) {
+                let matches = available_targets
+                    .iter()
+                    .filter(|t| t.contains(&target))
+                    .collect::<Vec<_>>();
+                if matches.len() == 1 {
+                    active_targets.push(matches[0].to_string());
+                } else {
+                    eprintln!(
+                        "couldn't build for target {}, target does not exist",
+                        &target
+                    );
+                    std::process::exit(1);
+                }
+            } else {
+                active_targets.push(target.to_string());
+            }
+        }
+    }
+    active_targets
+}
+
+fn compile_runner(target: &str, out_dir: &str) -> bool {
+    let profile = var("PROFILE").unwrap();
+    let native_target = var("TARGET").unwrap();
+    let cargo = PathBuf::from(var("CARGO").unwrap()).canonicalize().unwrap();
+    let no_cross = var(NO_CROSS_ENV) == Ok("true".into()) || var(NO_CROSS_ENV) == Ok("1".into());
+    let osxcross_workaround = var(OSXCROSS_WORKAROUND_ENV) == Ok("true".into())
+        || var(OSXCROSS_WORKAROUND_ENV) == Ok("1".into());
+    let mut command = if target == native_target || no_cross {
+        Command::new(cargo)
+    } else {
+        Command::new(which("cross").unwrap_or(cargo))
+    };
+    if let Some(hash) = get_git_hash() {
+        command.env("GIT_HASH", hash);
+    }
+    let mut rustflags = var("RUSTFLAGS").unwrap_or_default();
+    if !rustflags.contains("-Ctarget-feature") && !rustflags.contains("-C target-feature") {
+        rustflags = [rustflags, "-Ctarget-feature=+crt-static".to_string()].join(" ");
+    }
+    if osxcross_workaround {
+        command.env("MACOSX_DEPLOYMENT_TARGET", "11.3");
+        if target.contains("apple") {
+            if target.contains("aarch") {
+                command.env("CC", "oa64-clang");
+                command.env("CXX", "oa64-clang++");
+                command.env("AR", "arm64-apple-darwin20.4-ar");
+            } else {
+                command.env("CC", "o64-clang");
+                command.env("CXX", "o64-clang++");
+                command.env("AR", "x86_64-apple-darwin20.4-ar");
+            }
+        } else {
+            command.env_remove("CC");
+            command.env_remove("CXX");
+            command.env_remove("AR");
+        }
+    }
+    command.env("RUSTFLAGS", rustflags);
+    command
+        .current_dir(STARTER_NAME)
+        .arg("build")
+        .arg("--target")
+        .arg(&target)
+        .arg("--target-dir")
+        .arg(&out_dir);
+    if profile == "release" {
+        command.arg("--release");
+    }
+    let status = command
+        .status()
+        .unwrap_or_else(|e| panic!("couldn't compile runner for target {}: {}", &target, e));
+
+    status.success()
+}
+
+fn get_git_hash() -> Option<String> {
+    which("git").ok().and_then(|git| {
+        Command::new(git)
+            .args(&["rev-parse", "--short", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|output| {
+                String::from_utf8(output.stdout)
+                    .map(|output| output.trim().into())
+                    .ok()
+            })
+    })
+}
+
+fn main() {
+    println!("cargo:rerun-if-env-changed=OUT_DIR");
+    println!("cargo:rerun-if-env-changed=PROFILE");
+    println!("cargo:rerun-if-env-changed=TARGET");
+    println!("cargo:rerun-if-env-changed={}", TARGETS_ENV);
+    println!("cargo:rerun-if-changed=build.rs");
+    if let Some(hash) = get_git_hash() {
+        println!("cargo:rustc-env=GIT_HASH={}", hash);
+        println!(
+            "cargo:rustc-env=CARGO_PKG_VERSION={} ({})",
+            var("CARGO_PKG_VERSION").unwrap(),
+            hash
+        );
+    }
+    println!("cargo:rerun-if-changed=.git/HEAD");
+    for entry in WalkDir::new(STARTER_NAME)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        println!("cargo:rerun-if-changed={}", entry.path().display());
+    }
+    let osxcross_workaround = var(OSXCROSS_WORKAROUND_ENV) == Ok("true".into())
+        || var(OSXCROSS_WORKAROUND_ENV) == Ok("1".into());
+    if osxcross_workaround {
+        println!("cargo:rustc-env=MACOSX_DEPLOYMENT_TARGET=11.3");
+    }
+    let out_dir = var("OUT_DIR").unwrap();
+    let active_targets = get_runner_targets();
+    for target in &active_targets {
+        let status = compile_runner(target, &out_dir);
+        if !status {
+            eprintln!("couldn't build for target {}, build failed", &target);
+            std::process::exit(1);
+        }
+    }
+    let profile = var("PROFILE").unwrap();
+    let files = active_targets
+        .iter()
+        .map(|target| {
+            format!(
+                "{}/{}/{}/{}{}",
+                out_dir,
+                target,
+                profile,
+                STARTER_NAME,
+                if target.contains("windows") {
+                    ".exe"
+                } else {
+                    ""
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    let targets = active_targets.join(";");
+    println!("cargo:rustc-env={}={}", TARGETS_ENV, targets);
+    println!("cargo:rustc-env={}={}", FILES_ENV, files);
+}
+
+```
+
+`src/args.rs`:
+
+```rs
+use std::path::{Path, PathBuf};
+
+use console::style;
+use rand::{
+    distributions::{Alphanumeric, Distribution},
+    thread_rng,
+};
+use staticfilemap::StaticFileMap;
+
+#[derive(StaticFileMap)]
+#[parse = "env"]
+#[names = "WRAPPE_TARGETS"]
+#[files = "WRAPPE_FILES"]
+#[compression = 16]
+#[algorithm = "zstd"]
+struct StarterMap;
+
+pub fn list_runners() {
+    println!(
+        "{}: {}",
+        style("available runners").blue(),
+        format!(
+            "{} {} ",
+            StarterMap::keys()[0],
+            style("(default)").bold().black()
+        ) + &StarterMap::keys()[1..].join(", ")
+    );
+}
+
+pub fn get_runner(name: &str) -> &'static [u8] {
+    let runner_name = if name == "native" || name == "default" {
+        StarterMap::keys()[0]
+    } else {
+        name
+    };
+    StarterMap::get_match(runner_name).unwrap_or_else(|| {
+        println!(
+            "{}: {}",
+            style("not a valid runner").red(),
+            style(runner_name).red()
+        );
+        list_runners();
+        std::process::exit(-1);
+    })
+}
+
+pub fn get_unpack_target(directory: &str) -> u8 {
+    match directory.to_lowercase().as_str() {
+        "temp" => 0,
+        "default" => 0,
+        "local" => 1,
+        "cwd" => 2,
+        _ => {
+            println!(
+                "{}: {}",
+                style("not a valid target directory").red(),
+                style(directory).red(),
+            );
+            println!(
+                "{}: temp {}, local, cwd",
+                style("available target directories").blue(),
+                style("(default)").bold().black()
+            );
+            std::process::exit(-1);
+        }
+    }
+}
+
+pub fn get_versioning(versioning: &str) -> u8 {
+    match versioning.to_lowercase().as_str() {
+        "sidebyside" => 0,
+        "default" => 0,
+        "replace" => 1,
+        "none" => 2,
+        _ => {
+            println!(
+                "{}: {}",
+                style("not a valid versioning strategy").red(),
+                style(versioning).red(),
+            );
+            println!(
+                "{}: sidebyside {}, replace",
+                style("available versioning strategies").blue(),
+                style("(default)").bold().black()
+            );
+            std::process::exit(-1);
+        }
+    }
+}
+
+pub fn get_version(version: Option<&str>) -> String {
+    let mut version = if let Some(version) = version {
+        if version.len() > 16 {
+            println!(
+                "{}",
+                style("version specifier is longer than 16 characters").red(),
+            );
+            std::process::exit(-1);
+        }
+        version.chars().collect::<Vec<_>>()
+    } else {
+        Alphanumeric
+            .sample_iter(thread_rng())
+            .map(char::from)
+            .take(8)
+            .collect::<Vec<_>>()
+    };
+    version.resize(16, 0 as char);
+    version.iter().collect()
+}
+
+pub fn get_verification(verification: &str) -> u8 {
+    match verification.to_lowercase().as_str() {
+        "none" => 0,
+        "default" => 1,
+        "existence" => 1,
+        "checksum" => 2,
+        _ => {
+            println!(
+                "{}: {}",
+                style("not a valid verification option").red(),
+                style(verification).red(),
+            );
+            println!(
+                "{}: none, existence {}, checksum",
+                style("available verification options").blue(),
+                style("(default)").bold().black()
+            );
+            std::process::exit(-1);
+        }
+    }
+}
+
+pub fn get_show_information(show_information: &str) -> u8 {
+    match show_information.to_lowercase().as_str() {
+        "none" => 0,
+        "default" => 1,
+        "title" => 1,
+        "verbose" => 2,
+        _ => {
+            println!(
+                "{}: {}",
+                style("not a valid information details option").red(),
+                style(show_information).red(),
+            );
+            println!(
+                "{}: none, title {}, verbose",
+                style("available information details options").blue(),
+                style("(default)").bold().black()
+            );
+            std::process::exit(-1);
+        }
+    }
+}
+
+pub fn get_source(source: &Path) -> PathBuf {
+    let source = Path::new(&std::env::current_dir().unwrap()).join(&source);
+    let source = std::fs::canonicalize(&source).unwrap_or_else(|_| {
+        println!(
+            "{}: {}",
+            style("input path is not a directory").red(),
+            source.display()
+        );
+        std::process::exit(-1);
+    });
+    if !source.is_dir() && !source.is_file() {
+        println!(
+            "{}: {}",
+            style("input path is not a file or directory").red(),
+            source.display()
+        );
+        std::process::exit(-1);
+    }
+    source
+}
+
+pub fn get_output(output: &Path) -> PathBuf {
+    let output = Path::new(&std::env::current_dir().unwrap()).join(&output);
+    if !output.parent().map(|path| path.is_dir()).unwrap_or(false) {
+        println!(
+            "{}: {}",
+            style("output path has no parent directory").red(),
+            output.parent().unwrap().display()
+        );
+        std::process::exit(-1);
+    }
+    if output.is_dir() {
+        println!(
+            "{}: {}",
+            style("output path is a directory").red(),
+            output.display()
+        );
+        std::process::exit(-1);
+    }
+    std::fs::canonicalize(&output.parent().unwrap())
+        .unwrap_or_else(|_| {
+            println!(
+                "{}: {}",
+                style("output path is invalid").red(),
+                output.display()
+            );
+            std::process::exit(-1);
+        })
+        .join(output.file_name().unwrap())
+}
+
+pub fn get_unpack_directory(directory: Option<&str>, source: &Path) -> [u8; 128] {
+    let directory = if let Some(directory) = directory {
+        directory.as_bytes()
+    } else {
+        source
+            .file_name()
+            .unwrap_or_else(|| {
+                println!(
+                    "{}",
+                    style("couldn't infer unpack directory name from the input directory").red()
+                );
+                std::process::exit(-1);
+            })
+            .to_str()
+            .unwrap_or_else(|| {
+                println!(
+                    "{}",
+                    style("couldn't infer unpack directory name from the input directory, not valid utf8").red()
+                );
+                std::process::exit(-1);
+            })
+            .as_bytes()
+    };
+    if directory.len() >= 128 {
+        println!(
+            "{}",
+            style("unpack directory name is longer than 127 characters").red()
+        );
+        std::process::exit(-1);
+    }
+    let mut _directory = [0; 128];
+    _directory[0..directory.len()].copy_from_slice(directory);
+    _directory
+}
+
+pub fn get_command(command: &Path, source: &Path) -> [u8; 128] {
+    let source = if source.is_file() {
+        source.parent().unwrap_or_else(|| {
+            println!("{}", style("source path has no parent").red());
+            std::process::exit(-1);
+        })
+    } else {
+        source
+    };
+    let command = match std::fs::canonicalize(&source.join(command)) {
+        Err(_) => std::fs::canonicalize(Path::new(&std::env::current_dir().unwrap()).join(command)),
+        command => command,
+    }
+    .unwrap_or_else(|e| {
+        println!("{}: {}", style("command path is invalid").red(), e);
+        std::process::exit(-1);
+    });
+    if !command.is_file() {
+        println!("{}", style("command path is not a file").red());
+        std::process::exit(-1);
+    }
+    let command = if source.is_dir() {
+        command.strip_prefix(&source).unwrap_or_else(|_| {
+            println!(
+                "{}",
+                style("command path is not contained in the source directory").red()
+            );
+            std::process::exit(-1);
+        })
+    } else {
+        command.strip_prefix(source).unwrap_or_else(|_| {
+            println!(
+                "{}",
+                style("command path is not contained in the source directory").red()
+            );
+            std::process::exit(-1);
+        })
+    };
+    let command = command
+        .to_str()
+        .unwrap_or_else(|| {
+            println!("{}", style("command path is not valid utf8").red());
+            std::process::exit(-1);
+        })
+        .as_bytes();
+    if command.len() >= 128 {
+        println!(
+            "{}",
+            style("command path is longer than 127 characters").red()
+        );
+        std::process::exit(-1);
+    }
+    let mut _command = [0; 128];
+    _command[0..command.len()].copy_from_slice(command);
+    _command
+}
+
+```
+
+`src/compress.rs`:
+
+```rs
+use std::{
+    env::temp_dir,
+    fs::{read_link, remove_file, symlink_metadata, File},
+    hash::Hasher,
+    io::{copy, Cursor, Read, Result, Seek, SeekFrom, Write},
+    path::Path,
+    sync::{Arc, Mutex},
+    time::SystemTime,
+};
+
+use jwalk::WalkDir;
+use path_slash::PathExt;
+use rand::{
+    distributions::{Alphanumeric, Distribution},
+    thread_rng,
+};
+use rayon::prelude::*;
+use sysinfo::{System, SystemExt};
+use twox_hash::XxHash64;
+use zerocopy::AsBytes;
+use zstd::Encoder;
+
+use crate::types::*;
+
+pub const HASH_SEED: u64 = 1246736989840;
+
+pub struct HashReader<R: Read, H: Hasher> {
+    reader: R,
+    hasher: H,
+}
+impl<R: Read, H: Hasher> HashReader<R, H> {
+    pub fn new(reader: R, hasher: H) -> Self { HashReader { reader, hasher } }
+
+    pub fn finish(self) -> u64 { self.hasher.finish() }
+}
+impl<R: Read, H: Hasher> Read for HashReader<R, H> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let bytes = self.reader.read(buf)?;
+        if bytes > 0 {
+            self.hasher.write(&buf[0..bytes]);
+        }
+        Ok(bytes)
+    }
+}
+
+pub fn copy_encode<R: Read, W: Write>(
+    mut source: R, destination: W, level: i32, threads: u32,
+) -> Result<()> {
+    let mut encoder = Encoder::new(destination, level)?;
+    encoder.multithread(threads)?;
+    copy(&mut source, &mut encoder)?;
+    encoder.finish()?;
+    Ok(())
+}
+
+/// Compress the payload in `source` and write it into `target`.
+/// The data is written subsequently in the following order:
+/// - compressed file contents
+/// - directory sections
+/// - file section headers
+/// - symlink sections
+/// - payload section header
+pub fn compress<
+    T: AsRef<Path>,
+    W: Write + Seek + Sync + Send,
+    P: Fn() + Sync + Send,
+    E: Fn(&str) + Sync + Send,
+    I: Fn(&str) + Sync + Send,
+>(
+    source: T, target: &mut W, compression: u32, progress_callback: P, error_callback: E,
+    info_callback: I,
+) -> usize {
+    let source: &Path = source.as_ref();
+
+    let num_cpus = num_cpus::get() as u64;
+    let system = System::new_with_specifics(sysinfo::RefreshKind::new().with_memory());
+    let memory = system.total_memory();
+    let in_memory_limit = memory / num_cpus * 1000;
+
+    let entries = WalkDir::new(&source)
+        .skip_hidden(false)
+        .sort(true)
+        .into_iter()
+        .filter(|entry| {
+            if let Err(e) = entry {
+                error_callback(&format!("couldn't read entry: {}", e));
+                return false;
+            }
+            true
+        })
+        .collect::<Vec<_>>();
+
+    let source: &Path = if source.is_dir() {
+        source
+    } else {
+        source.parent().unwrap()
+    };
+
+    let mut directories = Vec::<DirectorySection>::new();
+    // start with the source directory as parent 0
+    let mut parents = Vec::<String>::from(["".to_string()]);
+
+    // enumerate directories
+    let _ = entries
+        .iter()
+        .filter_map(|entry| {
+            let entry = entry.as_ref().ok()?;
+            if !entry.file_type().is_dir() {
+                return None;
+            }
+            let entry = entry.path();
+            let entry = entry.strip_prefix(&source).ok()?;
+
+            if entry.file_name()?.len() > NAME_SIZE {
+                error_callback(&format!(
+                    "skipping directory with name longer than {}: {}",
+                    NAME_SIZE,
+                    entry.display()
+                ));
+                return None;
+            }
+
+            info_callback(&entry.display().to_string());
+
+            let name = entry.file_name()?.to_str()?;
+
+            let path = entry.to_slash()?;
+            parents.push(path);
+
+            let parent = entry.parent().unwrap().to_slash().unwrap();
+            let parent = match parents.iter().position(|element| element == &parent) {
+                Some(index) => index,
+                None => {
+                    error_callback(&format!(
+                        "skipping directory with no included parent: {}",
+                        entry.display()
+                    ));
+                    return None;
+                }
+            };
+
+            let mut name_array = [0; NAME_SIZE];
+            name_array[0..name.len()].copy_from_slice(name.as_bytes());
+            directories.push(DirectorySection {
+                name:   name_array,
+                parent: parent as u32,
+            });
+
+            progress_callback();
+            Some(())
+        })
+        .count();
+
+    let zero = target.seek(SeekFrom::Current(0)).unwrap();
+    let archive = Arc::new(Mutex::new(target));
+
+    let files = Arc::new(Mutex::new(Vec::<FileSectionHeader>::new()));
+    let links = Arc::new(Mutex::new(Vec::<String>::new()));
+
+    // compress and append files
+    let _ = entries
+        .par_iter()
+        .filter_map(|entry| {
+            let entry = entry.as_ref().ok()?;
+            if !entry.file_type().is_file() {
+                return None;
+            }
+            let entry = entry.path();
+
+            if entry.file_name()?.len() > NAME_SIZE {
+                error_callback(&format!(
+                    "skipping file with name longer than: {}: {}",
+                    NAME_SIZE,
+                    entry.display()
+                ));
+                return None;
+            }
+
+            info_callback(&entry.strip_prefix(&source).ok()?.display().to_string());
+
+            let parent = entry.strip_prefix(&source).ok()?.parent()?.to_slash()?;
+            let parent = match parents.iter().position(|element| element == &parent) {
+                Some(index) => index,
+                None => {
+                    error_callback(&format!(
+                        "skipping file with no included parent: {}",
+                        entry.display()
+                    ));
+                    return None;
+                }
+            };
+
+            let name = entry.file_name()?.to_str()?;
+
+            let file = File::open(&entry);
+            if let Err(e) = file {
+                error_callback(&format!("couldn't open {}: {}", entry.display(), e));
+                return None;
+            }
+            let file = file.ok()?;
+
+            let mut in_memory = true;
+            let mut meta_len = 0;
+            let meta = file.metadata();
+            if let Ok(ref meta) = meta {
+                meta_len = meta.len();
+                if meta_len > in_memory_limit {
+                    in_memory = false;
+                }
+            }
+
+            let mut start = 0;
+            let mut end = 0;
+            let mut compressed_hash = 0;
+            let mut reader = HashReader::new(file, XxHash64::with_seed(HASH_SEED));
+
+            if in_memory {
+                let mut data = Vec::new();
+                if let Err(e) = copy_encode(&mut reader, &mut data, compression as i32, 0) {
+                    error_callback(&format!("couldn't compress {}: {}", entry.display(), e));
+                    return None;
+                }
+
+                let mut archive = archive.lock();
+                if let Ok(ref mut archive) = archive {
+                    start = archive.seek(SeekFrom::Current(0)).unwrap();
+                    let mut hasher =
+                        HashReader::new(Cursor::new(&data), XxHash64::with_seed(HASH_SEED));
+                    if let Err(e) = copy(&mut hasher, archive.by_ref()) {
+                        error_callback(&format!(
+                            "couldn't write {} to archive: {}",
+                            entry.display(),
+                            e
+                        ));
+                        return None;
+                    }
+                    compressed_hash = hasher.finish();
+                    end = archive.seek(SeekFrom::Current(0)).unwrap();
+                }
+            } else {
+                info_callback(&format!(
+                    "{} (compressing large file to disk)",
+                    entry.display(),
+                ));
+                let cache_path = temp_dir().join(
+                    Alphanumeric
+                        .sample_iter(thread_rng())
+                        .map(char::from)
+                        .take(16)
+                        .collect::<String>(),
+                );
+
+                if let Err(e) = (|| -> Result<()> {
+                    let mut cache = File::create(&cache_path)?;
+                    copy_encode(
+                        &mut reader,
+                        &cache,
+                        compression as i32,
+                        u64::min(num_cpus / 2, meta_len / in_memory_limit + 1) as u32,
+                    )?;
+                    cache.flush()?;
+                    cache.sync_all()?;
+                    Ok(())
+                })() {
+                    error_callback(&format!("couldn't compress {}: {}", entry.display(), e));
+                    return None;
+                }
+
+                if let Err(e) = (|| -> Result<()> {
+                    let cache = File::open(&cache_path)?;
+                    let mut archive = archive.lock();
+                    let mut hasher = HashReader::new(&cache, XxHash64::with_seed(HASH_SEED));
+                    if let Ok(ref mut archive) = archive {
+                        start = archive.seek(SeekFrom::Current(0)).unwrap();
+                        copy(&mut hasher, archive.by_ref())?;
+                        end = archive.seek(SeekFrom::Current(0)).unwrap();
+                    }
+                    compressed_hash = hasher.finish();
+                    Ok(())
+                })() {
+                    error_callback(&format!(
+                        "couldn't write {} to archive: {}",
+                        entry.display(),
+                        e
+                    ));
+                    return None;
+                }
+
+                let _ = remove_file(cache_path);
+            }
+            let file_hash = reader.finish();
+
+            let mut name_array = [0; NAME_SIZE];
+            name_array[0..name.len()].copy_from_slice(name.as_bytes());
+            let mut header = FileSectionHeader {
+                name: name_array,
+                parent: parent as u32,
+                position: start - zero,
+                size: end - start,
+                file_hash,
+                compressed_hash,
+                time_accessed_nanos: 0,
+                time_accessed_seconds: 0,
+                time_modified_nanos: 0,
+                time_modified_seconds: 0,
+                mode: 0,
+                readonly: 0,
+            };
+
+            if let Ok(ref meta) = meta {
+                if let Ok(accessed) = meta.accessed() {
+                    if let Ok(accessed) = accessed.duration_since(SystemTime::UNIX_EPOCH) {
+                        header.time_accessed_seconds = accessed.as_secs();
+                        header.time_accessed_nanos = accessed.subsec_nanos();
+                    }
+                }
+                if let Ok(modified) = meta.modified() {
+                    if let Ok(modified) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                        header.time_modified_seconds = modified.as_secs();
+                        header.time_modified_nanos = modified.subsec_nanos();
+                    }
+                }
+                header.readonly = meta.permissions().readonly() as u8;
+                #[cfg(any(unix, target_os = "redox"))]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    header.mode = meta.permissions().mode();
+                }
+            }
+
+            let mut files = files.lock();
+            if let Ok(ref mut files) = files {
+                files.push(header);
+                let mut links = links.lock();
+                if let Ok(ref mut links) = links {
+                    links.push(entry.strip_prefix(&source).ok()?.to_slash()?);
+                }
+            }
+
+            progress_callback();
+            Some(())
+        })
+        .count();
+
+    let symlinks = Arc::new(Mutex::new(Vec::<SymlinkSection>::new()));
+
+    // enumerate symlinks
+    let _ = entries
+        .par_iter()
+        .filter_map(|entry| {
+            let entry = entry.as_ref().ok()?;
+            if !entry.file_type().is_symlink() {
+                return None;
+            }
+            let entry = entry.path();
+
+            if entry.file_name()?.len() > NAME_SIZE {
+                error_callback(&format!(
+                    "skipping file with name longer than: {}: {}",
+                    NAME_SIZE,
+                    entry.display()
+                ));
+                return None;
+            }
+
+            info_callback(&entry.strip_prefix(&source).ok()?.display().to_string());
+
+            let parent = entry.strip_prefix(&source).ok()?.parent()?.to_slash()?;
+            let parent = match parents.iter().position(|element| element == &parent) {
+                Some(index) => index,
+                None => {
+                    error_callback(&format!(
+                        "skipping file with no included parent: {}",
+                        entry.display()
+                    ));
+                    return None;
+                }
+            };
+
+            let meta = symlink_metadata(&entry);
+            let name = entry.file_name()?.to_str()?;
+
+            let link = read_link(&entry);
+            if let Err(ref e) = link {
+                error_callback(&format!("couldn't read link {}: {}", entry.display(), e));
+                return None;
+            }
+            let link = link.ok()?;
+            let link = link.strip_prefix(".").unwrap_or(&link);
+            let link = entry.parent().unwrap().join(link);
+            let link = link.canonicalize();
+            if let Err(e) = link {
+                error_callback(&format!(
+                    "link could not be canonicalized, skipping {}: {}",
+                    entry.display(),
+                    e
+                ));
+                return None;
+            }
+            let link = link.ok()?;
+            let is_file = link.is_file();
+            let link = link.strip_prefix(&source);
+            if let Err(e) = link {
+                error_callback(&format!(
+                    "link points to outside the directory, skipping {}: {}",
+                    entry.display(),
+                    e
+                ));
+                return None;
+            }
+            let link = link.ok()?;
+
+            let target = if is_file {
+                let link = link.to_slash()?;
+                match links
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .position(|element| element == &link)
+                {
+                    Some(index) => index,
+                    None => {
+                        error_callback(&format!(
+                            "skipping link with no included target: {}",
+                            entry.display()
+                        ));
+                        return None;
+                    }
+                }
+            } else {
+                let link = link.to_slash()?;
+                match parents.iter().position(|element| element == &link) {
+                    Some(index) => index,
+                    None => {
+                        error_callback(&format!(
+                            "skipping link with no included target: {}",
+                            entry.display()
+                        ));
+                        return None;
+                    }
+                }
+            };
+
+            let mut name_array = [0; NAME_SIZE];
+            name_array[0..name.len()].copy_from_slice(name.as_bytes());
+            let mut header = SymlinkSection {
+                name:                  name_array,
+                parent:                parent as u32,
+                kind:                  is_file as u8,
+                target:                target as u32,
+                time_accessed_nanos:   0,
+                time_accessed_seconds: 0,
+                time_modified_nanos:   0,
+                time_modified_seconds: 0,
+                mode:                  0,
+                readonly:              0,
+            };
+
+            if let Ok(ref meta) = meta {
+                if let Ok(accessed) = meta.accessed() {
+                    if let Ok(accessed) = accessed.duration_since(SystemTime::UNIX_EPOCH) {
+                        header.time_accessed_seconds = accessed.as_secs();
+                        header.time_accessed_nanos = accessed.subsec_nanos();
+                    }
+                }
+                if let Ok(modified) = meta.modified() {
+                    if let Ok(modified) = modified.duration_since(SystemTime::UNIX_EPOCH) {
+                        header.time_modified_seconds = modified.as_secs();
+                        header.time_modified_nanos = modified.subsec_nanos();
+                    }
+                }
+                header.readonly = meta.permissions().readonly() as u8;
+                #[cfg(any(unix, target_os = "redox"))]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    header.mode = meta.permissions().mode();
+                }
+            }
+
+            let mut symlinks = symlinks.lock();
+            if let Ok(ref mut symlinks) = symlinks {
+                symlinks.push(header);
+            }
+
+            progress_callback();
+            Some(())
+        })
+        .count();
+
+    let mut target = archive.lock().unwrap();
+    let end = target.seek(SeekFrom::Current(0)).unwrap();
+
+    // write sections
+    let mut hasher = XxHash64::with_seed(HASH_SEED);
+    for section in directories.iter() {
+        hasher.write(section.as_bytes());
+        target.write_all(section.as_bytes()).unwrap();
+    }
+    for section in files.lock().unwrap().iter() {
+        hasher.write(section.as_bytes());
+        target.write_all(section.as_bytes()).unwrap();
+    }
+    for section in symlinks.lock().unwrap().iter() {
+        hasher.write(section.as_bytes());
+        target.write_all(section.as_bytes()).unwrap();
+    }
+    let payload_header = PayloadHeader {
+        kind:               0,
+        directory_sections: directories.len(),
+        file_sections:      files.lock().unwrap().len(),
+        symlink_sections:   symlinks.lock().unwrap().len(),
+        section_hash:       hasher.finish(),
+        payload_size:       end - zero,
+    };
+    target.write_all(payload_header.as_bytes()).unwrap();
+
+    payload_header.len()
+}
+
+```
+
+`src/main.rs`:
+
+```rs
+use std::{
+    convert::TryInto,
+    fs::File,
+    io::{BufWriter, Cursor, Write},
+    path::PathBuf,
+    time::Duration,
+};
+
+use clap::Parser;
+use console::{style, Emoji};
+use indicatif::{ProgressBar, ProgressStyle};
+use jwalk::WalkDir;
+use zstd::stream::copy_decode;
+
+mod types;
+use types::*;
+
+mod compress;
+use compress::compress;
+
+mod args;
+use args::*;
+
+#[derive(Parser)]
+#[clap(about, version)]
+pub struct Args {
+    /// Zstd compression level (0-21)
+    #[clap(short = 'c', long, default_value = "8")]
+    compression:      u32,
+    /// Which runner to use
+    #[clap(short = 'r', long, default_value = "native")]
+    runner:           String,
+    /// Unpack directory target (temp, local, cwd)
+    #[clap(short = 't', long, default_value = "temp")]
+    unpack_target:    String,
+    /// Unpack directory name [default: inferred from input directory]
+    #[clap(short = 'd', long)]
+    unpack_directory: Option<String>,
+    /// Versioning strategy (sidebyside, replace, none)
+    #[clap(short = 'v', long, default_value = "sidebyside")]
+    versioning:       String,
+    /// Version specifier override [default: randomly generated]
+    #[clap(short = 'V', long)]
+    version:          Option<String>,
+    /// Verification of existing unpacked data (existence, checksum, none)
+    #[clap(short = 'e', long, default_value = "existence")]
+    verification:     String,
+    /// Information output details (title, verbose, none)
+    #[clap(short = 'i', long, default_value = "title")]
+    show_information: String,
+    /// Prints available runners
+    #[clap(short = 'l', long)]
+    #[allow(dead_code)]
+    list_runners:     bool,
+    /// Unconditionally show a console window on Windows
+    #[clap(short = 's', long)]
+    show_console:     bool,
+    /// Set the current dir of the target to the unpack directory
+    #[clap(short = 'w', long)]
+    current_dir:      bool,
+    /// Path to the input directory
+    #[clap(name = "input", parse(from_os_str))]
+    input:            PathBuf,
+    /// Path to the executable to start after unpacking
+    #[clap(name = "command", parse(from_os_str))]
+    command:          PathBuf,
+    /// Path to or filename of the output executable
+    #[clap(name = "output", parse(from_os_str))]
+    output:           PathBuf,
+}
+
+fn main() {
+    color_backtrace::install();
+
+    if std::env::args().any(|arg| arg == "-l" || arg == "--list-runners") {
+        list_runners();
+        std::process::exit(0);
+    }
+
+    let args = Args::parse();
+
+    let runner = get_runner(&args.runner);
+    let unpack_target = get_unpack_target(&args.unpack_target);
+    let versioning = get_versioning(&args.versioning);
+    let version = get_version(args.version.as_deref());
+    let source = get_source(&args.input);
+    let output = get_output(&args.output);
+    let command = get_command(&args.command, &source);
+    let unpack_directory = get_unpack_directory(args.unpack_directory.as_deref(), &source);
+    let verification = get_verification(&args.verification);
+    let show_information = get_show_information(&args.show_information);
+
+    let file = File::create(&output).unwrap_or_else(|_| {
+        println!(
+            "{}: {}",
+            style("couldn't create output file").red(),
+            output.display()
+        );
+        std::process::exit(-1);
+    });
+
+    let count = if source.is_dir() {
+        println!(
+            "{} {}counting contents of {}…",
+            style("[1/4]").bold().black(),
+            Emoji("🔍 ", ""),
+            style(
+                &source
+                    .strip_prefix(std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap())
+                    .unwrap_or(&source)
+                    .display()
+            )
+            .blue()
+        );
+        WalkDir::new(&source).skip_hidden(false).into_iter().count() as u64 - 1
+    } else {
+        println!(
+            "{} {}checking {}…",
+            style("[1/4]").bold().black(),
+            Emoji("🔍 ", ""),
+            style(
+                &source
+                    .strip_prefix(std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap())
+                    .unwrap_or(&source)
+                    .display()
+            )
+            .blue()
+        );
+        1
+    };
+
+    println!(
+        "{} {}writing runner {}…",
+        style("[2/4]").bold().black(),
+        Emoji("📃 ", ""),
+        style(
+            &output
+                .strip_prefix(std::fs::canonicalize(std::env::current_dir().unwrap()).unwrap())
+                .unwrap_or(&output)
+                .display()
+        )
+        .blue()
+    );
+    let mut writer = BufWriter::new(file);
+    copy_decode(Cursor::new(&runner), &mut writer).unwrap();
+
+    println!(
+        "{} {}compressing {} files and directories…",
+        style("[3/4]").bold().black(),
+        Emoji("🚚 ", ""),
+        style(count).magenta(),
+    );
+    let bar_progress =
+        ProgressBar::new(0).with_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} {elapsed_precise} [{wide_bar:.green}] {pos}/{len}\n{spinner:.green} {wide_msg}").unwrap(),
+        );
+    bar_progress.set_length(count);
+    bar_progress.set_position(0);
+    bar_progress.enable_steady_tick(Duration::from_millis(12));
+    let compressed = compress(
+        &source,
+        &mut writer,
+        args.compression,
+        || {
+            bar_progress.inc(1);
+        },
+        |message| {
+            bar_progress.inc(1);
+            bar_progress.println(&format!(
+                "      {}{}",
+                Emoji("⚠ ", ""),
+                style(message).red()
+            ));
+        },
+        |message| {
+            bar_progress.set_message(format!("{}", style(message).blue()));
+        },
+    ) as u64;
+    bar_progress.finish_and_clear();
+    writer.flush().unwrap();
+
+    println!(
+        "      {}{} {} {}{}",
+        Emoji("✨ ", ""),
+        style("successfully compressed").green(),
+        style(compressed).magenta(),
+        style("files and directories").green(),
+        if compressed < count {
+            style(format!(" (skipped {})", count - compressed))
+                .bold()
+                .red()
+        } else {
+            style(String::new())
+        }
+    );
+
+    println!(
+        "{} {}writing startup configuration…",
+        style("[4/4]").bold().black(),
+        Emoji("📃 ", "")
+    );
+
+    let info = StarterInfo {
+        signature: [0x50, 0x45, 0x33, 0x44, 0x41, 0x54, 0x41, 0x00],
+        show_console: args.show_console.into(),
+        current_dir: args.current_dir.into(),
+        verification,
+        show_information,
+        uid: version.as_bytes().try_into().unwrap(),
+        unpack_target,
+        versioning,
+        unpack_directory,
+        command,
+        wrappe_format: WRAPPE_FORMAT,
+    };
+    writer.write_all(info.as_bytes()).unwrap();
+
+    writer.flush().unwrap();
+    let _ = writer;
+
+    #[cfg(any(unix, target_os = "redox"))]
+    {
+        use ::std::{
+            fs::{metadata, set_permissions},
+            os::unix::prelude::*,
+        };
+        let mode = metadata(&output)
+            .map(|metadata| metadata.permissions().mode())
+            .unwrap_or(0o755);
+        set_permissions(&output, PermissionsExt::from_mode(mode | 0o111)).unwrap_or_else(|e| {
+            eprintln!(
+                "      {} failed to set permissions for {}: {}",
+                Emoji("⚠ ", ""),
+                output.display(),
+                e
+            )
+        });
+    }
+
+    println!("      {}{}", Emoji("✨ ", ""), style("done!").green());
+}
+
+```
+
+`src/types.rs`:
+
+```rs
+pub use zerocopy::AsBytes;
+
+pub const WRAPPE_FORMAT: u8 = 200;
+pub const NAME_SIZE: usize = 128;
+
+#[repr(C, packed)]
+#[derive(AsBytes)]
+pub struct StarterInfo {
+    pub signature:        [u8; 8],
+    pub show_console:     u8,
+    pub current_dir:      u8,
+    pub verification:     u8,
+    pub show_information: u8,
+    pub uid:              [u8; 16],
+    pub unpack_target:    u8,
+    pub versioning:       u8,
+    pub wrappe_format:    u8,
+    pub unpack_directory: [u8; NAME_SIZE],
+    pub command:          [u8; NAME_SIZE],
+}
+
+#[repr(C, packed)]
+#[derive(AsBytes)]
+pub struct PayloadHeader {
+    pub kind:               u8,
+    pub directory_sections: usize,
+    pub file_sections:      usize,
+    pub symlink_sections:   usize,
+    pub section_hash:       u64,
+    pub payload_size:       u64,
+}
+impl PayloadHeader {
+    pub fn len(&self) -> usize {
+        self.directory_sections + self.file_sections + self.symlink_sections
+    }
+}
+#[repr(C, packed)]
+#[derive(AsBytes)]
+pub struct DirectorySection {
+    pub name:   [u8; NAME_SIZE],
+    pub parent: u32,
+}
+#[repr(C, packed)]
+#[derive(AsBytes)]
+pub struct FileSectionHeader {
+    pub position:              u64,
+    pub size:                  u64,
+    pub name:                  [u8; NAME_SIZE],
+    pub parent:                u32,
+    pub file_hash:             u64,
+    pub compressed_hash:       u64,
+    pub time_accessed_seconds: u64,
+    pub time_accessed_nanos:   u32,
+    pub time_modified_seconds: u64,
+    pub time_modified_nanos:   u32,
+    pub mode:                  u32,
+    pub readonly:              u8,
+}
+#[repr(C, packed)]
+#[derive(AsBytes)]
+pub struct SymlinkSection {
+    pub name:                  [u8; NAME_SIZE],
+    pub parent:                u32,
+    pub kind:                  u8,
+    pub target:                u32,
+    pub time_accessed_seconds: u64,
+    pub time_accessed_nanos:   u32,
+    pub time_modified_seconds: u64,
+    pub time_modified_nanos:   u32,
+    pub mode:                  u32,
+    pub readonly:              u8,
+}
+
+```
+
+`startpe/Cargo.toml`:
+
+```toml
+[package]
+
+authors = ["Christian Sdunek <me@systemcluster.me>"]
+description = "Runner for Packed Executables"
+edition = "2021"
+license = "BSD-2-Clause"
+name = "startpe"
+publish = false
+repository = "https://github.com/Systemcluster/wrappe"
+version = "0.0.0"
+workspace = ".."
+
+[[bin]]
+
+name = "startpe"
+path = "src/main.rs"
+
+[dependencies]
+
+dirs = "4.0.0"
+filetime = "0.2.16"
+fslock = "0.2.1"
+memmap2 = "0.5.3"
+rayon = "1.5.2"
+twox-hash = {version = "1.6.2", default-features = false}
+zerocopy = "0.6.1"
+zstd = {version = "0.11.1", default-features = false, features = ["arrays"]}
+
+[target.'cfg(windows)'.dependencies]
+
+winapi = {version = "0.3.9", features = [
+  "wincon",
+  "wincontypes",
+  "consoleapi",
+]}
+
+```
+
+`startpe/Cross.toml`:
+
+```toml
+[build.env]
+passthrough = [
+  "RUSTFLAGS",
+  "GIT_HASH",
+  "MACOSX_DEPLOYMENT_TARGET",
+]
+
+```
+
+`startpe/src/decompress.rs`:
+
+```rs
+use std::{
+    fs::{create_dir_all, read_link, remove_dir, remove_file, File},
+    hash::Hasher,
+    io::{copy, sink, Cursor, Read, Result},
+    mem::size_of,
+    path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
+};
+
+use filetime::{set_file_times, set_symlink_file_times, FileTime};
+use fslock::LockFile;
+use rayon::prelude::*;
+use twox_hash::XxHash64;
+use zerocopy::LayoutVerified;
+use zstd::stream::copy_decode;
+
+use crate::types::*;
+
+use crate::versioning::*;
+
+pub const HASH_SEED: u64 = 1246736989840;
+pub const LOCK_FILE: &str = "._wrappe_lock_";
+
+pub struct HashReader<R: Read, H: Hasher> {
+    reader: R,
+    hasher: H,
+}
+impl<R: Read, H: Hasher> HashReader<R, H> {
+    pub fn new(reader: R, hasher: H) -> Self { HashReader { reader, hasher } }
+
+    pub fn finish(self) -> u64 { self.hasher.finish() }
+}
+impl<R: Read, H: Hasher> Read for HashReader<R, H> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let bytes = self.reader.read(buf)?;
+        if bytes > 0 {
+            self.hasher.write(&buf[0..bytes]);
+        }
+        Ok(bytes)
+    }
+}
+
+/// Decompress the payload and section data in `mmap` into `unpack_dir`.
+/// The data is expected to be in the following order at the end of `mmap`:
+/// - compressed file contents
+/// - directory sections
+/// - file section headers
+/// - symlink sections
+/// - payload section header
+pub fn decompress(
+    mmap: &[u8], unpack_dir: &Path, verification: u8, mut should_extract: bool, version: &str,
+    show_information: u8,
+) -> bool {
+    // read payload header sections
+    let payload_header_start = mmap.len() - size_of::<PayloadHeader>();
+    let payload_header = LayoutVerified::<_, PayloadHeader>::new(&mmap[payload_header_start..])
+        .expect("couldn't read payload header")
+        .into_ref();
+
+    let directory_sections = payload_header.directory_sections;
+    let file_sections = payload_header.file_sections;
+    let symlink_sections = payload_header.symlink_sections;
+    let payload_size = payload_header.payload_size;
+    if show_information >= 2 {
+        println!(
+            "payload: {} directories, {} files, {} symlinks ({} total)",
+            directory_sections,
+            file_sections,
+            symlink_sections,
+            payload_header.len()
+        );
+        println!("payload size: {}", payload_size);
+    }
+
+    let symlink_sections_start =
+        payload_header_start - symlink_sections * size_of::<SymlinkSection>();
+    let file_sections_start =
+        symlink_sections_start - file_sections * size_of::<FileSectionHeader>();
+    let directory_sections_start =
+        file_sections_start - directory_sections * size_of::<DirectorySection>();
+
+    let mut section_hasher = XxHash64::with_seed(HASH_SEED);
+
+    if show_information >= 2 {
+        println!("reading sections...");
+    }
+    let directories = mmap[directory_sections_start..file_sections_start]
+        .chunks(size_of::<DirectorySection>())
+        .enumerate()
+        .fold(
+            // start with the unpack directory as parent 0
+            Vec::<PathBuf>::from([PathBuf::from("")]),
+            |mut directories, (i, section)| {
+                let section_start = directory_sections_start + i * size_of::<DirectorySection>();
+                section_hasher.write(section);
+                let section = LayoutVerified::<_, DirectorySection>::new(
+                    &mmap[section_start..section_start + size_of::<DirectorySection>()],
+                )
+                .expect("couldn't read payload header")
+                .into_ref();
+
+                directories.push(
+                    directories[section.parent as usize].join(
+                        std::str::from_utf8(
+                            &section.name[0..(section
+                                .name
+                                .iter()
+                                .position(|&c| c == b'\0')
+                                .unwrap_or(section.name.len()))],
+                        )
+                        .unwrap(),
+                    ),
+                );
+                directories
+            },
+        );
+    let files = mmap[file_sections_start..symlink_sections_start]
+        .chunks(size_of::<FileSectionHeader>())
+        .enumerate()
+        .map(|(i, section)| {
+            let section_start = file_sections_start + i * size_of::<FileSectionHeader>();
+            section_hasher.write(section);
+            let section = LayoutVerified::<_, FileSectionHeader>::new(
+                &mmap[section_start..section_start + size_of::<FileSectionHeader>()],
+            )
+            .expect("couldn't read payload header")
+            .into_ref();
+            (
+                section,
+                std::str::from_utf8(
+                    &section.name[0..(section
+                        .name
+                        .iter()
+                        .position(|&c| c == b'\0')
+                        .unwrap_or(section.name.len()))],
+                )
+                .unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let symlinks = mmap[symlink_sections_start..payload_header_start]
+        .chunks(size_of::<SymlinkSection>())
+        .enumerate()
+        .map(|(i, section)| {
+            let section_start = symlink_sections_start + i * size_of::<SymlinkSection>();
+            section_hasher.write(section);
+            let section = LayoutVerified::<_, SymlinkSection>::new(
+                &mmap[section_start..section_start + size_of::<SymlinkSection>()],
+            )
+            .expect("couldn't read payload header")
+            .into_ref();
+            (
+                section,
+                std::str::from_utf8(
+                    &section.name[0..(section
+                        .name
+                        .iter()
+                        .position(|&c| c == b'\0')
+                        .unwrap_or(section.name.len()))],
+                )
+                .unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let section_hash = section_hasher.finish();
+    if section_hash != payload_header.section_hash {
+        let expected = payload_header.section_hash;
+        panic!(
+            "section hash ({}) differs from expected section hash ({})",
+            section_hash, expected
+        );
+    }
+
+    create_dir_all(unpack_dir)
+        .unwrap_or_else(|e| panic!("couldn't create directory {}: {}", unpack_dir.display(), e));
+
+    let mut lockfile = LockFile::open(&unpack_dir.join(LOCK_FILE)).unwrap();
+    lockfile.lock().unwrap();
+
+    // verify files
+    if verification > 0 && !should_extract && file_sections > 0 {
+        if show_information >= 2 {
+            println!("verifying files...");
+        }
+        should_extract = !files.par_iter().all(|(file, file_name)| {
+            let path = unpack_dir
+                .join(&directories[file.parent as usize])
+                .join(&file_name);
+            if !path.is_file() {
+                eprintln!("verification failed: not a file: {}", path.display());
+                return false;
+            }
+            if verification == 2 {
+                // verify checksums
+                let target = File::open(&path);
+                if target.is_err() {
+                    eprintln!(
+                        "verification failed: couldn't open file: {}",
+                        path.display()
+                    );
+                    return false;
+                }
+                let target = target.unwrap();
+                let mut hasher = XxHash64::with_seed(HASH_SEED);
+                let mut reader = HashReader::new(&target, &mut hasher);
+                if copy(&mut reader, &mut sink()).is_err() {
+                    eprintln!(
+                        "verification failed: couldn't read file: {}",
+                        path.display()
+                    );
+                    return false;
+                };
+                let file_hash = hasher.finish();
+                if file_hash != file.file_hash {
+                    let expected = file.file_hash;
+                    eprintln!(
+                        "verification failed: file hash ({}) differs from expected file hash ({}): {}",
+                        file_hash,
+                        expected,
+                        path.display()
+                    );
+                    return false;
+                }
+            }
+            true
+        });
+    }
+
+    // verify symlinks
+    if verification > 0 && !should_extract && symlink_sections > 0 {
+        if show_information >= 2 {
+            println!("verifying symlinks...");
+        }
+        should_extract = !symlinks.par_iter().all(|(symlink, symlink_name)| {
+            let path = unpack_dir
+                .join(&directories[symlink.parent as usize])
+                .join(&symlink_name);
+            let link = read_link(&path);
+            if link.is_err() {
+                eprintln!(
+                    "verification failed: not a valid symlink: {}",
+                    path.display()
+                );
+                return false;
+            }
+            let link = link.unwrap();
+            if !link.starts_with(unpack_dir) {
+                eprintln!(
+                    "verification failed: symlink points to target outside the target directory: {}",
+                    path.display()
+                );
+                return false;
+            }
+            // directory symlink
+            if symlink.kind == 0 {
+                let target = unpack_dir.join(&directories[symlink.target as usize]);
+                if link != target
+                {
+                    eprintln!(
+                        "verification failed: symlink points to wrong target: {} (expected: {})",
+                        target.display(),
+                        link.display(),
+                    );
+                    return false;
+                }
+            }
+            // file symlink
+            if symlink.kind == 1 {
+                let (file, file_name) = files[symlink.target as usize];
+                let target = unpack_dir
+                    .join(&directories[file.parent as usize])
+                    .join(&file_name);
+                if target != link
+                {
+                    eprintln!(
+                        "verification failed: symlink points to wrong target: {} (expected: {})",
+                        target.display(),
+                        link.display(),
+                    );
+                    return false;
+                }
+            }
+            true
+        });
+    }
+
+    if should_extract {
+        // create directories
+        if show_information >= 2 {
+            println!("creating directories...");
+        }
+        directories.iter().for_each(|directory| {
+            let path = unpack_dir.join(&directory);
+            create_dir_all(&path).unwrap_or_else(|e| {
+                panic!("couldn't create directory {}: {}", path.display(), e);
+            });
+        });
+
+        // unpack files
+        if show_information >= 2 {
+            println!("unpacking...");
+        }
+        let files_start = directory_sections_start as u64 - payload_size;
+        files.par_iter().for_each(|(file, file_name)| {
+            let path = unpack_dir
+                .join(&directories[file.parent as usize])
+                .join(&file_name);
+            let content = &mmap[(files_start + file.position) as usize
+                ..(files_start + file.position + file.size) as usize];
+            let mut reader = HashReader::new(Cursor::new(&content), XxHash64::with_seed(HASH_SEED));
+            let mut output = File::create(&path).unwrap();
+            copy_decode(&mut reader, &mut output)
+                .unwrap_or_else(|e| panic!("failed to unpack file {}: {}", path.display(), e));
+            let compressed_hash = reader.finish();
+            if file.compressed_hash != compressed_hash {
+                let expected = file.compressed_hash;
+                panic!(
+                    "file hash ({}) differs from expected file hash ({}) for {}",
+                    compressed_hash,
+                    expected,
+                    path.display()
+                );
+            }
+            #[cfg(windows)]
+            {
+                use ::std::fs::{metadata, set_permissions};
+                let meta = metadata(&path);
+                if let Ok(ref meta) = meta {
+                    let read = file.readonly != 0;
+                    let mut perm = meta.permissions();
+                    perm.set_readonly(read);
+                    set_permissions(&path, perm).unwrap_or_else(|e| {
+                        eprintln!("failed to set permissions for {}: {}", path.display(), e)
+                    });
+                }
+            }
+            #[cfg(any(unix, target_os = "redox"))]
+            {
+                use ::std::{
+                    fs::{set_permissions, Permissions},
+                    os::unix::prelude::*,
+                };
+                let mode = file.mode;
+                let mut perm: Permissions = PermissionsExt::from_mode(mode as u32);
+                let read = file.readonly != 0;
+                perm.set_readonly(read);
+                set_permissions(&path, perm).unwrap_or_else(|e| {
+                    eprintln!("failed to set permissions for {}: {}", path.display(), e)
+                });
+            }
+            set_file_times(
+                &path,
+                FileTime::from_unix_time(
+                    file.time_accessed_seconds as i64,
+                    file.time_accessed_nanos as u32,
+                ),
+                FileTime::from_unix_time(
+                    file.time_modified_seconds as i64,
+                    file.time_modified_nanos as u32,
+                ),
+            )
+            .unwrap_or_else(|e| println!("failed to set file times for {}: {}", path.display(), e));
+        });
+
+        // create symlinks
+        #[cfg(not(any(windows, unix, target_os = "redox")))]
+        {
+            eprintln!("skipping symlink creation on unsupported platform");
+        }
+        #[cfg(any(windows, unix, target_os = "redox"))]
+        {
+            if show_information >= 2 {
+                println!("creating symlinks...");
+            }
+            symlinks.par_iter().for_each(|(symlink, symlink_name)| {
+                let path = unpack_dir
+                    .join(&directories[symlink.parent as usize])
+                    .join(&symlink_name);
+                // directory symlink
+                if symlink.kind == 0 {
+                    if path.exists() {
+                        remove_dir(&path).unwrap_or_else(|e| {
+                            panic!(
+                                "failed to remove existing symlink {}: {}",
+                                path.display(),
+                                e
+                            )
+                        });
+                    }
+                    while path.exists() {
+                        sleep(Duration::from_millis(20));
+                    }
+                    let target = unpack_dir.join(&directories[symlink.target as usize]);
+                    #[cfg(windows)]
+                    {
+                        use ::std::os::windows::fs::symlink_dir;
+                        symlink_dir(&target, &path).unwrap_or_else(|e| {
+                            panic!("failed to create symlink {}: {}", path.display(), e)
+                        });
+                    }
+                    #[cfg(any(unix, target_os = "redox"))]
+                    {
+                        use ::std::os::unix::fs::symlink;
+                        symlink(&target, &path).unwrap_or_else(|e| {
+                            panic!("failed to create symlink {}: {}", path.display(), e)
+                        });
+                    }
+                }
+                // file symlink
+                if symlink.kind == 1 {
+                    if path.exists() {
+                        remove_file(&path).unwrap_or_else(|e| {
+                            panic!(
+                                "failed to remove existing symlink {}: {}",
+                                path.display(),
+                                e
+                            )
+                        });
+                    }
+                    while path.exists() {
+                        sleep(Duration::from_millis(20));
+                    }
+                    let (file, file_name) = files[symlink.target as usize];
+                    let target = unpack_dir
+                        .join(&directories[file.parent as usize])
+                        .join(&file_name);
+                    #[cfg(windows)]
+                    {
+                        use ::std::os::windows::fs::symlink_file;
+                        symlink_file(&target, &path).unwrap_or_else(|e| {
+                            panic!("failed to create symlink {}: {}", path.display(), e)
+                        });
+                    }
+                    #[cfg(any(unix, target_os = "redox"))]
+                    {
+                        use ::std::os::unix::fs::symlink;
+                        symlink(&target, &path).unwrap_or_else(|e| {
+                            panic!("failed to create symlink {}: {}", path.display(), e)
+                        });
+                    }
+                    set_symlink_file_times(
+                        &path,
+                        FileTime::from_unix_time(
+                            symlink.time_accessed_seconds as i64,
+                            symlink.time_accessed_nanos as u32,
+                        ),
+                        FileTime::from_unix_time(
+                            symlink.time_modified_seconds as i64,
+                            symlink.time_modified_nanos as u32,
+                        ),
+                    )
+                    .unwrap_or_else(|e| {
+                        eprintln!("failed to set file times for {}: {}", path.display(), e)
+                    });
+                }
+            });
+        }
+
+        set_version(unpack_dir, version);
+    }
+
+    should_extract
+}
+
+```
+
+`startpe/src/main.rs`:
+
+```rs
+use std::{
+    env::current_exe,
+    fs::{read_link, File},
+    io::Write,
+    mem::size_of,
+    panic::set_hook,
+    process::Command,
+    time::SystemTime,
+};
+
+#[cfg(any(unix, target_os = "redox"))]
+use std::os::unix::process::CommandExt;
+
+use memmap2::MmapOptions;
+use zerocopy::LayoutVerified;
+
+#[cfg(windows)]
+use winapi::um::wincon::FreeConsole;
+
+mod types;
+use types::*;
+
+mod decompress;
+use decompress::*;
+
+mod permissions;
+use permissions::*;
+
+mod versioning;
+use versioning::*;
+
+fn main() {
+    set_hook(Box::<_>::new(move |panic| {
+        if let Some(message) = panic.payload().downcast_ref::<&str>() {
+            eprintln!("{}", message);
+        } else if let Some(message) = panic.payload().downcast_ref::<String>() {
+            eprintln!("{}", message);
+        } else {
+            eprintln!("{}", panic);
+        }
+        #[cfg(windows)]
+        if let Ok(mut file) = File::create(format!(
+            "error-{}.txt",
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        )) {
+            let _ = writeln!(file, "{}", panic);
+        }
+    }));
+
+    let mut exe = current_exe().expect("couldn't get handle to current executable");
+    while let Ok(link) = read_link(&exe) {
+        exe = link;
+    }
+    let file = File::open(&exe).expect("couldn't open current executable");
+
+    let mmap = unsafe {
+        MmapOptions::new()
+            .map(&file)
+            .expect("couldn't memory map current executable")
+    };
+    let end = mmap.len();
+
+    let info_start = end - size_of::<StarterInfo>();
+    let info = LayoutVerified::<_, StarterInfo>::new(&mmap[info_start..end])
+        .expect("couldn't read starter info")
+        .into_ref();
+
+    let show_information = info.show_information;
+    if show_information >= 1 {
+        println!(
+            "{} {}{}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            option_env!("GIT_HASH")
+                .map(|hash| format!(" ({})", hash))
+                .unwrap_or_default()
+        );
+    }
+
+    if info.signature != [0x50, 0x45, 0x33, 0x44, 0x41, 0x54, 0x41, 0x00] {
+        panic!("file signature is invalid");
+    }
+    if info.wrappe_format != WRAPPE_FORMAT {
+        panic!(
+            "runner version ({}) differs from wrapper version ({})",
+            WRAPPE_FORMAT, info.wrappe_format
+        );
+    }
+
+    let unpack_dir_name = std::str::from_utf8(
+        &info.unpack_directory[0..(info
+            .unpack_directory
+            .iter()
+            .position(|&c| c == b'\0')
+            .unwrap_or(info.unpack_directory.len()))],
+    )
+    .unwrap();
+    if show_information >= 1 {
+        println!("{}", unpack_dir_name);
+    }
+
+    let version = std::str::from_utf8(
+        &info.uid[0..(info
+            .uid
+            .iter()
+            .position(|&c| c == b'\0')
+            .unwrap_or(info.uid.len()))],
+    )
+    .unwrap();
+    if show_information >= 2 {
+        println!();
+        println!("version: {}", version);
+    }
+
+    let unpack_root = match info.unpack_target {
+        0 => std::env::temp_dir(),
+        1 => dirs::data_local_dir().unwrap(),
+        2 => std::env::current_dir().unwrap(),
+        _ => panic!("invalid unpack target"),
+    };
+    let mut unpack_dir = unpack_root.join(unpack_dir_name);
+    if info.versioning == 0 {
+        unpack_dir = unpack_dir.join(version);
+    }
+    if show_information >= 2 {
+        println!("target directory: {}", unpack_dir.display());
+    }
+
+    let run_path = &unpack_dir.join(
+        std::str::from_utf8(
+            &info.command[0..(info
+                .command
+                .iter()
+                .position(|&c| c == b'\0')
+                .unwrap_or(info.command.len()))],
+        )
+        .unwrap(),
+    );
+    if show_information >= 2 {
+        println!("runpath: {}", run_path.display());
+    }
+
+    let should_extract = match info.versioning {
+        0 => get_version(&unpack_dir) != version,
+        1 => get_version(&unpack_dir) != version,
+        _ => true,
+    };
+
+    let verification = if !should_extract {
+        info.verification
+    } else {
+        0
+    };
+    if show_information >= 2 {
+        println!("should verify: {}", verification);
+        println!("should extract: {}", should_extract);
+    }
+
+    if should_extract || verification > 0 {
+        let extracted = decompress(
+            &mmap[..info_start],
+            &unpack_dir,
+            verification,
+            should_extract,
+            version,
+            show_information,
+        );
+        if extracted {
+            set_executable_permissions(run_path);
+        }
+    }
+
+    let current_dir = std::env::current_dir().unwrap();
+    let current_dir = if info.current_dir == 1 {
+        &unpack_dir
+    } else {
+        &current_dir
+    };
+    if show_information >= 2 {
+        println!("current dir: {}", current_dir.display());
+        println!("running...");
+    }
+
+    let _ = mmap;
+
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if show_information >= 2 {
+        println!("forwarded args: {:?}", args);
+    }
+
+    let mut command = Command::new(run_path);
+    command.args(args);
+    command.current_dir(current_dir);
+    #[cfg(any(unix, target_os = "redox"))]
+    {
+        let e = command.exec();
+        panic!("failed to run {}: {}", run_path.display(), e);
+    }
+    #[cfg(not(any(unix, target_os = "redox")))]
+    {
+        let mut child = command
+            .spawn()
+            .unwrap_or_else(|e| panic!("failed to run {}: {}", run_path.display(), e));
+        #[cfg(windows)]
+        unsafe {
+            if info.show_console == 0 {
+                FreeConsole();
+            }
+        }
+        let result = child
+            .wait()
+            .unwrap_or_else(|e| panic!("failed to run {}: {}", run_path.display(), e));
+
+        std::process::exit(result.code().unwrap_or(0))
+    }
+}
+
+```
+
+`startpe/src/permissions.rs`:
+
+```rs
+use std::path::Path;
+
+#[cfg(any(unix, target_os = "redox"))]
+pub fn set_executable_permissions(path: &Path) {
+    use ::std::{
+        fs::{metadata, set_permissions, Permissions},
+        os::unix::prelude::*,
+    };
+    let meta = metadata(&path);
+    if let Ok(ref meta) = meta {
+        let mut perm: Permissions = meta.permissions();
+        perm.set_mode(perm.mode() | 0o110);
+        set_permissions(&path, perm).unwrap_or_else(|e| {
+            eprintln!(
+                "failed to set executable permissions for {}: {}",
+                path.display(),
+                e
+            )
+        });
+    }
+}
+
+#[cfg(not(any(unix, target_os = "redox")))]
+pub fn set_executable_permissions(_: &Path) {}
+
+```
+
+`startpe/src/types.rs`:
+
+```rs
+pub use zerocopy::FromBytes;
+
+pub const WRAPPE_FORMAT: u8 = 200;
+pub const NAME_SIZE: usize = 128;
+
+#[repr(C, packed)]
+#[derive(FromBytes)]
+pub struct StarterInfo {
+    pub signature:        [u8; 8],
+    pub show_console:     u8,
+    pub current_dir:      u8,
+    pub verification:     u8,
+    pub show_information: u8,
+    pub uid:              [u8; 16],
+    pub unpack_target:    u8,
+    pub versioning:       u8,
+    pub wrappe_format:    u8,
+    pub unpack_directory: [u8; NAME_SIZE],
+    pub command:          [u8; NAME_SIZE],
+}
+
+#[repr(C, packed)]
+#[derive(FromBytes)]
+pub struct PayloadHeader {
+    pub kind:               u8,
+    pub directory_sections: usize,
+    pub file_sections:      usize,
+    pub symlink_sections:   usize,
+    pub section_hash:       u64,
+    pub payload_size:       u64,
+}
+impl PayloadHeader {
+    pub fn len(&self) -> usize {
+        self.directory_sections + self.file_sections + self.symlink_sections
+    }
+}
+#[repr(C, packed)]
+#[derive(FromBytes)]
+pub struct DirectorySection {
+    pub name:   [u8; NAME_SIZE],
+    pub parent: u32,
+}
+#[repr(C, packed)]
+#[derive(FromBytes)]
+pub struct FileSectionHeader {
+    pub position:              u64,
+    pub size:                  u64,
+    pub name:                  [u8; NAME_SIZE],
+    pub parent:                u32,
+    pub file_hash:             u64,
+    pub compressed_hash:       u64,
+    pub time_accessed_seconds: u64,
+    pub time_accessed_nanos:   u32,
+    pub time_modified_seconds: u64,
+    pub time_modified_nanos:   u32,
+    pub mode:                  u32,
+    pub readonly:              u8,
+}
+#[repr(C, packed)]
+#[derive(FromBytes)]
+pub struct SymlinkSection {
+    pub name:                  [u8; NAME_SIZE],
+    pub parent:                u32,
+    pub kind:                  u8,
+    pub target:                u32,
+    pub time_accessed_seconds: u64,
+    pub time_accessed_nanos:   u32,
+    pub time_modified_seconds: u64,
+    pub time_modified_nanos:   u32,
+    pub mode:                  u32,
+    pub readonly:              u8,
+}
+
+```
+
+`startpe/src/versioning.rs`:
+
+```rs
+use std::{
+    fs::{read_to_string, write},
+    path::Path,
+};
+
+const VERSION_FILE: &str = "._wrappe_uid_";
+
+pub fn get_version(target: &Path) -> String {
+    read_to_string(target.join(&VERSION_FILE)).unwrap_or_else(|_| "0".to_string())
+}
+
+pub fn set_version(target: &Path, version: &str) {
+    write(target.join(&VERSION_FILE), version).unwrap()
+}
+
+```
