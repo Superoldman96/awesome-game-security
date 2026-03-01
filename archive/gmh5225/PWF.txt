@@ -1,0 +1,1068 @@
+Project Path: arc_gmh5225_PWF_gqfwced7
+
+Source Tree:
+
+```txt
+arc_gmh5225_PWF_gqfwced7
+├── AtomicRedTeam
+│   ├── ART-attack-cleanup.ps1
+│   ├── ART-attack.ps1
+│   ├── PWF_Analysis-MITRE.png
+│   └── PWF_Analysis-MITRE.svg
+├── Install-Sysmon
+│   └── Install-Sysmon.ps1
+├── Investigation-roadmap.png
+├── License.md
+├── README.md
+└── Resources
+    ├── Analysis-Notes-Template.docx
+    ├── RegRipper-plugins.csv
+    └── RegRipper-plugins.xlsx
+
+```
+
+`AtomicRedTeam/ART-attack-cleanup.ps1`:
+
+```ps1
+Import-Module "C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1" -Force
+
+# Starting atomics attack simulation
+
+Write-Output "Starting ART attack cleanup"
+Write-Output "==============================="
+
+
+# initial-access
+#
+
+"T1566.001 Atomic Test #1 - Download Macro-Enabled Phishing Attachment"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1566.001/T1566.001.md#atomic-test-1---download-macro-enabled-phishing-attachment
+Invoke-AtomicTest T1566.001 -TestNumbers 1 -Cleanup
+
+"T1078.003 Atomic Test #1 - Create local account with admin privileges"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1078.003/T1078.003.md#atomic-tests
+Invoke-AtomicTest T1078.003 -TestNumbers 1 -Cleanup
+
+# execution
+#
+
+"T1059.001 Atomic Test #11 - PowerShell Fileless Script Execution"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1059.001/T1059.001.md#atomic-test-11---powershell-fileless-script-execution
+Invoke-AtomicTest T1059.001 -TestNumbers 11 -Cleanup
+
+# persistence
+#
+
+"T1547.001 Atomic Test #1 - Reg Key Run"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1547.001/T1547.001.md#atomic-test-1---reg-key-run
+Invoke-AtomicTest T1547.001 -TestNumbers 1 -Cleanup
+
+"T1547.001 Atomic Test #6 - Suspicious bat file run from startup Folder"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1547.001/T1547.001.md#atomic-test-6---suspicious-bat-file-run-from-startup-folder
+Invoke-AtomicTest T1547.001 -TestNumbers 6 -Cleanup
+		
+"T1053.005 Atomic Test #1 - Scheduled Task Startup Script"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1053.005/T1053.005.md#atomic-test-1---scheduled-task-startup-script
+Invoke-AtomicTest T1053.005 -TestNumbers 1 -Cleanup
+
+"T1543.003 Atomic Test #2 - Service Installation CMD"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1543.003/T1543.003.md#atomic-test-2---service-installation-cmd
+Invoke-AtomicTest T1543.003 -TestNumbers 2 -Cleanup
+
+# defense-evasion
+
+"T1055.001 Atomic Test #1 - Process Injection via mavinject.exe"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1055.001/T1055.001.md#atomic-test-1---process-injection-via-mavinjectexe
+Invoke-AtomicTest T1055.001 -TestNumbers 1 -Cleanup
+
+"T1070.004 Atomic Test #6 - Delete a single file - Windows PowerShell"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1070.004/T1070.004.md#atomic-test-6---delete-a-single-file---windows-powershell
+Invoke-AtomicTest T1070.004 -TestNumbers 6 -Cleanup
+```
+
+`AtomicRedTeam/ART-attack.ps1`:
+
+```ps1
+#TODO - check if ART framework is already installed
+
+#Install Execution Framework and Atomics Folder
+
+Write-Output "Installing AtomicRedTeam"
+Write-Output "==============================="
+IEX (IWR 'https://raw.githubusercontent.com/bluecapesecurity/invoke-atomicredteam/master/install-atomicredteam.ps1' -UseBasicParsing);
+Install-AtomicRedTeam -RepoOwner bluecapesecurity
+
+Write-Output "Installing AtomicsFolder...this might take a few minutes."
+IEX (IWR 'https://raw.githubusercontent.com/bluecapesecurity/invoke-atomicredteam/master/install-atomicsfolder.ps1' -UseBasicParsing);
+Install-AtomicsFolder -Force -Branch 724cb3f50dcdd341815d5d2f34cbf90168017404
+
+# Starting atomics attack simulation
+
+Write-Output "Starting ART attack simulation"
+Write-Output "==============================="
+
+
+# initial-access
+#
+
+"T1566.001 Atomic Test #1 - Download Macro-Enabled Phishing Attachment"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1566.001/T1566.001.md#atomic-test-1---download-macro-enabled-phishing-attachment
+Invoke-AtomicTest T1566.001 -TestNumbers 1
+
+Start-Sleep -s 2
+
+"T1078.003 Atomic Test #1 - Create local account with admin privileges"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1078.003/T1078.003.md#atomic-tests
+Invoke-AtomicTest T1078.003 -TestNumbers 1
+
+Start-Sleep -s 2
+
+# execution
+#
+
+"T1059.001 Atomic Test #11 - PowerShell Fileless Script Execution"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1059.001/T1059.001.md#atomic-test-11---powershell-fileless-script-execution
+Invoke-AtomicTest T1059.001 -TestNumbers 11
+
+Start-Sleep -s 2
+
+# persistence
+#
+
+"T1547.001 Atomic Test #1 - Reg Key Run"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1547.001/T1547.001.md#atomic-test-1---reg-key-run
+Invoke-AtomicTest T1547.001 -TestNumbers 1
+
+Start-Sleep -s 2
+
+"T1547.001 Atomic Test #6 - Suspicious bat file run from startup Folder"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1547.001/T1547.001.md#atomic-test-6---suspicious-bat-file-run-from-startup-folder
+Invoke-AtomicTest T1547.001 -TestNumbers 6
+
+Start-Sleep -s 2
+		
+"T1053.005 Atomic Test #1 - Scheduled Task Startup Script"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1053.005/T1053.005.md#atomic-test-1---scheduled-task-startup-script
+Invoke-AtomicTest T1053.005 -TestNumbers 1
+
+Start-Sleep -s 2
+
+"T1543.003 Atomic Test #2 - Service Installation CMD"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1543.003/T1543.003.md#atomic-test-2---service-installation-cmd
+Invoke-AtomicTest T1543.003 -TestNumbers 2
+
+Start-Sleep -s 2
+
+# defense-evasion
+
+"T1055.001 Atomic Test #1 - Process Injection via mavinject.exe"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1055.001/T1055.001.md#atomic-test-1---process-injection-via-mavinjectexe
+Invoke-AtomicTest T1055.001 -TestNumbers 1
+
+Start-Sleep -s 2
+
+"T1070.004 Atomic Test #6 - Delete a single file - Windows PowerShell"
+# https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1070.004/T1070.004.md#atomic-test-6---delete-a-single-file---windows-powershell
+Invoke-AtomicTest T1070.004 -TestNumbers 6 -GetPrereqs
+Invoke-AtomicTest T1070.004 -TestNumbers 6
+
+```
+
+`AtomicRedTeam/PWF_Analysis-MITRE.svg`:
+
+```svg
+<?xml version="1.0" standalone="no"?>
+<svg width="1056" height="816" xmlns="http://www.w3.org/2000/svg" id="svgvm0"><g transform="translate(5,5)" style="font-family: sans-serif;"><g><g transform="translate(0, 0)"><g transform="translate(0,5)"><rect class="header-box" width="336.8474576271186" height="86" stroke="black" fill="white" rx="5"/><rect class="label-cover" x="8" y="-10" width="34.03125" height="18" fill="white" rx="5"/><text class="header-box-label" x="10" font-size="12" y="3">about</text><g class="header-box-content" transform="translate(5, 0)"><g transform="translate(0, 2.0975609756097526)"><text font-size="12"><tspan x="4" y="23.426829268292682">PWF Analysis</tspan></text><line x1="0" x2="326.8474576271186" y1="39.853658536585364" y2="39.853658536585364" stroke="#dddddd"/></g><g transform="translate(0, 44.048780487804876)"><text font-size="12"><tspan x="4" y="16.176829268292682">Techniques</tspan><tspan x="4" y="30.676829268292682">analyzed during the PWF course</tspan></text></g></g></g></g><g transform="translate(354.57627118644064, 0)"><g transform="translate(0,5)"><rect class="header-box" width="336.8474576271186" height="86" stroke="black" fill="white" rx="5"/><rect class="label-cover" x="8" y="-10" width="43.359375" height="18" fill="white" rx="5"/><text class="header-box-label" x="10" font-size="12" y="3">domain</text><g class="header-box-content" transform="translate(5, 0)"><g transform="translate(0, 4.095238095238102)"><text font-size="12"><tspan x="4" y="42.4047619047619">Enterprise ATT&amp;CK v10</tspan></text></g></g></g></g><g transform="translate(709.1525423728813, 0)"><g transform="translate(0,5)"><rect class="header-box" width="336.8474576271186" height="86" stroke="black" fill="white" rx="5"/><rect class="label-cover" x="8" y="-10" width="53.359375" height="18" fill="white" rx="5"/><text class="header-box-label" x="10" font-size="12" y="3">platforms</text><g class="header-box-content" transform="translate(5, 0)"><g transform="translate(0, 4.095238095238102)"><text font-size="12"><tspan x="4" y="42.4047619047619">Windows</tspan></text></g></g></g></g></g><g transform="translate(0,97)"><g><g class="tactic initial-access" transform="translate(0, 0)"><g class="techniques"><g class="technique T1189" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1189: Drive-by</tspan><tspan x="4" y="15.903846153846153">Compromise</tspan></text></g><g class="technique T1190" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1190:</tspan><tspan x="4" y="10.602564102564102">Exploit Public-Facing</tspan><tspan x="4" y="16.337606837606838">Application</tspan></text></g><g class="technique T1133" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1133: External</tspan><tspan x="4" y="15.903846153846153">Remote Services</tspan></text></g><g class="technique T1200" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1200: Hardware</tspan><tspan x="4" y="15.903846153846153">Additions</tspan></text></g><g class="technique T1566" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1566:</tspan><tspan x="4" y="15.903846153846153">Phishing</tspan></text></g><g class="technique T1091" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1091:</tspan><tspan x="4" y="10.602564102564102">Replication Through</tspan><tspan x="4" y="16.337606837606838">Removable Media</tspan></text></g><g class="technique T1195" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1195: Supply</tspan><tspan x="4" y="14.903846153846153">Chain Compromise</tspan></text></g><g class="technique T1199" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1199: Trusted</tspan><tspan x="4" y="15.903846153846153">Relationship</tspan></text></g><g class="technique T1078" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1078:</tspan><tspan x="4" y="15.903846153846153">Valid Accounts</tspan></text></g></g><g class="subtechniques"><g class="subtechnique T1566.001" transform="translate(15, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="4.867521367521368">T1566.001:</tspan><tspan x="4" y="10.602564102564102">Spearphishing</tspan><tspan x="4" y="16.337606837606838">Attachment</tspan></text></g><g class="subtechnique T1566.002" transform="translate(15, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1566.002:</tspan><tspan x="4" y="10.602564102564102">Spearphishing</tspan><tspan x="4" y="16.337606837606838">Link</tspan></text></g><g class="subtechnique T1566.003" transform="translate(15, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1566.003:</tspan><tspan x="4" y="10.602564102564102">Spearphishing</tspan><tspan x="4" y="16.337606837606838">via Service</tspan></text></g><g class="subtechnique T1078.001" transform="translate(15, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1078.001:</tspan><tspan x="4" y="14.903846153846153">Default Accounts</tspan></text></g><g class="subtechnique T1078.002" transform="translate(15, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1078.002:</tspan><tspan x="4" y="14.903846153846153">Domain Accounts</tspan></text></g><g class="subtechnique T1078.003" transform="translate(15, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="6.301282051282051">T1078.003:</tspan><tspan x="4" y="14.903846153846153">Local Accounts</tspan></text></g></g><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="11.602564102564102">Initial Access</tspan></text></g></g><g class="tactic execution" transform="translate(87.89915966386555, 0)"><g class="techniques"><g class="technique T1059" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1059: Command and</tspan><tspan x="4" y="14.903846153846153">Scripting Interpreter</tspan></text></g><g class="technique T1203" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1203: Exploitation</tspan><tspan x="4" y="14.903846153846153">for Client Execution</tspan></text></g><g class="technique T1559" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1559: Inter-Process</tspan><tspan x="4" y="14.903846153846153">Communication</tspan></text></g><g class="technique T1106" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1106:</tspan><tspan x="4" y="15.903846153846153">Native API</tspan></text></g><g class="technique T1053" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1053: Scheduled</tspan><tspan x="4" y="14.903846153846153">Task/Job</tspan></text></g><g class="technique T1129" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1129:</tspan><tspan x="4" y="15.903846153846153">Shared Modules</tspan></text></g><g class="technique T1072" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1072: Software</tspan><tspan x="4" y="14.903846153846153">Deployment Tools</tspan></text></g><g class="technique T1569" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1569: System</tspan><tspan x="4" y="15.903846153846153">Services</tspan></text></g><g class="technique T1204" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1204:</tspan><tspan x="4" y="15.903846153846153">User Execution</tspan></text></g><g class="technique T1047" transform="translate(0, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1047:</tspan><tspan x="4" y="10.602564102564102">Windows Management</tspan><tspan x="4" y="16.337606837606838">Instrumentation</tspan></text></g></g><g class="subtechniques"><g class="subtechnique T1059.001" transform="translate(15, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="7.301282051282051">T1059.001:</tspan><tspan x="4" y="15.903846153846153">PowerShell</tspan></text></g><g class="subtechnique T1059.003" transform="translate(15, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1059.003:</tspan><tspan x="4" y="10.602564102564102">Windows</tspan><tspan x="4" y="16.337606837606838">Command Shell</tspan></text></g><g class="subtechnique T1059.005" transform="translate(15, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1059.005:</tspan><tspan x="4" y="15.903846153846153">Visual Basic</tspan></text></g><g class="subtechnique T1059.006" transform="translate(15, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1059.006:</tspan><tspan x="4" y="15.903846153846153">Python</tspan></text></g><g class="subtechnique T1059.007" transform="translate(15, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1059.007:</tspan><tspan x="4" y="15.903846153846153">JavaScript</tspan></text></g></g><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="12.602564102564102">Execution</tspan></text></g></g><g class="tactic persistence" transform="translate(175.7983193277311, 0)"><g class="techniques"><g class="technique T1098" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1098: Account</tspan><tspan x="4" y="15.903846153846153">Manipulation</tspan></text></g><g class="technique T1197" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1197:</tspan><tspan x="4" y="15.903846153846153">BITS Jobs</tspan></text></g><g class="technique T1547" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1547: Boot or Logon</tspan><tspan x="4" y="14.903846153846153">Autostart Execution</tspan></text></g><g class="technique T1037" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1037: Boot or</tspan><tspan x="4" y="10.602564102564102">Logon Initialization</tspan><tspan x="4" y="16.337606837606838">Scripts</tspan></text></g><g class="technique T1176" transform="translate(0, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1176: Browser</tspan><tspan x="4" y="15.903846153846153">Extensions</tspan></text></g><g class="technique T1554" transform="translate(0, 291.28205128205127)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1554:</tspan><tspan x="4" y="10.602564102564102">Compromise Client</tspan><tspan x="4" y="16.337606837606838">Software Binary</tspan></text></g><g class="technique T1136" transform="translate(0, 309.4871794871795)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1136:</tspan><tspan x="4" y="15.903846153846153">Create Account</tspan></text></g><g class="technique T1543" transform="translate(0, 327.69230769230774)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1543: Create or</tspan><tspan x="4" y="14.903846153846153">Modify System Process</tspan></text></g><g class="technique T1546" transform="translate(0, 364.1025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1546: Event</tspan><tspan x="4" y="14.903846153846153">Triggered Execution</tspan></text></g><g class="technique T1133" transform="translate(0, 382.30769230769226)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1133: External</tspan><tspan x="4" y="15.903846153846153">Remote Services</tspan></text></g><g class="technique T1574" transform="translate(0, 400.5128205128205)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1574: Hijack</tspan><tspan x="4" y="15.903846153846153">Execution Flow</tspan></text></g><g class="technique T1556" transform="translate(0, 418.71794871794873)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1556:</tspan><tspan x="4" y="10.602564102564102">Modify Authentication</tspan><tspan x="4" y="16.337606837606838">Process</tspan></text></g><g class="technique T1137" transform="translate(0, 436.92307692307696)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1137: Office</tspan><tspan x="4" y="14.903846153846153">Application Startup</tspan></text></g><g class="technique T1542" transform="translate(0, 455.12820512820514)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1542:</tspan><tspan x="4" y="15.903846153846153">Pre-OS Boot</tspan></text></g><g class="technique T1053" transform="translate(0, 473.3333333333333)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1053: Scheduled</tspan><tspan x="4" y="14.903846153846153">Task/Job</tspan></text></g><g class="technique T1505" transform="translate(0, 527.948717948718)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1505: Server</tspan><tspan x="4" y="14.903846153846153">Software Component</tspan></text></g><g class="technique T1205" transform="translate(0, 546.1538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1205: Traffic</tspan><tspan x="4" y="15.903846153846153">Signaling</tspan></text></g><g class="technique T1078" transform="translate(0, 564.3589743589744)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1078:</tspan><tspan x="4" y="15.903846153846153">Valid Accounts</tspan></text></g></g><g class="subtechniques"><g class="subtechnique T1547.001" transform="translate(15, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="4.867521367521368">T1547.001:</tspan><tspan x="4" y="10.602564102564102">Registry Run Keys</tspan><tspan x="4" y="16.337606837606838">/ Startup Folder</tspan></text></g><g class="subtechnique T1547.002" transform="translate(15, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1547.002:</tspan><tspan x="4" y="10.602564102564102">Authentication</tspan><tspan x="4" y="16.337606837606838">Package</tspan></text></g><g class="subtechnique T1547.003" transform="translate(15, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1547.003:</tspan><tspan x="4" y="14.903846153846153">Time Providers</tspan></text></g><g class="subtechnique T1547.004" transform="translate(15, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1547.004:</tspan><tspan x="4" y="10.602564102564102">Winlogon</tspan><tspan x="4" y="16.337606837606838">Helper DLL</tspan></text></g><g class="subtechnique T1547.005" transform="translate(15, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1547.005:</tspan><tspan x="4" y="10.602564102564102">Security</tspan><tspan x="4" y="16.337606837606838">Support Provider</tspan></text></g><g class="subtechnique T1547.008" transform="translate(15, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1547.008:</tspan><tspan x="4" y="15.903846153846153">LSASS Driver</tspan></text></g><g class="subtechnique T1547.009" transform="translate(15, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1547.009:</tspan><tspan x="4" y="10.602564102564102">Shortcut</tspan><tspan x="4" y="16.337606837606838">Modification</tspan></text></g><g class="subtechnique T1547.010" transform="translate(15, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1547.010:</tspan><tspan x="4" y="14.903846153846153">Port Monitors</tspan></text></g><g class="subtechnique T1547.012" transform="translate(15, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1547.012:</tspan><tspan x="4" y="14.903846153846153">Print Processors</tspan></text></g><g class="subtechnique T1547.014" transform="translate(15, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1547.014:</tspan><tspan x="4" y="15.903846153846153">Active Setup</tspan></text></g><g class="subtechnique T1543.003" transform="translate(15, 345.8974358974359)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="6.301282051282051">T1543.003:</tspan><tspan x="4" y="14.903846153846153">Windows Service</tspan></text></g><g class="subtechnique T1053.002" transform="translate(15, 491.53846153846155)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1053.002:</tspan><tspan x="4" y="15.903846153846153">At (Windows)</tspan></text></g><g class="subtechnique T1053.005" transform="translate(15, 509.7435897435897)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="6.301282051282051">T1053.005:</tspan><tspan x="4" y="14.903846153846153">Scheduled Task</tspan></text></g></g><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="11.602564102564102">Persistence</tspan></text></g></g><g class="tactic privilege-escalation" transform="translate(263.69747899159665, 0)"><g class="techniques"><g class="technique T1548" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1548:</tspan><tspan x="4" y="10.602564102564102">Abuse Elevation</tspan><tspan x="4" y="16.337606837606838">Control Mechanism</tspan></text></g><g class="technique T1134" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1134: Access</tspan><tspan x="4" y="14.903846153846153">Token Manipulation</tspan></text></g><g class="technique T1547" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1547: Boot or Logon</tspan><tspan x="4" y="14.903846153846153">Autostart Execution</tspan></text></g><g class="technique T1037" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1037: Boot or</tspan><tspan x="4" y="10.602564102564102">Logon Initialization</tspan><tspan x="4" y="16.337606837606838">Scripts</tspan></text></g><g class="technique T1543" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1543: Create or</tspan><tspan x="4" y="14.903846153846153">Modify System Process</tspan></text></g><g class="technique T1484" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1484: Domain</tspan><tspan x="4" y="14.903846153846153">Policy Modification</tspan></text></g><g class="technique T1611" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1611:</tspan><tspan x="4" y="15.903846153846153">Escape to Host</tspan></text></g><g class="technique T1546" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1546: Event</tspan><tspan x="4" y="14.903846153846153">Triggered Execution</tspan></text></g><g class="technique T1068" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1068:</tspan><tspan x="4" y="10.602564102564102">Exploitation for</tspan><tspan x="4" y="16.337606837606838">Privilege Escalation</tspan></text></g><g class="technique T1574" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1574: Hijack</tspan><tspan x="4" y="15.903846153846153">Execution Flow</tspan></text></g><g class="technique T1055" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1055: Process</tspan><tspan x="4" y="15.903846153846153">Injection</tspan></text></g><g class="technique T1053" transform="translate(0, 364.1025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1053: Scheduled</tspan><tspan x="4" y="14.903846153846153">Task/Job</tspan></text></g><g class="technique T1078" transform="translate(0, 382.30769230769226)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1078:</tspan><tspan x="4" y="15.903846153846153">Valid Accounts</tspan></text></g></g><g class="subtechniques"><g class="subtechnique T1055.001" transform="translate(15, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="4.867521367521368">T1055.001:</tspan><tspan x="4" y="10.602564102564102">Dynamic-link</tspan><tspan x="4" y="16.337606837606838">Library Injection</tspan></text></g><g class="subtechnique T1055.002" transform="translate(15, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.002:</tspan><tspan x="4" y="10.602564102564102">Portable Executable</tspan><tspan x="4" y="16.337606837606838">Injection</tspan></text></g><g class="subtechnique T1055.003" transform="translate(15, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.003:</tspan><tspan x="4" y="10.602564102564102">Thread Execution</tspan><tspan x="4" y="16.337606837606838">Hijacking</tspan></text></g><g class="subtechnique T1055.004" transform="translate(15, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.004:</tspan><tspan x="4" y="10.602564102564102">Asynchronous</tspan><tspan x="4" y="16.337606837606838">Procedure Call</tspan></text></g><g class="subtechnique T1055.005" transform="translate(15, 291.28205128205127)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.005:</tspan><tspan x="4" y="10.602564102564102">Thread</tspan><tspan x="4" y="16.337606837606838">Local Storage</tspan></text></g><g class="subtechnique T1055.011" transform="translate(15, 309.4871794871795)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.011:</tspan><tspan x="4" y="10.602564102564102">Extra Window</tspan><tspan x="4" y="16.337606837606838">Memory Injection</tspan></text></g><g class="subtechnique T1055.013" transform="translate(15, 327.69230769230774)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.013:</tspan><tspan x="4" y="10.602564102564102">Process</tspan><tspan x="4" y="16.337606837606838">Doppelgänging</tspan></text></g><g class="subtechnique T1055.012" transform="translate(15, 345.8974358974359)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1055.012:</tspan><tspan x="4" y="10.602564102564102">Process</tspan><tspan x="4" y="16.337606837606838">Hollowing</tspan></text></g></g><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="7.301282051282051">Privilege</tspan><tspan text-anchor="middle" x="39.554621848739494" y="15.903846153846153">Escalation</tspan></text></g></g><g class="tactic defense-evasion" transform="translate(351.5966386554622, 0)"><g class="techniques"><g class="technique T1548" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1548:</tspan><tspan x="4" y="10.602564102564102">Abuse Elevation</tspan><tspan x="4" y="16.337606837606838">Control Mechanism</tspan></text></g><g class="technique T1134" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1134: Access</tspan><tspan x="4" y="14.903846153846153">Token Manipulation</tspan></text></g><g class="technique T1197" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1197:</tspan><tspan x="4" y="15.903846153846153">BITS Jobs</tspan></text></g><g class="technique T1140" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1140:</tspan><tspan x="4" y="10.602564102564102">Deobfuscate/Decode</tspan><tspan x="4" y="16.337606837606838">Files or Information</tspan></text></g><g class="technique T1006" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1006: Direct</tspan><tspan x="4" y="15.903846153846153">Volume Access</tspan></text></g><g class="technique T1484" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1484: Domain</tspan><tspan x="4" y="14.903846153846153">Policy Modification</tspan></text></g><g class="technique T1480" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1480: Execution</tspan><tspan x="4" y="14.903846153846153">Guardrails</tspan></text></g><g class="technique T1211" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1211: Exploitation</tspan><tspan x="4" y="14.903846153846153">for Defense Evasion</tspan></text></g><g class="technique T1222" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1222: File and</tspan><tspan x="4" y="10.602564102564102">Directory Permissions</tspan><tspan x="4" y="16.337606837606838">Modification</tspan></text></g><g class="technique T1564" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1564:</tspan><tspan x="4" y="15.903846153846153">Hide Artifacts</tspan></text></g><g class="technique T1574" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1574: Hijack</tspan><tspan x="4" y="15.903846153846153">Execution Flow</tspan></text></g><g class="technique T1562" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1562: Impair</tspan><tspan x="4" y="15.903846153846153">Defenses</tspan></text></g><g class="technique T1070" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="visible"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1070: Indicator</tspan><tspan x="4" y="14.903846153846153">Removal on Host</tspan></text></g><g class="technique T1202" transform="translate(0, 345.8974358974359)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1202: Indirect</tspan><tspan x="4" y="14.903846153846153">Command Execution</tspan></text></g><g class="technique T1036" transform="translate(0, 364.1025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1036:</tspan><tspan x="4" y="15.903846153846153">Masquerading</tspan></text></g><g class="technique T1556" transform="translate(0, 382.30769230769226)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1556:</tspan><tspan x="4" y="10.602564102564102">Modify Authentication</tspan><tspan x="4" y="16.337606837606838">Process</tspan></text></g><g class="technique T1112" transform="translate(0, 400.5128205128205)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1112: Modify</tspan><tspan x="4" y="15.903846153846153">Registry</tspan></text></g><g class="technique T1027" transform="translate(0, 418.71794871794873)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1027: Obfuscated</tspan><tspan x="4" y="14.903846153846153">Files or Information</tspan></text></g><g class="technique T1542" transform="translate(0, 436.92307692307696)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1542:</tspan><tspan x="4" y="15.903846153846153">Pre-OS Boot</tspan></text></g><g class="technique T1055" transform="translate(0, 455.12820512820514)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1055: Process</tspan><tspan x="4" y="15.903846153846153">Injection</tspan></text></g><g class="technique T1620" transform="translate(0, 473.3333333333333)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1620: Reflective</tspan><tspan x="4" y="14.903846153846153">Code Loading</tspan></text></g><g class="technique T1207" transform="translate(0, 491.53846153846155)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1207: Rogue</tspan><tspan x="4" y="14.903846153846153">Domain Controller</tspan></text></g><g class="technique T1014" transform="translate(0, 509.7435897435897)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="11.602564102564102">T1014: Rootkit</tspan></text></g><g class="technique T1218" transform="translate(0, 527.948717948718)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1218: Signed Binary</tspan><tspan x="4" y="14.903846153846153">Proxy Execution</tspan></text></g><g class="technique T1216" transform="translate(0, 546.1538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1216: Signed Script</tspan><tspan x="4" y="14.903846153846153">Proxy Execution</tspan></text></g><g class="technique T1553" transform="translate(0, 564.3589743589744)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1553: Subvert</tspan><tspan x="4" y="15.903846153846153">Trust Controls</tspan></text></g><g class="technique T1221" transform="translate(0, 582.5641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1221: Template</tspan><tspan x="4" y="15.903846153846153">Injection</tspan></text></g><g class="technique T1205" transform="translate(0, 600.7692307692307)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1205: Traffic</tspan><tspan x="4" y="15.903846153846153">Signaling</tspan></text></g><g class="technique T1127" transform="translate(0, 618.974358974359)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1127: Trusted</tspan><tspan x="4" y="10.602564102564102">Developer Utilities</tspan><tspan x="4" y="16.337606837606838">Proxy Execution</tspan></text></g><g class="technique T1550" transform="translate(0, 637.1794871794872)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1550: Use Alternate</tspan><tspan x="4" y="10.602564102564102">Authentication</tspan><tspan x="4" y="16.337606837606838">Material</tspan></text></g><g class="technique T1078" transform="translate(0, 655.3846153846155)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1078:</tspan><tspan x="4" y="15.903846153846153">Valid Accounts</tspan></text></g><g class="technique T1497" transform="translate(0, 673.5897435897435)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1497:</tspan><tspan x="4" y="10.602564102564102">Virtualization/Sandbox</tspan><tspan x="4" y="16.337606837606838">Evasion</tspan></text></g><g class="technique T1220" transform="translate(0, 691.7948717948718)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1220: XSL</tspan><tspan x="4" y="14.903846153846153">Script Processing</tspan></text></g></g><g class="subtechniques"><g class="subtechnique T1070.001" transform="translate(15, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1070.001:</tspan><tspan x="4" y="10.602564102564102">Clear Windows</tspan><tspan x="4" y="16.337606837606838">Event Logs</tspan></text></g><g class="subtechnique T1070.003" transform="translate(15, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1070.003: Clear</tspan><tspan x="4" y="14.903846153846153">Command History</tspan></text></g><g class="subtechnique T1070.004" transform="translate(15, 291.28205128205127)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="#e60d0d" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="white"><tspan x="4" y="6.301282051282051">T1070.004:</tspan><tspan x="4" y="14.903846153846153">File Deletion</tspan></text></g><g class="subtechnique T1070.005" transform="translate(15, 309.4871794871795)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1070.005:</tspan><tspan x="4" y="10.602564102564102">Network Share</tspan><tspan x="4" y="16.337606837606838">Connection Removal</tspan></text></g><g class="subtechnique T1070.006" transform="translate(15, 327.69230769230774)"><rect class="cell" height="18.205128205128204" width="64.10924369747899" fill="white" stroke="#6B7279"/><rect class="cell" height="18.205128205128204" width="3" transform="translate(-3, 0)" fill="#6B7279" stroke="#6B7279"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1070.006:</tspan><tspan x="4" y="15.903846153846153">Timestomp</tspan></text></g></g><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="7.301282051282051">Defense</tspan><tspan text-anchor="middle" x="39.554621848739494" y="15.903846153846153">Evasion</tspan></text></g></g><g class="tactic credential-access" transform="translate(439.4957983193277, 0)"><g class="techniques"><g class="technique T1557" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1557:</tspan><tspan x="4" y="14.903846153846153">Adversary-in-the-Middle</tspan></text></g><g class="technique T1110" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1110:</tspan><tspan x="4" y="15.903846153846153">Brute Force</tspan></text></g><g class="technique T1555" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1555: Credentials</tspan><tspan x="4" y="14.903846153846153">from Password Stores</tspan></text></g><g class="technique T1212" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1212: Exploitation</tspan><tspan x="4" y="14.903846153846153">for Credential Access</tspan></text></g><g class="technique T1187" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1187: Forced</tspan><tspan x="4" y="15.903846153846153">Authentication</tspan></text></g><g class="technique T1606" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1606: Forge</tspan><tspan x="4" y="15.903846153846153">Web Credentials</tspan></text></g><g class="technique T1056" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1056:</tspan><tspan x="4" y="15.903846153846153">Input Capture</tspan></text></g><g class="technique T1556" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1556:</tspan><tspan x="4" y="10.602564102564102">Modify Authentication</tspan><tspan x="4" y="16.337606837606838">Process</tspan></text></g><g class="technique T1040" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1040: Network</tspan><tspan x="4" y="15.903846153846153">Sniffing</tspan></text></g><g class="technique T1003" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1003: OS</tspan><tspan x="4" y="14.903846153846153">Credential Dumping</tspan></text></g><g class="technique T1558" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1558: Steal or Forge</tspan><tspan x="4" y="14.903846153846153">Kerberos Tickets</tspan></text></g><g class="technique T1539" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1539: Steal Web</tspan><tspan x="4" y="14.903846153846153">Session Cookie</tspan></text></g><g class="technique T1111" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1111: Two-Factor</tspan><tspan x="4" y="10.602564102564102">Authentication</tspan><tspan x="4" y="16.337606837606838">Interception</tspan></text></g><g class="technique T1552" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1552: Unsecured</tspan><tspan x="4" y="14.903846153846153">Credentials</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="7.301282051282051">Credential</tspan><tspan text-anchor="middle" x="39.554621848739494" y="15.903846153846153">Access</tspan></text></g></g><g class="tactic discovery" transform="translate(527.3949579831933, 0)"><g class="techniques"><g class="technique T1087" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1087: Account</tspan><tspan x="4" y="15.903846153846153">Discovery</tspan></text></g><g class="technique T1010" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1010: Application</tspan><tspan x="4" y="14.903846153846153">Window Discovery</tspan></text></g><g class="technique T1217" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1217: Browser</tspan><tspan x="4" y="14.903846153846153">Bookmark Discovery</tspan></text></g><g class="technique T1482" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1482: Domain</tspan><tspan x="4" y="15.903846153846153">Trust Discovery</tspan></text></g><g class="technique T1083" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1083: File and</tspan><tspan x="4" y="14.903846153846153">Directory Discovery</tspan></text></g><g class="technique T1615" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1615: Group</tspan><tspan x="4" y="14.903846153846153">Policy Discovery</tspan></text></g><g class="technique T1046" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1046: Network</tspan><tspan x="4" y="14.903846153846153">Service Scanning</tspan></text></g><g class="technique T1135" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1135: Network</tspan><tspan x="4" y="15.903846153846153">Share Discovery</tspan></text></g><g class="technique T1040" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1040: Network</tspan><tspan x="4" y="15.903846153846153">Sniffing</tspan></text></g><g class="technique T1201" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1201: Password</tspan><tspan x="4" y="14.903846153846153">Policy Discovery</tspan></text></g><g class="technique T1120" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1120: Peripheral</tspan><tspan x="4" y="14.903846153846153">Device Discovery</tspan></text></g><g class="technique T1069" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1069: Permission</tspan><tspan x="4" y="14.903846153846153">Groups Discovery</tspan></text></g><g class="technique T1057" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1057: Process</tspan><tspan x="4" y="15.903846153846153">Discovery</tspan></text></g><g class="technique T1012" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1012:</tspan><tspan x="4" y="15.903846153846153">Query Registry</tspan></text></g><g class="technique T1018" transform="translate(0, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1018: Remote</tspan><tspan x="4" y="14.903846153846153">System Discovery</tspan></text></g><g class="technique T1518" transform="translate(0, 291.28205128205127)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1518: Software</tspan><tspan x="4" y="15.903846153846153">Discovery</tspan></text></g><g class="technique T1082" transform="translate(0, 309.4871794871795)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1082: System</tspan><tspan x="4" y="14.903846153846153">Information Discovery</tspan></text></g><g class="technique T1614" transform="translate(0, 327.69230769230774)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1614: System</tspan><tspan x="4" y="14.903846153846153">Location Discovery</tspan></text></g><g class="technique T1016" transform="translate(0, 345.8974358974359)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1016: System</tspan><tspan x="4" y="10.602564102564102">Network Configuration</tspan><tspan x="4" y="16.337606837606838">Discovery</tspan></text></g><g class="technique T1049" transform="translate(0, 364.1025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1049: System Network</tspan><tspan x="4" y="14.903846153846153">Connections Discovery</tspan></text></g><g class="technique T1033" transform="translate(0, 382.30769230769226)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1033: System</tspan><tspan x="4" y="14.903846153846153">Owner/User Discovery</tspan></text></g><g class="technique T1007" transform="translate(0, 400.5128205128205)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1007: System</tspan><tspan x="4" y="14.903846153846153">Service Discovery</tspan></text></g><g class="technique T1124" transform="translate(0, 418.71794871794873)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1124: System</tspan><tspan x="4" y="15.903846153846153">Time Discovery</tspan></text></g><g class="technique T1497" transform="translate(0, 436.92307692307696)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1497:</tspan><tspan x="4" y="10.602564102564102">Virtualization/Sandbox</tspan><tspan x="4" y="16.337606837606838">Evasion</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="12.602564102564102">Discovery</tspan></text></g></g><g class="tactic lateral-movement" transform="translate(615.2941176470588, 0)"><g class="techniques"><g class="technique T1210" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1210: Exploitation</tspan><tspan x="4" y="14.903846153846153">of Remote Services</tspan></text></g><g class="technique T1534" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1534: Internal</tspan><tspan x="4" y="15.903846153846153">Spearphishing</tspan></text></g><g class="technique T1570" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1570: Lateral</tspan><tspan x="4" y="15.903846153846153">Tool Transfer</tspan></text></g><g class="technique T1563" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1563: Remote Service</tspan><tspan x="4" y="14.903846153846153">Session Hijacking</tspan></text></g><g class="technique T1021" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1021: Remote</tspan><tspan x="4" y="15.903846153846153">Services</tspan></text></g><g class="technique T1091" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1091:</tspan><tspan x="4" y="10.602564102564102">Replication Through</tspan><tspan x="4" y="16.337606837606838">Removable Media</tspan></text></g><g class="technique T1072" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1072: Software</tspan><tspan x="4" y="14.903846153846153">Deployment Tools</tspan></text></g><g class="technique T1080" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1080: Taint</tspan><tspan x="4" y="15.903846153846153">Shared Content</tspan></text></g><g class="technique T1550" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1550: Use Alternate</tspan><tspan x="4" y="10.602564102564102">Authentication</tspan><tspan x="4" y="16.337606837606838">Material</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="7.301282051282051">Lateral</tspan><tspan text-anchor="middle" x="39.554621848739494" y="15.903846153846153">Movement</tspan></text></g></g><g class="tactic collection" transform="translate(703.1932773109244, 0)"><g class="techniques"><g class="technique T1557" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1557:</tspan><tspan x="4" y="14.903846153846153">Adversary-in-the-Middle</tspan></text></g><g class="technique T1560" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1560: Archive</tspan><tspan x="4" y="15.903846153846153">Collected Data</tspan></text></g><g class="technique T1123" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1123:</tspan><tspan x="4" y="15.903846153846153">Audio Capture</tspan></text></g><g class="technique T1119" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1119: Automated</tspan><tspan x="4" y="14.903846153846153">Collection</tspan></text></g><g class="technique T1185" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1185: Browser</tspan><tspan x="4" y="14.903846153846153">Session Hijacking</tspan></text></g><g class="technique T1115" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1115:</tspan><tspan x="4" y="15.903846153846153">Clipboard Data</tspan></text></g><g class="technique T1213" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1213:</tspan><tspan x="4" y="10.602564102564102">Data from Information</tspan><tspan x="4" y="16.337606837606838">Repositories</tspan></text></g><g class="technique T1005" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1005: Data from</tspan><tspan x="4" y="14.903846153846153">Local System</tspan></text></g><g class="technique T1039" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1039: Data from</tspan><tspan x="4" y="14.903846153846153">Network Shared Drive</tspan></text></g><g class="technique T1025" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1025: Data from</tspan><tspan x="4" y="14.903846153846153">Removable Media</tspan></text></g><g class="technique T1074" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1074:</tspan><tspan x="4" y="15.903846153846153">Data Staged</tspan></text></g><g class="technique T1114" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1114: Email</tspan><tspan x="4" y="15.903846153846153">Collection</tspan></text></g><g class="technique T1056" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1056:</tspan><tspan x="4" y="15.903846153846153">Input Capture</tspan></text></g><g class="technique T1113" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1113:</tspan><tspan x="4" y="15.903846153846153">Screen Capture</tspan></text></g><g class="technique T1125" transform="translate(0, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1125:</tspan><tspan x="4" y="15.903846153846153">Video Capture</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="12.602564102564102">Collection</tspan></text></g></g><g class="tactic command-and-control" transform="translate(791.09243697479, 0)"><g class="techniques"><g class="technique T1071" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1071: Application</tspan><tspan x="4" y="14.903846153846153">Layer Protocol</tspan></text></g><g class="technique T1092" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1092:</tspan><tspan x="4" y="10.602564102564102">Communication Through</tspan><tspan x="4" y="16.337606837606838">Removable Media</tspan></text></g><g class="technique T1132" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1132:</tspan><tspan x="4" y="15.903846153846153">Data Encoding</tspan></text></g><g class="technique T1001" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1001: Data</tspan><tspan x="4" y="15.903846153846153">Obfuscation</tspan></text></g><g class="technique T1568" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1568: Dynamic</tspan><tspan x="4" y="15.903846153846153">Resolution</tspan></text></g><g class="technique T1573" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1573: Encrypted</tspan><tspan x="4" y="14.903846153846153">Channel</tspan></text></g><g class="technique T1008" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1008: Fallback</tspan><tspan x="4" y="15.903846153846153">Channels</tspan></text></g><g class="technique T1105" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1105: Ingress</tspan><tspan x="4" y="15.903846153846153">Tool Transfer</tspan></text></g><g class="technique T1104" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1104: Multi-Stage</tspan><tspan x="4" y="14.903846153846153">Channels</tspan></text></g><g class="technique T1095" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1095:</tspan><tspan x="4" y="10.602564102564102">Non-Application</tspan><tspan x="4" y="16.337606837606838">Layer Protocol</tspan></text></g><g class="technique T1571" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1571:</tspan><tspan x="4" y="14.903846153846153">Non-Standard Port</tspan></text></g><g class="technique T1572" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1572: Protocol</tspan><tspan x="4" y="15.903846153846153">Tunneling</tspan></text></g><g class="technique T1090" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="11.602564102564102">T1090: Proxy</tspan></text></g><g class="technique T1219" transform="translate(0, 254.87179487179486)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1219: Remote</tspan><tspan x="4" y="15.903846153846153">Access Software</tspan></text></g><g class="technique T1205" transform="translate(0, 273.0769230769231)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1205: Traffic</tspan><tspan x="4" y="15.903846153846153">Signaling</tspan></text></g><g class="technique T1102" transform="translate(0, 291.28205128205127)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1102:</tspan><tspan x="4" y="15.903846153846153">Web Service</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="7.301282051282051">Command</tspan><tspan text-anchor="middle" x="39.554621848739494" y="15.903846153846153">and Control</tspan></text></g></g><g class="tactic exfiltration" transform="translate(878.9915966386554, 0)"><g class="techniques"><g class="technique T1020" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1020: Automated</tspan><tspan x="4" y="14.903846153846153">Exfiltration</tspan></text></g><g class="technique T1030" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1030: Data</tspan><tspan x="4" y="14.903846153846153">Transfer Size Limits</tspan></text></g><g class="technique T1048" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1048:</tspan><tspan x="4" y="10.602564102564102">Exfiltration Over</tspan><tspan x="4" y="16.337606837606838">Alternative Protocol</tspan></text></g><g class="technique T1041" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1041: Exfiltration</tspan><tspan x="4" y="14.903846153846153">Over C2 Channel</tspan></text></g><g class="technique T1011" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="4.867521367521368">T1011:</tspan><tspan x="4" y="10.602564102564102">Exfiltration Over</tspan><tspan x="4" y="16.337606837606838">Other Network Medium</tspan></text></g><g class="technique T1052" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1052: Exfiltration</tspan><tspan x="4" y="14.903846153846153">Over Physical Medium</tspan></text></g><g class="technique T1567" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1567: Exfiltration</tspan><tspan x="4" y="14.903846153846153">Over Web Service</tspan></text></g><g class="technique T1029" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1029: Scheduled</tspan><tspan x="4" y="14.903846153846153">Transfer</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="11.602564102564102">Exfiltration</tspan></text></g></g><g class="tactic impact" transform="translate(966.890756302521, 0)"><g class="techniques"><g class="technique T1531" transform="translate(0, 18.205128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1531: Account</tspan><tspan x="4" y="15.903846153846153">Access Removal</tspan></text></g><g class="technique T1485" transform="translate(0, 36.41025641025641)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1485: Data</tspan><tspan x="4" y="15.903846153846153">Destruction</tspan></text></g><g class="technique T1486" transform="translate(0, 54.61538461538462)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1486: Data</tspan><tspan x="4" y="14.903846153846153">Encrypted for Impact</tspan></text></g><g class="technique T1565" transform="translate(0, 72.82051282051282)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1565: Data</tspan><tspan x="4" y="15.903846153846153">Manipulation</tspan></text></g><g class="technique T1491" transform="translate(0, 91.02564102564102)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1491:</tspan><tspan x="4" y="15.903846153846153">Defacement</tspan></text></g><g class="technique T1561" transform="translate(0, 109.23076923076924)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1561:</tspan><tspan x="4" y="15.903846153846153">Disk Wipe</tspan></text></g><g class="technique T1499" transform="translate(0, 127.43589743589743)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1499: Endpoint</tspan><tspan x="4" y="14.903846153846153">Denial of Service</tspan></text></g><g class="technique T1495" transform="translate(0, 145.64102564102564)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1495: Firmware</tspan><tspan x="4" y="15.903846153846153">Corruption</tspan></text></g><g class="technique T1490" transform="translate(0, 163.84615384615387)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1490: Inhibit</tspan><tspan x="4" y="15.903846153846153">System Recovery</tspan></text></g><g class="technique T1498" transform="translate(0, 182.05128205128204)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,12" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="6.301282051282051">T1498: Network</tspan><tspan x="4" y="14.903846153846153">Denial of Service</tspan></text></g><g class="technique T1496" transform="translate(0, 200.25641025641025)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1496: Resource</tspan><tspan x="4" y="15.903846153846153">Hijacking</tspan></text></g><g class="technique T1489" transform="translate(0, 218.46153846153848)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1489:</tspan><tspan x="4" y="15.903846153846153">Service Stop</tspan></text></g><g class="technique T1529" transform="translate(0, 236.66666666666666)"><rect class="cell" height="18.205128205128204" width="79.10924369747899" fill="white" stroke="#6B7279"/><polygon class="sidebar" transform="translate(0, 18.205128205128204)" points="0,0 12,0 12,0" fill="#6B7279" visibility="hidden"/><text font-size="4.282021229544449" fill="black"><tspan x="4" y="7.301282051282051">T1529: System</tspan><tspan x="4" y="15.903846153846153">Shutdown/Reboot</tspan></text></g></g><g class="subtechniques"/><g class="tactic-label"><text font-size="7.282051282051282" fill="black" font-weight="bold"><tspan text-anchor="middle" x="39.554621848739494" y="12.602564102564102">Impact</tspan></text></g></g></g></g></g></svg>
+```
+
+`Install-Sysmon/Install-Sysmon.ps1`:
+
+```ps1
+# Author: Roberto Rodriguez (@Cyb3rWard0g)
+# License: GPL-3.0
+
+# References:
+# https://medium.com/@cosmin.ciobanu/enhanced-endpoint-detection-using-sysmon-and-wef-3b65d491ff95
+
+# Modified by BlueCapeSecurity
+# - Changed config to SwiftOnSecurity
+
+[CmdletBinding()]
+param (
+    [string]$SysmonConfigUrl = "https://raw.githubusercontent.com/SwiftOnSecurity/sysmon-config/master/sysmonconfig-export.xml"
+)
+
+write-host "[+] Processing Sysmon Installation.."
+
+$URL = "https://download.sysinternals.com/files/Sysmon.zip"
+Resolve-DnsName download.sysinternals.com
+Resolve-DnsName github.com
+Resolve-DnsName raw.githubusercontent.com
+
+$OutputFile = Split-Path $Url -leaf
+$File = "C:\ProgramData\$OutputFile"
+
+# Download File
+write-Host "[+] Downloading $OutputFile .."
+$wc = new-object System.Net.WebClient
+$wc.DownloadFile($Url, $File)
+if (!(Test-Path $File)) { Write-Error "File $File does not exist" -ErrorAction Stop }
+
+# Decompress if it is zip file
+if ($File.ToLower().EndsWith(".zip"))
+{
+    # Unzip file
+    write-Host "  [+] Decompressing $OutputFile .."
+    $UnpackName = (Get-Item $File).Basename
+    $SysmonFolder = "C:\ProgramData\$UnpackName"
+    $SysmonBinary = "$SysmonFolder\Sysmon.exe"
+    expand-archive -path $File -DestinationPath $SysmonFolder
+    if (!(Test-Path $SysmonFolder)) { Write-Error "$File was not decompressed successfully" -ErrorAction Stop }
+}
+
+# Downloading Sysmon Configuration
+write-Host "[+] Downloading Sysmon config.."
+$SysmonFile = "C:\ProgramData\sysmon.xml"
+$wc.DownloadFile($SysmonConfigUrl, $SysmonFile)
+if (!(Test-Path $SysmonFile)) { Write-Error "File $SysmonFile does not exist" -ErrorAction Stop }
+
+# Installing Sysmon
+write-Host "[+] Installing Sysmon.."
+& $SysmonBinary -i C:\ProgramData\sysmon.xml -accepteula
+
+write-Host "[+] Setting Sysmon to start automatically.."
+& sc.exe config Sysmon start= auto
+
+# Setting Sysmon Channel Access permissions
+write-Host "[+] Setting up Channel Access permissions for Microsoft-Windows-Sysmon/Operational "
+wevtutil set-log Microsoft-Windows-Sysmon/Operational /ca:'O:BAG:SYD:(A;;0xf0005;;;SY)(A;;0x5;;;BA)(A;;0x1;;;S-1-5-32-573)(A;;0x1;;;NS)'
+#New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WINEVT\Channels\Microsoft-Windows-Sysmon/Operational" -Name "ChannelAccess" -PropertyType String -Value "O:BAG:SYD:(A;;0xf0005;;;SY)(A;;0x5;;;BA)(A;;0x1;;;S-1-5-32-573)(A;;0x1;;;NS)" -Force
+
+write-Host "[+] Restarting Sysmon .."
+Restart-Service -Name Sysmon -Force
+
+write-Host "  [*] Verifying if Sysmon is running.."
+$s = Get-Service -Name Sysmon
+while ($s.Status -ne 'Running') { Start-Service Sysmon; Start-Sleep 3 }
+Start-Sleep 5
+write-Host "  [*] Sysmon is running.."
+```
+
+`License.md`:
+
+```md
+                    GNU AFFERO GENERAL PUBLIC LICENSE
+                       Version 3, 19 November 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU Affero General Public License is a free, copyleft license for
+software and other kinds of works, specifically designed to ensure
+cooperation with the community in the case of network server software.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+our General Public Licenses are intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  Developers that use our General Public Licenses protect your rights
+with two steps: (1) assert copyright on the software, and (2) offer
+you this License which gives you legal permission to copy, distribute
+and/or modify the software.
+
+  A secondary benefit of defending all users' freedom is that
+improvements made in alternate versions of the program, if they
+receive widespread use, become available for other developers to
+incorporate.  Many developers of free software are heartened and
+encouraged by the resulting cooperation.  However, in the case of
+software used on network servers, this result may fail to come about.
+The GNU General Public License permits making a modified version and
+letting the public access it on a server without ever releasing its
+source code to the public.
+
+  The GNU Affero General Public License is designed specifically to
+ensure that, in such cases, the modified source code becomes available
+to the community.  It requires the operator of a network server to
+provide the source code of the modified version running there to the
+users of that server.  Therefore, public use of a modified version, on
+a publicly accessible server, gives the public access to the source
+code of the modified version.
+
+  An older license, called the Affero General Public License and
+published by Affero, was designed to accomplish similar goals.  This is
+a different license, not a version of the Affero GPL, but Affero has
+released a new version of the Affero GPL which permits relicensing under
+this license.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU Affero General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Remote Network Interaction; Use with the GNU General Public License.
+
+  Notwithstanding any other provision of this License, if you modify the
+Program, your modified version must prominently offer all users
+interacting with it remotely through a computer network (if your version
+supports such interaction) an opportunity to receive the Corresponding
+Source of your version by providing access to the Corresponding Source
+from a network server at no charge, through some standard or customary
+means of facilitating copying of software.  This Corresponding Source
+shall include the Corresponding Source for any work covered by version 3
+of the GNU General Public License that is incorporated pursuant to the
+following paragraph.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the work with which it is combined will remain governed by version
+3 of the GNU General Public License.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU Affero General Public License from time to time.  Such new versions
+will be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU Affero General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU Affero General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU Affero General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published
+    by the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If your software can interact with users remotely through a computer
+network, you should also make sure that it provides a way for users to
+get its source.  For example, if your program is a web application, its
+interface could display a "Source" link that leads users to an archive
+of the code.  There are many ways you could offer source, and different
+solutions will be better for different programs; see section 13 for the
+specific requirements.
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU AGPL, see
+<https://www.gnu.org/licenses/>.
+
+```
+
+`README.md`:
+
+```md
+# Practical Windows Forensics
+*Provided by Blue Cape Security, LLC*
+
+<p align="center">
+  <img src="https://github.com/bluecapesecurity/bluecapesecurity/blob/main/BCS_banner.png" />
+</p>
+
+<div align="center">
+
+ **A quick DIY approach for performing a digital forensic analysis on a Windows 10 system**
+ 
+</div>
+ 
+ ---
+ 
+ 
+
+*Links:*
+- Check out the full [11-hour Practical Windows Forensics (PWF) course](https://bluecapesecurity.com/courses/practical-windows-forensics/)
+- Join the [Discord Community](https://discord.gg/WKsaGE2CV3)
+- Watch the [PWF intro videos on YouTube](https://youtu.be/JDzJHyBJIXk) 
+
+ 
+**Steps TLDR:**
+* Prepare a Windows target VM
+* Execute attack script (based on the AtomicRedTeam framework) on target VM
+* Acquire memory and disk images 
+* Setup a Windows forensic VM
+* Get started with your Windows forensic analysis
+
+Prerequisites:
+  * [VirtualBox or VMWare hypervisor](https://bluecapesecurity.com/build-your-lab/virtualization/)
+  * Host system requirements: 
+      * 4GB+ RAM for running Windows VMs (There are two VMs, but they do not have to run at the same time)
+      * Disk storage for 2 x Windows VMs using about 20GB and 40GB, respectively. Additionally, you'll need around 30 GB for handling disk and memory images as well as additional files. 
+  
+ 
+
+![Investigation Roadmap](Investigation-roadmap.png)
+
+ 
+ ---
+## Attack Scenario
+The attack simulation script in this repo can be used to create a realistic compromise scenario on a Windows system. It leverages selected Atomic Red Team tests that simulate commonly observed techniques in real world attacks. The script `PWF/AtomicRedTeam/ART-attack.ps1` first installs [Invoke-AtomicRedTeam](https://github.com/redcanaryco/invoke-atomicredteam) and then executes a number of techniques. The techniques executed in this script are highlited the MITRE ATT&CK framwork below.
+
+![Attack Script](AtomicRedTeam/PWF_Analysis-MITRE.png)
+
+## Preparation
+### 1 Prepare Target System
+1.1) Download, import and configure the free Windows 10 test VM from the Microsoft developer site
+  * Download: https://developer.microsoft.com/en-us/microsoft-edge/tools/vms/
+  * Import into VirtualBox and **take a snapshot before the first start**. This allows rolling back after the attack or the VM expired.
+  * Start and log in to the VM. Credentials: "IEUser" and "Passw0rd!"
+  * **Pause Windows Updates** to avoid additional noise: Go to Settings -> Windows Update -> Advanced Options -> Pause updates
+  * **Install Sysmon** for detailed event logging.
+      * Download the script in `PWF/Install-Sysmon/Install-Sysmon.ps1` onto the system
+      * Run PowerShell **as administrator**, navigate to the script and execute it `.\Install-Sysmon.ps1`
+  * **Disable all Defender settings**: Before executing the attack, go to "Virus & threat protection settings" -> Manage settings -> Disable all the features shown. *Note that this is only a temporary solution and real-time protection will turn itself on automatically after a while*.
+
+1.2) Execute the attack script on the target system
+* Download the script in `PWF/AtomicRedTeam/ART-attack.ps1` onto the system
+* Run PowerShell **as administrator!**, navigate to the script and :fire: *execute it* :fire: `.\ART-attack.ps1`
+    * Ensure that the target VM has internet access as it will download the Invoke-AtomicRedTeam Framework. Furthermore, press [Y] Yes if PowerShell asks for installing additional features.
+    * Verify that the powershell logs show successful executions of atomics. (If unsuccessful shut down the VM, revert to the previous snapshot and implement fixes before running the script again.)
+    * Do **not close any windows or processes** and proceed to the next step!
+
+### 2 Disk and Memory - Data Acquisition 
+2.1) Pause (in VirtualBox) or Suspend (in VMWare) the VM and take a snapshot
+
+2.2) Take an image of the VM memory
+* Create an "evidence" folder on the host system to store the following disk and memory images.
+
+*VMWare memory acquisition*
+  - Open the *.vmwarevm* directory of the VM in a terminal
+  - Copy the .vmem and the associated .vmsn (snapshot) file in your evidence folder
+
+*VirtualBox memory acquisition*
+* Open your terminal (Mac/Linux) or cmd (Windows) to run *vboxmanage* (in Windows it is located under C:\Program Files\Oracle\VirtualBox)
+* Identify the VM's UUID: `vboxmanage list vms`
+* Create a snapshot of the VM's memory: `vboxmanage debugvm <VM_UUID> dumpvmcore --filename win10-mem.raw`
+  
+2.3) Take an image of the VM disk
+* Upause and shut down the VM. 
+
+*VMWare disk image acquisition* 
+* Locate the VMDK split files in the VM's directory. These are all files ending with *.vmdk*.
+    * Depending on the number of snapshots there could be several versions of VMDK file sequences. In that case the sequence with the highest number in the name will be the one with the latest status e.g. as in "Virtual Disk-XXX.vmdk"
+* Export the vmdk image. There are two options:
+    * Copy all the split files of the latest sequence "Virtual Disk-xxx.vmdk" to "Virtual Disk-xxx-s0016.vmdk" into your evidence folder. 
+    * Alternatively, create a single VMDK from split files: `C:\Program Files (x86)\VMware\VMware Player\vmware-vdiskmanager.exe» -r «d:\VMLinux\vmdkname.vmdk» -t 0 MyNewImage.vmdk`
+  
+*VirtualBox disk image acquisition*
+* Open terminal or cmd
+* Identify the VM's UUID: `vboxmanage list vms`
+* Identify the VM's disk UUID: `vboxmanage showvminfo <VM_UUID>` Note the UUID of the disk in row *IDE Controller*
+* Export the disk using the disk UUID into RAW format: `vboxmanage clonemedium disk <disk_UUID> --format raw win10-disk.raw`
+  
+2.4) Validate integrity of memory and disk images by creating SHA1 hashes and saving them in a text file along with the images.
+  
+*Windows*: Open PowerShell and navigate to the folder. Obtain hashes by executing: `Get-FileHash -Algorithm SHA1 <file>`
+ 
+*Mac/Linux*: Open terminal and navigate to the folder. Obtain hashes by executing: `shasum <file>`
+  
+## Forensic Analysis
+
+### 3 Set up Your Forensic Workstation
+3.1) Set up a forensic VM as outlined in the following link: https://bluecapesecurity.com/build-your-forensic-workstation/
+* It is recommended to install a Windows 2019 Server VM from the Microsoft Evaluation Center.
+    * Create a new VM in Virtualbox. Assign at least **4 GB of RAM and 100 GB of disk storage with the dynamically allocated option** selected. This means the disk will start small (e.g. basic size of Windows 10-20 GB in size) and grows as we add more data. 
+    * Install VirtualBox Guest Additions and enable shared clipboard and file sharing with the evidence folder on the host system.
+    * When the Windows system is installed, follow the instructions in the section "Configure the Windows Environment – DFIR Best Practices".
+* When the setup is complete, install the following tools: 
+    * Kali Linux subsystem, Volatility
+    * Arsenal Image Mounter, FTK Imager, Eric Zimmerman Tools, KAPE, RegRipper, EventLog Explorer, Notepad++
+* Take a snapshot once the setup is complete. 
+
+### 4 Forensic memory and disk analysis
+With the forensic workstation installed and the evidence acquired, we can now beginn with the analysis of the memory and disk images. Some of the forensic artifacts that we want to investigate are:
+
+* User accounts
+* Program execution artifacts
+* Persistence (run keys, scheduled tasks, startup scripts, Windows services)
+* File creation and deletion (NTFS artifacts)
+* PowerShell executions
+* DLL process injection
+* Office document analysis
+* Timeline analysis
+
+
+Happy forensicating!
+
+  
+Copyright © 2022 [BlueCapeSecurity](https://www.bluecapesecurity.com)
+*Cyber Security Skills Training & Career Coaching*
+ 
+Disclaimer: The material is for educational purposes only! I do not assume and hereby disclaim any liability to any party for any errors, disruptions, damages, or other negative consequences resulting from applying the information that I share.
+
+```
+
+`Resources/RegRipper-plugins.csv`:
+
+```csv
+CSV Schema (1 sample row):
+Headers: Plugin, Version, Hive, Description, Column1, Column2
+Sample: "base", "20200427", "All", "Parse base info from hive", "", ""
+... [246 more rows omitted]
+
+```
