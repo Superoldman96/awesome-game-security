@@ -1,0 +1,3918 @@
+Project Path: arc_gmh5225_GhidrAssist_yk9e_hsb
+
+Source Tree:
+
+```txt
+arc_gmh5225_GhidrAssist_yk9e_hsb
+├── LICENSE
+├── Module.manifest
+├── README.md
+├── build.gradle
+├── data
+│   └── README.txt
+├── extension.properties
+├── ghidra_scripts
+│   └── README.txt
+├── res
+│   ├── screenshot1.png
+│   └── screenshots_anim.gif
+└── src
+    └── main
+        ├── help
+        │   └── help
+        │       ├── TOC_Source.xml
+        │       └── topics
+        │           └── ghidrassist
+        │               └── help.html
+        ├── java
+        │   └── ghidrassist
+        │       ├── APIProvider.java
+        │       ├── AnalysisDB.java
+        │       ├── CustomEmbeddingService.java
+        │       ├── CustomOpenAiService.java
+        │       ├── GAUtils.java
+        │       ├── GhidrAssistPlugin.java
+        │       ├── GhidrAssistProvider.java
+        │       ├── LlmApi.java
+        │       ├── RAGEngine.java
+        │       ├── RLHFDatabase.java
+        │       ├── SettingsDialog.java
+        │       └── ToolCalling.java
+        └── resources
+            └── images
+                └── README.txt
+
+```
+
+`LICENSE`:
+
+```
+Copyright (c) 2024 Jason Tang
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+`README.md`:
+
+```md
+# GhidrAssist
+Author: **Jason Tang**
+
+_A plugin that provides LLM helpers to explain code and assist in RE._
+
+## Support Continued Improvements
+
+[!["Buy Me A Beer"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://buymeacoffee.com/jtang613)
+
+## Description:
+
+This is a LLM plugin aimed at enabling the use of local LLM's (ollama, text-generation-webui, lm-studio, etc) for assisting with binary exploration and reverse engineering. It supports any OpenAI v1-compatible API. Recommended models are LLaMA-based models such as llama3.1:8b, but others such as DeepSeek and ChatGPT work as well.
+
+Current features include:
+* Explain the current function - Works for disassembly and pseudo-C.
+* Explain the current instruction - Works for disassembly and pseudo-C.
+* General query - Query the LLM directly from the UI.
+* Propose actions - Provide a list of proposed actions to apply.
+* Function calling - Allow agent to call functions to navigate the binary, rename functions and variables.
+* RAG augmentation - Supports adding contextual documents to refine query effectiveness.
+* RLHF dataset generation - To enable model fine tuning.
+* Settings to modify API host, key, model name and max tokens.
+
+Future Roadmap:
+* Agentic assistant - Use Autogen or similar framework for self-guided binary RE.
+* Model fine tuning - Leverage the RLHF dataset to fine tune the model.
+
+## Quickstart
+
+* If necessary, copy the binary release ZIP archive to the Ghidra_Install/Extensions/Ghidra directory.
+* Launch Ghidra -> File -> Install Extension -> Enable GhidrAssist.
+* Load a binary and launch the CodeBrowser.
+* CodeBrowser -> File -> Configure -> Miscellaneous -> Enable GhidrAssist.
+* Open Tool Settings -> GhidraAssist.
+* Ensure the RLHF and RAG database paths are appropriate for your environment.
+* Point the API host to your preferred API provider and set the API key. 
+* Open GhidrAssist with the GhidrAssist option in the Windows menu and start exploring.
+
+## Screenshot
+![Screenshot](/res/screenshot1.png)
+![Screenshots](/res/screenshots_anim.gif)
+
+## Homepage
+https://github.com/jtang613/GhidrAssist
+
+
+## Minimum Version
+
+This plugin requires the following minimum version of Ghidra:
+
+* 11.0
+
+## License
+
+This plugin is released under a MIT license.
+
+```
+
+`build.gradle`:
+
+```gradle
+/* ###
+ * IP: GHIDRA
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+// Builds a Ghidra Extension for a given Ghidra installation.
+//
+// An absolute path to the Ghidra installation directory must be supplied either by setting the 
+// GHIDRA_INSTALL_DIR environment variable or Gradle project property:
+//
+//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra> 
+//     > gradle
+//
+//         or
+//
+//     > gradle -PGHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
+//
+// Gradle should be invoked from the directory of the project to build.  Please see the
+// application.gradle.version property in <GHIDRA_INSTALL_DIR>/Ghidra/application.properties
+// for the correction version of Gradle to use for the Ghidra installation you specify.
+
+plugins {
+    id 'java'
+    id 'eclipse'
+}
+
+//----------------------START "DO NOT MODIFY" SECTION------------------------------
+def ghidraInstallDir
+
+if (System.env.GHIDRA_INSTALL_DIR) {
+	ghidraInstallDir = System.env.GHIDRA_INSTALL_DIR
+}
+else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
+	ghidraInstallDir = project.getProperty("GHIDRA_INSTALL_DIR")
+}
+
+if (ghidraInstallDir) {
+	apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
+}
+else {
+	throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
+}
+//----------------------END "DO NOT MODIFY" SECTION-------------------------------
+
+repositories {
+	// Declare dependency repositories here.  This is not needed if dependencies are manually 
+	// dropped into the lib/ directory.
+	// See https://docs.gradle.org/current/userguide/declaring_repositories.html for more info.
+	mavenCentral()
+}
+
+dependencies {
+	// Any external dependencies added here will automatically be copied to the lib/ directory when
+	// this extension is built.	
+
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.15.0'
+	implementation 'com.launchableinc.openai-java:service:0.4.0'
+	implementation "io.reactivex.rxjava3:rxjava:3.1.9"
+	implementation 'com.vladsch.flexmark:flexmark-all:0.64.0'
+	implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
+	implementation 'org.apache.lucene:lucene-core:9.11.1'
+	implementation 'org.apache.lucene:lucene-analysis-common:9.11.1'
+	implementation 'org.apache.lucene:lucene-queryparser:9.11.1'
+
+}
+
+// Exclude additional files from the built extension
+// Ex: buildExtension.exclude '.idea/**'
+
+```
+
+`data/README.txt`:
+
+```txt
+The "data" directory is intended to hold data files that will be used by this module and will
+not end up in the .jar file, but will be present in the zip or tar file.  Typically, data
+files are placed here rather than in the resources directory if the user may need to edit them.
+
+An optional data/languages directory can exist for the purpose of containing various Sleigh language
+specification files and importer opinion files.  
+
+The data/buildLanguage.xml is used for building the contents of the data/languages directory.
+
+The skel language definition has been commented-out within the skel.ldefs file so that the 
+skeleton language does not show-up within Ghidra.
+
+See the Sleigh language documentation (docs/languages/index.html) for details Sleigh language 
+specification syntax.
+ 
+```
+
+`extension.properties`:
+
+```properties
+name=@extname@
+description=A plugin that provides LLM helpers to explain code and assist in RE.
+author=Jason Tang
+createdOn=
+version=@extversion@
+
+```
+
+`ghidra_scripts/README.txt`:
+
+```txt
+Java source directory to hold module-specific Ghidra scripts.
+
+```
+
+`src/main/help/help/TOC_Source.xml`:
+
+```xml
+<?xml version='1.0' encoding='ISO-8859-1' ?>
+<!-- 
+
+	This is an XML file intended to be parsed by the Ghidra help system.  It is loosely based 
+	upon the JavaHelp table of contents document format.  The Ghidra help system uses a 
+	TOC_Source.xml file to allow a module with help to define how its contents appear in the 
+	Ghidra help viewer's table of contents.  The main document (in the Base module) 
+	defines a basic structure for the 
+	Ghidra table of contents system.  Other TOC_Source.xml files may use this structure to insert
+	their files directly into this structure (and optionally define a substructure).
+	
+	
+	In this document, a tag can be either a <tocdef> or a <tocref>.  The former is a definition
+	of an XML item that may have a link and may contain other <tocdef> and <tocref> children.  
+	<tocdef> items may be referred to in other documents by using a <tocref> tag with the 
+	appropriate id attribute value.  Using these two tags allows any module to define a place 
+	in the table of contents system (<tocdef>), which also provides a place for 
+	other TOC_Source.xml files to insert content (<tocref>).  
+	
+	During the help build time, all TOC_Source.xml files will be parsed and	validated to ensure
+	that all <tocref> tags point to valid <tocdef> tags.  From these files will be generated
+	<module name>_TOC.xml files, which are table of contents files written in the format 
+	desired by the JavaHelp system.   Additionally, the genated files will be merged together
+	as they are loaded by the JavaHelp system.  In the end, when displaying help in the Ghidra
+	help GUI, there will be on table of contents that has been created from the definitions in 
+	all of the modules' TOC_Source.xml files.
+
+	
+	Tags and Attributes
+	
+	<tocdef>
+	-id          - the name of the definition (this must be unique across all TOC_Source.xml files)	
+	-text        - the display text of the node, as seen in the help GUI
+	-target**    - the file to display when the node is clicked in the GUI
+	-sortgroup   - this is a string that defines where a given node should appear under a given
+	               parent.  The string values will be sorted by the JavaHelp system using
+	               a javax.text.RulesBasedCollator.  If this attribute is not specified, then
+	               the text of attribute will be used.
+
+	<tocref>
+	-id			 - The id of the <tocdef> that this reference points to 
+	
+	**The URL for the target is relative and should start with 'help/topics'.  This text is 
+	used by the Ghidra help system to provide a universal starting point for all links so that
+	they can be resolved at runtime, across modules.
+	
+	
+-->
+
+
+<tocroot>
+	<!-- Uncomment and adjust fields to add help topic to help system's Table of Contents
+	<tocref id="Ghidra Functionality">
+		<tocdef id="HelpAnchor" text="My Feature" target="help/topics/my_topic/help.html" />
+	</tocref>
+	-->
+</tocroot>
+
+```
+
+`src/main/help/help/topics/ghidrassist/help.html`:
+
+```html
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<HTML>
+  <HEAD>
+    <META name="generator" content=
+    "HTML Tidy for Java (vers. 2009-12-01), see jtidy.sourceforge.net">
+    <META http-equiv="Content-Language" content="en-us">
+    <META http-equiv="Content-Type" content="text/html; charset=windows-1252">
+    <META name="GENERATOR" content="Microsoft FrontPage 4.0">
+    <META name="ProgId" content="FrontPage.Editor.Document">
+
+    <TITLE>Skeleton Help File for a Module</TITLE>
+    <LINK rel="stylesheet" type="text/css" href="help/shared/DefaultStyle.css">
+  </HEAD>
+
+  <BODY>
+    <H1><a name="HelpAnchor"></a>Skeleton Help File for a Module</H1>
+
+    <P>This is a simple skeleton help topic. For a better description of what should and should not
+    go in here, see the "sample" Ghidra extension in the Extensions/Ghidra directory, or see your 
+    favorite help topic. In general, language modules do not have their own help topics.</P>
+  </BODY>
+</HTML>
+
+```
+
+`src/main/java/ghidrassist/APIProvider.java`:
+
+```java
+package ghidrassist;
+
+public class APIProvider {
+    private String name;
+    private String model;
+    private String maxTokens;
+    private String url;
+    private String key;
+    private boolean disableTlsVerification;
+
+    public APIProvider(String name, String model, String maxTokens, String url, String key, boolean disableTlsVerification) {
+        this.name = name;
+        this.model = model;
+        this.maxTokens = maxTokens;
+        this.url = url;
+        this.key = key;
+        this.disableTlsVerification = disableTlsVerification;
+    }
+
+    // Getters
+    public String getName() { return name; }
+    public String getModel() { return model; }
+    public String getMaxTokens() { return maxTokens; }
+    public String getUrl() { return url; }
+    public String getKey() { return key; }
+    public boolean isDisableTlsVerification() { return disableTlsVerification; }
+
+    // Setters
+    public void setName(String name) { this.name = name; }
+    public void setModel(String model) { this.model = model; }
+    public void setMaxTokens(String maxTokens) { this.maxTokens = maxTokens; }
+    public void setUrl(String url) { this.url = url; }
+    public void setKey(String key) { this.key = key; }
+    public void setDisableTlsVerification(boolean disableTlsVerification) { this.disableTlsVerification = disableTlsVerification; }
+}
+
+```
+
+`src/main/java/ghidrassist/AnalysisDB.java`:
+
+```java
+package ghidrassist;
+
+import ghidra.framework.preferences.Preferences;
+import ghidra.program.model.address.Address;
+import ghidra.util.Msg;
+import java.sql.*;
+
+public class AnalysisDB {
+    private static final String DB_PATH_PROPERTY = "GhidrAssist.AnalysisDBPath";
+    private static final String DEFAULT_DB_PATH = "ghidrassist_analysis.db";
+    private Connection connection;
+
+    public AnalysisDB() {
+        String dbPath = Preferences.getProperty(DB_PATH_PROPERTY, DEFAULT_DB_PATH);
+        initializeDatabase(dbPath);
+    }
+
+    private void initializeDatabase(String dbPath) {
+        try {
+            connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+            createAnalysisTable();
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to initialize Analysis database: " + e.getMessage());
+        }
+    }
+
+    private void createAnalysisTable() throws SQLException {
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS GHAnalysis ("
+                + "program_hash TEXT NOT NULL,"
+                + "function_address TEXT NOT NULL,"
+                + "query TEXT NOT NULL,"
+                + "response TEXT NOT NULL,"
+                + "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,"
+                + "PRIMARY KEY (program_hash, function_address)"
+                + ")";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(createTableSQL);
+        }
+    }
+
+    public void upsertAnalysis(String programHash, Address functionAddress, String query, String response) {
+        String upsertSQL = "INSERT INTO GHAnalysis (program_hash, function_address, query, response) "
+                + "VALUES (?, ?, ?, ?) "
+                + "ON CONFLICT(program_hash, function_address) "
+                + "DO UPDATE SET query = ?, response = ?, timestamp = CURRENT_TIMESTAMP";
+        
+        try (PreparedStatement pstmt = connection.prepareStatement(upsertSQL)) {
+            pstmt.setString(1, programHash);
+            pstmt.setString(2, functionAddress.toString());
+            pstmt.setString(3, query);
+            pstmt.setString(4, response);
+            pstmt.setString(5, query);
+            pstmt.setString(6, response);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to store analysis: " + e.getMessage());
+        }
+    }
+
+    public Analysis getAnalysis(String programHash, Address functionAddress) {
+        String selectSQL = "SELECT query, response, timestamp FROM GHAnalysis "
+                + "WHERE program_hash = ? AND function_address = ?";
+        
+        try (PreparedStatement pstmt = connection.prepareStatement(selectSQL)) {
+            pstmt.setString(1, programHash);
+            pstmt.setString(2, functionAddress.toString());
+            
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return new Analysis(
+                    rs.getString("query"),
+                    rs.getString("response"),
+                    rs.getTimestamp("timestamp")
+                );
+            }
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to retrieve analysis: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public void close() {
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to close Analysis database connection: " + e.getMessage());
+        }
+    }
+
+    public static class Analysis {
+        private final String query;
+        private final String response;
+        private final Timestamp timestamp;
+
+        public Analysis(String query, String response, Timestamp timestamp) {
+            this.query = query;
+            this.response = response;
+            this.timestamp = timestamp;
+        }
+
+        public String getQuery() { return query; }
+        public String getResponse() { return response; }
+        public Timestamp getTimestamp() { return timestamp; }
+    }
+}
+```
+
+`src/main/java/ghidrassist/CustomEmbeddingService.java`:
+
+```java
+package ghidrassist;
+
+import java.io.IOException;
+import java.security.cert.CertificateException;
+import javax.net.ssl.*;
+import okhttp3.*;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import ghidra.framework.preferences.Preferences;
+import ghidra.util.Msg;
+
+public class CustomEmbeddingService {
+
+    private String apiKey;
+    private String apiUrl;
+    private String apiModel;
+    private boolean disableTlsVerification;
+    private static final Gson gson = new Gson();
+    private OkHttpClient client;
+    private EmbeddingProvider embeddingProvider;
+    
+
+    public CustomEmbeddingService() {
+    }
+
+    public void init() {
+    	try {
+	    	APIProvider currentProvider = GhidrAssistPlugin.getCurrentAPIProvider();
+	        this.apiKey = currentProvider.getKey();
+	        this.apiUrl = currentProvider.getUrl();
+	        this.apiModel = currentProvider.getModel();
+	        this.disableTlsVerification = currentProvider.isDisableTlsVerification();
+    	}
+    	catch (Exception e) {
+    		Msg.showError(this, null, "Service Error", "You must configure at least one API Provider.");
+    	}
+    }
+
+    public enum EmbeddingProvider {
+        OPENAI, OLLAMA, NONE
+    }
+
+    public double[] getEmbedding(String text) throws IOException {
+    	this.init();
+    	embeddingProvider = EmbeddingProvider.valueOf(Preferences.getProperty("GhidrAssist.SelectedRAGProvider", "NONE"));
+        switch (embeddingProvider) {
+            case OLLAMA:
+                return getOllamaEmbedding(text);
+            case OPENAI:
+                return getOpenAIEmbedding(text);
+            case NONE:
+            default:
+                return new double[0]; // Return an empty result list
+        }
+    }
+
+    private static OkHttpClient createHttpClient(boolean disableTlsVerification) {
+        try {
+            OkHttpClient.Builder builder = new OkHttpClient.Builder();
+
+            if (!disableTlsVerification) {
+                return builder.build();
+            }
+
+            // Create a trust manager that does not validate certificate chains
+            final TrustManager[] trustAllCerts = new TrustManager[] {
+                new X509TrustManager() {
+                    @Override
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) throws CertificateException {}
+                    @Override
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) throws CertificateException {}
+                    @Override
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return new java.security.cert.X509Certificate[]{}; }
+                }
+            };
+
+            // Install the all-trusting trust manager
+            final SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            // Create an ssl socket factory with our all-trusting manager
+            final SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+
+            builder.sslSocketFactory(sslSocketFactory, (X509TrustManager)trustAllCerts[0]);
+            builder.hostnameVerifier((hostname, session) -> true);
+
+            return builder.build();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private double[] getOllamaEmbedding(String text) throws IOException {
+        String url = apiUrl.replace("v1/", "ollama/api/") + "embeddings";
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("model", this.apiModel);
+        payload.addProperty("keep_alive", 0);
+        payload.addProperty("prompt", text);
+        payload.add("options", new JsonObject());
+
+        RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), gson.toJson(payload));
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .post(body)
+                .build();
+
+        client = createHttpClient(disableTlsVerification);
+        Response response = client.newCall(request).execute();
+        if (!response.isSuccessful()) {
+            System.out.println("Failed to get embedding: " + response.code() + "\n" + response.message());
+            throw new IOException("Failed to get embedding: " + response.code() + "\n" + response.message());
+        }
+
+        String responseString = response.body().string();
+        JsonObject responseObject = (JsonObject) gson.fromJson(responseString, JsonElement.class);
+        JsonArray embeddingsArray = responseObject.getAsJsonArray("embedding");
+        if (embeddingsArray == null || embeddingsArray.size() == 0) {
+            throw new IOException("No embeddings found in the response");
+        }
+
+        JsonArray embeddings = embeddingsArray;
+        double[] embeddingArray = new double[embeddings.size()];
+        for (int i = 0; i < embeddings.size(); i++) {
+            embeddingArray[i] = embeddings.get(i).getAsDouble();
+        }
+        return embeddingArray;
+    }
+
+    private double[] getOpenAIEmbedding(String text) throws IOException {
+        String url = apiUrl + "embeddings";
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("model", "text-embedding-ada-002");
+        payload.addProperty("encoding_format", "float");
+        payload.addProperty("input", text);
+
+        RequestBody body = RequestBody.create(MediaType.get("application/json; charset=utf-8"), gson.toJson(payload));
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(body)
+                .build();
+
+        client = createHttpClient(disableTlsVerification);
+        Response response = client.newCall(request).execute();
+        if (!response.isSuccessful()) {
+            System.out.println("Failed to get embedding: " + response.code() + "\n" + response.message());
+            throw new IOException("Failed to get embedding: " + response.code() + "\n" + response.message());
+        }
+
+        String responseString = response.body().string();
+        JsonObject responseObject = gson.fromJson(responseString, JsonObject.class);
+        JsonArray dataArray = responseObject.getAsJsonArray("data");
+        JsonArray embeddingsArray = dataArray.get(0).getAsJsonObject().getAsJsonArray("embedding");
+        if (embeddingsArray == null || embeddingsArray.size() == 0) {
+            throw new IOException("No embeddings found in the response");
+        }
+
+        JsonArray embeddings = embeddingsArray;
+        double[] embeddingArray = new double[embeddings.size()];
+        for (int i = 0; i < embeddings.size(); i++) {
+            embeddingArray[i] = embeddings.get(i).getAsDouble();
+        }
+        return embeddingArray;
+    }
+}
+```
+
+`src/main/java/ghidrassist/CustomOpenAiService.java`:
+
+```java
+package ghidrassist;
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.launchableinc.openai.client.OpenAiApi;
+import com.launchableinc.openai.service.OpenAiService;
+import okhttp3.*;
+import retrofit2.Retrofit;
+import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory;
+import retrofit2.converter.jackson.JacksonConverterFactory;
+import java.io.IOException;
+import java.time.Duration;
+import javax.net.ssl.*;
+
+public class CustomOpenAiService {
+
+    private final OpenAiService openAiService;
+
+    public CustomOpenAiService(String apiKey, String apiHost, boolean disableTlsVerification) {
+        this(apiKey, apiHost, disableTlsVerification, Duration.ofSeconds(240)); // Default timeout of 30 seconds
+    }
+
+    public CustomOpenAiService(String apiKey, String apiHost, boolean disableTlsVerification, Duration timeout) {
+        OkHttpClient client = buildClient(apiKey, disableTlsVerification, timeout);
+        Retrofit retrofit = buildRetrofit(client, apiHost);
+
+        OpenAiApi api = retrofit.create(OpenAiApi.class);
+        this.openAiService = new OpenAiService(api);
+    }
+
+    private OkHttpClient buildClient(String apiKey, boolean disableTlsVerification, Duration timeout) {
+        try {
+            OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .addInterceptor(new AuthenticationInterceptor(apiKey))
+                .connectTimeout(timeout)
+                .readTimeout(timeout)
+                .writeTimeout(timeout)
+                .retryOnConnectionFailure(true)
+                .addInterceptor(new RetryInterceptor(3)); // Add retry interceptor
+
+            if (!disableTlsVerification) {
+                return builder.build();
+            }
+
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    @Override
+                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+
+                    @Override
+                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+
+                    @Override
+                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                        return new java.security.cert.X509Certificate[]{};
+                    }
+                }
+            };
+
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+            builder.sslSocketFactory(sslContext.getSocketFactory(), (X509TrustManager) trustAllCerts[0]);
+            builder.hostnameVerifier((hostname, session) -> true);
+
+            return builder.build();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create a custom OkHttpClient", e);
+        }
+    }
+    
+    private Retrofit buildRetrofit(OkHttpClient client, String apiHost) {
+        ObjectMapper objectMapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        		.configure(DeserializationFeature.FAIL_ON_INVALID_SUBTYPE, false)
+                .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, false)
+                .configure(DeserializationFeature.FAIL_ON_UNRESOLVED_OBJECT_IDS, false);
+
+
+
+        return new Retrofit.Builder()
+                .baseUrl(apiHost)
+                .client(client)
+                .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
+                .addConverterFactory(JacksonConverterFactory.create(objectMapper))
+                .build();
+    }
+
+    public OpenAiService getOpenAiService() {
+        return this.openAiService;
+    }
+
+    private static class AuthenticationInterceptor implements Interceptor {
+        private final String apiKey;
+
+        AuthenticationInterceptor(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        @Override
+        public Response intercept(Chain chain) throws IOException {
+            Request original = chain.request();
+            Request request = original.newBuilder()
+                    .header("Authorization", "Bearer " + apiKey)
+                    .build();
+            return chain.proceed(request);
+        }
+    }
+
+    private static class RetryInterceptor implements Interceptor {
+        private final int maxRetries;
+
+        RetryInterceptor(int maxRetries) {
+            this.maxRetries = maxRetries;
+        }
+
+        @Override
+        public Response intercept(Chain chain) throws IOException {
+            Request request = chain.request();
+            Response response = null;
+            IOException exception = null;
+
+            int tryCount = 0;
+            while (tryCount < maxRetries) {
+                try {
+                    response = chain.proceed(request);
+                    if (response.isSuccessful()) {
+                        return response;
+                    } else {
+                        response.close();
+                    }
+                } catch (IOException e) {
+                    exception = e;
+                }
+
+                tryCount++;
+                try {
+                    Thread.sleep(1000 * tryCount); // Exponential backoff
+                } catch (InterruptedException ignored) {}
+            }
+
+            if (exception != null) {
+                throw exception;
+            }
+            return response;
+        }
+    }
+}
+```
+
+`src/main/java/ghidrassist/GAUtils.java`:
+
+```java
+package ghidrassist;
+
+import java.io.File;
+
+public class GAUtils {
+	public enum OperatingSystem {
+	    WINDOWS, MAC, LINUX, UNKNOWN;
+	
+	    public static OperatingSystem detect() {
+	        String os = System.getProperty("os.name").toLowerCase();
+	        if (os.contains("win")) {
+	            return WINDOWS;
+	        } else if (os.contains("mac")) {
+	            return MAC;
+	        } else if (os.contains("nix") || os.contains("nux") || os.contains("aix")) {
+	            return LINUX;
+	        } else {
+	            return UNKNOWN;
+	        }
+	    }
+	}
+	
+	static String getDefaultLucenePath(OperatingSystem os) {
+	    String basePath;
+	    switch (os) {
+	        case WINDOWS:
+	            basePath = System.getenv("LOCALAPPDATA");
+	            if (basePath == null) {
+	                throw new RuntimeException("Unable to access LOCALAPPDATA environment variable.");
+	            }
+	            break;
+
+	        case MAC:
+	            basePath = System.getProperty("user.home") + "/Library/Application Support";
+	            break;
+
+	        case LINUX:
+	            basePath = System.getProperty("user.home") + "/.config";
+	            break;
+
+	        default:
+	            throw new UnsupportedOperationException("Unsupported operating system: " + os);
+	    }
+	    return basePath + File.separator + "GhidrAssist" + File.separator + "LuceneIndex";
+	}
+
+}
+```
+
+`src/main/java/ghidrassist/GhidrAssistPlugin.java`:
+
+```java
+package ghidrassist;
+
+import ghidra.app.decompiler.DecompilerLocation;
+import ghidra.app.plugin.PluginCategoryNames;
+import ghidra.app.plugin.ProgramPlugin;
+import ghidra.framework.plugintool.*;
+import ghidra.framework.plugintool.util.PluginStatus;
+import ghidra.framework.preferences.Preferences;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Function;
+import ghidra.program.model.listing.FunctionManager;
+import ghidra.program.model.listing.Program;
+import ghidra.program.util.ProgramLocation;
+import scala.Console;
+
+import java.lang.reflect.Type;
+import java.util.List;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+import docking.ActionContext;
+import docking.action.DockingAction;
+import docking.action.MenuData;
+
+/**
+ * GhidrAssistPlugin is a Ghidra plugin that provides code assistance using a language model.
+ */
+@PluginInfo(
+    status = PluginStatus.STABLE,
+    packageName = "GhidrAssist",
+    category = PluginCategoryNames.COMMON,
+    shortDescription = "GhidrAssist LLM Plugin",
+    description = "A plugin that provides code assistance using a language model."
+)
+public class GhidrAssistPlugin extends ProgramPlugin {
+
+	private GhidrAssistProvider provider;
+    private String lastActiveProvider;
+    
+    public enum CodeViewType {
+        IS_DECOMPILER,
+        IS_DISASSEMBLER,
+        UNKNOWN
+    }
+
+    public GhidrAssistPlugin(PluginTool tool) {
+        super(tool);
+        String pluginName = getName();
+        provider = new GhidrAssistProvider(this, pluginName);
+        
+    }
+
+    @Override
+    public void init() {
+        super.init();
+
+        // Add a menu action for settings
+        DockingAction settingsAction = new DockingAction("GhidrAssist Settings", getName()) {
+            @Override
+            public void actionPerformed(ActionContext context) {
+                showSettingsDialog();
+            }
+        };
+        settingsAction.setMenuBarData(new MenuData(new String[] { "Tools", "GhidrAssist Settings" }, null, "GhidrAssist"));
+        tool.addAction(settingsAction);
+    }
+
+    private void showSettingsDialog() {
+        SettingsDialog dialog = new SettingsDialog(tool.getToolFrame(), "GhidrAssist Settings");
+        tool.showDialog(dialog);
+    }
+
+    @Override
+    public void locationChanged(ProgramLocation loc) {
+        if (provider != null) {
+            provider.updateLocation(loc);
+        }
+    }
+
+    public Program getCurrentProgram() {
+        return currentProgram;
+    }
+
+    public Address getCurrentAddress() {
+        if (currentLocation != null) {
+            return currentLocation.getAddress();
+        }
+        return null;
+    }
+
+    public Function getCurrentFunction() {
+        Program program = getCurrentProgram();
+        Address address = getCurrentAddress();
+
+        if (program != null && address != null) {
+            FunctionManager functionManager = program.getFunctionManager();
+            Function function = functionManager.getFunctionContaining(address);
+            return function;
+        }
+        return null;
+    }
+
+	public String getLastActiveProvider() {
+		return lastActiveProvider;
+	}
+	
+	public CodeViewType checkLastActiveCodeView() {
+	    if (currentLocation instanceof DecompilerLocation) {
+	        return CodeViewType.IS_DECOMPILER;
+	    } else if (currentLocation != null) {
+	        // Assume disassembler view if not decompiler
+	        return CodeViewType.IS_DISASSEMBLER;
+	    } else {
+	        return CodeViewType.UNKNOWN;
+	    }
+	}
+
+    public static APIProvider getCurrentAPIProvider() {
+        // Load the list of API providers from preferences
+        String providersJson = Preferences.getProperty("GhidrAssist.APIProviders", "[]");
+        Gson gson = new Gson();
+        Type listType = new TypeToken<List<APIProvider>>() {}.getType();
+        List<APIProvider> apiProviders = gson.fromJson(providersJson, listType);
+
+        // Load the selected provider name
+        String selectedProviderName = Preferences.getProperty("GhidrAssist.SelectedAPIProvider", "");
+
+        for (APIProvider provider : apiProviders) {
+            if (provider.getName().equals(selectedProviderName)) {
+                return provider;
+            }
+        }
+
+        // If not found, return null or handle as needed
+        return null;
+    }
+}
+
+```
+
+`src/main/java/ghidrassist/GhidrAssistProvider.java`:
+
+```java
+package ghidrassist;
+
+import docking.ComponentProvider;
+import ghidra.app.decompiler.*;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressFactory;
+import ghidra.program.model.listing.*;
+import ghidra.program.util.ProgramLocation;
+import ghidra.util.Msg;
+import ghidra.util.task.Task;
+import ghidra.util.task.TaskMonitor;
+import ghidrassist.GhidrAssistPlugin.CodeViewType;
+import ghidra.util.task.TaskLauncher;
+
+import javax.swing.*;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.event.HyperlinkListener;
+import javax.swing.table.DefaultTableModel;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
+import com.google.gson.stream.JsonReader;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.util.ast.Document;
+import com.vladsch.flexmark.util.data.MutableDataSet;
+
+import ghidrassist.SearchResult; 
+
+public class GhidrAssistProvider extends ComponentProvider {
+
+    private JPanel panel;
+    private JTabbedPane tabbedPane;
+    private GhidrAssistPlugin plugin;
+
+    // For stopping running queries
+    private AtomicBoolean isQueryRunning = new AtomicBoolean(false);
+    private AtomicInteger numRunners = new AtomicInteger(0);
+    
+    // Components for Explain tab
+    private JTextField offsetField;
+    private JEditorPane explainTextPane;
+    private JButton explainFunctionButton;
+    private JButton explainLineButton;
+    private JButton clearExplainButton;
+
+    // Components for Query tab
+    private JEditorPane responseTextPane;
+    private JTextArea queryTextArea;
+    private JCheckBox useRAGCheckBox;
+    private StringBuilder conversationHistory;
+    private StringBuilder currentResponse;
+    private JButton submitButton;
+    private Timer updateTimer;
+    private static final int UPDATE_DELAY = 500; // milliseconds
+    
+    // Actions tab components
+    private JTable actionsTable;
+    private Map<String, JCheckBox> filterCheckBoxes;
+    private JButton analyzeFunctionButton;
+    private JButton analyzeClearButton;
+    private JButton applyActionsButton;
+
+    // RLHF
+    private RLHFDatabase rlhfDatabase;
+    private String lastPrompt;
+    private String lastResponse;
+    
+    // Analysis database
+    private AnalysisDB analysisDB;
+
+    // Flexmark parser and renderer
+    private Parser markdownParser;
+    private HtmlRenderer htmlRenderer;
+
+    // Hint text for queryTextArea
+    private final String queryHintText = "#line to include the current disassembly line.\n" +
+            "#func to include current function disassembly.\n" +
+            "#addr to include the current hex address.\n" +
+            "#range(start, end) to include the view data in a given range.";
+
+    public GhidrAssistProvider(GhidrAssistPlugin plugin, String owner) {
+        super(plugin.getTool(), owner, owner);
+        this.plugin = plugin;
+
+        // Initialize RLHFDatabase
+        rlhfDatabase = new RLHFDatabase();
+
+        // Initialize AnalysisDB
+        analysisDB = new AnalysisDB();
+        
+        // Initialize Markdown parser and renderer
+        MutableDataSet options = new MutableDataSet();
+        options.set(HtmlRenderer.SOFT_BREAK, "<br />\n");
+        markdownParser = Parser.builder(options).build();
+        htmlRenderer = HtmlRenderer.builder(options).build();
+        
+        conversationHistory = new StringBuilder();
+        currentResponse = new StringBuilder();
+
+        // Initialize update timer
+        updateTimer = new Timer(UPDATE_DELAY, e -> updateConversationDisplay());
+        updateTimer.setRepeats(false);
+        
+        buildPanel();
+
+        setVisible(true);
+    }
+    
+    
+
+    private void buildPanel() {
+        panel = new JPanel(new BorderLayout());
+
+        tabbedPane = new JTabbedPane();
+
+        // Create tabs
+        JPanel explainTab = createExplainTab();
+        JPanel queryTab = createQueryTab();
+        JPanel actionsTab = createActionsTab();
+        JPanel ragManagementTab = createRAGManagementTab();
+
+        tabbedPane.addTab("Explain", explainTab);
+        tabbedPane.addTab("Custom Query", queryTab);
+        tabbedPane.addTab("Actions", actionsTab);
+        tabbedPane.addTab("RAG Management", ragManagementTab);
+
+        panel.add(tabbedPane, BorderLayout.CENTER);
+    }
+
+    private JPanel createExplainTab() {
+        JPanel explainPanel = new JPanel(new BorderLayout());
+
+        // Components for Explain tab
+        JLabel offsetLabel = new JLabel("Offset: ");
+        offsetField = new JTextField(16);
+        offsetField.setEditable(false);
+        JPanel offsetPanel = new JPanel();
+        offsetPanel.add(offsetLabel);
+        offsetPanel.add(offsetField);
+
+        explainTextPane = new JEditorPane();
+        explainTextPane.setEditable(false);
+        explainTextPane.setContentType("text/html"); // Set content type to HTML
+        explainTextPane.addHyperlinkListener(new HyperlinkListener() {
+            @Override
+            public void hyperlinkUpdate(HyperlinkEvent e) {
+                if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                    String desc = e.getDescription();
+                    if (desc.equals("thumbsup")) {
+                        storeRLHFFeedback(1);
+                    } else if (desc.equals("thumbsdown")) {
+                        storeRLHFFeedback(0);
+                    }
+                }
+            }
+        });
+
+        JScrollPane textScrollPane = new JScrollPane(explainTextPane);
+
+        explainFunctionButton = new JButton("Explain Function");
+        explainLineButton = new JButton("Explain Line");
+        clearExplainButton = new JButton("Clear");
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(explainFunctionButton);
+        buttonPanel.add(explainLineButton);
+        buttonPanel.add(clearExplainButton);
+
+        explainPanel.add(offsetPanel, BorderLayout.NORTH);
+        explainPanel.add(textScrollPane, BorderLayout.CENTER);
+        explainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        // Add action listeners
+        explainFunctionButton.addActionListener(e -> onExplainFunctionClicked());
+        explainLineButton.addActionListener(e -> onExplainLineClicked());
+        clearExplainButton.addActionListener(e -> explainTextPane.setText(""));
+
+        return explainPanel;
+    }
+
+    private JPanel createQueryTab() {
+        JPanel queryPanel = new JPanel(new BorderLayout());
+
+        useRAGCheckBox = new JCheckBox("Use RAG");
+        useRAGCheckBox.setSelected(false);
+
+        responseTextPane = new JEditorPane();
+        responseTextPane.setEditable(false);
+        responseTextPane.setContentType("text/html"); // Set content type to HTML
+        responseTextPane.addHyperlinkListener(new HyperlinkListener() {
+            @Override
+            public void hyperlinkUpdate(HyperlinkEvent e) {
+                if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                    String desc = e.getDescription();
+                    if (desc.equals("thumbsup")) {
+                        storeRLHFFeedback(1);
+                    } else if (desc.equals("thumbsdown")) {
+                        storeRLHFFeedback(0);
+                    }
+                }
+            }
+        });
+
+        JScrollPane responseScrollPane = new JScrollPane(responseTextPane);
+
+        queryTextArea = new JTextArea();
+        JScrollPane queryScrollPane = new JScrollPane(queryTextArea);
+        queryTextArea.setRows(4);
+
+        // Set hint text for queryTextArea
+        addHintTextToQueryTextArea();
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, responseScrollPane, queryScrollPane);
+        splitPane.setResizeWeight(0.9);
+
+        submitButton = new JButton("Submit");
+        JButton clearButton = new JButton("Clear");
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(submitButton);
+        buttonPanel.add(clearButton);
+
+        queryPanel.add(useRAGCheckBox, BorderLayout.NORTH);
+        queryPanel.add(splitPane, BorderLayout.CENTER);
+        queryPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        // Add action listeners
+        submitButton.addActionListener(e -> onQuerySubmitClicked());
+        clearButton.addActionListener(e -> {
+            responseTextPane.setText("");
+            queryTextArea.setText("");
+            addHintTextToQueryTextArea(); // Reset hint text
+            conversationHistory.setLength(0);
+            updateConversationDisplay();
+        });
+
+        return queryPanel;
+    }
+
+    private void addHintTextToQueryTextArea() {
+    	Color fgColor = queryTextArea.getForeground();
+        queryTextArea.setText(queryHintText);
+        queryTextArea.setForeground(Color.GRAY);
+        queryTextArea.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (queryTextArea.getText().equals(queryHintText)) {
+                    queryTextArea.setText("");
+                    queryTextArea.setForeground(fgColor);
+                }
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                if (queryTextArea.getText().isEmpty()) {
+                    queryTextArea.setForeground(Color.GRAY);
+                    queryTextArea.setText(queryHintText);
+                }
+            }
+        });
+    }
+
+    private JPanel createActionsTab() {
+        JPanel actionsPanel = new JPanel(new BorderLayout());
+        actionsTable = new JTable();
+
+        // Create the table
+        DefaultTableModel tableModel = new DefaultTableModel(new Object[]{"Select", "Action", "Description", "Status", "Arguments"}, 0) {
+            private static final long serialVersionUID = 1L;
+
+			@Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) {
+                    return Boolean.class; // First column is a checkbox
+                }
+                return String.class;
+            }
+        };
+        actionsTable.setModel(tableModel);
+
+        // Set the "Select" column to a minimum size
+        int w = actionsTable.getColumnModel().getColumn(0).getWidth();
+        actionsTable.getColumnModel().getColumn(0).setMaxWidth((int)((double) (w*0.8)));
+        // Hide the "Arguments" column from the user
+//        actionsTable.getColumnModel().getColumn(4).setMinWidth(0);
+//        actionsTable.getColumnModel().getColumn(4).setMaxWidth(0);
+//        actionsTable.getColumnModel().getColumn(4).setWidth(0);
+        JScrollPane tableScrollPane = new JScrollPane(actionsTable);
+
+        // Create the filter checkboxes
+        JPanel filterPanel = new JPanel();
+        filterPanel.setLayout(new BoxLayout(filterPanel, BoxLayout.Y_AXIS));
+        filterPanel.setBorder(BorderFactory.createTitledBorder("Filters"));
+
+        filterCheckBoxes = new HashMap<>();
+        for (Map<String, Object> fnTemplate : ToolCalling.FN_TEMPLATES) {
+            if (fnTemplate.get("type").equals("function")) {
+                @SuppressWarnings("unchecked")
+				Map<String, Object> functionMap = (Map<String, Object>) fnTemplate.get("function");
+                String fnName = functionMap.get("name").toString();
+                String fnDescription = functionMap.get("description").toString();
+                String checkboxLabel = fnName.replace("_", " ") + ": " + fnDescription;
+                JCheckBox checkbox = new JCheckBox(checkboxLabel, true);
+                filterCheckBoxes.put(fnName, checkbox);
+                filterPanel.add(checkbox);
+            }
+        }
+        JScrollPane filterScrollPane = new JScrollPane(filterPanel);
+        filterScrollPane.setPreferredSize(new Dimension(200, 150));
+
+        // Create buttons
+        analyzeFunctionButton = new JButton("Analyze Function");
+        analyzeClearButton = new JButton("Clear");
+        applyActionsButton = new JButton("Apply Actions");
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(analyzeFunctionButton);
+        buttonPanel.add(analyzeClearButton);
+        buttonPanel.add(applyActionsButton);
+
+        // Add action listeners
+        analyzeFunctionButton.addActionListener(e -> onAnalyzeFunctionClicked());
+        analyzeClearButton.addActionListener(e -> onAnalyzeClearClicked());
+        applyActionsButton.addActionListener(e -> onApplyActionsClicked());
+
+        // Assemble the panel
+        actionsPanel.add(filterScrollPane, BorderLayout.NORTH);
+        actionsPanel.add(tableScrollPane, BorderLayout.CENTER);
+        actionsPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        return actionsPanel;
+    }
+
+    private JPanel createRAGManagementTab() {
+        JPanel ragPanel = new JPanel(new BorderLayout());
+
+        JButton addDocumentsButton = new JButton("Add Documents to RAG");
+        JList<String> documentList = new JList<>();
+        JScrollPane listScrollPane = new JScrollPane(documentList);
+
+        JButton deleteSelectedButton = new JButton("Delete Selected");
+        JButton refreshListButton = new JButton("Refresh List");
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(deleteSelectedButton);
+        buttonPanel.add(refreshListButton);
+
+        ragPanel.add(addDocumentsButton, BorderLayout.NORTH);
+        ragPanel.add(listScrollPane, BorderLayout.CENTER);
+        ragPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        // Add action listeners
+        addDocumentsButton.addActionListener(e -> onAddDocumentsClicked(documentList));
+        deleteSelectedButton.addActionListener(e -> onDeleteSelectedClicked(documentList));
+        refreshListButton.addActionListener(e -> loadIndexedFiles(documentList));
+
+        // Load the indexed files into the document list
+        loadIndexedFiles(documentList);
+
+        return ragPanel;
+    }
+    
+    private void loadIndexedFiles(JList<String> documentList) {
+        try {
+            List<String> fileNames = (ArrayList<String>) RAGEngine.listIndexedFiles();
+            // Update the documentList JList
+            documentList.setListData(fileNames.toArray(new String[0]));
+        } catch (IOException ex) {
+            Msg.showError(this, panel, "Error", "Failed to load indexed files: " + ex.getMessage());
+        }
+    }
+
+    private void onAddDocumentsClicked(JList<String> documentList) {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select Documents to Add to RAG");
+        fileChooser.setMultiSelectionEnabled(true);
+        fileChooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Text and Markdown Files", "txt", "md"));
+        fileChooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Source Code", "c", "h", "cpp", "hpp", "py", "java", "rs", "asm"));
+
+        int result = fileChooser.showOpenDialog(panel);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File[] files = fileChooser.getSelectedFiles();
+            try {
+                RAGEngine.ingestDocuments(Arrays.asList(files));
+                loadIndexedFiles(documentList);
+                Msg.showInfo(this, panel, "Success", "Documents added to RAG.");
+            } catch (IOException ex) {
+                Msg.showError(this, panel, "Error", "Failed to ingest documents: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void onDeleteSelectedClicked(JList<String> documentList) {
+        List<String> selectedFiles = (ArrayList<String>) documentList.getSelectedValuesList();
+        if (selectedFiles.isEmpty()) {
+            Msg.showInfo(this, panel, "No Selection", "No documents selected for deletion.");
+            return;
+        }
+        int confirmation = JOptionPane.showConfirmDialog(panel, "Are you sure you want to delete the selected documents?", "Confirm Deletion", JOptionPane.YES_NO_OPTION);
+        if (confirmation == JOptionPane.YES_OPTION) {
+            try {
+                for (String fileName : selectedFiles) {
+                    RAGEngine.deleteDocument(fileName);
+                }
+                loadIndexedFiles(documentList);
+                Msg.showInfo(this, panel, "Success", "Selected documents deleted from RAG.");
+            } catch (IOException ex) {
+                Msg.showError(this, panel, "Error", "Failed to delete documents: " + ex.getMessage());
+            }
+        }
+    }
+
+
+    @Override
+    public JComponent getComponent() {
+        return panel;
+    }
+
+    public void updateLocation(ProgramLocation loc) {
+        if (loc != null) {
+            Address address = loc.getAddress();
+            if (address != null) {
+                offsetField.setText(address.toString());
+                
+                // Check for existing analysis
+                Function function = plugin.getCurrentFunction();
+                if (function != null) {
+                    AnalysisDB.Analysis analysis = analysisDB.getAnalysis(
+                        plugin.getCurrentProgram().getExecutableSHA256(),
+                        function.getEntryPoint()
+                    );
+                    if (analysis != null) {
+                        String html = markdownToHtml(analysis.getResponse());
+                        explainTextPane.setText(html);
+                        explainTextPane.setCaretPosition(0);
+                    } else {
+                        explainTextPane.setText("");
+                    }
+                }
+            }
+        }
+    }
+
+    private void onAnalyzeFunctionClicked() {
+        if (isQueryRunning.get()) {
+            // If the query is running, stop it
+            analyzeFunctionButton.setText("Analyze Function");
+            isQueryRunning.set(false);
+            return;
+        } else {
+            // Count number of request types
+            for (Map.Entry<String, JCheckBox> entry : filterCheckBoxes.entrySet()) {
+                if (entry.getValue().isSelected()) {
+                	numRunners.getAndIncrement();
+                }
+            }
+            // Set the button to "Stop" and set the query as running
+            analyzeFunctionButton.setText("Stop");
+            isQueryRunning.set(true);
+        }
+
+        Function currentFunction = plugin.getCurrentFunction();
+        if (currentFunction == null) {
+            Msg.showInfo(getClass(), panel, "No Function", "No function at current location.");
+            return;
+        }
+
+        TaskMonitor monitor = TaskMonitor.DUMMY; // Replace with actual monitor if needed
+
+        String code = getFunctionCode(currentFunction, monitor);
+        if (code == null) {
+            Msg.showError(this, panel, "Error", "Failed to get code from the current address.");
+            return;
+        }
+
+        boolean hasSelectedActions = false;
+
+        // Use LlmApi to send request
+        LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+
+        // For each selected action, send an individual request
+        for (Map.Entry<String, JCheckBox> entry : filterCheckBoxes.entrySet()) {
+            if (!isQueryRunning.get()) {
+                break; // If "Stop" is pressed, exit the loop
+            }
+
+            if (entry.getValue().isSelected()) {
+                hasSelectedActions = true;
+                String action = entry.getKey();
+                String actionPromptTemplate = ToolCalling.ACTION_PROMPTS.get(action);
+                if (actionPromptTemplate != null) {
+                    String actionPrompt = actionPromptTemplate.replace("{code}", code);
+
+                    // Get the function definition for this action
+                    Map<String, Object> functionDefinition = null;
+                    for (Map<String, Object> fnTemplate : ToolCalling.FN_TEMPLATES) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> functionMap = (Map<String, Object>) fnTemplate.get("function");
+                        if (functionMap.get("name").equals(action)) {
+                            functionDefinition = functionMap;
+                            break;
+                        }
+                    }
+
+                    if (functionDefinition == null) {
+                        Msg.showError(this, panel, "Error", "Function definition not found for action: " + action);
+                        continue;
+                    }
+
+                    // Send the request with this prompt and function definition
+                    List<Map<String, Object>> functions = new ArrayList<>();
+                    functions.add(functionDefinition);
+
+                    // Send the request
+                    llmApi.sendRequestAsyncWithFunctions(actionPrompt, functions, new LlmApi.LlmResponseHandler() {
+                        @Override
+                        public void onStart() {
+                            // No need to clear the results here; already done
+                        }
+
+                        @Override
+                        public void onUpdate(String partialResponse) {
+                            // No streaming in function calling
+                        }
+
+                        @Override
+                        public void onComplete(String fullResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                // Parse the response and populate the table
+                                parseAndDisplayActions(fullResponse);
+                            	numRunners.decrementAndGet();
+                                
+                                if (numRunners.get() <= 0) {
+                                	numRunners.set(0);
+                                    // After all actions, reset the button text and stop the query
+                                    analyzeFunctionButton.setText("Analyze Function");
+                                    isQueryRunning.set(false);
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            SwingUtilities.invokeLater(() -> {
+                                // After all actions, reset the button text and stop the query
+                                analyzeFunctionButton.setText("Analyze Function");
+                            	numRunners.decrementAndGet();
+                                
+                                if (numRunners.get() <= 0) {
+                                	numRunners.set(0);
+                                    // After all actions, reset the button text and stop the query
+                                    analyzeFunctionButton.setText("Analyze Function");
+                                    isQueryRunning.set(false);
+                                }
+
+                                error.printStackTrace();
+                                Msg.showError(this, panel, "Error", "An error occurred: " + error.getMessage());
+                            });
+                        }
+
+                        @Override
+                        public boolean shouldContinue() {
+                            return isQueryRunning.get();  // Only continue if query is running
+                        }
+                    });
+                }
+            }
+        }
+
+        if (!hasSelectedActions) {
+            Msg.showError(this, panel, "Error", "No actions selected.");
+        }
+    }
+
+
+    private void parseAndDisplayActions(String response) {
+        try {
+            Gson gson = new Gson();
+
+            String responseJson = preprocessJsonResponse(response);
+
+            // Create a JsonReader with lenient mode enabled
+            JsonReader jsonReader = new JsonReader(new StringReader(responseJson));
+            jsonReader.setLenient(true);
+
+            JsonElement jsonElement = gson.fromJson(jsonReader, JsonElement.class);
+
+            if (!jsonElement.isJsonObject()) {
+            	System.out.println("Error: Unexpected JSON structure in response");
+                return;
+            }
+
+            JsonObject jsonObject = jsonElement.getAsJsonObject();
+
+            // Check if the JSON object contains "tool_calls"
+            if (jsonObject.has("tool_calls")) {
+                JsonArray toolCallsArray = jsonObject.getAsJsonArray("tool_calls");
+
+                for (JsonElement toolCallElement : toolCallsArray) {
+                    if (toolCallElement.isJsonObject()) {
+                        JsonObject toolCallObject = toolCallElement.getAsJsonObject();
+
+                        String functionName = null;
+                        JsonObject arguments = null;
+
+                        if (toolCallObject.has("name") && toolCallObject.has("arguments")) {
+                            functionName = toolCallObject.get("name").getAsString();
+                            arguments = toolCallObject.getAsJsonObject("arguments");
+                        } else {
+                            System.out.println("Error: Tool call does not contain 'name' and 'arguments' fields");
+                            continue;
+                        }
+
+                        // Only process actions that are in our function templates
+                        List<String> functionNames = new ArrayList<>();
+                        for (Map<String, Object> fnTemplate : ToolCalling.FN_TEMPLATES) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> functionMap = (Map<String, Object>) fnTemplate.get("function");
+                            functionNames.add(functionMap.get("name").toString());
+                        }
+
+                        if (!functionNames.contains(functionName)) {
+                        	System.out.println("Error: Unknown function: " + functionName);
+                            continue;
+                        }
+
+                        // Add to actions table
+                        DefaultTableModel model = (DefaultTableModel) actionsTable.getModel();
+                        Object[] rowData = new Object[]{
+                            Boolean.FALSE, // Deselected by default
+                            functionName.replace("_", " "),
+                            formatDescription(functionName, arguments),
+                            "", // Status
+                            arguments.toString() // Store arguments as a string (you might add a hidden column)
+                        };
+                        model.addRow(rowData);
+                    } else {
+                        System.out.println("Error: Unexpected structure in 'tool_calls' array");
+                    }
+                }
+            } else {
+            	System.out.println("Error: Response does not contain 'tool_calls' field");
+                return;
+            }
+
+        } catch (JsonSyntaxException e) {
+            System.out.println("Error: Failed to parse LLM response: " + e.getMessage());
+        }
+    }
+
+
+    private String preprocessJsonResponse(String response) {
+        String json = response.trim();
+
+        // Define regex patterns to match code block markers
+        Pattern codeBlockPattern = Pattern.compile("(?s)^[`']{3}(\\w+)?\\s*(.*?)\\s*[`']{3}$");
+        Matcher matcher = codeBlockPattern.matcher(json);
+
+        if (matcher.find()) {
+            // Extract the content inside the code block
+            json = matcher.group(2).trim();
+        } else {
+            // If no code block markers, attempt to find the JSON content directly
+            // Remove any leading or trailing quotes
+            if ((json.startsWith("\"") && json.endsWith("\"")) || (json.startsWith("'") && json.endsWith("'"))) {
+                json = json.substring(1, json.length() - 1).trim();
+            }
+        }
+
+        return json;
+    }
+    
+    private String formatDescription(String functionName, JsonObject arguments) {
+    	try {
+	        switch (functionName) {
+	            case "rename_function":
+	                return arguments.get("new_name").getAsString();
+	            case "rename_variable":
+	                return arguments.get("var_name").getAsString() + " -> " + arguments.get("new_name").getAsString();
+	            case "retype_variable":
+	                return arguments.get("var_name").getAsString() + " -> " + arguments.get("new_type").getAsString();
+	            case "auto_create_struct":
+	                return arguments.get("var_name").getAsString();
+	            default:
+	                return "";
+	        }
+    	}
+    	catch(Exception e) {
+    		System.out.println("Error: Failed to parse Json: " + e.getMessage());
+    	}
+    	return "";
+    }
+
+    private void onAnalyzeClearClicked() {
+        // Get the table model
+        DefaultTableModel model = (DefaultTableModel) actionsTable.getModel();
+
+        // Clear all rows
+        model.setRowCount(0);
+    }
+    
+    private void onApplyActionsClicked() {
+        DefaultTableModel model = (DefaultTableModel) actionsTable.getModel();
+        Program program = plugin.getCurrentProgram();
+        Address currentAddress = plugin.getCurrentAddress();
+
+        for (int row = 0; row < model.getRowCount(); row++) {
+            Boolean isSelected = (Boolean) model.getValueAt(row, 0);
+            if (isSelected) {
+                String action = model.getValueAt(row, 1).toString().replace(" ", "_");
+                String argumentsJson = model.getValueAt(row, 4).toString(); // Column 4 stores arguments
+
+                // Parse arguments
+                Gson gson = new Gson();
+                JsonObject arguments = gson.fromJson(argumentsJson, JsonObject.class);
+
+                // Call the appropriate handler
+                switch (action) {
+                    case "rename_function":
+                    	try {
+	                        String newName = arguments.get("new_name").getAsString().strip();
+	                        ToolCalling.handle_rename_function(program, currentAddress, newName);
+	                        model.setValueAt("Applied", row, 3);
+	                        model.setValueAt(Boolean.FALSE, row, 0);
+                    	}
+                    	catch (Exception e) {
+                    		model.setValueAt("Failed: " + e.getMessage(), row, 3);
+                    	}
+                        break;
+                    case "rename_variable":
+                    	try {
+	                        String funcName = arguments.get("func_name").getAsString().strip();
+	                        String varName = arguments.get("var_name").getAsString().strip();
+	                        String newVarName = arguments.get("new_name").getAsString().strip();
+	                        ToolCalling.handle_rename_variable(program, currentAddress, funcName, varName, newVarName);
+	                        model.setValueAt("Applied", row, 3);
+	                        model.setValueAt(Boolean.FALSE, row, 0);
+                    	}
+                    	catch (Exception e) {
+                    		model.setValueAt("Failed: " + e.getMessage(), row, 3);
+                    	}
+                        break;
+                    case "retype_variable":
+                    	try {
+	                        String funcName = arguments.get("func_name").getAsString().strip();
+	                        String varName = arguments.get("var_name").getAsString().strip();
+	                        String newType = arguments.get("new_type").getAsString().strip();
+	                        ToolCalling.handle_retype_variable(program, currentAddress, funcName, varName, newType);
+	                        model.setValueAt("Applied", row, 3);
+	                        model.setValueAt(Boolean.FALSE, row, 0);
+                    	}
+                    	catch (Exception e) {
+                    		model.setValueAt("Failed: " + e.getMessage(), row, 3);
+                    	}
+                        break;
+                    case "auto_create_struct":
+                    	try {
+	                        String funcName = arguments.get("func_name").getAsString().strip();
+	                        String varName = arguments.get("var_name").getAsString().strip();
+	                        ToolCalling.handle_auto_create_struct(program, currentAddress, funcName, varName);
+	                        model.setValueAt("Applied", row, 3);
+	                        model.setValueAt(Boolean.FALSE, row, 0);
+                    	}
+                    	catch (Exception e) {
+                    		model.setValueAt("Failed: " + e.getMessage(), row, 3);
+                    	}
+                        break;
+                    default:
+                        model.setValueAt("Failed: Unknown action", row, 3);
+                        break;
+                }
+            }
+        }
+    }
+
+    private void onExplainFunctionClicked() {
+        if (isQueryRunning.get()) {
+            // If query is running, stop it
+            explainFunctionButton.setText("Explain Function");
+            isQueryRunning.set(false);
+            LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+            llmApi.cancelCurrentRequest();
+            return;
+        }
+        
+        explainFunctionButton.setText("Stop");
+        isQueryRunning.set(true);
+        
+        Function currentFunction = plugin.getCurrentFunction();
+        if (currentFunction == null) {
+            Msg.showInfo(getClass(), panel, "No Function", "No function at current location.");
+            return;
+        }
+
+        Task task = new Task("Explain Function", true, true, true) {
+            @Override
+            public void run(TaskMonitor monitor) {
+                try {
+                    String functionCode = null;
+                    String codeType = null;
+
+                    CodeViewType viewType = plugin.checkLastActiveCodeView();
+                    if (viewType == CodeViewType.IS_DECOMPILER) {
+                        functionCode = getFunctionCode(currentFunction, monitor);
+                        codeType = "pseudo-C";
+                    } else if (viewType == CodeViewType.IS_DISASSEMBLER) {
+                        functionCode = getFunctionDisassembly(currentFunction);
+                        codeType = "assembly";
+                    } else {
+                        throw new Exception("Unknown code view type.");
+                    }
+
+                    String prompt = "Explain the following " + codeType + " code:\n```\n" + functionCode + "\n```";
+                    lastPrompt = prompt;
+
+                    // Use LlmApi to send request
+                    LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+                    llmApi.sendRequestAsync(prompt, new LlmApi.LlmResponseHandler() {
+                        @Override
+                        public void onStart() {
+                            SwingUtilities.invokeLater(() -> {
+                                explainTextPane.setText("Processing...");
+                            });
+                        }
+
+                        @Override
+                        public void onUpdate(String partialResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                String html = markdownToHtml(partialResponse);
+                                explainTextPane.setText(html);
+                                //explainTextPane.setCaretPosition(0); // Scroll to top
+                            });
+                        }
+
+                        @Override
+                        public void onComplete(String fullResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                lastResponse = fullResponse;
+                                String html = markdownToHtml(fullResponse);
+                                explainTextPane.setText(html);
+                                explainTextPane.setCaretPosition(0);
+                                explainFunctionButton.setText("Explain Function");
+                                isQueryRunning.set(false);
+                                
+                                // Store the analysis result
+                                Function currentFunction = plugin.getCurrentFunction();
+                                if (currentFunction != null) {
+                                    analysisDB.upsertAnalysis(
+                                        plugin.getCurrentProgram().getExecutableSHA256(),
+                                        currentFunction.getEntryPoint(),
+                                        prompt,
+                                        fullResponse
+                                    );
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            SwingUtilities.invokeLater(() -> {
+                                explainTextPane.setText("An error occurred: " + error.getMessage());
+                                explainFunctionButton.setText("Explain Function");
+                                isQueryRunning.set(false);
+                            });
+                        }
+                        
+                        @Override
+                        public boolean shouldContinue() {
+                            return isQueryRunning.get();  // Only continue if query is running
+                        }
+                    });
+
+
+                } catch (Exception e) {
+                    Msg.showError(getClass(), panel, "Error", "Failed to explain function: " + e.getMessage());
+                }
+            }
+        };
+
+        new TaskLauncher(task, plugin.getTool().getToolFrame());
+    }
+
+    private void onExplainLineClicked() {
+        if (isQueryRunning.get()) {
+            // If query is running, stop it
+            explainLineButton.setText("Explain Line");
+            isQueryRunning.set(false);
+            LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+            llmApi.cancelCurrentRequest();
+            return;
+        }
+        
+        explainLineButton.setText("Stop");
+        isQueryRunning.set(true);
+        
+        Address currentAddress = plugin.getCurrentAddress();
+        if (currentAddress == null) {
+            Msg.showInfo(getClass(), panel, "No Address", "No address at current location.");
+            return;
+        }
+
+        Task task = new Task("Explain Line", true, true, true) {
+            @Override
+            public void run(TaskMonitor monitor) {
+                try {
+                    String codeLine = null;
+                    String codeType = null;
+                    String prompt = null;
+
+                    CodeViewType viewType = plugin.checkLastActiveCodeView();
+                    if (viewType == CodeViewType.IS_DECOMPILER) {
+                        // Get the decompiled code line
+                        codeLine = getLineCode(currentAddress, monitor);
+                        if (codeLine == null || codeLine.isEmpty()) {
+                            throw new Exception("Failed to get decompiled code line.");
+                        }
+                        codeType = "pseudo-C";
+                    } else if (viewType == CodeViewType.IS_DISASSEMBLER) {
+                        // Get the disassembly line
+                        codeLine = getLineDisassembly(currentAddress);
+                        if (codeLine == null || codeLine.isEmpty()) {
+                            throw new Exception("Failed to get disassembly instruction.");
+                        }
+                        codeType = "assembly";
+                    } else {
+                        throw new Exception("Unknown code view type.");
+                    }
+
+                    prompt = "Explain the following " + codeType + " line:\n```\n" + codeLine + "\n```";
+                    lastPrompt = prompt;
+
+                    // Use LlmApi to send request
+                    LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+                    llmApi.sendRequestAsync(prompt, new LlmApi.LlmResponseHandler() {
+                        @Override
+                        public void onStart() {
+                            SwingUtilities.invokeLater(() -> {
+                                explainTextPane.setText("Processing...");
+                            });
+                        }
+
+                        @Override
+                        public void onUpdate(String partialResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                String html = markdownToHtml(partialResponse);
+                                explainTextPane.setText(html);
+                                //explainTextPane.setCaretPosition(0); // Scroll to top
+                            });
+                        }
+
+                        @Override
+                        public void onComplete(String fullResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                lastResponse = fullResponse;
+                                String html = markdownToHtml(fullResponse);
+                                explainTextPane.setText(html);
+                                explainTextPane.setCaretPosition(0); // Scroll to top
+                                explainLineButton.setText("Explain Line");
+                                isQueryRunning.set(false);
+                            });
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            SwingUtilities.invokeLater(() -> {
+                                explainTextPane.setText("An error occurred: " + error.getMessage());
+                                explainLineButton.setText("Explain Line");
+                                isQueryRunning.set(false);
+                            });
+                        }
+                        
+                        @Override
+                        public boolean shouldContinue() {
+                            return isQueryRunning.get();  // Only continue if query is running
+                        }
+                    });
+
+
+                } catch (Exception e) {
+                    Msg.showError(getClass(), panel, "Error", "Failed to explain line: " + e.getMessage());
+                }
+            }
+        };
+
+        new TaskLauncher(task, plugin.getTool().getToolFrame());
+    }
+
+    private void onQuerySubmitClicked() {
+        if (isQueryRunning.get()) {
+            // If query is running, stop it
+            submitButton.setText("Submit");
+            isQueryRunning.set(false);
+            LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+            llmApi.cancelCurrentRequest();
+            return;
+        }
+        
+        submitButton.setText("Stop");
+        isQueryRunning.set(true);
+        
+        String query = queryTextArea.getText();
+
+        // Check if the query is just the hint text
+        if (query.equals(queryHintText)) {
+            Msg.showInfo(getClass(), panel, "Empty Query", "Please enter a query.");
+            return;
+        }
+
+        // Process macros in the query
+        String processedQuery = processMacrosInQuery(query);
+
+        // If 'Use RAG' is selected, perform a RAG search and prepend context
+        if (useRAGCheckBox.isSelected()) {
+            try {
+                // Perform RAG search
+                List<SearchResult> results = RAGEngine.hybridSearch(processedQuery, 5); // Retrieve top 5 results
+                if (!results.isEmpty()) {
+                    StringBuilder contextBuilder = new StringBuilder();
+                    contextBuilder.append("<context>\n");
+                    for (SearchResult result : results) {
+                    	contextBuilder.append("<result>\n");
+                    	contextBuilder.append("</br><file>" + result.getFilename() + "</file>").append("\n");
+                    	contextBuilder.append("</br><chunkid>" + result.getChunkId() + "</chunkid>").append("\n");
+                    	contextBuilder.append("</br><score>" + result.getScore() + "</score>").append("\n");
+                        contextBuilder.append("</br><content>\n" + result.getSnippet() + "\n</content>").append("\n");
+                    	contextBuilder.append("\n</result>\n\n");
+                    }
+                    contextBuilder.append("\n</context>\n");
+
+                    // Prepend context to the processed query
+                    processedQuery = contextBuilder.toString() + processedQuery;
+                }
+            } catch (Exception e) {
+                Msg.showError(this, panel, "Error", "Failed to perform RAG search: " + e.getMessage());
+                return;
+            }
+        }
+        
+        lastPrompt = processedQuery;
+        final String prompt = processedQuery;
+
+        // Add user query to conversation history
+        conversationHistory.append("**User**:\n").append(prompt).append("\n\n");
+        currentResponse.setLength(0);
+
+        Task task = new Task("Custom Query", true, true, true) {
+            @Override
+            public void run(TaskMonitor monitor) {
+                try {
+                    // Use LlmApi to send request
+                    LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+                    llmApi.sendRequestAsync(prompt, new LlmApi.LlmResponseHandler() {
+                        @Override
+                        public void onStart() {
+                            SwingUtilities.invokeLater(() -> {
+                                responseTextPane.setText("Processing...");
+                            });
+                        }
+
+                        private String previousResponseChunk = "";
+
+                        @Override
+                        public void onUpdate(String partialResponse) {
+                            // Append only the new portion of the response
+                            if (!partialResponse.equals(previousResponseChunk)) {
+                                String newChunk = partialResponse.substring(previousResponseChunk.length());
+                                currentResponse.append(newChunk);
+                                previousResponseChunk = partialResponse;
+                                scheduleUpdate();
+                            }
+                        }
+
+
+                        @Override
+                        public void onComplete(String fullResponse) {
+                            SwingUtilities.invokeLater(() -> {
+                                lastResponse = fullResponse;
+                                conversationHistory.append("**Assistant**:\n").append(fullResponse).append("\n\n");
+                                currentResponse.setLength(0);
+                                updateConversationDisplay();
+                                submitButton.setText("Submit");
+                                isQueryRunning.set(false);
+                            });
+                        }
+
+                        @Override
+                        public void onError(Throwable error) {
+                            SwingUtilities.invokeLater(() -> {
+                                conversationHistory.append("**Error**:\n").append(error.getMessage()).append("\n\n");
+                                updateConversationDisplay();
+                                submitButton.setText("Submit");
+                                isQueryRunning.set(false);
+                            });
+                        }
+                    });
+
+                } catch (Exception e) {
+                    Msg.showError(getClass(), panel, "Error", "Failed to perform query: " + e.getMessage());
+                }
+            }
+        };
+
+        new TaskLauncher(task, plugin.getTool().getToolFrame());
+    }
+
+    private void scheduleUpdate() {
+        if (!updateTimer.isRunning()) {
+            updateTimer.restart();
+        }
+    }
+
+    private void updateConversationDisplay() {
+        String fullConversation = conversationHistory.toString() + "**Assistant**:\n" + currentResponse.toString();
+        String html = markdownToHtml(fullConversation);
+        responseTextPane.setText(html);
+        responseTextPane.setCaretPosition(responseTextPane.getDocument().getLength());
+    }
+
+    
+    private String processMacrosInQuery(String query) {
+        // Replace macros with actual code/data
+        // Handle #line, #func, #addr, #range(start,end)
+
+        try {
+            CodeViewType viewType = plugin.checkLastActiveCodeView();
+            TaskMonitor monitor = TaskMonitor.DUMMY; // Replace with actual monitor if needed
+
+            // Replace #line
+            if (query.contains("#line")) {
+                String codeLine = null;
+                if (viewType == CodeViewType.IS_DECOMPILER) {
+                    codeLine = getLineCode(plugin.getCurrentAddress(), monitor);
+                } else if (viewType == CodeViewType.IS_DISASSEMBLER) {
+                    codeLine = getLineDisassembly(plugin.getCurrentAddress());
+                }
+                if (codeLine != null) {
+                    query = query.replace("#line", codeLine);
+                }
+            }
+
+            // Replace #func
+            if (query.contains("#func")) {
+                Function currentFunction = plugin.getCurrentFunction();
+                String functionCode = null;
+                if (currentFunction != null) {
+                    if (viewType == CodeViewType.IS_DECOMPILER) {
+                        functionCode = getFunctionCode(currentFunction, monitor);
+                    } else if (viewType == CodeViewType.IS_DISASSEMBLER) {
+                        functionCode = getFunctionDisassembly(currentFunction);
+                    }
+                    if (functionCode != null) {
+                        query = query.replace("#func", functionCode);
+                    }
+                } else {
+                    query = query.replace("#func", "No function at current location.");
+                }
+            }
+
+            // Replace #addr
+            if (query.contains("#addr")) {
+                Address currentAddress = plugin.getCurrentAddress();
+                String addressString = (currentAddress != null) ? currentAddress.toString() : "No address available.";
+                query = query.replace("#addr", addressString);
+            }
+
+            // Replace #range(start,end)
+            // Use regex to find all occurrences of #range(start,end)
+            query = replaceRangeMacros(query);
+
+        } catch (Exception e) {
+            Msg.showError(getClass(), panel, "Error", "Failed to process macros: " + e.getMessage());
+        }
+
+        return query;
+    }
+
+    private String replaceRangeMacros(String query) {
+        // Pattern to match #range(start, end)
+        String pattern = "#range\\(([^,]+),\\s*([^\\)]+)\\)";
+        java.util.regex.Pattern regex = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher matcher = regex.matcher(query);
+
+        while (matcher.find()) {
+            String startStr = matcher.group(1);
+            String endStr = matcher.group(2);
+            String rangeData = getRangeData(startStr, endStr);
+            // Replace the entire macro with the range data
+            String macro = matcher.group(0);
+            query = query.replace(macro, rangeData);
+            // Reset matcher after replacement
+            matcher = regex.matcher(query);
+        }
+        return query;
+    }
+
+    private String getRangeData(String startStr, String endStr) {
+        try {
+            Program program = plugin.getCurrentProgram();
+            if (program == null) {
+                return "No program loaded.";
+            }
+            AddressFactory addressFactory = program.getAddressFactory();
+            Address startAddr = addressFactory.getAddress(startStr.trim());
+            Address endAddr = addressFactory.getAddress(endStr.trim());
+
+            if (startAddr == null || endAddr == null) {
+                return "Invalid addresses.";
+            }
+
+            // Get the bytes in the range
+            byte[] bytes = new byte[(int) (endAddr.getOffset() - startAddr.getOffset()) + 1];
+            program.getMemory().getBytes(startAddr, bytes);
+
+            // Convert bytes to hex string
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) {
+                sb.append(String.format("%02X ", b));
+            }
+            return sb.toString();
+
+        } catch (Exception e) {
+            return "Failed to get range data: " + e.getMessage();
+        }
+    }
+
+    private String getFunctionCode(Function function, TaskMonitor monitor) {
+        DecompInterface decompiler = new DecompInterface();
+        decompiler.openProgram(function.getProgram());
+
+        try {
+            DecompileResults results = decompiler.decompileFunction(function, 60, monitor);
+            if (results != null && results.decompileCompleted()) {
+                String decompiledCode = results.getDecompiledFunction().getC();
+                return decompiledCode;
+            } else {
+                return "Failed to decompile function.";
+            }
+        } catch (Exception e) {
+            return "Failed to decompile function: " + e.getMessage();
+        } finally {
+            decompiler.dispose();
+        }
+    }
+
+    private String getFunctionDisassembly(Function function) {
+        StringBuilder sb = new StringBuilder();
+        Listing listing = function.getProgram().getListing();
+
+        InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
+
+        while (instructions.hasNext()) {
+            Instruction instr = instructions.next();
+            sb.append(instr.getAddress().toString() + "  " + instr.toString() + "\n");
+        }
+
+        return sb.toString();
+    }
+
+    private String getLineCode(Address address, TaskMonitor monitor) {
+        DecompInterface decompiler = new DecompInterface();
+        Program program = plugin.getCurrentProgram();
+        decompiler.openProgram(program);
+
+        try {
+            Function function = program.getFunctionManager().getFunctionContaining(address);
+            if (function == null) {
+                return "No function containing the address.";
+            }
+
+            DecompileResults results = decompiler.decompileFunction(function, 60, monitor);
+            if (results != null && results.decompileCompleted()) {
+                ClangTokenGroup tokens = results.getCCodeMarkup();
+                if (tokens != null) {
+                    StringBuilder codeLineBuilder = new StringBuilder();
+                    boolean found = collectCodeLine(tokens, address, codeLineBuilder);
+                    if (found && codeLineBuilder.length() > 0) {
+                        return codeLineBuilder.toString();
+                    } else {
+                        return "No code line found at the address.";
+                    }
+                } else {
+                    return "Failed to get code tokens.";
+                }
+            } else {
+                return "Failed to decompile function.";
+            }
+        } catch (Exception e) {
+            return "Failed to decompile line: " + e.getMessage();
+        } finally {
+            decompiler.dispose();
+        }
+    }
+
+    private boolean collectCodeLine(ClangNode node, Address address, StringBuilder codeLineBuilder) {
+        if (node instanceof ClangToken) {
+            ClangToken token = (ClangToken) node;
+            if (token.getMinAddress() != null && token.getMaxAddress() != null) {
+                if (token.getMinAddress().compareTo(address) <= 0 && token.getMaxAddress().compareTo(address) >= 0) {
+                    // Found the token corresponding to the address
+                    ClangNode parent = token.Parent();
+                    if (parent != null) {
+                        for (int i = 0; i < parent.numChildren(); i++) {
+                            ClangNode sibling = parent.Child(i);
+                            codeLineBuilder.append(((ClangToken) sibling).getText());
+                        }
+                    } else {
+                        codeLineBuilder.append(token.getText());
+                    }
+                    return true;
+                }
+            }
+        } else if (node instanceof ClangTokenGroup) {
+            ClangTokenGroup group = (ClangTokenGroup) node;
+            for (int i = 0; i < group.numChildren(); i++) {
+                ClangNode child = group.Child(i);
+                boolean found = collectCodeLine(child, address, codeLineBuilder);
+                if (found) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private String getLineDisassembly(Address address) {
+        Instruction instruction = plugin.getCurrentProgram().getListing().getInstructionAt(address);
+        if (instruction != null) {
+            return instruction.getAddressString(true, true) + "  " + instruction.toString();
+        } else {
+            return null;
+        }
+    }
+
+    private String markdownToHtml(String markdown) {
+        // Parse the Markdown into a document
+        Document document = markdownParser.parse(markdown);
+
+        // Render the document to HTML
+        String html = htmlRenderer.render(document);
+
+        // Add RLHF feedback thumbs-up / thumbs-down buttons
+        String feedbackLinks = "<br> <div style=\"text-align: center; color: grey; font-size: 18px;\"><a href='thumbsup'>&#128077;</a> | <a href='thumbsdown'>&#128078;</a></div>";
+
+        // Optionally, wrap the HTML in basic tags to improve rendering
+        String wrappedHtml = "<html><body>" + html + feedbackLinks + "</body></html>";
+
+        return wrappedHtml;
+    }
+
+    private void storeRLHFFeedback(int feedback) {
+        if (lastPrompt != null && lastResponse != null) {
+            LlmApi llmApi = new LlmApi(GhidrAssistPlugin.getCurrentAPIProvider());
+            String modelName = GhidrAssistPlugin.getCurrentAPIProvider().getModel();
+            String systemContext = llmApi.getSystemPrompt();
+            rlhfDatabase.storeFeedback(modelName, lastPrompt, systemContext, lastResponse, feedback);
+            Msg.showInfo(getClass(), panel, "Feedback", "Thank you for your feedback!");
+        } else {
+            Msg.showError(getClass(), panel, "Error", "No explain response to provide feedback on.");
+        }
+    }
+}
+
+```
+
+`src/main/java/ghidrassist/LlmApi.java`:
+
+```java
+package ghidrassist;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.launchableinc.openai.completion.chat.*;
+import com.launchableinc.openai.service.OpenAiService;
+import ghidra.util.Msg;
+import io.reactivex.Flowable;
+import io.reactivex.schedulers.Schedulers;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
+
+public class LlmApi {
+
+    private OpenAiService service;
+    private APIProvider provider;
+    private volatile Flowable<ChatCompletionChunk> currentStream;
+    private volatile io.reactivex.disposables.Disposable currentSubscription;
+    private final Object streamLock = new Object();
+
+    
+    // Pattern for matching complete <think> blocks and opening/closing tags
+    private static final Pattern COMPLETE_THINK_PATTERN = Pattern.compile("<think>.*?</think>", Pattern.DOTALL);
+    private final String SYSTEM_PROMPT =  
+            "    You are a professional software reverse engineer specializing in cybersecurity. You are intimately \n"
+            + "    familiar with x86_64, ARM, PPC and MIPS architectures. You are an expert C and C++ developer.\n"
+            + "    You are an expert Python and Rust developer. You are familiar with common frameworks and libraries \n"
+            + "    such as WinSock, OpenSSL, MFC, etc. You are an expert in TCP/IP network programming and packet analysis.\n"
+            + "    You always respond to queries in a structured format using Markdown styling for headings and lists. \n"
+            + "    You format code blocks using back-tick code-fencing.\\n";
+    private final String FUNCTION_PROMPT = "USE THE PROVIDED TOOLS WHEN NECESSARY. YOU ALWAYS RESPOND WITH TOOL CALLS WHEN POSSIBLE.";
+    private final String FORMAT_PROMPT = 
+    "The output MUST strictly adhere to the following JSON format, do not include any other text.\n" +
+    "The example format is as follows. Please make sure the parameter type is correct. If no function call is needed, please make tool_calls an empty list '[]'.\n" +
+    "```\n" +
+    "{\n" +
+    "    \"tool_calls\": [\n" +
+    "    {\"name\": \"rename_function\", \"arguments\": {\"new_name\": \"new_name\"}},\n" +
+    "    ... (more tool calls as required)\n" +
+    "    ]\n" +
+    "}\n" +
+    "```\n" +
+    "REMEMBER, YOU MUST ALWAYS PRODUCE A JSON LIST OF TOOL_CALLS!";
+    
+    /**
+     * Helper class to track streaming state and filter think blocks
+     */
+    private static class StreamingResponseFilter {
+        private StringBuilder buffer = new StringBuilder();
+        private StringBuilder visibleBuffer = new StringBuilder();
+        private boolean insideThinkBlock = false;
+        private boolean hasPlaceholder = false;
+        private static final String PROCESSING_PLACEHOLDER = "Thinking...";
+        
+        public String processChunk(String chunk) {
+            if (chunk == null) {
+                return null;
+            }
+            
+            buffer.append(chunk);
+            
+            // Process the buffer until we can't anymore
+            String currentBuffer = buffer.toString();
+            int lastSafeIndex = 0;
+            
+            for (int i = 0; i < currentBuffer.length(); i++) {
+                // Look for start tag
+                if (!insideThinkBlock && currentBuffer.startsWith("<think>", i)) {
+                    // Append everything up to this point to visible buffer
+                    visibleBuffer.append(currentBuffer.substring(lastSafeIndex, i));
+                    insideThinkBlock = true;
+                    // Add processing placeholder
+                    if (!hasPlaceholder) {
+                        visibleBuffer.append(PROCESSING_PLACEHOLDER);
+                        hasPlaceholder = true;
+                    }
+                    lastSafeIndex = i + 7; // Skip "<think>"
+                    i += 6; // Move past "<think>"
+                }
+                // Look for end tag
+                else if (insideThinkBlock && currentBuffer.startsWith("</think>", i)) {
+                    insideThinkBlock = false;
+                    // Remove placeholder when think block ends
+                    if (hasPlaceholder) {
+                        visibleBuffer.setLength(visibleBuffer.length() - PROCESSING_PLACEHOLDER.length());
+                        hasPlaceholder = false;
+                    }
+                    lastSafeIndex = i + 8; // Skip "</think>"
+                    i += 7; // Move past "</think>"
+                }
+            }
+            
+            // If we're not in a think block, append any remaining safe content
+            if (!insideThinkBlock) {
+                visibleBuffer.append(currentBuffer.substring(lastSafeIndex));
+                // Clear processed content from buffer
+                buffer.setLength(0);
+            } else {
+                // Keep everything from lastSafeIndex in buffer
+                buffer = new StringBuilder(currentBuffer.substring(lastSafeIndex));
+            }
+            
+            return visibleBuffer.toString();
+        }
+        
+        public String getFilteredContent() {
+            return visibleBuffer.toString();
+        }
+    }
+    
+    public LlmApi(APIProvider provider) {
+        this.provider = provider;
+        this.service = new CustomOpenAiService(this.provider.getKey(), this.provider.getUrl(), this.provider.isDisableTlsVerification()).getOpenAiService();
+    }
+
+    public String getSystemPrompt() {
+        return this.SYSTEM_PROMPT;
+    }
+    
+    /**
+     * Filters out complete <think> blocks from non-streaming response text
+     */
+    private String filterThinkBlocks(String response) {
+        if (response == null) {
+            return null;
+        }
+        return COMPLETE_THINK_PATTERN.matcher(response).replaceAll("").trim();
+    }
+    
+    public void sendRequestAsync(String prompt, LlmResponseHandler responseHandler) {
+        if (service == null) {
+            Msg.showError(this, null, "Service Error", "OpenAI service is not initialized.");
+            return;
+        }
+
+        // Cancel any existing stream
+        cancelCurrentRequest();
+
+        List<ChatMessage> messages = new ArrayList<>();
+        ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), this.SYSTEM_PROMPT);
+        messages.add(systemMessage);
+
+        ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), prompt);
+        messages.add(userMessage);
+
+        ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest
+                .builder()
+                .model(this.provider.getModel())
+                .messages(messages)
+                .maxTokens(Integer.parseInt(this.provider.getMaxTokens()))
+                .stream(true)
+                .build();
+
+        if (!responseHandler.shouldContinue()) {
+            return;
+        }
+
+        try {
+            synchronized (streamLock) {
+                currentStream = service.streamChatCompletion(chatCompletionRequest);
+                
+                AtomicBoolean isFirst = new AtomicBoolean(true);
+                StreamingResponseFilter filter = new StreamingResponseFilter();
+
+                currentSubscription = currentStream
+                    .subscribeOn(Schedulers.io())
+                    .subscribe(
+                        chunk -> {
+                            if (responseHandler.shouldContinue()) {
+                                ChatMessage delta = chunk.getChoices().get(0).getMessage();
+                                if (delta.getContent() != null) {
+                                    if (isFirst.getAndSet(false)) {
+                                        responseHandler.onStart();
+                                    }
+                                    String filteredContent = filter.processChunk(delta.getContent());
+                                    responseHandler.onUpdate(filteredContent);
+                                }
+                            } else {
+                                // If handler says to stop, dispose of the subscription
+                                cancelCurrentRequest();
+                            }
+                        },
+                        error -> {
+                            synchronized (streamLock) {
+                                currentStream = null;
+                                currentSubscription = null;
+                            }
+                            if (!isDisposedException(error)) {
+                                Msg.showError(this, null, "LLM Error", "An error occurred: " + error.getMessage());
+                                responseHandler.onError(error);
+                            }
+                        },
+                        () -> {
+                            synchronized (streamLock) {
+                                currentStream = null;
+                                currentSubscription = null;
+                            }
+                            responseHandler.onComplete(filter.getFilteredContent());
+                        }
+                    );
+            }
+        } catch (Exception e) {
+            responseHandler.onError(e);
+        }
+    }
+
+    public void sendRequestAsyncWithFunctions(String prompt, List<Map<String, Object>> functions, LlmResponseHandler responseHandler) {
+        if (service == null) {
+            Msg.showError(this, null, "Service Error", "OpenAI service is not initialized.");
+            return;
+        }
+
+        // Cancel any existing request
+        cancelCurrentRequest();
+
+        List<ChatMessage> messages = new ArrayList<>();
+        ChatMessage systemMessage = new ChatMessage(ChatMessageRole.SYSTEM.value(), 
+            this.SYSTEM_PROMPT + "\n" + this.FUNCTION_PROMPT + "\n" + this.FORMAT_PROMPT);
+        messages.add(systemMessage);
+
+        ChatMessage userMessage = new ChatMessage(ChatMessageRole.USER.value(), prompt);
+        messages.add(userMessage);
+
+        ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
+                .model(this.provider.getModel())
+                .messages(messages)
+                .maxTokens(Integer.parseInt(this.provider.getMaxTokens()))
+                .functions(functions)
+                .functionCall(null)
+                .build();
+
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                if (!responseHandler.shouldContinue()) {
+                    return null;
+                }
+                return service.createChatCompletion(chatCompletionRequest);
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        }).thenAccept(chatCompletionResult -> {
+            if (chatCompletionResult == null || !responseHandler.shouldContinue()) {
+                return;
+            }
+            if (!chatCompletionResult.getChoices().isEmpty()) {
+                ChatMessage message = chatCompletionResult.getChoices().get(0).getMessage();
+                if (message.getFunctionCall() != null) {
+                    String functionName = message.getFunctionCall().getName();
+                    JsonNode arguments = message.getFunctionCall().getArguments();
+                    String fullResponse = "{ \"name\": \"" + functionName + 
+                        "\", \"arguments\": " + arguments.toString() + " }";
+                    responseHandler.onComplete(filterThinkBlocks(fullResponse));
+                } else {
+                    responseHandler.onComplete(filterThinkBlocks(message.getContent()));
+                }
+            } else {
+                responseHandler.onError(new Exception("Empty response from LLM."));
+            }
+        }).exceptionally(throwable -> {
+            responseHandler.onError(throwable);
+            return null;
+        });
+    }
+
+    // Add method to cancel current request
+    public void cancelCurrentRequest() {
+        synchronized (streamLock) {
+            if (currentSubscription != null && !currentSubscription.isDisposed()) {
+                currentSubscription.dispose();
+                currentSubscription = null;
+            }
+            currentStream = null;
+        }
+    }
+
+    // Helper method to check if an error is from disposing the subscription
+    private boolean isDisposedException(Throwable error) {
+        return error.getMessage().contains("The consumer was disposed");
+    }
+
+    public interface LlmResponseHandler {
+        void onStart();
+        void onUpdate(String partialResponse);
+        void onComplete(String fullResponse);
+        void onError(Throwable error);
+        default boolean shouldContinue() {
+            return true;
+        }
+    }
+}
+```
+
+`src/main/java/ghidrassist/RAGEngine.java`:
+
+```java
+package ghidrassist;
+
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.document.*;
+import org.apache.lucene.index.*;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.*;
+import org.apache.lucene.search.similarities.BM25Similarity;
+import org.apache.lucene.store.*;
+import ghidra.framework.preferences.Preferences;
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.concurrent.locks.ReentrantLock;
+
+
+public class RAGEngine {
+
+    private static Directory indexDirectory;
+    private static Analyzer analyzer;
+    private static IndexWriter indexWriter;
+    private static ReentrantLock indexLock = new ReentrantLock();
+
+    private static final int MAX_SNIPPET_LENGTH = 500;
+    private static EmbeddingService embeddingService;
+
+    // Updated embedding store to include embeddings for each provider separately
+    private static Map<String, Map<String, double[]>> embeddingStore = new HashMap<>();
+
+    static {
+        try {
+            initialize();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to initialize RAGEngine", e);
+        }
+    }
+
+    private static void initialize() throws IOException {
+        String indexPath = Preferences.getProperty("GhidrAssist.LuceneIndexPath", "");
+        GAUtils.OperatingSystem os = GAUtils.OperatingSystem.detect();
+
+        if (indexPath == null || indexPath.isEmpty()) {
+            indexPath = GAUtils.getDefaultLucenePath(os);
+            System.out.println("No index path specified. Using default: " + indexPath);
+
+            // Create the directory if it doesn't exist
+            Files.createDirectories(Paths.get(indexPath));
+        }
+        initializeIndex(indexPath);
+
+        // Load the selected API provider and RAG provider
+        embeddingService = new EmbeddingService();
+    }
+
+    private static void initializeIndex(String indexPath) throws IOException {
+        Path path = Paths.get(indexPath);
+        indexDirectory = FSDirectory.open(path);
+
+        analyzer = new StandardAnalyzer();
+        IndexWriterConfig config = new IndexWriterConfig(analyzer);
+
+        indexWriter = new IndexWriter(indexDirectory, config);
+    }
+
+    public static void ingestDocuments(List<File> files) throws IOException {
+        indexLock.lock();
+        try {
+            for (File file : files) {
+                String content = readFileContent(file);
+                if (content != null && !content.isEmpty()) {
+                    List<String> chunks = chunkContent(content);
+                    for (int i = 0; i < chunks.size(); i++) {
+                        String chunk = chunks.get(i);
+                        Document doc = new Document();
+                        doc.add(new StringField("filename", file.getName(), Field.Store.YES));
+                        doc.add(new IntPoint("chunk_id", i));
+                        doc.add(new StoredField("chunk_id", i));
+                        doc.add(new TextField("content", chunk, Field.Store.YES));
+                        indexWriter.addDocument(doc);
+
+                        // Generate embedding for the chunk and store it along with the provider
+                        double[] embedding = embeddingService.getEmbedding(chunk);
+                        String provider = Preferences.getProperty("GhidrAssist.SelectedRAGProvider", "NONE");
+                        String chunkKey = file.getName() + "_" + i;
+
+
+                        // Ensure the inner map for this chunk exists
+                        embeddingStore.putIfAbsent(chunkKey, new HashMap<>());
+                        
+                        // Store the embedding for the specific provider
+                        embeddingStore.get(chunkKey).put(provider, embedding);
+                    }
+                }
+            }
+            indexWriter.commit();
+        } finally {
+            indexLock.unlock();
+        }
+    }
+
+    public static List<SearchResult> hybridSearch(String queryStr, int maxResults) throws Exception {
+        List<SearchResult> results = new ArrayList<>();
+
+        // Get the current provider
+        String currentProvider = Preferences.getProperty("GhidrAssist.SelectedRAGProvider", "NONE");
+
+        // Step 1: Generate embedding for the query
+        double[] queryEmbedding = embeddingService.getEmbedding(queryStr);
+
+        // Step 2: Retrieve the closest vector matches, if they were generated by the current provider
+        boolean canUseEmbedding = embeddingStore.values().stream()
+            .anyMatch(providerMap -> providerMap.containsKey(currentProvider));
+        List<VectorSearchResult> vectorResults = canUseEmbedding ? searchSimilar(queryEmbedding, maxResults, currentProvider) : Collections.emptyList();
+
+        // Step 3: Run BM25-based keyword search using Lucene
+        List<SearchResult> keywordResults = search(queryStr, maxResults);
+
+        // Step 4: If embeddings match, combine results; otherwise, use keyword results only
+        if (canUseEmbedding) {
+            results.addAll(vectorResults.stream().map(vr -> new SearchResult(vr.getFilename(), vr.getSnippet(), vr.getScore(), vr.getChunkId())).collect(Collectors.toList()));
+        }
+        results.addAll(keywordResults);
+
+        return results.stream().sorted((a, b) -> Double.compare(b.getScore(), a.getScore())).limit(maxResults).collect(Collectors.toList());
+    }
+
+    private static List<VectorSearchResult> searchSimilar(double[] queryEmbedding, int maxResults, String currentProvider) throws IOException {
+        List<VectorSearchResult> results = new ArrayList<>();
+        for (Map.Entry<String, Map<String, double[]>> entry : embeddingStore.entrySet()) {
+            String key = entry.getKey();
+            Map<String, double[]> providerMap = entry.getValue();
+
+            // Skip if there is no embedding for the current provider
+            if (!providerMap.containsKey(currentProvider)) {
+                continue;
+            }
+
+            double[] embedding = providerMap.get(currentProvider);
+            double similarity = cosineSimilarity(queryEmbedding, embedding);
+            if (similarity > 0.5) { // Set a threshold to filter out low similarities
+                String[] keyParts = key.split("_");
+                String filename = keyParts[0];
+                int chunkId = Integer.parseInt(keyParts[1]);
+                String snippet = getSnippetFromIndex(filename, chunkId);
+                results.add(new VectorSearchResult(filename, snippet, similarity, chunkId));
+            }
+        }
+        results.sort((a, b) -> Double.compare(b.getScore(), a.getScore()));
+        return results.subList(0, Math.min(results.size(), maxResults));
+    }
+
+    private static double cosineSimilarity(double[] vecA, double[] vecB) {
+        double dotProduct = 0.0;
+        double normA = 0.0;
+        double normB = 0.0;
+        for (int i = 0; i < vecA.length; i++) {
+            dotProduct += vecA[i] * vecB[i];
+            normA += Math.pow(vecA[i], 2);
+            normB += Math.pow(vecB[i], 2);
+        }
+        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    private static String getSnippetFromIndex(String filename, int chunkId) throws IOException {
+        indexLock.lock();
+        try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            Query query = new BooleanQuery.Builder()
+                    .add(new TermQuery(new Term("filename", filename)), BooleanClause.Occur.MUST)
+                    .add(IntPoint.newExactQuery("chunk_id", chunkId), BooleanClause.Occur.MUST)
+                    .build();
+
+            TopDocs topDocs = searcher.search(query, 1);
+            if (topDocs.totalHits.value == 0) {
+                return "";
+            }
+            StoredFields storedFields = searcher.storedFields();
+            Document doc = storedFields.document(topDocs.scoreDocs[0].doc);
+            return doc.get("content");
+        } finally {
+            indexLock.unlock();
+        }
+    }
+
+    private static List<String> chunkContent(String content) {
+        List<String> chunks = new ArrayList<>();
+        int start = 0;
+        while (start < content.length()) {
+            int end = start + 500;
+            if (end >= content.length()) {
+                chunks.add(content.substring(start));
+                break;
+            }
+            int splitPos = content.indexOf("\n\n", end);
+            if (splitPos == -1) {
+                chunks.add(content.substring(start));
+                break;
+            } else {
+                chunks.add(content.substring(start, splitPos + 2));
+                start = splitPos + 2;
+            }
+        }
+        return chunks;
+    }
+
+    private static String readFileContent(File file) throws IOException {
+        return new String(Files.readAllBytes(file.toPath()));
+    }
+
+    public static List<SearchResult> search(String queryStr, int maxResults) throws Exception {
+        List<SearchResult> results = new ArrayList<>();
+
+        indexLock.lock();
+        try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
+            IndexSearcher searcher = new IndexSearcher(reader);
+            searcher.setSimilarity(new BM25Similarity());
+
+            BooleanQuery.Builder queryBuilder = new BooleanQuery.Builder();
+
+            QueryParser contentParser = new QueryParser("content", analyzer);
+            Query contentQuery = contentParser.parse(QueryParser.escape(queryStr));
+            queryBuilder.add(new BoostQuery(contentQuery, 2.0f), BooleanClause.Occur.SHOULD);
+
+            QueryParser filenameParser = new QueryParser("filename", analyzer);
+            Query filenameQuery = filenameParser.parse(QueryParser.escape(queryStr));
+            queryBuilder.add(filenameQuery, BooleanClause.Occur.SHOULD);
+
+            TopDocs topDocs = searcher.search(queryBuilder.build(), maxResults * 3);
+
+            List<ScoreDoc> scoreDocs = Arrays.asList(topDocs.scoreDocs);
+            scoreDocs.sort((a, b) -> Float.compare(b.score, a.score));
+
+            Set<String> uniqueFiles = new HashSet<>();
+            for (ScoreDoc sd : scoreDocs) {
+                Document doc = searcher.storedFields().document(sd.doc);
+                String filename = doc.get("filename");
+                String content = doc.get("content");
+                int chunkId = doc.getField("chunk_id").numericValue().intValue();
+
+                if (!uniqueFiles.contains(filename) && uniqueFiles.size() < maxResults) {
+                    String snippet = generateSnippet(content, queryStr);
+                    results.add(new SearchResult(filename, snippet, sd.score/100, chunkId));
+                    uniqueFiles.add(filename);
+                }
+            }
+        } finally {
+            indexLock.unlock();
+        }
+
+        return results;
+    }
+
+    public static List<String> listIndexedFiles() throws IOException {
+        List<String> files = new ArrayList<>();
+        indexLock.lock();
+        try (DirectoryReader reader = DirectoryReader.open(indexWriter)) {
+            for (int i = 0; i < reader.maxDoc(); i++) {
+            	StoredFields readerStoredFields = reader.storedFields();
+            	Document doc = readerStoredFields.document(i);
+                String filename = doc.get("filename");
+                if (!files.contains(filename)) {
+                    files.add(filename);
+                }
+            }
+        } finally {
+            indexLock.unlock();
+        }
+        return files;
+    }
+
+    public static void deleteDocument(String filename) throws IOException {
+        indexLock.lock();
+        try {
+            Term term = new Term("filename", filename);
+            indexWriter.deleteDocuments(term);
+            indexWriter.commit();
+        } finally {
+            indexLock.unlock();
+        }
+    }
+
+    private static String generateSnippet(String content, String query) {
+        String[] queryTerms = query.toLowerCase().split("\s+");
+        int bestPosition = content.length();
+        for (String term : queryTerms) {
+            int pos = content.toLowerCase().indexOf(term);
+            if (pos != -1 && pos < bestPosition) {
+                bestPosition = pos;
+            }
+        }
+
+        int start = Math.max(0, bestPosition - MAX_SNIPPET_LENGTH / 2);
+        int end = Math.min(content.length(), start + MAX_SNIPPET_LENGTH);
+        String snippet = content.substring(start, end);
+
+        if (start > 0) snippet = "..." + snippet;
+        if (end < content.length()) snippet = snippet + "...";
+
+        return snippet;
+    }
+}
+
+class EmbeddingService {
+    private final CustomEmbeddingService requestor;
+
+    public EmbeddingService() {
+        this.requestor = new CustomEmbeddingService();
+    }
+
+    public double[] getEmbedding(String text) {
+        try {
+            return requestor.getEmbedding(text);
+        } catch (IOException e) {
+            throw new RuntimeException("Error getting embedding", e);
+        }
+    }
+}
+
+class EmbeddingData {
+    private double[] embedding;
+    private String provider;
+
+    public EmbeddingData(double[] embedding, String provider) {
+        this.embedding = embedding;
+        this.provider = provider;
+    }
+
+    public double[] getEmbedding() {
+        return embedding;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+}
+
+class SearchResult {
+    private String filename;
+    private String snippet;
+    private double score;
+    private int chunkId;
+
+    public SearchResult(String filename, String snippet, double score, int chunkId) {
+        this.filename = filename;
+        this.snippet = snippet;
+        this.score = score;
+        this.chunkId = chunkId;
+    }
+
+    public String getFilename() { return filename; }
+    public String getSnippet() { return snippet; }
+    public double getScore() { return score; }
+    public int getChunkId() { return chunkId; }
+}
+
+class VectorSearchResult {
+    private String filename;
+    private String snippet;
+    private double score;
+    private int chunkId;
+
+    public VectorSearchResult(String filename, String snippet, double score, int chunkId) {
+        this.filename = filename;
+        this.snippet = snippet;
+        this.score = score;
+        this.chunkId = chunkId;
+    }
+
+    public String getFilename() { return filename; }
+    public String getSnippet() { return snippet; }
+    public double getScore() { return score; }
+    public int getChunkId() { return chunkId; }
+}
+
+```
+
+`src/main/java/ghidrassist/RLHFDatabase.java`:
+
+```java
+package ghidrassist;
+
+import ghidra.framework.preferences.Preferences;
+import ghidra.util.Msg;
+
+import java.sql.*;
+
+public class RLHFDatabase {
+
+    private static final String DB_PATH_PROPERTY = "GhidrAssist.RLHFDatabasePath";
+    private static final String DEFAULT_DB_PATH = "ghidrassist_rlhf.db";
+    private Connection connection;
+
+    public RLHFDatabase() {
+        String dbPath = Preferences.getProperty(DB_PATH_PROPERTY, DEFAULT_DB_PATH);
+        initializeDatabase(dbPath);
+    }
+
+    private void initializeDatabase(String dbPath) {
+        try {
+            connection = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+            createFeedbackTable();
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to initialize RLHF database: " + e.getMessage());
+        }
+    }
+
+    private void createFeedbackTable() throws SQLException {
+        String createTableSQL = "CREATE TABLE IF NOT EXISTS feedback ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                + "model_name TEXT NOT NULL,"
+                + "prompt_context TEXT NOT NULL,"
+                + "system_context TEXT NOT NULL,"
+                + "response TEXT NOT NULL,"
+                + "feedback INTEGER NOT NULL" // 1 for thumbs up, 0 for thumbs down
+                + ")";
+        Statement stmt = connection.createStatement();
+        stmt.execute(createTableSQL);
+        stmt.close();
+    }
+
+    public void storeFeedback(String modelName, String promptContext, String systemContext, String response, int feedback) {
+        String insertSQL = "INSERT INTO feedback (model_name, prompt_context, system_context, response, feedback) "
+                + "VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(insertSQL)) {
+            pstmt.setString(1, modelName);
+            pstmt.setString(2, promptContext);
+            pstmt.setString(3, systemContext);
+            pstmt.setString(4, response);
+            pstmt.setInt(5, feedback);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to store feedback: " + e.getMessage());
+        }
+    }
+
+    public void close() {
+        try {
+            connection.close();
+        } catch (SQLException e) {
+            Msg.showError(this, null, "Database Error", "Failed to close RLHF database connection: " + e.getMessage());
+        }
+    }
+}
+
+```
+
+`src/main/java/ghidrassist/SettingsDialog.java`:
+
+```java
+package ghidrassist;
+
+import docking.DialogComponentProvider;
+import ghidra.framework.preferences.Preferences;
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.io.File;
+import java.lang.reflect.Type;
+import java.util.List;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+public class SettingsDialog extends DialogComponentProvider {
+
+    private DefaultTableModel tableModel;
+    private JTable table;
+    private JComboBox<String> activeProviderComboBox;
+    private List<APIProvider> apiProviders;
+    private String selectedProviderName;
+
+    // Components for RLHF Database Path
+    private JTextField rlhfDbPathField;
+    private JButton rlhfDbBrowseButton;
+    
+    // Components for the RAG index path
+    private JTextField luceneIndexPathField;
+    private JButton luceneIndexBrowseButton;
+
+    // RAG Provider
+    private JComboBox<String> ragProviderComboBox;
+    private String selectedRagProviderName;
+    
+    // Analysis database
+    private JTextField analysisDbPathField;
+    private JButton analysisDbBrowseButton;
+
+    public SettingsDialog(Component parent, String title) {
+        super(title, true, false, true, false);
+
+        // Load the list of API providers from preferences
+        String providersJson = Preferences.getProperty("GhidrAssist.APIProviders", "[]");
+        Gson gson = new Gson();
+        Type listType = new TypeToken<List<APIProvider>>() {}.getType();
+        apiProviders = gson.fromJson(providersJson, listType);
+
+        // Load the selected provider name
+        selectedProviderName = Preferences.getProperty("GhidrAssist.SelectedAPIProvider", "");
+
+        // Load the RLHF database path
+        String rlhfDbPath = Preferences.getProperty("GhidrAssist.RLHFDatabasePath", "ghidrassist_rlhf.db");
+        
+        // Create the Analysis database path components
+        String analysisDbPath = Preferences.getProperty("GhidrAssist.AnalysisDBPath", "ghidrassist_analysis.db");
+        JLabel analysisDbPathLabel = new JLabel("Analysis Database Path:");
+        analysisDbPathField = new JTextField(analysisDbPath, 20);
+        analysisDbBrowseButton = new JButton("Browse...");
+
+        analysisDbBrowseButton.addActionListener(e -> onBrowseAnalysisDbPath());
+
+        JPanel analysisDbPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        analysisDbPanel.add(analysisDbPathLabel);
+        analysisDbPanel.add(analysisDbPathField);
+        analysisDbPanel.add(analysisDbBrowseButton);
+
+        // Load the Lucene index path
+        String luceneIndexPath = Preferences.getProperty("GhidrAssist.LuceneIndexPath", "ghidrassist_lucene");
+        
+
+        // Initialize the UI components
+        JPanel panel = new JPanel(new BorderLayout());
+
+        // Create the table
+        String[] columnNames = {"Name", "Model", "Max Tokens", "URL", "Key", "Disable TLS Verify"};
+        tableModel = new DefaultTableModel(columnNames, 0);
+        table = new JTable(tableModel);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        // Populate the table model with the data
+        for (APIProvider provider : apiProviders) {
+            tableModel.addRow(new Object[] {
+                provider.getName(),
+                provider.getModel(),
+                provider.getMaxTokens(),
+                provider.getUrl(),
+                provider.getKey(),
+                provider.isDisableTlsVerification()
+            });
+        }
+
+        // Make the TLS column use checkboxes
+        table.getColumnModel().getColumn(5).setCellRenderer(table.getDefaultRenderer(Boolean.class));
+        table.getColumnModel().getColumn(5).setCellEditor(table.getDefaultEditor(Boolean.class));
+
+        JScrollPane tableScrollPane = new JScrollPane(table);
+
+        // Create the buttons
+        JButton addButton = new JButton("Add");
+        JButton editButton = new JButton("Edit");
+        JButton deleteButton = new JButton("Delete");
+
+        addButton.addActionListener(e -> onAddProvider());
+        editButton.addActionListener(e -> onEditProvider());
+        deleteButton.addActionListener(e -> onDeleteProvider());
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(addButton);
+        buttonPanel.add(editButton);
+        buttonPanel.add(deleteButton);
+
+        // Create the active provider combo box
+        activeProviderComboBox = new JComboBox<>();
+        for (APIProvider provider : apiProviders) {
+            activeProviderComboBox.addItem(provider.getName());
+        }
+        activeProviderComboBox.setSelectedItem(selectedProviderName);
+
+        JPanel activeProviderPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        activeProviderPanel.add(new JLabel("Active API Provider:"));
+        activeProviderPanel.add(activeProviderComboBox);
+
+        // Create the RLHF database path components
+        JLabel rlhfDbPathLabel = new JLabel("RLHF Database Path:");
+        rlhfDbPathField = new JTextField(rlhfDbPath, 20);
+        rlhfDbBrowseButton = new JButton("Browse...");
+
+        rlhfDbBrowseButton.addActionListener(e -> onBrowseRLHFDbPath());
+
+        JPanel rlhfDbPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        rlhfDbPanel.add(rlhfDbPathLabel);
+        rlhfDbPanel.add(rlhfDbPathField);
+        rlhfDbPanel.add(rlhfDbBrowseButton);
+
+        // Create the Lucene index path components
+        JLabel luceneIndexPathLabel = new JLabel("Lucene Index Path:");
+        luceneIndexPathField = new JTextField(luceneIndexPath, 20);
+        luceneIndexBrowseButton = new JButton("Browse...");
+
+        luceneIndexBrowseButton.addActionListener(e -> onBrowseLuceneIndexPath());
+
+        JPanel luceneIndexPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        luceneIndexPanel.add(luceneIndexPathLabel);
+        luceneIndexPanel.add(luceneIndexPathField);
+        luceneIndexPanel.add(luceneIndexBrowseButton);
+        
+        String[] ragProviders = { "OPENAI", "OLLAMA", "NONE" };
+        ragProviderComboBox = new JComboBox<>(ragProviders);
+        selectedRagProviderName = Preferences.getProperty("GhidrAssist.SelectedRAGProvider", "NONE");
+        ragProviderComboBox.setSelectedItem(selectedRagProviderName);
+
+        JPanel ragProviderPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        ragProviderPanel.add(new JLabel("RAG Provider:"));
+        ragProviderPanel.add(ragProviderComboBox);
+
+        // Create a panel to hold the active provider panel and RLHF database panel
+        JPanel topPanel = new JPanel();
+        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+        topPanel.add(activeProviderPanel);
+        topPanel.add(rlhfDbPanel);
+        topPanel.add(analysisDbPanel);
+        topPanel.add(luceneIndexPanel);
+        topPanel.add(ragProviderPanel);
+
+        // Add components to the panel
+        panel.add(topPanel, BorderLayout.NORTH);
+        panel.add(tableScrollPane, BorderLayout.CENTER);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
+        addWorkPanel(panel);
+
+        addOKButton();
+        addCancelButton();
+
+        setRememberSize(false);
+    }
+
+    private void onBrowseLuceneIndexPath() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select Lucene Index Directory");
+        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+        // Set current directory to the existing path if it exists
+        String currentPath = luceneIndexPathField.getText();
+        if (!currentPath.isEmpty()) {
+            File currentFile = new File(currentPath);
+            fileChooser.setCurrentDirectory(currentFile.getParentFile());
+            fileChooser.setSelectedFile(currentFile);
+        }
+
+        int result = fileChooser.showOpenDialog(getComponent());
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedDir = fileChooser.getSelectedFile();
+            luceneIndexPathField.setText(selectedDir.getAbsolutePath());
+        }
+    }
+    
+    private void onBrowseRLHFDbPath() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select RLHF Database File");
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+
+        // Set current directory to the existing path if it exists
+        String currentPath = rlhfDbPathField.getText();
+        if (!currentPath.isEmpty()) {
+            File currentFile = new File(currentPath);
+            fileChooser.setCurrentDirectory(currentFile.getParentFile());
+            fileChooser.setSelectedFile(currentFile);
+        }
+
+        int result = fileChooser.showOpenDialog(getComponent());
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            rlhfDbPathField.setText(selectedFile.getAbsolutePath());
+        }
+    }
+    
+    private void onBrowseAnalysisDbPath() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select Analysis Database File");
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+
+        // Set current directory to the existing path if it exists
+        String currentPath = analysisDbPathField.getText();
+        if (!currentPath.isEmpty()) {
+            File currentFile = new File(currentPath);
+            fileChooser.setCurrentDirectory(currentFile.getParentFile());
+            fileChooser.setSelectedFile(currentFile);
+        }
+
+        int result = fileChooser.showOpenDialog(getComponent());
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File selectedFile = fileChooser.getSelectedFile();
+            analysisDbPathField.setText(selectedFile.getAbsolutePath());
+        }
+    }
+
+    private void onAddProvider() {
+        APIProvider newProvider = new APIProvider("", "", "", "", "", false);
+        boolean isSaved = openProviderDialog(newProvider);
+        if (isSaved) {
+            apiProviders.add(newProvider);
+            tableModel.addRow(new Object[] {
+                newProvider.getName(),
+                newProvider.getModel(),
+                newProvider.getMaxTokens(),
+                newProvider.getUrl(),
+                newProvider.getKey(),
+                newProvider.isDisableTlsVerification()
+            });
+            activeProviderComboBox.addItem(newProvider.getName());
+        }
+    }
+
+    private void onEditProvider() {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow >= 0) {
+            APIProvider provider = apiProviders.get(selectedRow);
+            APIProvider editedProvider = new APIProvider(
+                provider.getName(),
+                provider.getModel(),
+                provider.getMaxTokens(),
+                provider.getUrl(),
+                provider.getKey(),
+                provider.isDisableTlsVerification()
+            );
+            boolean isSaved = openProviderDialog(editedProvider);
+            if (isSaved) {
+                // Update the provider
+                provider.setName(editedProvider.getName());
+                provider.setModel(editedProvider.getModel());
+                provider.setMaxTokens(editedProvider.getMaxTokens());
+                provider.setUrl(editedProvider.getUrl());
+                provider.setKey(editedProvider.getKey());
+                provider.setDisableTlsVerification(editedProvider.isDisableTlsVerification());
+                // Update the table model
+                tableModel.setValueAt(provider.getName(), selectedRow, 0);
+                tableModel.setValueAt(provider.getModel(), selectedRow, 1);
+                tableModel.setValueAt(provider.getMaxTokens(), selectedRow, 2);
+                tableModel.setValueAt(provider.getUrl(), selectedRow, 3);
+                tableModel.setValueAt(provider.getKey(), selectedRow, 4);
+                tableModel.setValueAt(provider.isDisableTlsVerification(), selectedRow, 5);
+                // Update the combo box
+                activeProviderComboBox.removeItemAt(selectedRow);
+                activeProviderComboBox.insertItemAt(provider.getName(), selectedRow);
+                if (selectedProviderName.equals(provider.getName())) {
+                    activeProviderComboBox.setSelectedItem(provider.getName());
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(getComponent(), "Please select a provider to edit.", "No Selection", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private void onDeleteProvider() {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow >= 0) {
+            int result = JOptionPane.showConfirmDialog(getComponent(), "Are you sure you want to delete the selected provider?", "Confirm Delete", JOptionPane.YES_NO_OPTION);
+            if (result == JOptionPane.YES_OPTION) {
+                APIProvider provider = apiProviders.get(selectedRow);
+                apiProviders.remove(selectedRow);
+                tableModel.removeRow(selectedRow);
+                activeProviderComboBox.removeItemAt(selectedRow);
+                // If the deleted provider was the selected provider, update the selection
+                if (selectedProviderName.equals(provider.getName())) {
+                    selectedProviderName = "";
+                    activeProviderComboBox.setSelectedItem(selectedProviderName);
+                }
+            }
+        } else {
+            JOptionPane.showMessageDialog(getComponent(), "Please select a provider to delete.", "No Selection", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private boolean openProviderDialog(APIProvider provider) {
+        JTextField nameField = new JTextField(provider.getName(), 20);
+        JTextField modelField = new JTextField(provider.getModel(), 20);
+        JTextField maxTokensField = new JTextField(provider.getMaxTokens(), 20);
+        JTextField urlField = new JTextField(provider.getUrl(), 20);
+        JTextField keyField = new JTextField(provider.getKey(), 20);
+        JCheckBox disableTlsVerifyCheckbox = new JCheckBox("Disable TLS Certificate Verification", provider.isDisableTlsVerification());
+
+        JPanel panel = new JPanel(new GridLayout(0, 2));
+        panel.add(new JLabel("Name:"));
+        panel.add(nameField);
+        panel.add(new JLabel("Model:"));
+        panel.add(modelField);
+        panel.add(new JLabel("Max Tokens:"));
+        panel.add(maxTokensField);
+        panel.add(new JLabel("URL:"));
+        panel.add(urlField);
+        panel.add(new JLabel("Key:"));
+        panel.add(keyField);
+        panel.add(new JLabel("Insecure TLS:"));
+        panel.add(disableTlsVerifyCheckbox);
+
+        int result = JOptionPane.showConfirmDialog(getComponent(), panel, "API Provider", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            provider.setName(nameField.getText().trim());
+            provider.setModel(modelField.getText().trim());
+            provider.setMaxTokens(maxTokensField.getText().trim());
+            provider.setUrl(urlField.getText().trim());
+            provider.setKey(keyField.getText().trim());
+            provider.setDisableTlsVerification(disableTlsVerifyCheckbox.isSelected());
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    protected void okCallback() {
+        // Save settings
+        // Get the selected provider name
+        selectedProviderName = (String) activeProviderComboBox.getSelectedItem();
+        selectedRagProviderName = (String) ragProviderComboBox.getSelectedItem();
+
+
+        // Serialize the list of providers to JSON
+        Gson gson = new Gson();
+        String providersJson = gson.toJson(apiProviders);
+
+        // Get the RLHF database path from the text field
+        String rlhfDbPath = rlhfDbPathField.getText().trim();
+        // Get the Analysis database path from the text field
+        String analysisDbPath = analysisDbPathField.getText().trim();
+        // Add to the preferences storage:
+        Preferences.setProperty("GhidrAssist.AnalysisDBPath", analysisDbPath);
+        // Get the Lucene index path from the text field
+        String luceneIndexPath = luceneIndexPathField.getText().trim();
+
+        // Store settings
+        Preferences.setProperty("GhidrAssist.APIProviders", providersJson);
+        Preferences.setProperty("GhidrAssist.SelectedAPIProvider", selectedProviderName);
+        Preferences.setProperty("GhidrAssist.SelectedRAGProvider", selectedRagProviderName);
+        Preferences.setProperty("GhidrAssist.RLHFDatabasePath", rlhfDbPath);
+        Preferences.setProperty("GhidrAssist.LuceneIndexPath", luceneIndexPath);
+        Preferences.store(); // Save preferences to disk
+
+        close();
+    }
+}
+
+```
+
+`src/main/java/ghidrassist/ToolCalling.java`:
+
+```java
+package ghidrassist;
+
+import java.util.*;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.listing.Function.FunctionUpdateType;
+import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.HighFunctionDBUtil;
+import ghidra.program.model.pcode.HighSymbol;
+import ghidra.program.model.pcode.HighVariable;
+import ghidra.program.model.data.*;
+import ghidra.program.model.symbol.*;
+import ghidra.app.decompiler.DecompInterface;
+import ghidra.app.decompiler.DecompileOptions;
+import ghidra.app.decompiler.DecompileResults;
+import ghidra.app.decompiler.util.FillOutStructureHelper;
+import ghidra.program.model.address.*;
+import ghidra.util.Msg;
+import ghidra.util.data.DataTypeParser;
+import ghidra.util.exception.CancelledException;
+import ghidra.util.exception.DuplicateNameException;
+import ghidra.util.exception.InvalidInputException;
+import ghidra.util.task.TaskMonitor;
+
+public class ToolCalling {
+
+    public static final List<Map<String, Object>> FN_TEMPLATES = Arrays.asList(
+        createFunctionTemplate(
+            "rename_function",
+            "Rename a function",
+            createParameters(
+                createParameter("new_name", "string", "The new name for the function. (e.g., recv_data)")
+            )
+        ),
+        createFunctionTemplate(
+            "rename_variable",
+            "Rename a variable within a function",
+            createParameters(
+                createParameter("func_name", "string", "The name of the function containing the variable. (e.g., sub_40001234)"),
+                createParameter("var_name", "string", "The current name of the variable. (e.g., var_20)"),
+                createParameter("new_name", "string", "The new name for the variable. (e.g., recv_buf)")
+            )
+        ),
+        createFunctionTemplate(
+            "retype_variable",
+            "Set a variable data type within a function",
+            createParameters(
+                createParameter("func_name", "string", "The name of the function containing the variable. (e.g., sub_40001234)"),
+                createParameter("var_name", "string", "The current name of the variable. (e.g., rax_12)"),
+                createParameter("new_type", "string", "The new type for the variable. (e.g., int32_t)")
+            )
+        ),
+        createFunctionTemplate(
+            "auto_create_struct",
+            "Automatically create a structure datatype from a variable given its offset uses in a given function.",
+            createParameters(
+                createParameter("func_name", "string", "The name of the function containing the variable. (e.g., sub_40001234)"),
+                createParameter("var_name", "string", "The current name of the variable. (e.g., rax_12)")
+            )
+        )
+    );
+
+    public static final Map<String, String> ACTION_PROMPTS = new HashMap<>();
+
+    static {
+        ACTION_PROMPTS.put("rename_function",
+			"Use the 'rename_function' tool:\n```\n{code}\n```\n" +
+            "Examine the code functionality, strings and log parameters.\n" +
+            "If you detect C++ Super::Derived::Method or Class::Method style class names, recommend that name first, OTHERWISE USE PROCEDURAL NAMING.\n" +
+            "CREATE A JSON TOOL_CALL LIST WITH SUGGESTIONS FOR THREE POSSIBLE FUNCTION NAMES " +
+            "THAT ALIGN AS CLOSELY AS POSSIBLE TO WHAT THE CODE ABOVE DOES.\n" +
+            "RESPOND ONLY WITH THE RENAME_FUNCTION PARAMETER (new_name). DO NOT INCLUDE ANY OTHER TEXT.\n" +
+            "ALL JSON MUST BE PROPERLY FORMATTED WITH NO EMBEDDED COMMENTS.\n"
+        );
+        ACTION_PROMPTS.put("rename_variable",
+            "Use the 'rename_variable' tool:\n```\n{code}\n```\n" +
+            "Examine the code functionality, strings, and log parameters.\n" +
+            "SUGGEST VARIABLE NAMES THAT BETTER ALIGN WITH THE CODE FUNCTIONALITY.\n" +
+            "RESPOND ONLY WITH THE RENAME_VARIABLE PARAMETERS (func_name, var_name, new_name). DO NOT INCLUDE ANY OTHER TEXT.\n" +
+            "ALL JSON VALUES MUST BE TEXT STRINGS, INCLUDING NUMBERS AND ADDRESSES, e.g., \"0x1234abcd\".\n" +
+            "ALL JSON MUST BE PROPERLY FORMATTED WITH NO EMBEDDED COMMENTS.\n"
+        );
+        ACTION_PROMPTS.put("retype_variable",
+            "Use the 'retype_variable' tool:\n```\n{code}\n```\n" +
+            "Examine the code functionality, strings, and log parameters.\n" +
+            "SUGGEST VARIABLE TYPES THAT BETTER ALIGN WITH THE CODE FUNCTIONALITY.\n" +
+            "RESPOND ONLY WITH THE RETYPE_VARIABLE PARAMETERS (func_name, var_name, new_type). DO NOT INCLUDE ANY OTHER TEXT.\n" +
+            "ALL JSON VALUES MUST BE TEXT STRINGS, INCLUDING NUMBERS AND ADDRESSES, e.g., \"0x1234abcd\".\n" +
+            "ALL JSON MUST BE PROPERLY FORMATTED WITH NO EMBEDDED COMMENTS.\n"
+        );
+        ACTION_PROMPTS.put("auto_create_struct",
+            "Use the 'auto_create_struct' tool:\n```\n{code}\n```\n" +
+            "Examine the code functionality, parameters, and variables being used.\n" +
+            "IF YOU DETECT A VARIABLE THAT USES OFFSET ACCESS SUCH AS `*(arg1 + 0xc)` OR VARIABLES LIKELY TO BE STRUCTURES OR CLASSES,\n" +
+            "RESPOND ONLY WITH THE AUTO_CREATE_STRUCT PARAMETERS (func_name, var_name). DO NOT INCLUDE ANY OTHER TEXT.\n" +
+            "ALL JSON VALUES MUST BE TEXT STRINGS, INCLUDING NUMBERS AND ADDRESSES, e.g., \"0x1234abcd\".\n" +
+            "ALL JSON MUST BE PROPERLY FORMATTED WITH NO EMBEDDED COMMENTS.\n"
+        );
+    }
+
+    private static Map<String, Object> createFunctionTemplate(String name, String description, Map<String, Object> parameters) {
+        Map<String, Object> functionMap = new HashMap<>();
+        functionMap.put("name", name);
+        functionMap.put("description", description);
+        functionMap.put("parameters", parameters);
+
+        Map<String, Object> template = new HashMap<>();
+        template.put("type", "function");
+        template.put("function", functionMap);
+
+        return template;
+    }
+
+    @SafeVarargs
+	private static Map<String, Object> createParameters(Map<String, Object>... params) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        for (Map<String, Object> param : params) {
+            properties.put((String) param.get("name"), param);
+        }
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("type", "object");
+        parameters.put("properties", properties);
+        List<String> required = new ArrayList<>();
+        for (Map<String, Object> param : params) {
+            required.add((String) param.get("name"));
+        }
+        parameters.put("required", required);
+        return parameters;
+    }
+
+    private static Map<String, Object> createParameter(String name, String type, String description) {
+        Map<String, Object> param = new HashMap<>();
+        param.put("name", name);
+        param.put("type", type);
+        param.put("description", description);
+        return param;
+    }
+
+    // Handler methods for each action
+    public static void handle_rename_function(Program program, Address address, String newName) throws InvalidInputException, DuplicateNameException {
+    	int transaction = program.startTransaction("Rename Function");
+        boolean success = false;
+    	FunctionManager functionManager = program.getFunctionManager();
+        Function function = functionManager.getFunctionContaining(address);
+        if (function != null) {
+            function.setName(newName, SourceType.USER_DEFINED);
+            success = true;
+        } else {
+            program.endTransaction(transaction, success);
+            throw new InvalidInputException("Function not found at address: " + address.toString());
+        }
+        program.endTransaction(transaction, success);
+    }
+
+    public static void handle_rename_variable(Program program, Address address, String funcName, String varName, String newName) throws InvalidInputException, DuplicateNameException {
+    	int transaction = program.startTransaction("Rename Variable");
+        boolean success = false;
+        Function function = program.getFunctionManager().getFunctionContaining(address);
+        if (function == null) {
+        	program.endTransaction(transaction, success);
+            throw new InvalidInputException("Function not found: " + funcName);
+        }
+        // Combine variables from getAllVariables() and getLocalVariables()
+        commitLocalNames(program, function);
+        List<Variable> combinedVariables = new ArrayList<>(Arrays.asList(function.getAllVariables()));
+        combinedVariables.addAll(Arrays.asList(function.getAllVariables())); // Locals
+        combinedVariables.addAll(Arrays.asList(function.getParameters()));  // Parameters
+
+        // Search for the variable by name in the combined list
+        for (Variable var : combinedVariables) {
+            if (var.getName().equals(varName)) {
+                var.setName(newName, SourceType.USER_DEFINED);
+                success = true;
+                break;
+            }
+        }
+        if (success == false) {
+	        throw new InvalidInputException("Variable not found: " + varName);
+        }
+        program.endTransaction(transaction, success);
+    }
+
+    public static void handle_retype_variable(Program program, Address address, String funcName, String varName, String newTypeStr) throws InvalidDataTypeException, CancelledException, InvalidInputException, DuplicateNameException {
+        int transaction = program.startTransaction("Retype Variable");
+        boolean success = false;
+        Function function = program.getFunctionManager().getFunctionContaining(address);
+        if (function == null) {
+        	program.endTransaction(transaction, success);
+            throw new InvalidInputException("Function not found: " + funcName);
+        }
+        // Combine variables from getAllVariables() and getLocalVariables()
+        commitLocalNames(program, function);
+        List<Variable> combinedVariables = new ArrayList<>(Arrays.asList(function.getAllVariables()));
+        combinedVariables.addAll(Arrays.asList(function.getAllVariables())); // Locals
+        combinedVariables.addAll(Arrays.asList(function.getParameters()));  // Parameters
+
+        // Search for the variable by name in the combined list
+        for (Variable var : combinedVariables) {
+            if (var.getName().equals(varName)) {
+                DataTypeManager dtm = program.getDataTypeManager();
+                DataType newType = getDataType(newTypeStr, dtm, program);
+                if (newType != null) {
+                    var.setDataType(newType, true, true, SourceType.USER_DEFINED);
+                    success = true;
+                    break;
+                } else {
+                    program.endTransaction(transaction, success);
+                    throw new InvalidDataTypeException("Failed to parse data type: " + newTypeStr);
+                }
+            }
+        }
+        if (!success) {
+        	program.endTransaction(transaction, success);
+            throw new InvalidInputException("Variable not found: " + varName);
+        }
+        program.endTransaction(transaction, success);
+    }
+
+    private static DataType getDataType(String dataTypeStr, DataTypeManager dtm, Program program) throws InvalidDataTypeException, CancelledException {
+        // First, try to get the data type directly
+        DataType dataType = dtm.getDataType(new CategoryPath("/"), dataTypeStr);
+        
+        // If not found, try to parse it
+        if (dataType == null) {
+        	DataTypeParser parser = new DataTypeParser(dtm, program.getDataTypeManager(), null, DataTypeParser.AllowedDataTypes.ALL);
+            dataType = parser.parse(dataTypeStr);
+        }
+        
+        return dataType;
+    }
+
+    public static void handle_auto_create_struct(Program program, Address address, String funcName, String varName) throws InvalidInputException, DuplicateNameException, CancelledException {
+        int transaction = program.startTransaction("Auto Create Struct");
+        boolean success = false;
+
+        try {
+            // Retrieve the function at the specified address
+            Function function = program.getFunctionManager().getFunctionContaining(address);
+            if (function == null) {
+                throw new InvalidInputException("Function not found: " + funcName);
+            }
+            
+            // Combine variables from getAllVariables() and getParameters()
+            commitLocalNames(program, function);
+            List<Variable> combinedVariables = new ArrayList<>();
+            combinedVariables.addAll(Arrays.asList(function.getAllVariables()));
+            combinedVariables.addAll(Arrays.asList(function.getParameters())); // Parameters
+
+            // Decompile the function
+            DecompInterface decompiler = new DecompInterface();
+            DecompileOptions options = new DecompileOptions();
+            options.grabFromProgram(program);
+            decompiler.setOptions(options);
+            decompiler.openProgram(program);
+            DecompileResults decompileResults = decompiler.decompileFunction(function, 30, null);
+
+            if (!decompileResults.decompileCompleted()) {
+                throw new InvalidInputException("Decompilation failed for function: " + funcName);
+            }
+
+            HighFunction highFunction = decompileResults.getHighFunction();
+
+            // Find the HighVariable for varName
+            HighVariable highVar = findHighVariable(highFunction, varName);
+            if (highVar == null) {
+                throw new InvalidInputException("Variable not found: " + varName);
+            }
+
+            // Use FillOutStructureHelper
+            TaskMonitor monitor = TaskMonitor.DUMMY;
+            FillOutStructureHelper fillHelper = new FillOutStructureHelper(program, monitor);
+            Structure structDT = fillHelper.processStructure(highVar, function, false, true, decompiler);
+
+            if (structDT == null) {
+                throw new InvalidInputException("Failed to create structure for variable: " + varName);
+            }
+
+            // Add the struct to the DataTypeManager
+            DataTypeManager dtm = program.getDataTypeManager();
+            structDT = (Structure) dtm.addDataType(structDT, DataTypeConflictHandler.DEFAULT_HANDLER);
+
+            // Create a pointer to the struct
+            PointerDataType ptrStruct = new PointerDataType(structDT);
+
+            // Apply the data type to the variable
+            Variable var = null;
+            for (Variable v : combinedVariables) {
+                if (v.getName().equals(varName)) {
+                    var = v;
+                    break;
+                }
+            }
+            
+            if (var != null && var instanceof AutoParameterImpl) {
+                // Modify the function signature to change the data type of the auto-parameter
+                Parameter[] parameters = function.getParameters();
+                Parameter[] newParams = new Parameter[parameters.length];
+
+                for (int i = 0; i < parameters.length; i++) {
+                    if (parameters[i].getName().equals(varName)) {
+                        newParams[i] = new ParameterImpl(
+                            parameters[i].getName(),
+                            ptrStruct,
+                            parameters[i].getVariableStorage(),
+                            program,
+                            SourceType.USER_DEFINED
+                        );
+                    } else {
+                        newParams[i] = parameters[i];
+                    }
+                }
+
+                // Update the function signature
+                function.updateFunction(
+                    function.getCallingConventionName(),
+                    null, // Return type remains the same
+                    FunctionUpdateType.CUSTOM_STORAGE,
+                    true, // Force the update
+                    SourceType.USER_DEFINED,
+                    newParams
+                );
+            } else {
+                // Update local variable
+                HighFunctionDBUtil.updateDBVariable(highVar.getSymbol(), null, ptrStruct, SourceType.USER_DEFINED);
+            }
+
+            success = true;
+
+        } catch (Exception e) {
+            throw new InvalidInputException("Error in auto-creating struct: " + e.getMessage());
+        } finally {
+            program.endTransaction(transaction, success);
+        }
+    }
+
+    private static HighVariable findHighVariable(HighFunction highFunction, String varName) {
+        // Retrieve all high-level variables from the function and search by name
+        Iterator<HighSymbol> highVariables = highFunction.getLocalSymbolMap().getSymbols();
+        while (highVariables.hasNext()) {
+        	HighSymbol highVar = highVariables.next(); 
+            if (highVar.getName().equals(varName)) {
+                return highVar.getHighVariable();
+            }
+        }
+        return null;
+    }
+
+    public static void commitLocalNames(Program program, Function function) {
+        DecompInterface ifc = new DecompInterface();
+        ifc.openProgram(program);
+        
+        DecompileResults res = ifc.decompileFunction(function, 30, null);
+        if (res.decompileCompleted()) {
+            try {
+                function.setName(function.getName(), SourceType.USER_DEFINED); // Commit the function parameters
+                HighFunction hf = res.getHighFunction();
+                HighFunctionDBUtil.commitLocalNamesToDatabase(hf, SourceType.ANALYSIS);
+                HighFunctionDBUtil.commitParamsToDatabase(hf, true, null, SourceType.ANALYSIS);
+            } catch (Exception e) {
+                Msg.error(ToolCalling.class, "Error committing local names: " + e.getMessage());
+            }
+        }
+        
+        ifc.closeProgram();
+    }
+
+}
+
+```
+
+`src/main/resources/images/README.txt`:
+
+```txt
+The "src/resources/images" directory is intended to hold all image/icon files used by
+this module.
+
+```
