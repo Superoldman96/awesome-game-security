@@ -1,0 +1,3385 @@
+Project Path: arc_gmh5225_hwinfo_6y9rwdu4
+
+Source Tree:
+
+```txt
+arc_gmh5225_hwinfo_6y9rwdu4
+├── CHANGELOG.md
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── examples
+│   ├── CMakeLists.txt
+│   └── example.cpp
+├── include
+│   └── hwinfo
+│       ├── WMIwrapper.h
+│       ├── cpu.h
+│       ├── cpuid.h
+│       ├── disk.h
+│       ├── gpu.h
+│       ├── hwinfo.h
+│       ├── mainboard.h
+│       ├── os.h
+│       ├── platform.h
+│       ├── ram.h
+│       ├── system.h
+│       └── utils
+│           ├── stringutils.h
+│           └── subprocess.h
+├── src
+│   ├── CMakeLists.txt
+│   ├── apple
+│   │   ├── cpu.cpp
+│   │   ├── disk.cpp
+│   │   ├── gpu.cpp
+│   │   ├── mainboard.cpp
+│   │   ├── os.cpp
+│   │   └── ram.cpp
+│   ├── cpu.cpp
+│   ├── disk.cpp
+│   ├── gpu.cpp
+│   ├── linux
+│   │   ├── cpu.cpp
+│   │   ├── disk.cpp
+│   │   ├── gpu.cpp
+│   │   ├── mainboard.cpp
+│   │   ├── os.cpp
+│   │   └── ram.cpp
+│   ├── mainboard.cpp
+│   ├── os.cpp
+│   ├── ram.cpp
+│   ├── system.cpp
+│   └── windows
+│       ├── cpu.cpp
+│       ├── disk.cpp
+│       ├── gpu.cpp
+│       ├── mainboard.cpp
+│       ├── os.cpp
+│       └── ram.cpp
+└── test
+    └── CMakeLists.txt
+
+```
+
+`CHANGELOG.md`:
+
+```md
+# Changelog
+___
+##24-08-2022
+1. added cpuid (x86) independent fallback methods for gathering cpu information such as name, vendor, cores, ...
+2. cpuid wrapper without class
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.21)
+project(hwinfo VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED 20)
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+
+set(MAIN_PROJECT OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(MAIN_PROJECT ON)
+endif()
+
+include_directories(${PROJECT_SOURCE_DIR}/include/)
+
+add_subdirectory(src)
+
+if (${MAIN_PROJECT})
+    add_subdirectory(examples)
+    add_subdirectory(test)
+endif()
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2022 Leon Freist
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+[![Linux (clang)](https://github.com/lfreist/hwinfo/actions/workflows/build-linux-clang.yml/badge.svg)](https://github.com/lfreist/hwinfo/actions/workflows/build-linux-clang.yml)
+[![Linux (gcc)](https://github.com/lfreist/hwinfo/actions/workflows/build-linux-gcc.yml/badge.svg)](https://github.com/lfreist/hwinfo/actions/workflows/build-linux-gcc.yml)
+
+[![MacOS](https://github.com/lfreist/hwinfo/actions/workflows/build-macos.yml/badge.svg)](https://github.com/lfreist/hwinfo/actions/workflows/build-macos.yml)
+
+[![Windows (MinGW)](https://github.com/lfreist/hwinfo/actions/workflows/build-windows-mingw.yml/badge.svg)](https://github.com/lfreist/hwinfo/actions/workflows/build-windows-mingw.yml)
+[![Windows (Visual Studio)](https://github.com/lfreist/hwinfo/actions/workflows/build-windows-vs.yml/badge.svg)](https://github.com/lfreist/hwinfo/actions/workflows/build-windows-vs.yml)
+
+# hwinfo
+
+hwinfo provides an easy-to-use and modern C++ API for retrieving hardware information of your systems components such as CPU, RAM, GPU, Disks, Mainboard, ...
+
+## Content
+
+* [Functionality](#functionality)
+* [Build hwinfo](#build-hwinfo)
+* [Example](#example)
+* [Include hwinfo to cmake project](#include-hwinfo-in-your-cmake-project)
+
+## Functionality
+
+| Component        | Info               | Linux | Apple |  Windows  |
+|------------------|:-------------------|:-----:|:-----:|:---------:|
+| CPU              | Vendor             |  ✔️   |  ✔️   |    ✔️     |
+|                  | Model              |  ✔️   |  ✔️   |    ✔️     |
+|                  | Frequency          |  ✔️   |  ✔️   |    ✔️     |
+|                  | Physical Cores     |  ✔️   |  ✔️   |    ✔️     |
+|                  | Logical Cores      |  ✔️   |  ✔️   |    ✔️     |
+|                  | Cache Size         |  ✔️   |  ✔️   |    ✔️     |
+| GPU              | Vendor             |  ✔️   |  ✔️   |    ✔️     |
+|                  | Model              |  ✔️   |  ✔️   |    ✔️     |
+|                  | Memory Size        |   ❌   |   ❌   |    ✔️     |
+| Memory (RAM)     | Vendor             |   ❌   |   ❌   |    ✔️     |
+|                  | Model              |   ❌   |   ❌   |    ✔️     |
+|                  | Name               |   ❌   |   ❌   |    ✔️     |
+|                  | Serial Number      |   ❌   |   ❌   |    ✔️     |
+|                  | Total Memory Size  |  ✔️   |  ✔️   |    ✔️     |
+|                  | Free Memory Size   |   ❌   |   ❌   |     ❌     |
+| Mainboard        | Vendor             |  ✔️   |   ❌   |    ✔️     |
+|                  | Model              |  ✔️   |   ❌   |    ✔️     |
+|                  | Version            |  ✔️   |   ❌   |    ✔️     |
+|                  | Serial-Number      |   ❌   |   ❌   |    ✔️     |
+|                  | Bios               |   ❌   |   ❌   |     ❌     |
+| Disk             | Vendor             |  ✔️   |   ❌   |     ❌     |
+|                  | Model              |  ✔️   |   ❌   |     ❌     |
+|                  | Serial-Number      |   ❌   |   ❌   |     ❌     |
+|                  | Size               |   ❌   |   ❌   |     ❌     |
+| Operating System | Name               |  ✔️   |  ✔️   |    ✔️     |
+|                  | Short Name         |  ✔️   |  ✔️   |    ✔️     |
+|                  | Version            |  ✔️   |  ✔️   |     ❌     |
+|                  | Kernel             |  ✔️   |   ❌   |     ❌     |
+|                  | Architecture (Bit) |  ✔️   |  ✔️   |    ✔️     |
+|                  | Endianess          |  ✔️   |  ✔️   |    ✔️     |
+
+## Build `hwinfo`
+
+> Requirements: git, cmake, c++ compiler (gcc, clang, MSVC)
+
+1. Download repository:
+    ```
+    git clone https://github.com/lfreist/hwinfo
+    ```
+2. Build using cmake:
+    ```
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release .. && make -j $(nproc)
+    ```
+
+## Example
+
+See [example.cpp](examples/example.cpp)
+
+## Include `hwinfo` in your cmake project
+
+1. Download `hwinfo` into your project (e.g. in `<project-root>/third_party/hwinfo`)
+    ```
+    mkdir third_party
+    cd third_party
+    git clone https://github.com/lfreist/hwinfo
+    ```
+2. Simply add the following to your `<project-root>/CMakeLists.txt` file:
+    ```cmake
+    # file: <project-root>/CMakeLists.txt
+    
+    add_subdirectory(third_party/hwinfo)
+    include_directories(third_party/hwinfo/include)
+    ```
+3. Include `hwinfo` into your `.cpp/.h` files:
+    ```c++
+    // file: your_benchmarks.cpp
+    
+    #include "hwinfo/hwinfo.h"
+    ```
+4. Link it in cmake
+    ```cmake
+    add_executable(your_executable your_executable.cpp)
+    target_link_libraries(your_executable PUBLIC hwinfo::HWinfo)
+    ```
+
+```
+
+`examples/CMakeLists.txt`:
+
+```txt
+add_executable(Example example.cpp)
+target_link_libraries(Example PUBLIC hwinfo::HWinfo)
+```
+
+`examples/example.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include <iostream>
+#include <iomanip>
+
+#include "hwinfo/hwinfo.h"
+
+int main(int argc, char** argv) {
+  std::cout << std::endl << "Hardware Report:" << std::endl << std::endl;
+  hwinfo::CPU cpu;
+  std::cout << "----------------------------------- CPU -----------------------------------" << std::endl;
+  std::cout << std::left << std::setw(20) << "vendor:";
+  std::cout << cpu.vendor() << std::endl;
+  std::cout << std::left << std::setw(20) << "model:";
+  std::cout << cpu.modelName() << std::endl;
+  std::cout << std::left << std::setw(20) << "physical cores:";
+  std::cout << cpu.numPhysicalCores() << std::endl;
+  std::cout << std::left << std::setw(20) << "logical cores:";
+  std::cout << cpu.numLogicalCores() << std::endl;
+  std::cout << std::left << std::setw(20) << "max frequency:";
+  std::cout << cpu.maxClockSpeed_kHz() << std::endl;
+  std::cout << std::left << std::setw(20) << "regular frequency:";
+  std::cout << cpu.regularClockSpeed_kHz() << std::endl;
+  std::cout << std::left << std::setw(20) << "current frequency:";
+  std::cout << hwinfo::CPU::currentClockSpeed_kHz() << std::endl;
+  std::cout << std::left << std::setw(20) << "cache size:";
+  std::cout << cpu.cacheSize_Bytes() << std::endl;
+
+  hwinfo::OS os;
+  std::cout << "----------------------------------- OS ------------------------------------" << std::endl;
+  std::cout << std::left << std::setw(20) << "Operating System:";
+  std::cout << os.fullName() <<std::endl;
+  std::cout << std::left << std::setw(20) << "short name:";
+  std::cout << os.name() <<std::endl;
+  std::cout << std::left << std::setw(20) << "version:";
+  std::cout << os.version() <<std::endl;
+  std::cout << std::left << std::setw(20) << "kernel:";
+  std::cout << os.kernel() <<std::endl;
+  std::cout << std::left << std::setw(20) << "architecture:";
+  std::cout << (os.is32bit() ? "32 bit" : "64 bit") << std::endl;
+  std::cout << std::left << std::setw(20) << "endianess:";
+  std::cout << (os.isLittleEndian() ? "little endian" : "big endian") << std::endl;
+
+  hwinfo::GPU gpu;
+  std::cout << "----------------------------------- GPU -----------------------------------" << std::endl;
+  std::cout << std::left << std::setw(20) << "vendor:";
+  std::cout << gpu.vendor() << std::endl;
+  std::cout << std::left << std::setw(20) << "model:";
+  std::cout << gpu.name() << std::endl;
+  std::cout << std::left << std::setw(20) << "driverVersion:";
+  std::cout << gpu.driverVersion() << std::endl;
+  std::cout << std::left << std::setw(20) << "memory [MiB]:";
+  std::cout << static_cast<double>(gpu.memory_Bytes()) / 1024.0 / 1024.0 << std::endl;
+
+  hwinfo::RAM ram;
+  std::cout << "----------------------------------- RAM -----------------------------------" << std::endl;
+  std::cout << std::left << std::setw(20) << "vendor:";
+  std::cout << ram.vendor() << std::endl;
+  std::cout << std::left << std::setw(20) << "model:";
+  std::cout << ram.model() << std::endl;
+  std::cout << std::left << std::setw(20) << "name:";
+  std::cout << ram.name() << std::endl;
+  std::cout << std::left << std::setw(20) << "serial-number:";
+  std::cout << ram.serialNumber() << std::endl;
+  std::cout << std::left << std::setw(20) << "size [MiB]:";
+  std::cout << static_cast<double>(ram.totalSize_Bytes()) / 1024.0 / 1024.0 << std::endl;
+
+  hwinfo::MainBoard main_board;
+  std::cout << "------------------------------- Main Board --------------------------------" << std::endl;
+  std::cout << std::left << std::setw(20) << "vendor:";
+  std::cout << main_board.vendor() << std::endl;
+  std::cout << std::left << std::setw(20) << "name:";
+  std::cout << main_board.name() << std::endl;
+  std::cout << std::left << std::setw(20) << "version:";
+  std::cout << main_board.version() << std::endl;
+  std::cout << std::left << std::setw(20) << "serial-number:";
+  std::cout << ram.serialNumber() << std::endl;
+
+  std::vector<hwinfo::Disk> disks = hwinfo::getAllDisks();
+  int counter = 0;
+  std::cout << "--------------------------------- Disks -----------------------------------" << std::endl;
+  for (const auto& disk: disks) {
+    std::cout << "Disk " << counter++ << ":" << std::endl;
+    std::cout << std::left << std::setw(20) << "  vendor:";
+    std::cout << disk.vendor() << std::endl;
+    std::cout << std::left << std::setw(20) << "  model:";
+    std::cout << disk.model() << std::endl;
+    std::cout << std::left << std::setw(20) << "  serial-number:";
+    std::cout << disk.serialNumber() << std::endl;
+    std::cout << std::left << std::setw(20) << "  size:";
+    std::cout << disk.size_Bytes() << std::endl;
+  }
+  std::cout << "---------------------------------------------------------------------------" << std::endl;
+
+  hwinfo::getAllDisks();
+}
+```
+
+`include/hwinfo/WMIwrapper.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+
+#if defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+
+#pragma once
+
+#include <string>
+#include <vector>
+#include <type_traits>
+
+#include <Windows.h>
+#include <comdef.h>
+#include <WbemIdl.h>
+#include <ntddscsi.h>
+#pragma comment(lib, "wbemuuid.lib")
+
+namespace hwinfo::wmi {
+
+template<typename T>
+inline bool queryWMI(const std::string &WMIClass,
+              std::string field,
+              std::vector<T> &value,
+              const std::string &serverName = "ROOT\\CIMV2") {
+  std::string query("SELECT " + field + " FROM " + WMIClass);
+
+  HRESULT hres;
+  hres = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+  if (FAILED(hres)) {
+    return false;
+  }
+  hres = CoInitializeSecurity(nullptr,
+                              -1,
+                              nullptr,
+                              nullptr,
+                              RPC_C_AUTHN_LEVEL_DEFAULT,
+                              RPC_C_IMP_LEVEL_IMPERSONATE,
+                              nullptr,
+                              EOAC_NONE,
+                              nullptr);
+  if (FAILED(hres)) {
+    CoUninitialize();
+    return false;
+  }
+  IWbemLocator *pLoc = nullptr;
+  hres = CoCreateInstance(CLSID_WbemLocator, nullptr, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID *) &pLoc);
+  if (FAILED(hres)) {
+    CoUninitialize();
+    return false;
+  }
+  IWbemServices *pSvc = nullptr;
+  hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, nullptr, 0, nullptr, nullptr, &pSvc);
+  if (FAILED(hres)) {
+    pLoc->Release();
+    CoUninitialize();
+    return false;
+  }
+  hres = CoSetProxyBlanket(pSvc,
+                           RPC_C_AUTHN_WINNT,
+                           RPC_C_AUTHZ_NONE,
+                           nullptr,
+                           RPC_C_AUTHN_LEVEL_CALL,
+                           RPC_C_IMP_LEVEL_IMPERSONATE,
+                           nullptr,
+                           EOAC_NONE);
+  if (FAILED(hres)) {
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
+    return false;
+  }
+  IEnumWbemClassObject *pEnumerator = nullptr;
+  hres = pSvc->ExecQuery(bstr_t(L"WQL"),
+                         bstr_t(std::wstring(query.begin(), query.end()).c_str()),
+                         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                         nullptr,
+                         &pEnumerator);
+  if (FAILED(hres)) {
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
+    return false;
+  }
+  IWbemClassObject *pclsObj = nullptr;
+  ULONG uReturn = 0;
+  while (pEnumerator) {
+
+    HRESULT Res = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+
+    if (!uReturn) {
+      break;
+    }
+
+    VARIANT vtProp;
+    Res = pclsObj->Get(std::wstring(field.begin(), field.end()).c_str(), 0, &vtProp, nullptr, nullptr);
+
+    if (std::is_same<T, long>::value || std::is_same<T, int>::value) {
+      value.push_back((T) vtProp.intVal);
+    } else if (std::is_same<T, bool>::value) {
+      value.push_back((T) vtProp.boolVal);
+    } else if (std::is_same<T, unsigned>::value) {
+      value.push_back((T) vtProp.uintVal);
+    } else if (std::is_same<T, unsigned short>::value) {
+      value.push_back((T) vtProp.uiVal);
+    } else if (std::is_same<T, long long>::value) {
+      value.push_back((T) vtProp.llVal);
+    } else if (std::is_same<T, unsigned long long>::value) {
+      value.push_back((T) vtProp.ullVal);
+    } else {
+      value.push_back((T) ((bstr_t) vtProp.bstrVal).copy());
+    }
+
+    VariantClear(&vtProp);
+    pclsObj->Release();
+  }
+
+  if (!value.size()) {
+    value.resize(1);
+  }
+
+  pSvc->Release();
+  pLoc->Release();
+  pEnumerator->Release();
+  CoUninitialize();
+  return true;
+}
+
+}  // namespace hwinfo::wmi
+
+#endif
+
+```
+
+`include/hwinfo/cpu.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace hwinfo {
+
+struct InstructionSet {
+  bool _isHTT = false;
+  bool _isSSE = false;
+  bool _isSSE2 = false;
+  bool _isSSE3 = false;
+  bool _isSSE41 = false;
+  bool _isSSE42 = false;
+  bool _isAVX = false;
+  bool _isAVX2 = false;
+
+  bool _init_ = false;
+};
+
+class CPU {
+ public:
+  CPU() = default;
+  CPU(std::string& model,
+      std::string& vendor,
+      int cacheSize_Bytes,
+      int numPhysicalCores,
+      int numLogicalCores,
+      int maxClockSpeed_kHz,
+      int regularClockSpeed_kHz);
+  ~CPU() = default;
+
+  std::string& modelName();
+  std::string& vendor();
+  int cacheSize_Bytes();
+  int numPhysicalCores();
+  int numLogicalCores();
+  int maxClockSpeed_kHz();
+  int regularClockSpeed_kHz();
+  InstructionSet& instructionSet();
+
+  static int currentClockSpeed_kHz();
+
+  static std::string getModelName();
+  static std::string getVendor();
+  static int getNumPhysicalCores();
+  static int getNumLogicalCores();
+  static int getMaxClockSpeed_kHz();
+  static int getRegularClockSpeed_kHz();
+  static int getCacheSize_Bytes();
+
+ private:
+  std::string _modelName;
+  std::string _vendor;
+  int _numPhysicalCores = -1;
+  int _numLogicalCores = -1;
+  int _maxClockSpeed_kHz = -1;
+  int _regularClockSpeed_kHz = -1;
+  int _cacheSize_Bytes = -1;
+  InstructionSet _instructionSet;
+};
+
+}  // namespace hwinfo
+
+```
+
+`include/hwinfo/cpuid.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include "hwinfo/platform.h"
+
+#if defined(HWINFO_X86)
+
+#ifdef _MSC_VER
+#include <Windows.h>
+#else
+#include <cpuid.h>
+#endif
+
+#define MAX_INTEL_TOP_LVL 4
+
+#define SSE_POS 0x02000000
+#define SSE2_POS 0x04000000
+#define SSE3_POS 0x00000001
+#define SSE41_POS 0x00080000
+#define SSE42_POS 0x00100000
+#define AVX_POS 0x10000000
+#define AVX2_POS 0x00000020
+#define LVL_NUM 0x000000ff
+#define LVL_TYPE 0x0000ff00
+#define LVL_CORES 0x0000ffff
+
+
+namespace hwinfo::cpuid {
+
+/**
+ * cpuid wrapper for Linux, MacOS and Windows
+ * @param func_id
+ * @param sub_func_id
+ * @param regs
+ */
+inline void cpuid(uint32_t func_id, uint32_t sub_func_id, uint32_t regs[4]) {
+#ifdef _MSC_VER
+  __cpuidex(reinterpret_cast<int*>(regs), static_cast<int>(func_id), static_cast<int>(sub_func_id));
+#elif defined(__GNUC__) || defined(__clang__)
+  __get_cpuid_count(func_id, sub_func_id, &regs[0], &regs[1], &regs[2], &regs[3]);
+#elif __CYGWIN
+  cpuid(&regs[0], &regs[1], &regs[2], &regs[3], func_id, sub_func_id);
+#endif
+}
+
+}  // namespace hwinfo::cpuid
+
+#endif  // HWINFO_X86
+
+```
+
+`include/hwinfo/disk.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace hwinfo {
+
+class Disk {
+ public:
+  Disk(const std::string &vendor, const std::string &model, const std::string &serialNumber, int64_t size_Bytes);
+  ~Disk() = default;
+
+  [[nodiscard]] const std::string &vendor() const;
+  [[nodiscard]] const std::string &model() const;
+  [[nodiscard]] const std::string &serialNumber() const;
+  [[nodiscard]] int64_t size_Bytes() const;
+
+ private:
+  std::string _vendor;
+  std::string _model;
+  std::string _serialNumber;
+  int64_t _size_Bytes = -1;
+};
+
+std::vector<Disk> getAllDisks();
+
+}  // namespace hwinfo
+```
+
+`include/hwinfo/gpu.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace hwinfo {
+
+class GPU {
+ public:
+  GPU() = default;
+  GPU(const std::string& vendor, const std::string& name, const std::string& driverVersion, int64_t memory_Bytes);
+  ~GPU() = default;
+
+  std::string& vendor();
+  std::string& name();
+  std::string& driverVersion();
+  int64_t memory_Bytes();
+
+  static std::string getVendor();
+  static std::string getName();
+  static std::string getDriverVersion();
+  static int64_t getMemory_Bytes();
+
+ private:
+  std::string _vendor;
+  std::string _name;
+  std::string _driverVersion;
+  int64_t _memory_Bytes = -1;
+};
+
+}  // namespace hwinfo
+
+```
+
+`include/hwinfo/hwinfo.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include "hwinfo/cpu.h"
+#include "hwinfo/ram.h"
+#include "hwinfo/os.h"
+#include "hwinfo/mainboard.h"
+#include "hwinfo/gpu.h"
+#include "hwinfo/disk.h"
+
+```
+
+`include/hwinfo/mainboard.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "hwinfo/platform.h"
+
+namespace hwinfo {
+
+class MainBoard {
+ public:
+  MainBoard() = default;
+  MainBoard(const std::string &vendor,
+            const std::string &product,
+            const std::string &version,
+            const std::string &serialNumber);
+  ~MainBoard() = default;
+
+  std::string &vendor();
+  std::string &name();
+  std::string &version();
+  std::string &serialNumber();
+
+  static std::string getVendor();
+  static std::string getName();
+  static std::string getVersion();
+  static std::string getSerialNumber();
+
+ private:
+  std::string _vendor;
+  std::string _name;
+  std::string _version;
+  std::string _serialNumber;
+
+#ifdef HWINFO_UNIX
+  static std::vector<std::string> _candidates;
+#endif
+};
+
+}  // namespace hwinfo
+```
+
+`include/hwinfo/os.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+
+namespace hwinfo {
+
+class OS {
+ public:
+  OS();
+  ~OS() = default;
+
+  std::string fullName();
+  std::string name();
+  std::string version();
+  std::string kernel();
+  [[nodiscard]] bool is32bit() const;
+  [[nodiscard]] bool is64bit() const;
+  [[nodiscard]] bool isBigEndian() const;
+  [[nodiscard]] bool isLittleEndian() const;
+
+  static std::string getFullName();
+  static std::string getName();
+  static std::string getVersion();
+  static std::string getKernel();
+  static bool getIs32bit();
+  static bool getIs64bit();
+  static bool getIsBigEndian();
+  static bool getIsLittleEndian();
+
+ private:
+  std::string _fullName;
+  std::string _name;
+  std::string _version;
+  std::string _kernel;
+  bool _32bit = false;
+  bool _64bit = false;
+  bool _bigEndian = false;
+  bool _littleEndian = false;
+};
+
+}  // namespace hwinfo
+
+```
+
+`include/hwinfo/platform.h`:
+
+```h
+#pragma once
+
+#if defined(unix) || defined(__unix) || defined(__unix__)
+#define HWINFO_UNIX
+#endif
+#if defined(__APPLE__)
+#define HWINFO_APPLE
+#endif
+#if defined(_WIN32) || defined (_WIN64) || defined(__CYGWIN__)
+#define HWINFO_WINDOWS
+#endif
+
+#if defined(__x86_64__) || defined(__x86_64) || defined(__amd64__) || defined(_M_X64)
+#define HWINFO_X86_64
+#elif defined(__i386__) || defined(_M_IX86)
+#define HWINFO_X86_32
+#endif
+#if defined(HWINFO_X86_64) || defined(HWINFO_X86_32)
+#define HWINFO_X86
+#endif
+
+```
+
+`include/hwinfo/ram.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+
+namespace hwinfo {
+
+class RAM {
+ public:
+  RAM() = default;
+  RAM(std::string &vendor, std::string &name, std::string &model, std::string &serialNumber, int64_t size_Bytes);
+  ~RAM() = default;
+
+  std::string &vendor();
+  std::string &name();
+  std::string &model();
+  std::string &serialNumber();
+  int64_t totalSize_Bytes();
+
+  static std::string getVendor();
+  static std::string getName();
+  static std::string getModel();
+  static std::string getSerialNumber();
+  static int64_t getTotalSize_Bytes();
+
+ private:
+  std::string _vendor;
+  std::string _name;
+  std::string _model;
+  std::string _serialNumber;
+  int64_t _totalSize_Bytes = -1;
+  int _clockSpeed = -1;
+};
+
+}  // namespace hwinfo
+
+```
+
+`include/hwinfo/system.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "hwinfo/cpu.h"
+#include "hwinfo/ram.h"
+#include "hwinfo/gpu.h"
+#include "hwinfo/disk.h"
+
+namespace hwinfo {
+
+class System {
+ public:
+  System() = default;
+
+  std::vector<CPU>& CPUs() const;
+  std::vector<GPU>& GPUs() const;
+  std::vector<RAM>& RAMs() const;
+  std::vector<Disk>& Disks() const;
+
+ private:
+  std::vector<CPU> _cpuSockets;
+  std::vector<GPU> _gpus;
+  std::vector<RAM> _ramBars;
+  std::vector<Disk> _disks;
+};
+
+}  // namespace hwinfo
+
+```
+
+`include/hwinfo/utils/stringutils.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <string>
+
+/**
+ * remove all white spaces (' ', '\t', '\n') from start and end of input
+ * inplace!
+ * @param input
+ */
+inline void strip(std::string& input) {
+  std::string res;
+  size_t start_index = 0;
+  while (true) {
+    char c = input[start_index];
+    if (c != ' ' && c != '\t' && c != '\n') { break; }
+    start_index++;
+  }
+  size_t end_index = input.size() - 1;
+  while (true) {
+    char c = input[end_index];
+    if (c != ' ' && c != '\t' && c != '\n') { break; }
+    end_index--;
+  }
+  if (end_index <= start_index) {
+    input.assign("");
+    return;
+  }
+  input.assign(input.begin()+start_index, input.begin()+end_index+1);
+}
+
+/**
+ * Count occurrences of a substring in input
+ * @param input
+ * @param substring
+ * @return
+ */
+inline unsigned count_substring(const std::string& input, const std::string& substring) {
+  unsigned occurrences = 0;
+  std::string::size_type shift = 0;
+  while ((shift = input.find(substring, shift)) != std::string::npos) {
+    occurrences++;
+    shift += substring.size();
+  }
+  return occurrences;
+}
+
+/**
+ * split input at delimiter and return substring at position index.
+ * index can be negative, where -1 is the last occurrence.
+ * @param input
+ * @param delimiter
+ * @param index
+ * @return
+ */
+inline std::string split_get_index(const std::string& input, const std::string& delimiter, int index) {
+  unsigned occ = count_substring(input, delimiter) + 1;
+  index = index < 0 ? static_cast<int>(occ + index) : index;
+  if (occ <= index) { return ""; }
+
+  std::string::size_type start_index = 0;
+  while (true) {
+    if (index == 0) { break; }
+    start_index = input.find(delimiter, start_index) + delimiter.size();
+    index--;
+  }
+  std::string::size_type end_index = input.find(delimiter, start_index);
+  if (end_index == std::string::npos) {
+    return {input.begin() + static_cast<int64_t>(start_index), input.end()};
+  }
+  return {input.begin() + static_cast<int64_t>(start_index), input.begin() + static_cast<int64_t>(end_index)};
+}
+
+/**
+ * Convert windows wstring to string
+ * @return
+ */
+inline std::string wstring_to_string() {
+  return "";
+}
+```
+
+`include/hwinfo/utils/subprocess.h`:
+
+```h
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#pragma once
+
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <memory>
+#include <iostream>
+
+inline std::string exec(std::string& command) {
+  std::string output;
+  std::vector<char> buffer(0x80);
+  std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+  if (!pipe) {
+    return "";
+  }
+  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+    output.append(buffer.data());
+  }
+  return output;
+}
+```
+
+`src/CMakeLists.txt`:
+
+```txt
+add_library(HWinfo
+        # platform independent definitions
+        cpu.cpp
+        gpu.cpp
+        ram.cpp
+        os.cpp
+        mainboard.cpp
+        disk.cpp
+        # apple specific definitions
+        apple/cpu.cpp
+        apple/gpu.cpp
+        apple/ram.cpp
+        apple/os.cpp
+        apple/mainboard.cpp
+        apple/disk.cpp
+        # linux specific definitions
+        linux/cpu.cpp
+        linux/gpu.cpp
+        linux/ram.cpp
+        linux/os.cpp
+        linux/mainboard.cpp
+        linux/disk.cpp
+        # windows specific definitions
+        windows/cpu.cpp
+        windows/gpu.cpp
+        windows/ram.cpp
+        windows/os.cpp
+        windows/mainboard.cpp
+        windows/disk.cpp
+        )
+
+add_library(${PROJECT_NAME}::HWinfo ALIAS HWinfo)
+```
+
+`src/apple/cpu.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include <string>
+#include <vector>
+#include <algorithm>
+
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <sys/sysctl.h>
+#include <math.h>
+#include <pthread.h>
+
+#include "hwinfo/cpu.h"
+#include "hwinfo/cpuid.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+int CPU::currentClockSpeed_kHz() {
+  // TODO: implement
+  return -1;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getVendor() {
+#if defined(HWINFO_X86)
+  std::string vendor;
+  uint32_t regs[4] {0};
+  cpuid::cpuid(0, 0, regs);
+  vendor += std::string((const char *) &regs[1], 4);
+  vendor += std::string((const char *) &regs[3], 4);
+  vendor += std::string((const char *) &regs[2], 4);
+  return vendor;
+#else
+  // TODO: implement
+  return "<unknown>";
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getModelName() {
+#if defined(HWINFO_X86)
+  std::string model;
+  uint32_t regs[4] {};
+  for (unsigned i = 0x80000002; i < 0x80000005; ++i) {
+    cpuid::cpuid(i, 0, regs);
+    for(auto c : std::string((const char*)&regs[0], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[1], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[2], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[3], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+  }
+  return model;
+#else
+  char* model_2[1024];
+  size_t size=sizeof(model_2);
+  if (sysctlbyname("machdep.cpu.brand_string", model_2, &size, NULL, 0) < 0) {
+      perror("sysctl");
+  }
+  return std::string(model);
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumPhysicalCores() {
+#if defined(HWINFO_X86)
+  uint32_t regs[4] {};
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 11) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x01) {
+          int numCores = getNumLogicalCores()/static_cast<int>(LVL_CORES & regs_2[1]);
+          if (numCores > 0) {
+            return numCores;
+          }
+        }
+      }
+    } else {
+      if (HFS >= 4) {
+        uint32_t regs_3[4] {};
+        cpuid::cpuid(4, 0, regs_3);
+        int numCores = getNumLogicalCores()/static_cast<int>(1 + ((regs_3[0] >> 26) & 0x3f));
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      uint32_t regs_4[4] {};
+      cpuid::cpuid(0x80000000, 0, regs_4);
+      if (regs_4[0] >= 8) {
+        int numCores = 1 + (regs_4[2] & 0xff);
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  }
+  return -1;
+#else
+  int physical = 0;
+    size_t physical_size = sizeof(physical);
+    if (sysctlbyname("hw.physicalcpu", &physical, &physical_size, nullptr, 0) != 0) {
+      return -1;
+    }
+    return physical;
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumLogicalCores() {
+#if defined(HWINFO_X86)
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  uint32_t regs[4] {};
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 0xb) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x02) {
+          return static_cast<int>(LVL_CORES & regs_2[1]);
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      cpuid::cpuid(1, 0, regs);
+      return static_cast<int>(regs[1] >> 16) & 0xff;
+    }
+    return 1;
+  }
+  return -1;
+#else
+  int logical = 0;
+  size_t logical_size = sizeof(logical);
+  if (sysctlbyname("hw.logicalcpu", &logical, &logical_size, nullptr, 0) != 0) {
+    return -1;
+  }
+  return logical;
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getMaxClockSpeed_kHz() {
+  long speed = 0;
+  size_t speed_size = sizeof(speed);
+  if (sysctlbyname("hw.cpufrequency", &speed, &speed_size, nullptr, 0) != 0) {
+    speed = -1;
+  }
+  return static_cast<int>(speed);
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getRegularClockSpeed_kHz() {
+  uint64_t frequency = 0;
+  size_t size = sizeof(frequency);
+  if (sysctlbyname("hw.cpufrequency", &frequency, &size, nullptr, 0) == 0) {
+    return static_cast<int>(frequency);
+  }
+  return -1;
+}
+
+int CPU::getCacheSize_Bytes() {
+#if defined(unix) || defined(__unix) || defined(__unix__)
+  std::string line;
+  std::ifstream stream("/proc/cpuinfo");
+  if (!stream) {
+    return -1;
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("cache size")) {
+      try {
+        stream.close();
+        return std::stoi(line.substr(line.find(": ")+2, line.length()-3)) * 1000;
+      } catch (std::invalid_argument &e) {
+        return -1;
+      }
+    }
+  }
+  stream.close();
+  return -1;
+#elif defined(__APPLE__)
+  return -1;
+#elif defined(_WIN32) || defined(_WIN64)
+  std::vector<int> cacheSize {};
+  wmi::queryWMI("Win32_Processor", "L3CacheSize", cacheSize);
+  if (cacheSize.empty()) { return -1; }
+  return cacheSize[0];
+#else
+  return -1;
+#endif
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/apple/disk.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include <filesystem>
+#include <fstream>
+
+#include "hwinfo/disk.h"
+#include "hwinfo/utils/stringutils.h"
+
+namespace hwinfo {
+
+// =====================================================================================================================
+// _____________________________________________________________________________________________________________________
+std::vector<Disk> getAllDisks() {
+  // TODO: implement
+  std::vector<Disk> disks;
+  return disks;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/apple/gpu.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include <vector>
+#include <string>
+#include <regex>
+
+#include "hwinfo/gpu.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getVendor() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getName() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getDriverVersion() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t GPU::getMemory_Bytes() {
+  // TODO: implement
+  return -1;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/apple/mainboard.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include "hwinfo/mainboard.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVendor() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getName() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVersion() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getSerialNumber() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/apple/os.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include <sstream>
+#include <string>
+
+#include <sys/sysctl.h>
+
+#include "hwinfo/os.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getFullName() {
+  std::string os_name;
+  os_name.resize(1024);
+  size_t size = sizeof(os_name);
+  if (sysctlbyname("kern.os", os_name.data(), &size, nullptr, 0) == 0) {
+    return os_name;
+  }
+  return "macOS <unknown version>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getName() {
+  std::string os_name;
+  os_name.resize(1024);
+  size_t size = sizeof(os_name);
+  if (sysctlbyname("kern.os", os_name.data(), &size, nullptr, 0) == 0) {
+    return os_name;
+  }
+  return "macOS";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getVersion() {
+  std::string os_name;
+  os_name.resize(1024);
+  size_t size = sizeof(os_name);
+  if (sysctlbyname("kern.osrelease", os_name.data(), &size, nullptr, 0) == 0) {
+    return os_name;
+  }
+  return "<unknown version>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getKernel() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIs64bit() {
+  return true;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/apple/ram.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_APPLE
+
+#include <string>
+#include <vector>
+
+#include <sys/sysctl.h>
+
+#include "hwinfo/ram.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getVendor() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getName() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getModel() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getSerialNumber() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t RAM::getTotalSize_Bytes() {
+  int64_t memsize = 0;
+  size_t size = sizeof(memsize);
+  if (sysctlbyname("hw.memsize", &memsize, &size, nullptr, 0) == 0) {
+    return memsize;
+  }
+  return -1;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_APPLE
+```
+
+`src/cpu.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include <string>
+#include <vector>
+
+#include "hwinfo/cpu.h"
+#include "hwinfo/platform.h"
+
+#include "hwinfo/cpuid.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+CPU::CPU(std::string& model,
+         std::string& vendor,
+         int cacheSize_Bytes,
+         int numPhysicalCores,
+         int numLogicalCores,
+         int maxClockSpeed_kHz,
+         int regularClockSpeed_kHz) {
+  _modelName = model;
+  _vendor = vendor;
+  _cacheSize_Bytes = cacheSize_Bytes;
+  _numPhysicalCores = numPhysicalCores;
+  _numLogicalCores = numLogicalCores;
+  _maxClockSpeed_kHz = maxClockSpeed_kHz;
+  _regularClockSpeed_kHz = regularClockSpeed_kHz;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& CPU::modelName() {
+  if (_modelName.empty()) {
+    _modelName = std::move(getModelName());
+  }
+  return _modelName;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& CPU::vendor() {
+  if (_vendor.empty()) {
+    _vendor = std::move(getVendor());
+  }
+  return _vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::cacheSize_Bytes() {
+  if (_cacheSize_Bytes == -1) {
+    _cacheSize_Bytes = getCacheSize_Bytes();
+  }
+  return _cacheSize_Bytes;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::numPhysicalCores() {
+  if (_numPhysicalCores == -1) {
+    _numPhysicalCores = getNumPhysicalCores();
+  }
+  return _numPhysicalCores;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::numLogicalCores() {
+  if (_numLogicalCores == -1) {
+    _numLogicalCores = getNumLogicalCores();
+  }
+  return _numLogicalCores;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::maxClockSpeed_kHz() {
+  if (_maxClockSpeed_kHz == -1) {
+    _maxClockSpeed_kHz = getMaxClockSpeed_kHz();
+  }
+  return _maxClockSpeed_kHz;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::regularClockSpeed_kHz() {
+  if (_regularClockSpeed_kHz == -1) {
+    _regularClockSpeed_kHz = getRegularClockSpeed_kHz();
+  }
+  return _regularClockSpeed_kHz;
+}
+
+// _____________________________________________________________________________________________________________________
+InstructionSet &CPU::instructionSet() {
+  if (!_instructionSet._init_) {
+#if defined(HWINFO_X86)
+    uint32_t regs[4] {};
+    cpuid::cpuid(1, 0, regs);
+    _instructionSet = InstructionSet {
+      static_cast<bool>(regs[3] & AVX_POS),
+      static_cast<bool>(regs[3] & SSE_POS),
+      static_cast<bool>(regs[3] & SSE2_POS),
+      static_cast<bool>(regs[2] & SSE3_POS),
+      static_cast<bool>(regs[2] & SSE41_POS),
+      static_cast<bool>(regs[2] & SSE42_POS),
+      static_cast<bool>(regs[2] & AVX_POS),
+      false,
+      true
+    };
+    cpuid::cpuid(7, 0, regs);
+    _instructionSet._isAVX2 = static_cast<bool>(regs[1] & AVX2_POS);
+#else
+    _instructionSet = InstructionSet();
+#endif
+  }
+  return _instructionSet;
+}
+
+}  // namespace hwinfo
+```
+
+`src/disk.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/disk.h"
+#include "hwinfo/utils/stringutils.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+Disk::Disk(const std::string &vendor, const std::string &model, const std::string &serialNumber, int64_t size_Bytes) {
+  _vendor = vendor;
+  _model = model;
+  _serialNumber = serialNumber;
+  _size_Bytes = size_Bytes;
+}
+
+// _____________________________________________________________________________________________________________________
+const std::string &Disk::vendor() const {
+  return _vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+const std::string &Disk::model() const {
+  return _model;
+}
+
+// _____________________________________________________________________________________________________________________
+const std::string &Disk::serialNumber() const {
+  return _serialNumber;
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t Disk::size_Bytes() const {
+  return _size_Bytes;
+}
+
+}  // namespace hwinfo
+
+```
+
+`src/gpu.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include <vector>
+#include <string>
+#include <regex>
+
+#if defined(unix) || defined(__unix) || defined(__unix__)
+#include "hwinfo/utils/subprocess.h"
+#elif defined(__APPLE__)
+#elif defined(_WIN32) || defined(_WIN64) || defined(__CYGWIN__)
+#include "hwinfo/WMIwrapper.h"
+#pragma comment(lib, "wbemuuid.lib")
+#endif
+
+#include "hwinfo/gpu.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+GPU::GPU(const std::string& vendor, const std::string &name, const std::string &driverVersion, int64_t memory_Bytes) {
+  _vendor = vendor;
+  _name = name;
+  _driverVersion = driverVersion;
+  _memory_Bytes = memory_Bytes;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &GPU::vendor() {
+  if (_vendor.empty()) {
+    _vendor = getVendor();
+  }
+  return _vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &GPU::name() {
+  if (_name.empty()) {
+    _name = getName();
+  }
+  return _name;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &GPU::driverVersion() {
+  if (_driverVersion.empty()) {
+    _driverVersion = getDriverVersion();
+  }
+  return _driverVersion;
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t GPU::memory_Bytes() {
+  if (_memory_Bytes == -1) {
+    _memory_Bytes = getMemory_Bytes();
+  }
+  return _memory_Bytes;
+}
+
+}  // namespace hwinfo
+```
+
+`src/linux/cpu.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <string>
+#include <vector>
+#include <algorithm>
+
+#include <regex>
+#include <fstream>
+
+#include "hwinfo/cpu.h"
+#include "hwinfo/cpuid.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+int CPU::currentClockSpeed_kHz() {
+  std::string line;
+  std::ifstream stream("/sys/devices/system/cpu/cpu" + std::to_string(0) + "/cpufreq/scaling_cur_freq");
+  if (!stream) {
+    return -1;
+  }
+  getline(stream, line);
+  stream.close();
+  try {
+    return std::stoi(line);
+  } catch (std::invalid_argument &e) {
+    return -1;
+  }
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getVendor() {
+#if defined(HWINFO_X86)
+  std::string vendor;
+  uint32_t regs[4] {0};
+  cpuid::cpuid(0, 0, regs);
+  vendor += std::string((const char *) &regs[1], 4);
+  vendor += std::string((const char *) &regs[3], 4);
+  vendor += std::string((const char *) &regs[2], 4);
+  return vendor;
+#else
+  std::string line;
+  std::ifstream stream("/proc/cpuinfo");
+  if (!stream) {
+    return "<unknown>";
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("vendor_id")) {
+      stream.close();
+      return line.substr(line.find(": ")+2, line.length());
+    }
+  }
+  return "<unknown>";
+  stream.close();
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getModelName() {
+#if defined(HWINFO_X86)
+  std::string model;
+  uint32_t regs[4] {};
+  for (unsigned i = 0x80000002; i < 0x80000005; ++i) {
+    cpuid::cpuid(i, 0, regs);
+    for(auto c : std::string((const char*)&regs[0], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[1], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[2], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[3], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+  }
+  return model;
+#else
+  std::string line;
+  std::ifstream stream("/proc/cpuinfo");
+  if (!stream) {
+    return "<unknown>";
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("model name")) {
+      stream.close();
+      return line.substr(line.find(": ")+2, line.length());
+    }
+  }
+  return "<unknown>";
+  stream.close();
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumPhysicalCores() {
+#if defined(HWINFO_X86)
+  uint32_t regs[4] {};
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 11) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x01) {
+          int numCores = getNumLogicalCores()/static_cast<int>(LVL_CORES & regs_2[1]);
+          if (numCores > 0) {
+            return numCores;
+          }
+        }
+      }
+    } else {
+      if (HFS >= 4) {
+        uint32_t regs_3[4] {};
+        cpuid::cpuid(4, 0, regs_3);
+        int numCores = getNumLogicalCores()/static_cast<int>(1 + ((regs_3[0] >> 26) & 0x3f));
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      uint32_t regs_4[4] {};
+      cpuid::cpuid(0x80000000, 0, regs_4);
+      if (regs_4[0] >= 8) {
+        int numCores = 1 + (regs_4[2] & 0xff);
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  }
+  return -1;
+#else
+#if defined(_SC_NPROCESSORS_ONLN)
+  // TODO: returns number of logical cores, but I want physical cores... fix this!
+  return static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
+#else
+  return -1;
+#endif
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumLogicalCores() {
+#if defined(HWINFO_X86)
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  uint32_t regs[4] {};
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 0xb) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x02) {
+          return static_cast<int>(LVL_CORES & regs_2[1]);
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      cpuid::cpuid(1, 0, regs);
+      return static_cast<int>(regs[1] >> 16) & 0xff;
+    }
+    return 1;
+  }
+  return -1;
+#else
+#if defined(_SC_NPROCESSORS_ONLN)
+  return static_cast<int>(sysconf(_SC_NPROCESSORS_ONLN));
+#else
+  return -1;
+#endif
+#endif
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getMaxClockSpeed_kHz() {
+  std::string line;
+  std::ifstream stream("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq");
+  if (!stream) {
+    return -1;
+  }
+  getline(stream, line);
+  stream.close();
+  try {
+    return std::stoi(line);
+  } catch (std::invalid_argument &e) {
+    return -1;
+  }
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getRegularClockSpeed_kHz() {
+  std::string line;
+  std::ifstream stream("/proc/cpuinfo");
+  if (!stream) {
+    return -1;
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("cpu MHz")) {
+      try {
+        stream.close();
+        return static_cast<int>(std::stof(line.substr(line.find(": ")+2, line.length()))) * 1000;
+      } catch (std::invalid_argument &e) {
+        return -1;
+      }
+    }
+  }
+  stream.close();
+  return -1;
+}
+
+int CPU::getCacheSize_Bytes() {
+  std::string line;
+  std::ifstream stream("/proc/cpuinfo");
+  if (!stream) {
+    return -1;
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("cache size")) {
+      try {
+        stream.close();
+        return std::stoi(line.substr(line.find(": ")+2, line.length()-3)) * 1000;
+      } catch (std::invalid_argument &e) {
+        return -1;
+      }
+    }
+  }
+  stream.close();
+  return -1;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/linux/disk.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <filesystem>
+#include <fstream>
+
+#include "hwinfo/disk.h"
+#include "hwinfo/utils/stringutils.h"
+
+namespace hwinfo {
+
+// =====================================================================================================================
+// _____________________________________________________________________________________________________________________
+std::vector<Disk> getAllDisks() {
+  std::vector<Disk> disks;
+  const std::string base_path("/sys/class/block/");
+  std::string vendor;
+  std::string model;
+  std::string serialNumber;
+  for (const auto& entry: std::filesystem::directory_iterator(base_path)) {
+    std::string path = entry.path().string() + "/device/";
+    if (!std::filesystem::exists(std::filesystem::path(path))) {
+      continue;
+    }
+    std::ifstream f(path + "vendor");
+    if (f) {
+      getline(f, vendor);
+    }
+    else { vendor = "<unknown>"; }
+    f.close();
+    f.open(path + "model");
+    if (f) {
+      getline(f, model);
+    }
+    else { vendor = "<unknown>"; }
+    f.close();
+    f.open(path + "serial");
+    if (f) {
+      getline(f, serialNumber);
+    }
+    else { serialNumber = "<unknown>"; }
+    f.close();
+    strip(vendor);
+    strip(model);
+    strip(serialNumber);
+    int64_t size = -1;
+    /*
+    struct statvfs buf {};
+    std::string mount_path("/dev/");
+    mount_path.append(split_get_index(entry.path().string(), "/", -1));
+    if (statvfs(mount_path.c_str(), &buf)) {
+      size = static_cast<int64_t>(buf.f_bsize * buf.f_bfree);
+    }
+    */
+    disks.emplace_back(vendor, model, serialNumber, size);
+  }
+  return disks;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/linux/gpu.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <vector>
+#include <string>
+#include <regex>
+
+#include "hwinfo/utils/subprocess.h"
+
+#include "hwinfo/gpu.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getVendor() {
+  // TODO: piping stderr to /dev/null seems super ugly.
+  //  Why am I doing this? -> lshw prints that one should run it as sudo user to stderr...
+  std::string command("lshw -c display 2> /dev/null");
+  std::regex matcher("vendor:.*");
+  std::string output = exec(command);
+  std::smatch match;
+  std::string vendor;
+  if (std::regex_search(output.cbegin(), output.cend(), match, matcher)) {
+    char prev = '\0';
+    bool add = false;
+    std::string tmp = match[0];
+    for (auto& c: tmp) {
+      if (c == '\n') { break; }
+      if (add) {
+        vendor += c;
+      }
+      if (prev == ':') { add = true; }
+      prev = c;
+    }
+  }
+  return vendor.empty() ? "<unknown>" : vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getName() {
+  // TODO: piping stderr to /dev/null seems super ugly.
+  //  Why am I doing this? -> lshw prints that one should run it as sudo user to stderr...
+  std::string command("lshw -c display 2> /dev/null");
+  std::regex matcher("product:.*\\[.*\\]");
+  std::string output = exec(command);
+  std::smatch match;
+  std::string name;
+  if (std::regex_search(output.cbegin(), output.cend(), match, matcher)) {
+    bool add = false;
+    std::string tmp = match[0];
+    for (auto& c: tmp) {
+      if (c == ']') { break; }
+      if (add) {
+        name += c;
+      }
+      if (c == '[') { add = true; }
+    }
+  }
+  return name;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getDriverVersion() {
+  // TODO: implement
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t GPU::getMemory_Bytes() {
+  // TODO: implement
+  return -1;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/linux/mainboard.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <fstream>
+
+#include "hwinfo/mainboard.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVendor() {
+  std::string manufacturer;
+  for (const auto& path: _candidates) {
+    std::string full_path = path + "id/board_vendor";
+    std::ifstream f(full_path);
+    if (f) {
+      getline(f, manufacturer);
+      if (!manufacturer.empty()) {
+        return manufacturer;
+      }
+    }
+  }
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getName() {
+  std::string name;
+  for (const auto& path: _candidates) {
+    std::string full_path = path + "id/board_name";
+    std::ifstream f(full_path);
+    if (f) {
+      getline(f, name);
+      if (!name.empty()) {
+        return name;
+      }
+    }
+  }
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVersion() {
+  std::string version;
+  for (const auto& path: _candidates) {
+    std::string full_path = path + "id/board_version";
+    std::ifstream f(full_path);
+    if (f) {
+      getline(f, version);
+      if (!version.empty()) {
+        return version;
+      }
+    }
+  }
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getSerialNumber() {
+  std::string serialNumber;
+  for (const auto& path: _candidates) {
+    std::string full_path = path + "id/board_serial";
+    std::ifstream f(full_path);
+    if (f) {
+      getline(f, serialNumber);
+      if (serialNumber.empty()) {
+        return serialNumber;
+      }
+    }
+  }
+  return "<unknown>";
+}
+
+std::vector<std::string> MainBoard::_candidates = {"/sys/devices/virtual/dmi/", "/sys/class/dmi/"};
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/linux/os.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <sstream>
+#include <string>
+
+#include <fstream>
+#include <sys/stat.h>
+#include <sys/utsname.h>
+
+#include "hwinfo/os.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getFullName() {
+  std::string line;
+  std::ifstream stream("/etc/lsb-release");
+  if (!stream) {
+    return "Linux <unknown version>";
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("DISTRIB_DESCRIPTION")) {
+      line = line.substr(line.find('=')+1, line.length());
+      // remove \" at begin and end of the substring result
+      return {line.begin()+1, line.end()-1};
+    }
+  }
+  stream.close();
+  return "Linux <unknown version>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getName() {
+  std::string line;
+  std::ifstream stream("/etc/lsb-release");
+  if (!stream) {
+    return "Linux";
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("DISTRIB_ID")) {
+      return line.substr(line.find('=')+1, line.length());
+    }
+  }
+  stream.close();
+  return "Linux";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getVersion() {
+  std::string line;
+  std::ifstream stream("/etc/lsb-release");
+  if (!stream) {
+    return "<unknown version>";
+  }
+  while (getline(stream, line)) {
+    if (line.starts_with("DISTRIB_RELEASE")) {
+      return line.substr(line.find('=')+1, line.length());
+    }
+  }
+  stream.close();
+  return "<unknown version>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getKernel() {
+  static utsname info;
+  if (uname(&info) == 0) {
+    return info.release;
+  }
+  return "<unknown kernel>";
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIs64bit() {
+  struct stat buffer{};
+  return (stat("/lib64/ld-linux-x86-64.so.2", &buffer) == 0);
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/linux/ram.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_UNIX
+
+#include <string>
+#include <vector>
+
+#include <unistd.h>
+
+#include "hwinfo/ram.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getVendor() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getName() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getModel() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getSerialNumber() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t RAM::getTotalSize_Bytes() {
+  long pages = sysconf(_SC_PHYS_PAGES);
+  long page_size = sysconf(_SC_PAGESIZE);
+  if ((pages > 0) && (page_size > 0)) {
+    return pages * page_size;
+  }
+  return -1;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_UNIX
+```
+
+`src/mainboard.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include <fstream>
+
+#include "hwinfo/WMIwrapper.h"
+
+#include "hwinfo/mainboard.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+MainBoard::MainBoard(const std::string &vendor,
+                     const std::string &product,
+                     const std::string &version,
+                     const std::string &serialNumber) {
+  _vendor = vendor;
+  _name = product;
+  _version = version;
+  _serialNumber = serialNumber;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& MainBoard::vendor() {
+  if (_vendor.empty()) {
+    _vendor = getVendor();
+  }
+  return _vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& MainBoard::name() {
+  if (_name.empty()) {
+    _name = getName();
+  }
+  return _name;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& MainBoard::version() {
+  if (_version.empty()) {
+    _version = getVersion();
+  }
+  return _version;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string& MainBoard::serialNumber() {
+  if (_serialNumber.empty()) {
+    _serialNumber = getSerialNumber();
+  }
+  return _serialNumber;
+}
+
+}  // namespace hwinfo
+```
+
+`src/os.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include <string>
+
+#include "hwinfo/os.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+OS::OS() {
+  _32bit = getIs32bit();
+  _64bit = getIs64bit();
+  _bigEndian = getIsBigEndian();
+  _littleEndian = !_bigEndian;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::fullName() {
+  if (_fullName.empty()) {
+    _fullName = getFullName();
+  }
+  return _fullName;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::name() {
+  if (_name.empty()) {
+    _name = getName();
+  }
+  return _name;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::version() {
+  if (_version.empty()) {
+    _version = getVersion();
+  }
+  return _version;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::kernel() {
+  if (_kernel.empty()) {
+    _kernel = getKernel();
+  }
+  return _kernel;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::is32bit() const {
+  return _32bit;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::is64bit() const {
+  return _64bit;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::isBigEndian() const {
+  return _bigEndian;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::isLittleEndian() const {
+  return _littleEndian;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIs32bit() {
+  return !getIs64bit();
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIsBigEndian() {
+  char16_t dummy = 0x0102;
+  return ((char*)&dummy)[0] == 0x01;
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIsLittleEndian() {
+  char16_t dummy = 0x0102;
+  return ((char*)&dummy)[0] == 0x02;
+}
+
+}  // namespace hwinfo
+```
+
+`src/ram.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include <string>
+#include <vector>
+
+#if defined(unix) || defined(__unix) || defined(__unix__)
+#include <unistd.h>
+#elif defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif defined(_WIN32) || defined(_WIN64)
+#include <Windows.h>
+#include "hwinfo/WMIwrapper.h"
+#endif
+#include "hwinfo/ram.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+RAM::RAM(std::string &vendor,
+         std::string &name,
+         std::string &model,
+         std::string &serialNumber,
+         int64_t size_Bytes) {
+  _vendor = vendor;
+  _name = name;
+  _model = model;
+  _serialNumber = serialNumber;
+  _totalSize_Bytes = size_Bytes;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &RAM::vendor() {
+  if (_vendor.empty()) {
+    _vendor = getVendor();
+  }
+  return _vendor;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &RAM::name() {
+  if (_name.empty()) {
+    _name = getName();
+  }
+  return _name;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &RAM::model() {
+  if (_model.empty()) {
+    _model = getModel();
+  }
+  return _model;
+}
+
+// _____________________________________________________________________________________________________________________
+std::string &RAM::serialNumber() {
+  if (_serialNumber.empty()) {
+    _serialNumber = getSerialNumber();
+  }
+  return _serialNumber;
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t RAM::totalSize_Bytes() {
+  if (_totalSize_Bytes == -1) {
+    _totalSize_Bytes = getTotalSize_Bytes();
+  }
+  return _totalSize_Bytes;
+}
+
+}  // namespace hwinfo
+```
+
+`src/system.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/system.h"
+
+```
+
+`src/windows/cpu.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <string>
+#include <vector>
+#include <algorithm>
+
+#include "hwinfo/WMIwrapper.h"
+#include "hwinfo/cpu.h"
+
+#include "hwinfo/cpuid.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+int CPU::currentClockSpeed_kHz() {
+  std::vector<int64_t> speed {};
+  wmi::queryWMI("Win32_Processor", "CurrentClockSpeed", speed);
+  if (speed.empty()) { return -1; }
+  return speed[0];
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getVendor() {
+#if defined(HWINFO_X86)
+  std::string vendor;
+  uint32_t regs[4] {0};
+  cpuid::cpuid(0, 0, regs);
+  vendor += std::string((const char *) &regs[1], 4);
+  vendor += std::string((const char *) &regs[3], 4);
+  vendor += std::string((const char *) &regs[2], 4);
+  return vendor;
+#else
+  std::vector<const wchar_t*> vendor {};
+  wmi::queryWMI("Win32_Processor", "Manufacturer", vendor);
+  if (vendor.empty()) { return "<unknown>"; }
+  std::wstring tmp(vendor[0]);
+  return {tmp.begin(), tmp.end()};
+#endif
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string CPU::getModelName() {
+#if defined(HWINFO_X86)
+  std::string model;
+  uint32_t regs[4] {};
+  for (unsigned i = 0x80000002; i < 0x80000005; ++i) {
+    cpuid::cpuid(i, 0, regs);
+    for(auto c : std::string((const char*)&regs[0], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[1], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[2], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+    for(auto c : std::string((const char*)&regs[3], 4)) {
+      if (std::isalnum(c) || c == '(' || c == ')' || c == '@' || c == ' ' || c == '-' || c == '.') {
+        model += c;
+      }
+    }
+  }
+  return model;
+#else
+  std::vector<const wchar_t*> vendor {};
+  wmi::queryWMI("Win32_Processor", "Name", vendor);
+  if (vendor.empty()) { return "<unknown>"; }
+  std::wstring tmp(vendor[0]);
+  return {tmp.begin(), tmp.end()};
+#endif
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumPhysicalCores() {
+#if defined(HWINFO_X86)
+  uint32_t regs[4] {};
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 11) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x01) {
+          int numCores = getNumLogicalCores()/static_cast<int>(LVL_CORES & regs_2[1]);
+          if (numCores > 0) {
+            return numCores;
+          }
+        }
+      }
+    } else {
+      if (HFS >= 4) {
+        uint32_t regs_3[4] {};
+        cpuid::cpuid(4, 0, regs_3);
+        int numCores = getNumLogicalCores()/static_cast<int>(1 + ((regs_3[0] >> 26) & 0x3f));
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      uint32_t regs_4[4] {};
+      cpuid::cpuid(0x80000000, 0, regs_4);
+      if (regs_4[0] >= 8) {
+        int numCores = 1 + (regs_4[2] & 0xff);
+        if (numCores > 0) {
+          return numCores;
+        }
+      }
+    }
+  }
+  return -1;
+#else
+  std::vector<int> cores {};
+  wmi::queryWMI("Win32_Processor", "NumberOfCores", cores);
+  if (cores.empty()) { return -1; }
+  return cores[0];
+#endif
+  return -1;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getNumLogicalCores() {
+#if defined(HWINFO_X86)
+  std::string vendorId = getVendor();
+  std::for_each(vendorId.begin(), vendorId.end(), [](char &in) { in = ::toupper(in); } );
+  uint32_t regs[4] {};
+  cpuid::cpuid(0, 0, regs);
+  uint32_t HFS = regs[0];
+  if (vendorId.find("INTEL") != std::string::npos) {
+    if (HFS >= 0xb) {
+      for (int lvl = 0; lvl < MAX_INTEL_TOP_LVL; ++lvl) {
+        uint32_t regs_2[4] {};
+        cpuid::cpuid(0x0b, lvl, regs_2);
+        uint32_t currLevel = (LVL_TYPE & regs_2[2]) >> 8;
+        if (currLevel == 0x02) {
+          return static_cast<int>(LVL_CORES & regs_2[1]);
+        }
+      }
+    }
+  } else if (vendorId.find("AMD") != std::string::npos) {
+    if (HFS > 0) {
+      cpuid::cpuid(1, 0, regs);
+      return static_cast<int>(regs[1] >> 16) & 0xff;
+    }
+    return 1;
+  }
+  return -1;
+#else
+  std::vector<int> cores {};
+  wmi::queryWMI("Win32_Processor", "NumberOfThreads", cores);
+  if (cores.empty()) { return -1; }
+  return cores[0];
+#endif
+  return -1;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getMaxClockSpeed_kHz() {
+  std::vector<int64_t> speed {};
+  wmi::queryWMI("Win32_Processor", "MaxClockSpeed", speed);
+  if (speed.empty()) { return -1; }
+  return speed[0] * 1000;
+}
+
+// _____________________________________________________________________________________________________________________
+int CPU::getRegularClockSpeed_kHz() {
+  std::vector<int64_t> speed {};
+  wmi::queryWMI("Win32_Processor", "MaxClockSpeed", speed);
+  if (speed.empty()) { return -1; }
+  return speed[0] * 1000;
+}
+
+int CPU::getCacheSize_Bytes() {
+  std::vector<int64_t> cacheSize {};
+  wmi::queryWMI("Win32_Processor", "L3CacheSize", cacheSize);
+  if (cacheSize.empty()) { return -1; }
+  return cacheSize[0];
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
+
+`src/windows/disk.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <filesystem>
+
+#include "hwinfo/disk.h"
+#include "hwinfo/utils/stringutils.h"
+#include "hwinfo/WMIwrapper.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::vector<Disk> getAllDisks() {
+  std::vector<Disk> disks;
+  std::vector<const wchar_t*> vendor {};
+  wmi::queryWMI("Win32_Processor", "Name", vendor);
+  if (vendor.empty()) { return {}; }
+  std::wstring tmp(vendor[0]);
+  return disks;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
+
+`src/windows/gpu.cpp`:
+
+```cpp
+// Copyright Leon Freist
+// Author Leon Freist <freist@informatik.uni-freiburg.de>
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <vector>
+#include <string>
+
+#include "hwinfo/WMIwrapper.h"
+#pragma comment(lib, "wbemuuid.lib")
+
+#include "hwinfo/gpu.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getVendor() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_VideoController", "Name", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getName() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_VideoController", "Name", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string GPU::getDriverVersion() {
+  std::vector<const wchar_t*> driverVersion{};
+  wmi::queryWMI("WIN32_VideoController", "DriverVersion", driverVersion);
+  auto ret = driverVersion[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t GPU::getMemory_Bytes() {
+  std::vector<unsigned long long> memory{};
+  wmi::queryWMI("WIN32_VideoController", "AdapterRam", memory);
+  return static_cast<int64_t>(memory[0] * 2);
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
+
+`src/windows/mainboard.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <string>
+
+#include "hwinfo/WMIwrapper.h"
+#include "hwinfo/mainboard.h"
+
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVendor() {
+  std::vector<const wchar_t*> manufacturer{};
+  wmi::queryWMI("Win32_BaseBoard", "Manufacturer", manufacturer);
+  auto ret = manufacturer[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getName() {
+  std::vector<const wchar_t*> name{};
+  wmi::queryWMI("Win32_BaseBoard", "Product", name);
+  auto ret = name[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getVersion() {
+  std::vector<const wchar_t*> version{};
+  wmi::queryWMI("Win32_BaseBoard", "Version", version);
+  auto ret = version[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string MainBoard::getSerialNumber() {
+  std::vector<const wchar_t*> serialNumber{};
+  wmi::queryWMI("Win32_BaseBoard", "SerialNumber", serialNumber);
+  auto ret = serialNumber[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
+
+`src/windows/os.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <sstream>
+#include <string>
+
+#include <Windows.h>
+#include <winternl.h>
+#define STATUS_SUCCESS 0x00000000
+
+#include "hwinfo/os.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getFullName() {
+  static NTSTATUS(__stdcall *RtlGetVersion)(OUT PRTL_OSVERSIONINFOEXW lpVersionInformation) = (NTSTATUS(__stdcall*)(PRTL_OSVERSIONINFOEXW))GetProcAddress(GetModuleHandle("ntdll.dll"), "RtlGetVersion");
+  static void(__stdcall *GetNativeSystemInfo)(OUT LPSYSTEM_INFO lpSystemInfo) = (void(__stdcall*)(LPSYSTEM_INFO))GetProcAddress(GetModuleHandle("kernel32.dll"), "GetNativeSystemInfo");
+  static BOOL(__stdcall *GetProductInfo)(IN DWORD dwOSMajorVersion, IN DWORD dwOSMinorVersion, IN DWORD dwSpMajorVersion, IN DWORD dwSpMinorVersion, OUT PDWORD pdwReturnedProductType) = (BOOL(__stdcall*)(DWORD, DWORD, DWORD, DWORD, PDWORD))GetProcAddress(GetModuleHandle("kernel32.dll"), "GetProductInfo");
+
+  OSVERSIONINFOEXW osvi;
+  ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXW));
+  osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXW);
+
+  if (RtlGetVersion != nullptr) {
+    NTSTATUS ntRtlGetVersionStatus = RtlGetVersion(&osvi);
+    if (ntRtlGetVersionStatus != STATUS_SUCCESS) {
+      return "<windows>";
+    }
+  } else {
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4996) // C4996: 'function': was declared deprecated
+#endif
+    BOOL bOsVersionInfoEx = GetVersionExW((OSVERSIONINFOW*)&osvi);
+    if (bOsVersionInfoEx == 0) {
+      return "<windows>";
+    }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+  }
+
+  SYSTEM_INFO si;
+  ZeroMemory(&si, sizeof(SYSTEM_INFO));
+
+  if (GetNativeSystemInfo != nullptr) {
+    GetNativeSystemInfo(&si);
+  } else {
+    GetSystemInfo(&si);
+  }
+
+  if ((osvi.dwPlatformId != VER_PLATFORM_WIN32_NT) || (osvi.dwMajorVersion <= 4)) {
+    return "Windows <unknown version>";
+  }
+
+  std::stringstream os;
+  os << "Microsoft ";
+  if (osvi.dwMajorVersion >= 6) {
+    if (osvi.dwMajorVersion == 10) {
+      if (osvi.dwMinorVersion == 0) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+          if (osvi.dwBuildNumber >= 22000) {
+            os << "Windows 11 ";
+          } else {
+            os << "Windows 10 ";
+          }
+        } else {
+          if (osvi.dwBuildNumber >= 20348) {
+            os << "Windows Server 2022 ";
+          } else if (osvi.dwBuildNumber >= 17763) {
+            os << "Windows Server 2019 ";
+          } else {
+            os << "Windows Server 2016 ";
+          }
+        }
+      }
+    } else if (osvi.dwMajorVersion == 6) {
+      if (osvi.dwMinorVersion == 3) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+          os << "Windows 8.1 ";
+        }
+        else {
+          os << "Windows Server 2012 R2 ";
+        }
+      } else if (osvi.dwMinorVersion == 2) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+          os << "Windows 8 ";
+        } else {
+          os << "Windows Server 2012 ";
+        }
+      } else if (osvi.dwMinorVersion == 1) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+          os << "Windows 7 ";
+        } else {
+          os << "Windows Server 2008 R2 ";
+        }
+      } else if (osvi.dwMinorVersion == 0) {
+        if (osvi.wProductType == VER_NT_WORKSTATION) {
+          os << "Windows Vista ";
+        } else {
+          os << "Windows Server 2008 ";
+        }
+      }
+    }
+
+    DWORD dwType;
+    if ((GetProductInfo != nullptr) && GetProductInfo(osvi.dwMajorVersion, osvi.dwMinorVersion, 0, 0, &dwType)) {
+      switch (dwType) {
+        case PRODUCT_ULTIMATE:
+          os << "Ultimate Edition";
+          break;
+        case PRODUCT_PROFESSIONAL:
+          os << "Professional";
+          break;
+        case PRODUCT_HOME_PREMIUM:
+          os << "Home Premium Edition";
+          break;
+        case PRODUCT_HOME_BASIC:
+          os << "Home Basic Edition";
+          break;
+        case PRODUCT_ENTERPRISE:
+          os << "Enterprise Edition";
+          break;
+        case PRODUCT_BUSINESS:
+          os << "Business Edition";
+          break;
+        case PRODUCT_STARTER:
+          os << "Starter Edition";
+          break;
+        case PRODUCT_CLUSTER_SERVER:
+          os << "Cluster Server Edition";
+          break;
+        case PRODUCT_DATACENTER_SERVER:
+          os << "Datacenter Edition";
+          break;
+        case PRODUCT_DATACENTER_SERVER_CORE:
+          os << "Datacenter Edition (core installation)";
+          break;
+        case PRODUCT_ENTERPRISE_SERVER:
+          os << "Enterprise Edition";
+          break;
+        case PRODUCT_ENTERPRISE_SERVER_CORE:
+          os << "Enterprise Edition (core installation)";
+          break;
+        case PRODUCT_ENTERPRISE_SERVER_IA64:
+          os << "Enterprise Edition for Itanium-based Systems";
+          break;
+        case PRODUCT_SMALLBUSINESS_SERVER:
+          os << "Small Business Server";
+          break;
+        case PRODUCT_SMALLBUSINESS_SERVER_PREMIUM:
+          os << "Small Business Server Premium Edition";
+          break;
+        case PRODUCT_STANDARD_SERVER:
+          os << "Standard Edition";
+          break;
+        case PRODUCT_STANDARD_SERVER_CORE:
+          os << "Standard Edition (core installation)";
+          break;
+        case PRODUCT_WEB_SERVER:
+          os << "Web Server Edition";
+          break;
+        default:
+          break;
+      }
+    }
+  } else if ((osvi.dwMajorVersion == 5) && (osvi.dwMinorVersion == 2)) {
+    if (GetSystemMetrics(SM_SERVERR2)) {
+      os << "Windows Server 2003 R2, ";
+    } else if (osvi.wSuiteMask & VER_SUITE_STORAGE_SERVER) {
+      os << "Windows Storage Server 2003";
+    } else if (osvi.wSuiteMask & VER_SUITE_WH_SERVER) {
+      os << "Windows Home Server";
+    } else if ((osvi.wProductType == VER_NT_WORKSTATION) &&
+    (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64)) {
+      os << "Windows XP Professional x64 Edition";
+    } else {
+      os << "Windows Server 2003, ";
+    } if (osvi.wProductType != VER_NT_WORKSTATION) {
+        if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_IA64) {
+          if (osvi.wSuiteMask & VER_SUITE_DATACENTER) {
+            os << "Datacenter Edition for Itanium-based Systems";
+          } else if (osvi.wSuiteMask & VER_SUITE_ENTERPRISE) {
+            os << "Enterprise Edition for Itanium-based Systems";
+          }
+      } else if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64) {
+        if (osvi.wSuiteMask & VER_SUITE_DATACENTER) {
+          os << "Datacenter x64 Edition";
+        } else if (osvi.wSuiteMask & VER_SUITE_ENTERPRISE) {
+          os << "Enterprise x64 Edition";
+        } else {
+          os << "Standard x64 Edition";
+        }
+      } else {
+        if (osvi.wSuiteMask & VER_SUITE_COMPUTE_SERVER) {
+          os << "Compute Cluster Edition";
+        } else if (osvi.wSuiteMask & VER_SUITE_DATACENTER) {
+          os << "Datacenter Edition";
+        } else if (osvi.wSuiteMask & VER_SUITE_ENTERPRISE) {
+          os << "Enterprise Edition";
+        } else if (osvi.wSuiteMask & VER_SUITE_BLADE) {
+          os << "Web Edition";
+        } else {
+          os << "Standard Edition";
+        }
+      }
+    }
+  } else if ((osvi.dwMajorVersion == 5) && (osvi.dwMinorVersion == 1)) {
+    os << "Windows XP ";
+    if (osvi.wSuiteMask & VER_SUITE_PERSONAL) {
+      os << "Home Edition";
+    } else {
+      os << "Professional";
+    }
+  } else if ((osvi.dwMajorVersion == 5) && (osvi.dwMinorVersion == 0)) {
+    os << "Windows 2000 ";
+    if (osvi.wProductType == VER_NT_WORKSTATION) {
+      os << "Professional";
+    } else {
+      if (osvi.wSuiteMask & VER_SUITE_DATACENTER) {
+        os << "Datacenter Server";
+      } else if (osvi.wSuiteMask & VER_SUITE_ENTERPRISE) {
+        os << "Advanced Server";
+      } else {
+        os << "Server";
+      }
+    }
+  }
+  os << " (build " << osvi.dwBuildNumber << ")";
+  return os.str();
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getName() {
+  return "Windows";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getVersion() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+std::string OS::getKernel() {
+  return "<unknown>";
+}
+
+// _____________________________________________________________________________________________________________________
+bool OS::getIs64bit() {
+  BOOL bWow64Process = FALSE;
+  return IsWow64Process(GetCurrentProcess(), &bWow64Process) && bWow64Process;
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
+
+`src/windows/ram.cpp`:
+
+```cpp
+// Copyright (c) Leon Freist <freist@informatik.uni-freiburg.de>
+// This software is part of HWBenchmark
+
+#include "hwinfo/platform.h"
+
+#ifdef HWINFO_WINDOWS
+
+#include <string>
+#include <vector>
+
+#include <Windows.h>
+
+#include "hwinfo/WMIwrapper.h"
+#include "hwinfo/ram.h"
+
+namespace hwinfo {
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getVendor() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_PhysicalMemory", "Manufacturer", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getName() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_PhysicalMemory", "Name", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getModel() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_PhysicalMemory", "PartNumber", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+std::string RAM::getSerialNumber() {
+  std::vector<const wchar_t*> names{};
+  wmi::queryWMI("WIN32_PhysicalMemory", "SerialNumber", names);
+  auto ret = names[0];
+  if (!ret) {
+    return "<unknown>";
+  }
+  std::wstring tmp(ret);
+  return {tmp.begin(), tmp.end()};
+}
+
+// _____________________________________________________________________________________________________________________
+int64_t RAM::getTotalSize_Bytes() {
+  MEMORYSTATUSEX status;
+  status.dwLength = sizeof(status);
+  GlobalMemoryStatusEx(&status);
+  return static_cast<int64_t>(status.ullTotalPhys);
+}
+
+}  // namespace hwinfo
+
+#endif  // HWINFO_WINDOWS
+```
