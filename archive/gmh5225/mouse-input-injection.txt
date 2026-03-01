@@ -1,0 +1,424 @@
+Project Path: arc_gmh5225_mouse-input-injection_pogdp7kw
+
+Source Tree:
+
+```txt
+arc_gmh5225_mouse-input-injection_pogdp7kw
+├── README.md
+├── direct_mouse_input
+│   ├── defines.h
+│   ├── direct_mouse_input.vcxproj
+│   ├── direct_mouse_input.vcxproj.filters
+│   ├── includes.h
+│   ├── main.cpp
+│   ├── mouse_interface.hpp
+│   └── pragma.h
+└── direct_mouse_input.sln
+
+```
+
+`README.md`:
+
+```md
+# mouse-input-injection
+
+What is this?
+Using the undocumented NtUserInjectMouseInput syscall to inject mouse input.
+
+## Functionality
+* An alternative to emulate mouse movement and actions.
+
+## Need help?
+* Build the program in release x64 and with multibyte.
+* Still cant figure it out? join the discord!
+
+## Links
+* [Discord](https://discord.gg/9XykzWqVMP) - GameReversalClub
+
+```
+
+`direct_mouse_input.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31205.134
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "direct_mouse_input", "direct_mouse_input\direct_mouse_input.vcxproj", "{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|ARM = Release|ARM
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|ARM.ActiveCfg = Debug|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|ARM64.ActiveCfg = Debug|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|x64.ActiveCfg = Debug|x64
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|x64.Build.0 = Debug|x64
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|x86.ActiveCfg = Debug|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Debug|x86.Build.0 = Debug|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|ARM.ActiveCfg = Release|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|ARM64.ActiveCfg = Release|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|x64.ActiveCfg = Release|x64
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|x64.Build.0 = Release|x64
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|x86.ActiveCfg = Release|Win32
+		{05A9C2A2-B416-4A3A-BB33-8C0505E1E466}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7A371357-3F0F-4271-BA5D-45F9F98C1981}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`direct_mouse_input/defines.h`:
+
+```h
+#pragma once
+#include <windows.h>
+
+// https://docs.microsoft.com/en-us/uwp/api/windows.ui.input.preview.injection.injectedinputmouseoptions?view=winrt-20348
+enum InjectedInputMouseOptions
+{
+    left_up = 4,
+    left_down = 2,
+    right_up = 8,
+    right_down = 16
+};
+
+struct InjectedInputMouseInfo
+{
+    int move_direction_x; // 10 would move the mouse from the current position +10 on the X, same withe the Y
+    int move_direction_y;
+    unsigned int mouse_data;
+    InjectedInputMouseOptions mouse_options;
+    unsigned int time_offset_in_miliseconds;
+    void* extra_info;
+};
+```
+
+`direct_mouse_input/direct_mouse_input.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{05a9c2a2-b416-4a3a-bb33-8c0505e1e466}</ProjectGuid>
+    <RootNamespace>directmouseinput</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>mouse-input-injection</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="defines.h" />
+    <ClInclude Include="includes.h" />
+    <ClInclude Include="mouse_interface.hpp" />
+    <ClInclude Include="pragma.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`direct_mouse_input/direct_mouse_input.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="defines.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pragma.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mouse_interface.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
+
+`direct_mouse_input/includes.h`:
+
+```h
+#pragma once
+#include <windows.h>
+#include <iostream>
+
+#include "mouse_interface.hpp"
+#include "defines.h"
+#include "pragma.h"
+```
+
+`direct_mouse_input/main.cpp`:
+
+```cpp
+#include "includes.h"
+
+BOOLEAN WINAPI main()
+{
+	mouse_interface custom_mouse_interface = mouse_interface();
+
+	custom_mouse_interface.left_down();
+
+	while (1);
+}
+```
+
+`direct_mouse_input/mouse_interface.hpp`:
+
+```hpp
+#pragma once
+#include <windows.h>
+#include <iostream>
+#include "pragma.h"
+
+#include "defines.h"
+
+class mouse_interface
+{
+private:
+	bool(*NtUserInjectMouseInput)(InjectedInputMouseInfo*, int) = nullptr;
+
+public:
+	mouse_interface()
+	{
+		LoadLibrary("user32.dll");
+		HMODULE win32u = LoadLibrary("win32u.dll");
+
+		if (!win32u)
+		{
+			printf_s("[-] could not find win32u -> %p\n", win32u);
+			return;
+		}
+
+		printf_s("[+] found win32u -> %p\n", win32u);
+
+		void* NtUserInjectMouseInputAddress = (void*)GetProcAddress(win32u, "NtUserInjectMouseInput");
+
+		if (!NtUserInjectMouseInputAddress)
+		{
+			printf_s("[-] could not find NtUserInjectMouseInput -> %p\n", win32u);
+			return;
+		}
+
+		*(void**)&NtUserInjectMouseInput = NtUserInjectMouseInputAddress;
+
+		printf_s("[+] found NtUserInjectMouseInput -> %p\n", NtUserInjectMouseInputAddress);
+	}
+
+	bool left_down(int x = 0, int y = 0)
+	{
+		InjectedInputMouseInfo temp = {};
+		temp.mouse_options = InjectedInputMouseOptions::left_down;
+		temp.move_direction_x = x;
+		temp.move_direction_y = y;
+		return NtUserInjectMouseInput(&temp, 1);
+	}
+
+	bool left_up(int x = 0, int y = 0)
+	{
+		InjectedInputMouseInfo temp{};
+		temp.mouse_options = InjectedInputMouseOptions::left_up;
+		temp.move_direction_x = x;
+		temp.move_direction_y = y;
+		return NtUserInjectMouseInput(&temp, 1);
+	}
+
+	bool right_down(int x = 0, int y = 0)
+	{
+		InjectedInputMouseInfo temp{};
+		temp.mouse_options = InjectedInputMouseOptions::right_down;
+		temp.move_direction_x = x;
+		temp.move_direction_y = y;
+		return NtUserInjectMouseInput(&temp, 1);
+	}
+
+	bool right_up(int x = 0, int y = 0)
+	{
+		InjectedInputMouseInfo temp{};
+		temp.mouse_options = InjectedInputMouseOptions::right_up;
+		temp.move_direction_x = x;
+		temp.move_direction_y = y;
+		return NtUserInjectMouseInput(&temp, 1);
+	}
+};
+
+```
+
+`direct_mouse_input/pragma.h`:
+
+```h
+#pragma once
+#pragma warning (disable : 6066)
+```
