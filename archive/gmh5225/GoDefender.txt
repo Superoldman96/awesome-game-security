@@ -1,0 +1,1636 @@
+Project Path: arc_gmh5225_GoDefender_56tymxdy
+
+Source Tree:
+
+```txt
+arc_gmh5225_GoDefender_56tymxdy
+├── AntiDLLInjection
+│   └── MitigationPolicy
+│       └── PatchMitigationPolicy.go
+├── AntiDebug
+│   ├── CheckBlacklistedWindowsNames
+│   │   └── CheckBlacklistedWindowsNames.go
+│   ├── InternetCheck
+│   │   └── internetcheck.go
+│   ├── IsDebuggerPresent
+│   │   └── isdebuggerpresent.go
+│   ├── ParentAntiDebug
+│   │   └── parentantidebug.go
+│   ├── ProcessDetection
+│   │   └── ProcessDetection.go
+│   ├── RemoteDebugger
+│   │   └── RemoteDebugger.go
+│   ├── RunningProcesses
+│   │   └── RunningProcesses.go
+│   ├── UserAntiAntiDebug
+│   │   └── HooksDetection.go
+│   └── pcuptime
+│       └── pcuptime.go
+├── AntiVirtualization
+│   ├── KVMCheck
+│   │   └── kvmcheck.go
+│   ├── MonitorMetrics
+│   │   └── monitormetrics.go
+│   ├── ParallelsCheck
+│   │   └── checkparallels.go
+│   ├── QEMU
+│   │   └── qemu.go
+│   ├── RecentFileActivity
+│   │   └── RecentFileActivity.go
+│   ├── RepetitiveProcess
+│   │   └── repetitiveproc.go
+│   ├── TriageDetection
+│   │   └── triagecheck.go
+│   ├── USBCheck
+│   │   └── USBCheck.go
+│   ├── UsernameCheck
+│   │   └── UsernameCheck.go
+│   ├── VMArtifacts
+│   │   └── arifacts.go
+│   ├── VMWareDetection
+│   │   └── vmwaredetection.go
+│   └── VirtualboxDetection
+│       └── virtualboxdetection.go
+├── GoDefenderLogo.png
+├── Install.bat
+├── LICENSE
+├── ProcessUtils
+│   ├── AdminChecks
+│   │   └── adminchecks.go
+│   ├── CriticalProcess
+│   │   └── SetProcessIsCritical.go
+│   ├── EnableAllTokens
+│   │   └── EnableAllTokens.go
+│   └── SetRuntime
+│       └── setruntime.go
+├── README.md
+├── go.mod
+├── go.sum
+└── main.go
+
+```
+
+`AntiDLLInjection/MitigationPolicy/PatchMitigationPolicy.go`:
+
+```go
+package MitigationPolicyPatch
+
+import (
+	"fmt"
+	"syscall"
+	"unsafe"
+)
+
+const (
+	ProcessSignaturePolicyMitigation = 8
+)
+
+type PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY struct {
+	MicrosoftSignedOnly uint32
+}
+
+var (
+	modkernelbase                 = syscall.NewLazyDLL("kernelbase.dll")
+	procSetProcessMitigationPolicy = modkernelbase.NewProc("SetProcessMitigationPolicy")
+)
+
+func SetProcessMitigationPolicy(policy int, lpBuffer *PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, size uint32) (bool, error) {
+	ret, _, err := procSetProcessMitigationPolicy.Call(uintptr(policy),uintptr(unsafe.Pointer(lpBuffer)),uintptr(size),)
+	if ret != 0 {
+		return true, nil
+	}
+	if err != nil && err.Error() != "The operation completed successfully." {
+		return false, err
+	}
+	return false, nil
+}
+
+func ConfigureProcessMitigationPolicy() {
+	var OnlyMicrosoftBinaries PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY
+	OnlyMicrosoftBinaries.MicrosoftSignedOnly = 1
+
+	success, err := SetProcessMitigationPolicy(ProcessSignaturePolicyMitigation,
+		&OnlyMicrosoftBinaries,
+		uint32(unsafe.Sizeof(OnlyMicrosoftBinaries)),
+	)
+	if err != nil {
+		fmt.Println("Failed:", err.Error())
+		return
+	}
+	if success {
+		fmt.Println("Success")
+	} else {
+		fmt.Println("Failed")
+	}
+}
+
+```
+
+`AntiDebug/CheckBlacklistedWindowsNames/CheckBlacklistedWindowsNames.go`:
+
+```go
+package CheckBlacklistedWindowsNames
+
+import (
+    "log"
+    "syscall"
+    "unsafe"
+)
+
+var (
+    mu32  = syscall.NewLazyDLL("user32.dll")
+    pew   = mu32.NewProc("EnumWindows")
+    pgwt  = mu32.NewProc("GetWindowTextA")
+    pgwtp = mu32.NewProc("GetWindowThreadProcessId")
+    mk32  = syscall.NewLazyDLL("kernel32.dll")
+    pop   = mk32.NewProc("OpenProcess")
+    ptp   = mk32.NewProc("TerminateProcess")
+    pch   = mk32.NewProc("CloseHandle")
+)
+
+var blacklistedWindows = []string{
+    "proxifier", "graywolf", "extremedumper", "zed", "exeinfope", "dnspy",
+    "titanHide", "ilspy", "titanhide", "x32dbg", "codecracker", "simpleassembly",
+    "process hacker 2", "pc-ret", "http debugger", "Centos", "process monitor",
+    "debug", "ILSpy", "reverse", "simpleassemblyexplorer", "process", "de4dotmodded",
+    "dojandqwklndoqwd-x86", "sharpod", "folderchangesview", "fiddler", "die", "pizza",
+    "crack", "strongod", "ida -", "brute", "dump", "StringDecryptor", "wireshark",
+    "debugger", "httpdebugger", "gdb", "kdb", "x64_dbg", "windbg", "x64netdumper",
+    "petools", "scyllahide", "megadumper", "reversal", "ksdumper v1.1 - by equifox",
+    "dbgclr", "HxD", "monitor", "peek", "ollydbg", "ksdumper", "http", "wpe pro", "dbg",
+    "httpanalyzer", "httpdebug", "PhantOm", "kgdb", "james", "x32_dbg", "proxy", "phantom",
+    "mdbg", "WPE PRO", "system explorer", "de4dot", "X64NetDumper", "protection_id",
+    "charles", "systemexplorer", "pepper", "hxd", "procmon64", "MegaDumper", "ghidra", "xd",
+    "0harmony", "dojandqwklndoqwd", "hacker", "process hacker", "SAE", "mdb", "checker",
+    "harmony", "Protection_ID", "PETools", "scyllaHide", "x96dbg", "systemexplorerservice",
+    "folder", "mitmproxy", "dbx", "sniffer", "Process Hacker", "Process Explorer", "Sysinternals", "www.sysinternals.com", "binary ninja",
+}
+
+// CheckBlacklistedWindows checks for blacklisted window names and terminates the associated process if found.
+func CheckBlacklistedWindows() {
+    pew.Call(syscall.NewCallback(enumWindowsProc), 0)
+}
+
+// enumWindowsProc is the callback function that checks each window title against the blacklist.
+func enumWindowsProc(hwnd syscall.Handle, lParam uintptr) uintptr {
+    var pid uint32
+    pgwtp.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&pid)))
+
+    var title [256]byte
+    pgwt.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&title[0])), uintptr(len(title)))
+    wt := string(title[:])
+
+    // Check if the window title contains any blacklisted strings
+    for _, blacklisted := range blacklistedWindows {
+        if contains(wt, blacklisted) {
+            log.Printf("Detected blacklisted window: %s\n", wt)
+            // If a blacklisted window is found, terminate the associated process
+            proc, _, _ := pop.Call(syscall.PROCESS_TERMINATE, 0, uintptr(pid))
+            if proc != 0 {
+                ptp.Call(proc, 0)
+                pch.Call(proc)
+            }
+        }
+    }
+    return 1 // Continue enumeration
+}
+
+func contains(s, substr string) bool {
+    return len(s) >= len(substr) && s[:len(substr)] == substr
+}
+
+```
+
+`AntiDebug/InternetCheck/internetcheck.go`:
+
+```go
+package InternetCheck
+
+import (
+	"log"
+	"net"
+	"errors"
+)
+
+func CheckConnection() (bool, error) {
+	conn, err := net.Dial("tcp", "google.com:80")
+	if err != nil {
+		err = errors.New("error checking internet connection: " + err.Error())
+		log.Printf("[DEBUG] Error checking internet connection: %v", err)
+		return false, err
+	}
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			log.Printf("[DEBUG] Error closing connection: %v", cerr)
+		}
+	}()
+
+	return true, nil
+}
+
+```
+
+`AntiDebug/IsDebuggerPresent/isdebuggerpresent.go`:
+
+```go
+package IsDebuggerPresent
+
+import (
+	"syscall"
+)
+
+var (
+	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
+	isDebugger  = kernel32DLL.NewProc("IsDebuggerPresent")
+)
+
+// IsDebuggerPresent1 checks if a debugger is present.
+func IsDebuggerPresent1() bool {
+	flag, _, _ := isDebugger.Call()
+	return flag != 0
+}
+
+// IsDebuggerPresent checks if a debugger is present and logs the result.
+func IsDebuggerPresent() bool {
+	if IsDebuggerPresent1() {
+		return true
+	} else {
+		return false
+	}
+}
+
+```
+
+`AntiDebug/ParentAntiDebug/parentantidebug.go`:
+
+```go
+package ParentAntiDebug
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var (
+	ntdll   = syscall.NewLazyDLL("ntdll.dll")
+	ntquery = ntdll.NewProc("NtQueryInformationProcess")
+)
+
+type ProcessInfo struct {
+	Res1             uintptr
+	PebAddr          uintptr
+	Res2             [2]uintptr
+	PID              uintptr
+	InheritedFromPID uintptr
+}
+
+// NtQueryProc queries process information
+func NtQueryProc(handle syscall.Handle, class uint32, info *ProcessInfo, length uint32) error {
+	r1, _, err := syscall.Syscall6(ntquery.Addr(), 5, uintptr(handle), uintptr(class), uintptr(unsafe.Pointer(info)), uintptr(length), 0, 0)
+	if err != 0 {
+		log.Printf("NtQueryInformationProcess failed: %v", err)
+		return err
+	}
+	if r1 != 0 {
+		log.Printf("NtQueryInformationProcess failed: unexpected return value: %v", r1)
+		return err
+	}
+	return nil
+}
+
+// QueryImageName retrieves the full image name of the process
+func QueryImageName(handle syscall.Handle, flags uint32, nameBuffer []uint16, size *uint32) error {
+	err := windows.QueryFullProcessImageName(windows.Handle(handle), flags, &nameBuffer[0], size)
+	if err != nil {
+		log.Printf("QueryFullProcessImageName failed: %v", err)
+		return err
+	}
+	return nil
+}
+
+// CurrentProcName returns the name of the current executable
+func CurrentProcName() (string, error) {
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("os.Executable failed: %v", err)
+		return "", err
+	}
+	return filepath.Base(exePath), nil
+}
+
+// ParentAntiDebug checks the parent process if it's explorer.exe or cmd.exe
+func ParentAntiDebug() bool {
+	const ProcInfo = 0
+	var p ProcessInfo
+	if err := NtQueryProc(syscall.Handle(windows.CurrentProcess()), ProcInfo, &p, uint32(unsafe.Sizeof(p))); err != nil {
+		log.Printf("Error querying process information: %v", err)
+		return false
+	}
+	par := int32(p.InheritedFromPID)
+	if par == 0 {
+		return false
+	}
+	handle, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(par))
+	if err != nil {
+		log.Printf("Error opening process handle: %v", err)
+		return false
+	}
+	defer syscall.CloseHandle(handle)
+
+	buff13 := make([]uint16, windows.MAX_PATH)
+	size := uint32(len(buff13))
+	if err := QueryImageName(handle, 0, buff13, &size); err != nil {
+		log.Printf("Error querying image name: %v", err)
+		return false
+	}
+	parname := filepath.Base(syscall.UTF16ToString(buff13[:size]))
+
+	if parname != "explorer.exe" && parname != "cmd.exe" {
+		return true
+	} else {
+		return false
+	}
+}
+
+```
+
+`AntiDebug/ProcessDetection/ProcessDetection.go`:
+
+```go
+package BadProcesses
+
+import (
+	"bytes"
+	"log"
+	"os/exec"
+	"strings"
+)
+
+// DetectProcesses checks for specific processes and returns true if any are found.
+func Detect() (bool, error) {
+	ptk := []string{
+		"taskmgr.exe", "process.exe", "processhacker.exe", "ksdumper.exe", "fiddler.exe",
+		"httpdebuggerui.exe", "wireshark.exe", "httpanalyzerv7.exe", "decoder.exe",
+		"regedit.exe", "procexp.exe", "dnspy.exe", "vboxservice.exe", "burpsuite.exe",
+		"DbgX.Shell.exe", "ILSpy.exe", "ollydbg.exe", "x32dbg.exe", "x64dbg.exe", "gdb.exe",
+		"idaq.exe", "idag.exe", "idaw.exe", "ida64.exe", "idag64.exe", "idaw64.exe",
+		"idaq64.exe", "windbg.exe", "immunitydebugger.exe", "windasm.exe",
+	}
+
+	for _, prg := range ptk {
+		cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq "+prg)
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err := cmd.Run()
+		if err != nil {
+			return false, err
+		}
+
+		processLines := strings.Split(out.String(), "\n")
+		for _, line := range processLines {
+			if strings.Contains(line, prg) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiDebug/RemoteDebugger/RemoteDebugger.go`:
+
+```go
+package RemoteDebugger
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+var (
+	mk32 = syscall.NewLazyDLL("kernel32.dll")
+	crdp = mk32.NewProc("CheckRemoteDebuggerPresent")
+)
+
+// RemoteDebugger checks for the presence of a remote debugger.
+func RemoteDebugger() (bool, error) {
+	var isremdebpres bool
+	r1, _, err := crdp.Call(^uintptr(0), uintptr(unsafe.Pointer(&isremdebpres)))
+	if r1 == 0 {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if isremdebpres {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
+
+```
+
+`AntiDebug/RunningProcesses/RunningProcesses.go`:
+
+```go
+package RunningProcesses
+
+import (
+	"log"
+	"syscall"
+	"unsafe"
+)
+
+var (
+	kernel32DLL = syscall.NewLazyDLL("kernel32.dll")
+	enumProcesses         = kernel32DLL.NewProc("K32EnumProcesses")
+)
+
+// GetRunningProcessesCount returns the number of currently running processes.
+func GetRunningProcessesCount() (int, error) {
+	var ids [1024]uint32
+	var needed uint32
+	r1, _, err := enumProcesses.Call(uintptr(unsafe.Pointer(&ids)), uintptr(len(ids)), uintptr(unsafe.Pointer(&needed)))
+	if r1 == 0 {
+		log.Printf("K32EnumProcesses failed: %v", err)
+		return 0, nil
+	}
+	return int(needed / 4), nil
+}
+
+// CheckRunningProcessesCount checks if the number of currently running processes is less than a specified count.
+func CheckRunningProcessesCount(count int) (bool, error) {
+	processesCount, err := GetRunningProcessesCount()
+	if err != nil {
+		return false, err
+	}
+
+	if processesCount < count {
+		return true, nil
+	}
+	return false, nil
+}
+
+```
+
+`AntiDebug/UserAntiAntiDebug/HooksDetection.go`:
+
+```go
+package HooksDetection
+
+import (
+	"log"
+	"syscall"
+	"unsafe"
+)
+
+type UNICODE_STRING struct {
+	Length        uint16
+	MaximumLength uint16
+	Buffer        uintptr
+}
+
+type ANSI_STRING struct {
+	Length        int16
+	MaximumLength int16
+	Buffer        *byte
+}
+// creds to advdebug ported from cs to go
+var (
+	modNtdll      = syscall.NewLazyDLL("ntdll.dll")
+	modKernelbase = syscall.NewLazyDLL("kernelbase.dll")
+	modKernel32   = syscall.NewLazyDLL("kernel32.dll")
+	modUser32     = syscall.NewLazyDLL("user32.dll")
+	modWin32u     = syscall.NewLazyDLL("win32u.dll")
+
+	procRtlInitUnicodeString          = modNtdll.NewProc("RtlInitUnicodeString")
+	procRtlUnicodeStringToAnsiString  = modNtdll.NewProc("RtlUnicodeStringToAnsiString")
+	procLdrGetDllHandleEx             = modNtdll.NewProc("LdrGetDllHandleEx")
+	procGetModuleHandleA              = modKernelbase.NewProc("GetModuleHandleA")
+	procGetProcAddress                = modKernelbase.NewProc("GetProcAddress")
+	procLdrGetProcedureAddressForCall = modNtdll.NewProc("LdrGetProcedureAddressForCaller")
+)
+
+func RtlInitUnicodeString(destinationString *UNICODE_STRING, sourceString string) {
+	sourcePtr, _ := syscall.UTF16PtrFromString(sourceString)
+	syscall.Syscall(procRtlInitUnicodeString.Addr(), 2, uintptr(unsafe.Pointer(destinationString)), uintptr(unsafe.Pointer(sourcePtr)), 0)
+}
+
+func RtlUnicodeStringToAnsiString(destinationString *ANSI_STRING, unicodeString *UNICODE_STRING, allocateDestinationString bool) {
+	syscall.Syscall(procRtlUnicodeStringToAnsiString.Addr(), 3, uintptr(unsafe.Pointer(destinationString)), uintptr(unsafe.Pointer(unicodeString)), uintptr(boolToInt(allocateDestinationString)))
+}
+
+func GetModuleHandleA(library string) uintptr {
+	ret, _, _ := procGetModuleHandleA.Call(uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(library))))
+	return ret
+}
+
+func GetProcAddress(hModule uintptr, function string) uintptr {
+	ret, _, _ := procGetProcAddress.Call(hModule, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(function))))
+	return ret
+}
+
+func LdrGetProcedureAddressForCaller(moduleHandle uintptr, procedureName *ANSI_STRING, procedureNumber uint16, functionHandle *uintptr, flags uint64, callback uintptr) uint32 {
+	ret, _, _ := procLdrGetProcedureAddressForCall.Call(moduleHandle, uintptr(unsafe.Pointer(procedureName)), uintptr(procedureNumber), uintptr(unsafe.Pointer(functionHandle)), uintptr(flags), callback)
+	return uint32(ret)
+}
+
+func LdrGetDllHandleEx(flags uint64, dllPath string, dllCharacteristics string, libraryName *UNICODE_STRING, dllHandle *uintptr) uint32 {
+	ret, _, _ := procLdrGetDllHandleEx.Call(uintptr(flags), 0, 0, uintptr(unsafe.Pointer(libraryName)), uintptr(unsafe.Pointer(dllHandle)))
+	return uint32(ret)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func LowLevelGetModuleHandle(library string) uintptr {
+	var hModule uintptr
+	var unicodeString UNICODE_STRING
+	RtlInitUnicodeString(&unicodeString, library)
+	LdrGetDllHandleEx(0, "", "", &unicodeString, &hModule)
+	return hModule
+}
+
+func LowLevelGetProcAddress(hModule uintptr, function string) uintptr {
+	var functionHandle uintptr
+	var unicodeString UNICODE_STRING
+	var ansiString ANSI_STRING
+	RtlInitUnicodeString(&unicodeString, function)
+	RtlUnicodeStringToAnsiString(&ansiString, &unicodeString, true)
+	LdrGetProcedureAddressForCaller(hModule, &ansiString, 0, &functionHandle, 0, 0)
+	return functionHandle
+}
+
+func DetectHooksOnCommonWinAPIFunctions(moduleName string, functions []string) bool {
+	libraries := []string{"kernel32.dll", "kernelbase.dll", "ntdll.dll", "user32.dll", "win32u.dll"}
+	kernellibfunc := []string{"IsDebuggerPresent", "CheckRemoteDebuggerPresent", "GetThreadContext", "CloseHandle", "OutputDebugStringA", "GetTickCount", "SetHandleInformation"}
+	ntdllfunc := []string{"NtQueryInformationProcess", "NtSetInformationThread", "NtClose", "NtGetContextThread", "NtQuerySystemInformation", "NtCreateFile", "NtCreateProcess", "NtCreateSection", "NtCreateThread", "NtYieldExecution", "NtCreateUserProcess"}
+	user32func := []string{"FindWindowW", "FindWindowA", "FindWindowExW", "FindWindowExA", "GetForegroundWindow", "GetWindowTextLengthA", "GetWindowTextA", "BlockInput", "CreateWindowExW", "CreateWindowExA"}
+	win32ufunc := []string{"NtUserBlockInput", "NtUserFindWindowEx", "NtUserQueryWindow", "NtUserGetForegroundWindow"}
+
+	for _, library := range libraries {
+		hModule := LowLevelGetModuleHandle(library)
+		if hModule != 0 {
+			switch library {
+			case "kernel32.dll", "kernelbase.dll", "ntdll.dll", "win32u.dll":
+				var commonFunctions []string
+				switch library {
+				case "kernel32.dll", "kernelbase.dll":
+					commonFunctions = kernellibfunc
+				case "ntdll.dll":
+					commonFunctions = ntdllfunc
+				case "win32u.dll":
+					commonFunctions = win32ufunc
+				}
+				for _, winAPIFunction := range commonFunctions {
+					function := LowLevelGetProcAddress(hModule, winAPIFunction)
+					var functionBytes [1]byte
+					syscall.Syscall(uintptr(function), 1, uintptr(unsafe.Pointer(&functionBytes[0])), 0, 0)
+					if functionBytes[0] == 0x90 || functionBytes[0] == 0xE9 {
+						return true
+					}
+				}
+			case "user32.dll":
+				for _, winAPIFunction := range user32func {
+					function := LowLevelGetProcAddress(hModule, winAPIFunction)
+					var functionBytes [1]byte
+					syscall.Syscall(uintptr(function), 1, uintptr(unsafe.Pointer(&functionBytes[0])), 0, 0)
+					if functionBytes[0] == 0x90 || functionBytes[0] == 0xE9 {
+						return true
+					}
+				}
+			}
+		}
+	}
+
+	if moduleName != "" && functions != nil {
+		for _, winAPIFunction := range functions {
+			hModule := LowLevelGetModuleHandle(moduleName)
+			function := LowLevelGetProcAddress(hModule, winAPIFunction)
+			var functionBytes [1]byte
+			syscall.Syscall(uintptr(function), 1, uintptr(unsafe.Pointer(&functionBytes[0])), 0, 0)
+			if functionBytes[0] == 0x90 || functionBytes[0] == 0xE9 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func AntiAntiDebug() {
+	log.Println("Detecting Hooks on Common WinAPI Functions by checking for Bad Instructions on Functions Addresses (Most Effective on x64): ", DetectHooksOnCommonWinAPIFunctions("", nil))
+}
+
+```
+
+`AntiDebug/pcuptime/pcuptime.go`:
+
+```go
+package pcuptime
+
+import (
+    "syscall"
+)
+
+var (
+    kernel32DLL  = syscall.NewLazyDLL("kernel32.dll")
+    getTickCount = kernel32DLL.NewProc("GetTickCount")
+)
+
+// GetUptimeInSeconds returns the system uptime in seconds.
+func GetUptimeInSeconds() (int, error) {
+    uptime, _, err := getTickCount.Call()
+    if err != nil && err.Error() != "The operation completed successfully." {
+        return 0, err
+    }
+    return int(uptime / 1000), nil
+}
+
+// CheckUptime checks if the system uptime is less than a specified duration in seconds.
+func CheckUptime(durationInSeconds int) (bool, error) {
+    uptime, err := GetUptimeInSeconds()
+    if err != nil {
+        return false, err
+    }
+
+    if uptime < durationInSeconds {
+        return true, nil
+    } else {
+        return false, nil
+    }
+}
+
+```
+
+`AntiVirtualization/KVMCheck/kvmcheck.go`:
+
+```go
+package KVMCheck
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+)
+
+// CheckForKVM checks for the presence of Kernel-based Virtual Machine (KVM) components.
+// It returns true if KVM components are detected, otherwise false.
+func CheckForKVM() (bool, error) {
+	badDriversList := []string{"balloon.sys", "netkvm.sys", "vioinput", "viofs.sys", "vioser.sys"}
+	for _, driver := range badDriversList {
+		files, err := filepath.Glob(filepath.Join(os.Getenv("SystemRoot"), "System32", driver))
+		if err != nil {
+			log.Printf("Error accessing system files for %s: %v", driver, err)
+			continue
+		}
+		if len(files) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/MonitorMetrics/monitormetrics.go`:
+
+```go
+package MonitorMetrics
+
+import (
+	"syscall"
+)
+
+// IsScreenSmall checks if the screen size is considered small.
+func IsScreenSmall() (bool, error) {
+	getSystemMetrics := syscall.NewLazyDLL("user32.dll").NewProc("GetSystemMetrics")
+	width, _, err := getSystemMetrics.Call(0)
+	if err != nil {
+		return false, err
+	}
+	height, _, err := getSystemMetrics.Call(1)
+	if err != nil {
+		return false, err
+	}
+
+	isSmall := width < 800 || height < 600
+	if isSmall {
+		return true, nil
+	} else {
+		return false, nil
+	}
+}
+
+```
+
+`AntiVirtualization/ParallelsCheck/checkparallels.go`:
+
+```go
+package ParallelsCheck
+
+import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// CheckForParallels checks for the presence of Parallels components.
+// It returns true if Parallels components are detected, otherwise false.
+func CheckForParallels() (bool, error) {
+	parallelsDrivers := []string{"prl_sf", "prl_tg", "prl_eth"}
+	sys32fold := filepath.Join(os.Getenv("SystemRoot"), "System32")
+
+	files, err := ioutil.ReadDir(sys32fold)
+	if err != nil {
+		return false, err
+	}
+
+	for _, file := range files {
+		for _, driver := range parallelsDrivers {
+			if strings.Contains(file.Name(), driver) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/QEMU/qemu.go`:
+
+```go
+package QEMUCheck
+
+import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// CheckForQEMU checks for the presence of QEMU components.
+// It returns true if QEMU components are detected, otherwise false.
+func CheckForQEMU() (bool, error) {
+	qemuDrivers := []string{"qemu-ga", "qemuwmi"}
+	sys32 := filepath.Join(os.Getenv("SystemRoot"), "System32")
+
+	files, err := ioutil.ReadDir(sys32)
+	if err != nil {
+		return false, err
+	}
+
+	for _, file := range files {
+		for _, driver := range qemuDrivers {
+			if strings.Contains(file.Name(), driver) {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/RecentFileActivity/RecentFileActivity.go`:
+
+```go
+package RecentFileActivity
+
+import (
+	"log"
+	"os"
+	"io/ioutil"
+	"path/filepath"
+)
+
+// RecentFileActivityCheck checks recent file activity.
+func RecentFileActivityCheck() (bool, error) {
+	recdir := filepath.Join(os.Getenv("APPDATA"), "microsoft", "windows", "recent")
+	files, err := ioutil.ReadDir(recdir)
+	if err != nil {
+		log.Printf("Debug Check: Error reading recent file activity directory: %v", err)
+		return false, err
+	}
+
+	if len(files) < 20 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/RepetitiveProcess/repetitiveproc.go`:
+
+```go
+package RepetitiveProcess
+
+import (
+	"bytes"
+	"log"
+	"os/exec"
+	"strings"
+	"syscall"
+)
+
+// Check checks if any non-svchost process with the same name is running more than 60 times and exits if so.
+func Check() (bool, error) {
+	cmd := exec.Command("tasklist")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("Error running tasklist command: %v", err)
+		return false, err
+	}
+
+	processLines := strings.Split(out.String(), "\n")
+	processCounts := make(map[string]int)
+	for _, line := range processLines {
+		fields := strings.Fields(line)
+		if len(fields) > 0 {
+			processName := fields[0]
+			if processName != "svchost.exe" {
+				processCounts[processName]++
+			}
+		}
+	}
+
+	for _, count := range processCounts {
+		if count > 60 {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/TriageDetection/triagecheck.go`:
+
+```go
+package TriageDetection
+
+import (
+	"log"
+	"os/exec"
+	"strings"
+	"syscall"
+)
+
+// TriageCheck checks for specific hard disk models and returns true if found.
+func TriageCheck() (bool, error) {
+	monki := exec.Command("wmic", "diskdrive", "get", "model")
+
+	// Set the command to hide the console window
+	monki.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	wowww, err := monki.Output()
+	if err != nil {
+		log.Printf("Error running wmic command: %v", err)
+		return false, err
+	}
+
+	if strings.Contains(string(wowww), "DADY HARDDISK") || strings.Contains(string(wowww), "QEMU HARDDISK") {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+```
+
+`AntiVirtualization/USBCheck/USBCheck.go`:
+
+```go
+package USBCheck
+
+import (
+	"log"
+	"os/exec"
+	"strings"
+	"syscall"
+)
+// yes this detects https://tria.ge lol 
+// PluggedIn checks if USB devices were ever plugged in and returns true if found.
+func PluggedIn() (bool, error) {
+	usbcheckcmd := exec.Command("reg", "query", "HKLM\\SYSTEM\\ControlSet001\\Services\\USBSTOR")
+	usbcheckcmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	outputusb, err1 := usbcheckcmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Debug Check: Error running reg query command: %v", err)
+		usbcheckcmd := exec.Command("reg", "query", "HKLM\\SYSTEM\\ControlSet001\\Enum\\USBSTOR")
+		usbcheckcmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+		outputusb, err2 := usbcheckcmd.CombinedOutput()
+		if err2 != nil {
+			log.Printf("Debug Check: Error running reg query command: %v", err)
+			return false, err
+		}
+	}
+
+	usblines := strings.Split(string(outputusb), "\n")
+	pluggedusb := 0
+	for _, line := range usblines {
+		if strings.TrimSpace(line) != "" {
+			pluggedusb++
+		}
+	}
+
+	if pluggedusb < 1 {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+```
+
+`AntiVirtualization/UsernameCheck/UsernameCheck.go`:
+
+```go
+package UsernameCheck
+
+import (
+	"os"
+	"strings"
+)
+
+// CheckForBlacklistedNames checks if the current username matches any blacklisted names.
+// It returns true if a blacklisted name is found, otherwise false.
+func CheckForBlacklistedNames() bool {
+	bn := []string{"Johnson", "Miller", "malware", "maltest", "CurrentUser", "Sandbox", "virus", "John Doe", "test user", "sand box", "WDAGUtilityAccount", "Bruno", "george", "Harry Johnson"}
+	user := strings.ToLower(os.Getenv("USERNAME"))
+	for _, name := range bn {
+		if user == strings.ToLower(name) {
+			return true
+		}
+	}
+	return false
+}
+
+```
+
+`AntiVirtualization/VMArtifacts/arifacts.go`:
+
+```go
+package VMArtifacts
+import (
+	"fmt"
+	"strings"
+	"os"
+	"path/filepath"
+)
+// VMArtifactsDetect checks for the presence of files and directories related to VirtualBox and VMware.
+// It returns true if any of the bad files or directories are detected, otherwise false.
+func VMArtifactsDetect() bool {
+	badFileNames := []string{"VBoxMouse.sys", "VBoxGuest.sys", "VBoxSF.sys", "VBoxVideo.sys", "vmmouse.sys", "vboxogl.dll"}
+	badDirs := []string{`C:\Program Files\VMware`, `C:\Program Files\oracle\virtualbox guest additions`}
+
+	system32Folder := os.Getenv("SystemRoot") + `\System32`
+	files, err := filepath.Glob(filepath.Join(system32Folder, "*"))
+	if err != nil {
+		fmt.Printf("Error accessing System32 folder: %v\n", err)
+		return false
+	}
+
+	for _, file := range files {
+		fileName := strings.ToLower(filepath.Base(file))
+		for _, badFileName := range badFileNames {
+			if fileName == strings.ToLower(badFileName) {
+				return true
+			}
+		}
+	}
+
+	for _, badDir := range badDirs {
+		if _, err := os.Stat(badDir); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+```
+
+`AntiVirtualization/VMWareDetection/vmwaredetection.go`:
+
+```go
+package VMWareDetection
+
+import (
+    "log"
+    "os/exec"
+    "strings"
+    "syscall"
+)
+
+// GraphicsCardCheck checks for virtualization software by inspecting the graphics card information.
+// It returns true if VMware is detected, otherwise false.
+func GraphicsCardCheck() (bool, error) {
+    cmd := exec.Command("wmic", "path", "win32_VideoController", "get", "name")
+    cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+    gpu, err := cmd.Output()
+    if err != nil {
+        log.Println("Error executing command:", err)
+        return false, err
+    }
+    detected := strings.Contains(strings.ToLower(string(gpu)), "vmware")
+    if detected {
+        return true, nil
+    }
+    return false, nil
+}
+```
+
+`AntiVirtualization/VirtualboxDetection/virtualboxdetection.go`:
+
+```go
+package VirtualboxDetection
+
+import (
+    "log"
+    "os/exec"
+	"syscall"
+    "strings"
+)
+
+// GraphicsCardCheck checks for virtualization software by inspecting the graphics card information.
+// It returns true if VirtualBox is detected, otherwise false.
+func GraphicsCardCheck() (bool, error) {
+    cmd := exec.Command("wmic", "path", "win32_VideoController", "get", "name")
+    cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+    gpu, err := cmd.Output()
+    if err != nil {
+        log.Println("Error executing command:", err)
+        return false, err
+    }
+    detected := strings.Contains(strings.ToLower(string(gpu)), "virtualbox")
+    if detected {
+        return true, nil
+    }
+    return false, nil
+}
+```
+
+`Install.bat`:
+
+```bat
+@Echo off
+title DOWNLOADING MODULES
+go mod init GoDefender
+go get github.com/EvilBytecode/GoDefender
+pause
+
+```
+
+`LICENSE`:
+
+```
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>
+
+```
+
+`ProcessUtils/AdminChecks/adminchecks.go`:
+
+```go
+package AdminCheck
+
+import (
+	"os"
+	"strings"
+	"syscall"
+	"golang.org/x/sys/windows"
+	"fmt"
+)
+
+// IsAdmin checks if the current process is running as an administrator.
+func IsAdmin() bool {
+	ret, _, _ := syscall.NewLazyDLL("shell32.dll").NewProc("IsUserAnAdmin").Call()
+	return ret != 0
+}
+
+// ElevateProcess attempts to elevate the process to run with administrative privileges. : https://stackoverflow.com/questions/31558066/how-to-ask-for-administer-privileges-on-windows-with-go
+func ElevateProcess() {
+	verb := "runas"
+	exe, _ := os.Executable()
+	cwd, _ := os.Getwd()
+	args := strings.Join(os.Args[1:], " ")
+
+	verbPtr, _ := syscall.UTF16PtrFromString(verb)
+	exePtr, _ := syscall.UTF16PtrFromString(exe)
+	cwdPtr, _ := syscall.UTF16PtrFromString(cwd)
+	argPtr, _ := syscall.UTF16PtrFromString(args)
+
+	var showCmd int32 = 1 // SW_NORMAL
+
+	err := windows.ShellExecute(0, verbPtr, exePtr, argPtr, cwdPtr, showCmd)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+```
+
+`ProcessUtils/CriticalProcess/SetProcessIsCritical.go`:
+
+```go
+package CriticalProcess
+
+import (
+	"syscall"
+	"unsafe"
+)
+
+var (
+	modadvapi32 = syscall.NewLazyDLL("advapi32.dll")
+	modntdll    = syscall.NewLazyDLL("ntdll.dll")
+	modkernel32 = syscall.NewLazyDLL("kernel32.dll")
+	procLookupPrivilegeValueW  = modadvapi32.NewProc("LookupPrivilegeValueW")
+	procAdjustTokenPrivileges  = modadvapi32.NewProc("AdjustTokenPrivileges")
+	procRtlSetProcessIsCritical = modntdll.NewProc("RtlSetProcessIsCritical")
+	procGetCurrentProcess       = modkernel32.NewProc("GetCurrentProcess")
+	procCloseHandle             = modkernel32.NewProc("CloseHandle")
+)
+
+const (
+	SE_DEBUG_NAME       = "SeDebugPrivilege"
+	SE_PRIVILEGE_ENABLED = 0x00000002
+)
+
+type LUID struct {
+	LowPart  uint32
+	HighPart int32
+}
+
+type LUIDAndAttributes struct {
+	Luid       LUID
+	Attributes uint32
+}
+
+type Tokenprivileges struct {
+	PrivilegeCount uint32
+	Privileges     [1]LUIDAndAttributes
+}
+
+func LookupPrivilegeValue(systemname *uint16, name *uint16, luid *LUID) error {
+	r1, _, e1 := procLookupPrivilegeValueW.Call(uintptr(unsafe.Pointer(systemname)), uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(luid)))
+	if r1 == 0 {
+		return syscall.Errno(e1.(syscall.Errno))
+	}
+	return nil
+}
+
+func AdjustTokenPrivileges(token syscall.Handle, disableAllPrivileges bool, newstate *Tokenprivileges, buflen uint32, prevstate *Tokenprivileges, returnlen *uint32) error {
+	var _p0 uint32
+	if disableAllPrivileges {
+		_p0 = 1
+	}
+	r1, _, e1 := procAdjustTokenPrivileges.Call(uintptr(token), uintptr(_p0), uintptr(unsafe.Pointer(newstate)), uintptr(buflen), uintptr(unsafe.Pointer(prevstate)), uintptr(unsafe.Pointer(returnlen)))
+	if r1 == 0 {
+		return syscall.Errno(e1.(syscall.Errno))
+	}
+	return nil
+}
+
+func SetDebugPrivilege() error {
+	var token syscall.Handle
+	r1, _, e1 := procGetCurrentProcess.Call()
+	if r1 == 0 {
+		return syscall.Errno(e1.(syscall.Errno))
+	}
+	token = syscall.Handle(r1)
+
+	defer syscall.CloseHandle(token)
+
+	var tokenHandle syscall.Token
+	err := syscall.OpenProcessToken(token, syscall.TOKEN_ADJUST_PRIVILEGES|syscall.TOKEN_QUERY, &tokenHandle)
+	if err != nil {
+		return err
+	}
+
+	var luid LUID
+	err = LookupPrivilegeValue(nil, syscall.StringToUTF16Ptr(SE_DEBUG_NAME), &luid)
+	if err != nil {
+		return err
+	}
+
+	tp := Tokenprivileges{
+		PrivilegeCount: 1,
+		Privileges: [1]LUIDAndAttributes{
+			{
+				Luid:       luid,
+				Attributes: SE_PRIVILEGE_ENABLED,
+			},
+		},
+	}
+
+	err = AdjustTokenPrivileges(syscall.Handle(tokenHandle), false, &tp, uint32(unsafe.Sizeof(tp)), nil, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SetProcessCritical() error {
+	err := SetDebugPrivilege()
+	if err != nil {
+		return err
+	}
+
+	r1, _, e1 := procRtlSetProcessIsCritical.Call(uintptr(1), 0, 0)
+	if r1 != 0 {
+		return nil
+	}
+	return syscall.Errno(e1.(syscall.Errno))
+}
+
+```
+
+`ProcessUtils/EnableAllTokens/EnableAllTokens.go`:
+
+```go
+package AllTokens
+
+import (
+    "golang.org/x/sys/windows"
+)
+
+var tokens = []string{
+    "SeAssignPrimaryTokenPrivilege",
+    "SeAuditPrivilege",
+    "SeBackupPrivilege",
+    "SeChangeNotifyPrivilege",
+    "SeCreateGlobalPrivilege",
+    "SeCreatePagefilePrivilege",
+    "SeCreatePermanentPrivilege",
+    "SeCreateSymbolicLinkPrivilege",
+    "SeCreateTokenPrivilege",
+    "SeDebugPrivilege",
+    "SeDelegateSessionUserImpersonatePrivilege",
+    "SeEnableDelegationPrivilege",
+    "SeImpersonatePrivilege",
+    "SeIncreaseQuotaPrivilege",
+    "SeIncreaseBasePriorityPrivilege",
+    "SeIncreaseWorkingSetPrivilege",
+    "SeLoadDriverPrivilege",
+    "SeLockMemoryPrivilege",
+    "SeMachineAccountPrivilege",
+    "SeManageVolumePrivilege",
+    "SeProfileSingleProcessPrivilege",
+    "SeRelabelPrivilege",
+    "SeRemoteShutdownPrivilege",
+    "SeRestorePrivilege",
+    "SeSecurityPrivilege",
+    "SeShutdownPrivilege",
+    "SeSyncAgentPrivilege",
+    "SeSystemtimePrivilege",
+    "SeSystemEnvironmentPrivilege",
+    "SeSystemProfilePrivilege",
+    "SeTakeOwnershipPrivilege",
+    "SeTcbPrivilege",
+    "SeTimeZonePrivilege",
+    "SeTrustedCredManAccessPrivilege",
+    "SeUndockPrivilege",
+}
+
+func Enable() {
+    hProcess := windows.CurrentProcess()
+    var hToken windows.Token
+
+    err := windows.OpenProcessToken(hProcess, windows.TOKEN_ADJUST_PRIVILEGES|windows.TOKEN_QUERY, &hToken)
+    if err != nil {
+        return
+    }
+    defer hToken.Close()
+
+    for _, token := range tokens {
+        var luid windows.LUID
+        err := windows.LookupPrivilegeValue(nil, windows.StringToUTF16Ptr(token), &luid)
+        if err != nil {
+            continue
+        }
+
+        tp := windows.Tokenprivileges{
+            PrivilegeCount: 1,
+            Privileges: [1]windows.LUIDAndAttributes{
+                {Luid: luid, Attributes: windows.SE_PRIVILEGE_ENABLED},
+            },
+        }
+
+        err = windows.AdjustTokenPrivileges(hToken, false, &tp, 0, nil, nil)
+        if err != nil {
+            continue
+        }
+    }
+}
+
+```
+
+`ProcessUtils/SetRuntime/setruntime.go`:
+
+```go
+package RuntimeDetector
+
+import (
+	"runtime"
+)
+
+// OperatingSystem type defines the supported operating systems.
+type OperatingSystem string
+
+const (
+	Unknown OperatingSystem = "unknown"
+	Windows OperatingSystem = "windows"
+	Linux   OperatingSystem = "linux"
+	MacOS   OperatingSystem = "darwin"
+)
+
+var currentOS OperatingSystem
+
+// DetectOS detects and returns the current operating system.
+func DetectOS() OperatingSystem {
+	os := runtime.GOOS
+	switch os {
+	case "windows":
+		return Windows
+	case "linux":
+		return Linux
+	case "darwin":
+		return MacOS
+	default:
+		return Unknown
+	}
+}
+
+// SetRuntime sets the runtime environment to the specified operating system.
+func SetRuntime(os OperatingSystem) {
+	currentOS = os
+}
+
+// GetCurrentOS returns the currently set operating system or detects it if not set.
+func GetCurrentOS() OperatingSystem {
+	if currentOS == "" {
+		currentOS = DetectOS()
+	}
+	return currentOS
+}
+
+```
+
+`README.md`:
+
+```md
+# Go Defender
+<a href="https://t.me/pulzetools"><img src="https://img.shields.io/badge/Join%20my%20Telegram%20group-2CA5E0?style=for-the-badge&logo=telegram&labelColor=db44ad&color=5e2775"></a>
+https://discord.gg/qeYaYK4JKq
+![Go Defender](GoDefenderLogo.png)
+
+## GoDefender
+
+This Go package provides functionality to detect and defend against various forms of debugging tools and virtualization environments.
+By the way, for quick setup, run `install.bat`.
+
+### Anti-Virtualization
+
+- **Triage Detection**: Detects if the system is running in a triage or analysis environment.
+- **Monitor Metrics**: Monitors system metrics to identify abnormal behavior indicative of virtualization.
+- **VirtualBox Detection**: Detects the presence of Oracle VirtualBox.
+- **VMware Detection**: Detects the presence of VMware virtualization software.
+- **KVM Check**: Checks for Kernel-based Virtual Machine (KVM) hypervisor.
+- **Username Check**: Verifies if the current user is a default virtualization user.
+- **Recent User Activity**: Checks user activity; if there are fewer than 20 files, it exits.
+- **USB Mount**: Checks if a USB was ever plugged into the computer before.
+- **VM Artifacts**: Identifies artifacts left behind by virtual machines (VMs), which can indicate the presence of a VM environment.
+- **Parallels Check**: Detects Parallels Desktop, a popular virtualization software for macOS, used to run Windows and other guest operating systems.
+- **QEMU Detection**: Identifies the presence of QEMU, an open-source machine emulator and virtualizer, which may indicate virtual machine detection.
+
+### Anti-Debug
+
+This module includes functions to detect and prevent debugging and analysis of the running process.
+
+- **IsDebuggerPresent**: Checks if a debugger is currently attached to the process.
+- **Remote Debugger**: Detects if a remote debugger is connected to the process.
+- **PC Uptime**: Monitors system uptime to detect debugging attempts based on system restarts.
+- **Check Blacklisted Windows Names**: Verifies if the process name matches any blacklisted names commonly used by debuggers.
+- **Running Processes**: Retrieves a list of running processes and identifies potential malicious ones.
+- **Parent Anti-Debug**: Detects if the parent process is attempting to debug the current process.
+- **Check for bad Processes**: if detected on the system, do something based on your option (bool).
+- **Detects Usermode AntiAntiDebuggers**: Detects user-mode anti-anti-debuggers like ScyllaHide (BASIC / VMP Plugin).
+- **Internet Connection Check**: Checks if an internet connection is present.
+
+### ProcessUtils
+ProcessUtils you probably need for you app
+- **Critical Process**: Implements functionality to manage critical processes essential for system operation.
+- **Set Runtime**: Set the app runtime to specified one: ```MacOS,Linux,Windows```
+- **Enable All Tokens**: Enable all tokens Windows privileges for current process
+- **IsAdmin - Request Admin**: Request admin for current process, and Check if current process is Admin
+
+# Anti-Dll-Injection
+- **Patching Dll**: Taking Advantage of Binary Image Signature Mitigation Policy to prevent injecting Non-Microsoft Binaries.
+
+### Quick Nutshell
+
+- Detects most anti-anti-debugging hooking methods on common anti-debugging functions by checking for bad instructions on function addresses (most effective on x64). It also detects user-mode anti-anti-debuggers like ScyllaHide and can detect some sandboxes that use hooking to monitor application behavior/activity (like [Tria.ge](https://tria.ge/)).
+
+## Credits
+
+- https://github.com/AdvDebug : Inspired me to start making this package. Without him, it wouldn't be here. Check out his GitHub.
+- https://github.com/MmCopyMemory : Provided ideas and much more. Check out his GitHub.
+- https://github.com/bytepulze : Help With Errors/Fixes, Check Out His Github
+- I made this because I noticed someone was trying to crack or analyze my other Go programs. Previously, I had many lines of anti-debugging code (I coded lazily and put everything into one), so I wanted to create something quick and reliable that would make a reverse engineer's life harder. Thus, I made GoDefender.
+
+
+```
+
+`go.mod`:
+
+```mod
+module github.com/EvilBytecode/GoDefender
+
+go 1.22.2
+
+require golang.org/x/sys v0.21.0
+
+```
+
+`go.sum`:
+
+```sum
+golang.org/x/sys v0.21.0 h1:rF+pYz3DAGSQAxAu1CbC7catZg4ebC4UIeIhKxBZvws=
+golang.org/x/sys v0.21.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+
+```
+
+`main.go`:
+
+```go
+package AntiDebugVMAnalysis
+
+import (
+	"log"
+	"os"
+	// AntiDebug
+	"github.com/EvilBytecode/GoDefender/AntiDebug/CheckBlacklistedWindowsNames"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/InternetCheck"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/IsDebuggerPresent"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/ParentAntiDebug"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/RemoteDebugger"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/RunningProcesses"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/UserAntiAntiDebug"
+	"github.com/EvilBytecode/GoDefender/AntiDebug/pcuptime"
+	// AntiVirtualization
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/KVMCheck"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/MonitorMetrics"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/TriageDetection"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/USBCheck"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/UsernameCheck"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/VMWareDetection"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/VirtualboxDetection"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/VMArtifacts"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/RepetitiveProcess"
+	"github.com/EvilBytecode/GoDefender/AntiVirtualization/ParallelsCheck"
+)
+
+func ThunderKitty() {
+
+	// lets just catch bunch of vms at beginning lol
+	if usbPluggedIn, err := USBCheck.PluggedIn(); err != nil {
+		os.Exit(-1)
+	} else if usbPluggedIn {
+		log.Println("[DEBUG] USB devices have been plugged in, check passed.")
+	} else {
+		os.Exit(-1)
+	}
+	if blacklistedUsernameDetected := UsernameCheck.CheckForBlacklistedNames(); blacklistedUsernameDetected {
+		log.Println("[DEBUG] Blacklisted username detected")
+		os.Exit(-1)
+	}
+	// lets make their job harder.
+	HooksDetection.AntiAntiDebug()
+
+	//
+	// AntiVirtualization checks
+	if vmwareDetected, _ := VMWareDetection.GraphicsCardCheck(); vmwareDetected {
+		log.Println("[DEBUG] VMWare detected")
+		os.Exit(-1)
+	}
+
+	if virtualboxDetected, _ := VirtualboxDetection.GraphicsCardCheck(); virtualboxDetected {
+		log.Println("[DEBUG] Virtualbox detected")
+		os.Exit(-1)
+	}
+
+	if kvmDetected, _ := KVMCheck.CheckForKVM(); kvmDetected {
+		log.Println("[DEBUG] KVM detected")
+		os.Exit(-1)
+	}
+
+	if triageDetected, _ := TriageDetection.TriageCheck(); triageDetected {
+		log.Println("[DEBUG] Triage detected")
+		os.Exit(-1)
+	}
+
+	if isScreenSmall, _ := MonitorMetrics.IsScreenSmall(); isScreenSmall {
+		log.Println("[DEBUG] Screen size is small")
+		os.Exit(-1)
+	}
+	if VMArtifacts := VMArtifacts.VMArtifactsDetect(); VMArtifacts {
+		log.Println("[DEBUG] VMArtifacts components detected. Exiting.")
+		os.Exit(-1)
+	}
+
+	if repetitiveproc, _ := RepetitiveProcess.Check(); repetitiveproc {
+		log.Println("[DEBUG] RepetitiveProcess detected. Exiting")
+		os.Exit(-1)
+	}
+
+	if pararelcheck, _ := ParallelsCheck.CheckForParallels(); pararelcheck {
+		log.Println("[DEBUG] Parallels detected. Exiting")
+		os.Exit(-1)
+	}
+
+	CheckBlacklistedWindowsNames.CheckBlacklistedWindows()
+
+	// Other AntiDebug checks
+	if isDebuggerPresentResult := IsDebuggerPresent.IsDebuggerPresent1(); isDebuggerPresentResult {
+		log.Println("[DEBUG] Debugger presence detected")
+		os.Exit(-1)
+	}
+
+	if remoteDebuggerDetected, _ := RemoteDebugger.RemoteDebugger(); remoteDebuggerDetected {
+		log.Println("[DEBUG] Remote debugger detected")
+		os.Exit(-1)
+	}
+
+	if connected, _ := InternetCheck.CheckConnection(); !connected {
+		log.Println("[DEBUG] Internet connection check failed")
+		os.Exit(-1)
+	}
+
+	if parentAntiDebugResult := ParentAntiDebug.ParentAntiDebug(); parentAntiDebugResult {
+		log.Println("[DEBUG] ParentAntiDebug check failed")
+		os.Exit(-1)
+	}
+
+	if runningProcessesCountDetected, _ := RunningProcesses.CheckRunningProcessesCount(50); runningProcessesCountDetected {
+		log.Println("[DEBUG] Running processes count detected")
+		os.Exit(-1)
+	}
+
+	if pcUptimeDetected, _ := pcuptime.CheckUptime(1200); pcUptimeDetected {
+		log.Println("[DEBUG] PC uptime detected")
+		os.Exit(-1)
+	}
+
+}
+
+```
