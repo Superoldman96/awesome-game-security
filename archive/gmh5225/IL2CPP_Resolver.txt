@@ -1,0 +1,2765 @@
+Project Path: arc_gmh5225_IL2CPP_Resolver_wfnpy6tq
+
+Source Tree:
+
+```txt
+arc_gmh5225_IL2CPP_Resolver_wfnpy6tq
+├── Cache.cpp
+├── Cache.hpp
+├── Data.cpp
+├── Data.hpp
+├── Defines.hpp
+├── Functions
+│   ├── Class.cpp
+│   ├── Class.hpp
+│   ├── Domain.hpp
+│   ├── ResolveCall.hpp
+│   ├── String.cpp
+│   ├── String.hpp
+│   ├── Thread.cpp
+│   └── Thread.hpp
+├── Includes.hpp
+├── LICENSE
+├── Main.cpp
+├── Main.hpp
+├── README.md
+├── Unity
+│   ├── API
+│   │   ├── Camera.cpp
+│   │   ├── Camera.hpp
+│   │   ├── Component.cpp
+│   │   ├── Component.hpp
+│   │   ├── GameObject.cpp
+│   │   ├── GameObject.hpp
+│   │   ├── LayerMask.cpp
+│   │   ├── LayerMask.hpp
+│   │   ├── Object.cpp
+│   │   ├── Object.hpp
+│   │   ├── Rigidbody.cpp
+│   │   ├── Rigidbody.hpp
+│   │   ├── Transform.cpp
+│   │   ├── Transform.hpp
+│   │   ├── _TEMPLATE_API.cpp
+│   │   └── _TEMPLATE_API.hpp
+│   ├── Defines.hpp
+│   ├── Includes.hpp
+│   ├── Obfuscators.cpp
+│   ├── Obfuscators.hpp
+│   └── Structures
+│       ├── Engine.hpp
+│       ├── Includes.hpp
+│       ├── System_String.hpp
+│       ├── il2cpp.hpp
+│       ├── il2cppArray.hpp
+│       └── il2cppDictionary.hpp
+└── Utils
+    └── Joaat.hpp
+
+```
+
+`Cache.cpp`:
+
+```cpp
+#include "Includes.hpp"
+
+namespace IL2CPP
+{
+	namespace SystemTypeCache
+	{
+		class CCache
+		{
+		public:
+			unsigned int m_uHash = 0U;
+			Unity::il2cppObject* m_pSystemType = nullptr;
+
+			CCache() { }
+			CCache(unsigned int m_uKey, Unity::il2cppObject* m_pValue)
+			{
+				m_uHash = m_uKey;
+				m_pSystemType = m_pValue;
+			}
+		};
+		std::vector<CCache> m_vCache;
+
+		void Add(unsigned int m_uHash, Unity::il2cppObject* m_pSystemType)
+		{
+			if (!m_pSystemType)
+				return;
+
+			m_vCache.emplace_back(CCache(m_uHash, m_pSystemType));
+		}
+
+		void Add(const char* m_pName, Unity::il2cppObject* m_pSystemType)
+		{
+			if (!m_pName)
+				return;
+
+			Add(Utils::JOAAT(m_pName), m_pSystemType);
+		}
+
+		Unity::il2cppObject* Find(unsigned int m_uHash)
+		{
+			size_t m_sSize = m_vCache.size();
+			if (m_sSize > 0)
+			{
+				CCache* m_pData = m_vCache.data();
+				for (size_t i = 0; m_sSize > i; ++i)
+				{
+					if (m_pData[i].m_uHash == m_uHash)
+						return m_pData[i].m_pSystemType;
+				}
+			}
+
+			return nullptr;
+		}
+
+		Unity::il2cppObject* Find(const char* m_pName)
+		{
+			return Find(Utils::JOAAT(m_pName));
+		}
+
+		namespace Initializer
+		{
+			std::vector<const char*> m_vList;
+
+			void Add(const char* m_pName) { m_vList.emplace_back(m_pName); }
+
+			void PreCache()
+			{
+				for (const char* m_pName : m_vList)
+					SystemTypeCache::Add(m_pName, IL2CPP::Class::GetSystemType(m_pName));
+
+				m_vList.clear();
+			}
+		}
+	}
+}
+```
+
+`Cache.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	namespace SystemTypeCache
+	{
+		void Add(unsigned int m_uHash, Unity::il2cppObject* m_pSystemType);
+
+		void Add(const char* m_pName, Unity::il2cppObject* m_pSystemType);
+
+		Unity::il2cppObject* Find(unsigned int m_uHash);
+
+		Unity::il2cppObject* Find(const char* m_pName);
+
+		namespace Initializer
+		{
+			extern std::vector<const char*> m_vList;
+
+			/*
+			* (WARNING) this needs to be called before actual IL2CPP Resolver Init, otherwise use function Add outside Initializer namespace!
+			*/
+			void Add(const char* m_pName);
+
+			void PreCache();
+		}
+	}
+}
+```
+
+`Data.cpp`:
+
+```cpp
+#include "Includes.hpp"
+
+namespace IL2CPP { SData Data; }
+```
+
+`Data.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	struct SData
+	{
+		HMODULE m_hGameAseembly = 0;
+		
+		struct SFunctions
+		{
+			void* m_pClassFromName = nullptr;
+			void* m_pClassGetFields = nullptr;
+			void* m_pClassGetFieldFromName = nullptr;
+			void* m_pClassGetMethods = nullptr;
+			void* m_pClassGetMethodFromName = nullptr;
+			void* m_pClassGetPropertyFromName = nullptr;
+			void* m_pClassGetType = nullptr;
+			void* m_pDomainGet = nullptr;
+			void* m_pDomainGetAssemblies = nullptr;
+			void* m_pFree = nullptr;
+			void* m_pImageGetClass = nullptr;
+			void* m_pImageGetClassCount = nullptr;
+			void* m_pResolveFunction = nullptr;
+			void* m_pStringNew = nullptr;
+			void* m_pThreadAttach = nullptr;
+			void* m_pThreadDetach = nullptr;
+			void* m_pTypeGetObject = nullptr;
+		};
+		SFunctions Functions;
+	};
+	extern SData Data;
+}
+```
+
+`Defines.hpp`:
+
+```hpp
+#pragma once
+// Disable Asserts
+//#define IL2CPP_ASSERT(x) assert(0)
+#ifndef IL2CPP_ASSERT
+	#define IL2CPP_ASSERT(x) assert(x)
+#endif
+
+#ifndef IL2CPP_MAIN_MODULE
+	#define IL2CPP_MAIN_MODULE "GameAssembly.dll"
+#endif
+
+#define IL2CPP_INIT_EXPORT								"il2cpp_init"
+#define IL2CPP_CLASS_FROM_NAME_EXPORT					"il2cpp_class_from_name"
+#define IL2CPP_CLASS_GET_FIELDS							"il2cpp_class_get_fields"
+#define IL2CPP_CLASS_GET_FIELD_FROM_NAME_EXPORT			"il2cpp_class_get_field_from_name"
+#define IL2CPP_CLASS_GET_METHODS						"il2cpp_class_get_methods"
+#define IL2CPP_CLASS_GET_METHOD_FROM_NAME_EXPORT		"il2cpp_class_get_method_from_name"
+#define IL2CPP_CLASS_GET_PROPERTY_FROM_NAME_EXPORT		"il2cpp_class_get_property_from_name"
+#define IL2CPP_CLASS_GET_TYPE_EXPORT					"il2cpp_class_get_type"
+#define IL2CPP_DOMAIN_GET_EXPORT						"il2cpp_domain_get"
+#define IL2CPP_DOMAIN_GET_ASSEMBLIES_EXPORT				"il2cpp_domain_get_assemblies"
+#define IL2CPP_FREE_EXPORT								"il2cpp_free"
+#define IL2CPP_IMAGE_GET_CLASS_EXPORT					"il2cpp_image_get_class"
+#define IL2CPP_IMAGE_GET_CLASS_COUNT_EXPORT				"il2cpp_image_get_class_count"
+#define IL2CPP_RESOLVE_FUNC_EXPORT						"il2cpp_resolve_icall"
+#define IL2CPP_STRING_NEW_EXPORT						"il2cpp_string_new"
+#define IL2CPP_THREAD_ATTACH_EXPORT						"il2cpp_thread_attach"
+#define IL2CPP_THREAD_DETACH_EXPORT						"il2cpp_thread_detach"
+#define IL2CPP_TYPE_GET_OBJECT_EXPORT					"il2cpp_type_get_object"
+
+// Calling Convention
+#define IL2CPP_CALLING_CONVENTION __fastcall*
+```
+
+`Functions/Class.cpp`:
+
+```cpp
+#include "../Includes.hpp"
+
+namespace IL2CPP
+{
+	namespace Class
+	{
+        Unity::il2cppFieldInfo* GetFields(Unity::il2cppClass* m_pClass, void** m_pIterator)
+        {
+            return reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, void**)>(Data.Functions.m_pClassGetFields)(m_pClass, m_pIterator);
+        }
+
+        void FetchFields(Unity::il2cppClass* m_pClass, std::vector<Unity::il2cppFieldInfo*>* m_pVector, void* m_pFieldIterator)
+        {
+            m_pVector->clear();
+
+            while (1)
+            {
+                Unity::il2cppFieldInfo* m_pField = GetFields(m_pClass, &m_pFieldIterator);
+                if (!m_pField)
+                    break;
+
+                m_pVector->emplace_back(m_pField);
+            }
+        }
+
+        Unity::il2cppMethodInfo* GetMethods(Unity::il2cppClass* m_pClass, void** m_pIterator)
+        {
+            return reinterpret_cast<Unity::il2cppMethodInfo*(IL2CPP_CALLING_CONVENTION)(void*, void**)>(Data.Functions.m_pClassGetMethods)(m_pClass, m_pIterator);
+        }
+
+        void FetchMethods(Unity::il2cppClass* m_pClass, std::vector<Unity::il2cppMethodInfo*>* m_pVector, void* m_pMethodIterator)
+        {
+            m_pVector->clear();
+
+            while (1)
+            {
+                Unity::il2cppMethodInfo* m_pMethod = GetMethods(m_pClass, &m_pMethodIterator);
+                if (!m_pMethod)
+                    break;
+
+                m_pVector->emplace_back(m_pMethod);
+            }
+        }
+
+        Unity::il2cppType* GetType(Unity::il2cppClass* m_pClass)
+        {
+            return reinterpret_cast<Unity::il2cppType*(IL2CPP_CALLING_CONVENTION)(void*)>(Data.Functions.m_pClassGetType)(m_pClass);
+        }
+
+        Unity::il2cppObject* GetSystemType(Unity::il2cppClass* m_pClass)
+        {
+            return reinterpret_cast<Unity::il2cppObject*(IL2CPP_CALLING_CONVENTION)(void*)>(Data.Functions.m_pTypeGetObject)(GetType(m_pClass));
+        }
+
+        Unity::il2cppObject* GetSystemType(const char* m_pClassName)
+        {
+            Unity::il2cppClass* m_pClass = Find(m_pClassName);
+            if (!m_pClass)
+                return nullptr;
+
+            return GetSystemType(m_pClass);
+        }
+
+        Unity::il2cppClass* GetFromName(Unity::il2cppImage* m_pImage, const char* m_pNamespace, const char* m_pName)
+        {
+            return reinterpret_cast<Unity::il2cppClass*(IL2CPP_CALLING_CONVENTION)(void*, const char*, const char*)>(Data.Functions.m_pClassFromName)(m_pImage, m_pNamespace, m_pName);
+        }
+
+		Unity::il2cppClass* Find(const char* m_pName)
+		{
+            size_t m_sAssembliesCount = 0U;
+            Unity::il2cppAssembly** m_pAssemblies = Domain::GetAssemblies(&m_sAssembliesCount);
+            if (!m_pAssemblies || 0U >= m_sAssembliesCount) return nullptr;
+
+            const char* m_pNameSpaceEnd = strrchr(m_pName, '.');
+            char* m_pNameSpace = nullptr;
+            if (m_pNameSpaceEnd)
+            {
+                uintptr_t m_uNamespaceSize = static_cast<uintptr_t>(m_pNameSpaceEnd - m_pName);
+                m_pNameSpace = new char[m_uNamespaceSize + 1];
+                memcpy(m_pNameSpace, m_pName, m_uNamespaceSize);
+                m_pNameSpace[m_uNamespaceSize] = '\0';
+
+                m_pName = m_pNameSpaceEnd + 1;
+            }
+            else
+            {
+                m_pNameSpace = new char[2];
+                memset(m_pNameSpace, 0, 2);
+            }
+
+            Unity::il2cppClass* m_pClassReturn = nullptr;
+            for (size_t i = 0U; m_sAssembliesCount > i; ++i)
+            {
+                Unity::il2cppAssembly* m_pAssembly = m_pAssemblies[i];
+                if (!m_pAssembly || !m_pAssembly->m_pImage) continue;
+
+                m_pClassReturn = GetFromName(m_pAssembly->m_pImage, m_pNameSpace, m_pName);
+                if (m_pClassReturn) break;
+            }
+
+            delete[] m_pNameSpace;
+            return m_pClassReturn;
+		}
+
+        void FetchClasses(std::vector<Unity::il2cppClass*>* m_pVector, const char* m_pModuleName, const char* m_pNamespace)
+        {
+            m_pVector->clear();
+
+            size_t m_sAssembliesCount = 0U;
+            Unity::il2cppAssembly** m_pAssemblies = Domain::GetAssemblies(&m_sAssembliesCount);
+            if (!m_pAssemblies || 0U >= m_sAssembliesCount) return;
+
+            Unity::il2cppImage* m_pImage = nullptr;
+            for (size_t i = 0U; m_sAssembliesCount > i; ++i)
+            {
+                Unity::il2cppAssembly* m_pAssembly = m_pAssemblies[i];
+                if (!m_pAssembly || !m_pAssembly->m_pImage || strcmp(m_pAssembly->m_pImage->m_pNameNoExt, m_pModuleName) != 0)
+                    continue;
+
+                m_pImage = m_pAssembly->m_pImage;
+                break;
+            }
+
+            if (m_pImage)
+            {
+                size_t m_sClassesCount = reinterpret_cast<size_t(IL2CPP_CALLING_CONVENTION)(void*)>(Data.Functions.m_pImageGetClassCount)(m_pImage);
+                for (size_t i = 0U; m_sClassesCount > i; ++i)
+                {
+                    Unity::il2cppClass* m_pClass = reinterpret_cast<Unity::il2cppClass*(IL2CPP_CALLING_CONVENTION)(void*, size_t)>(Data.Functions.m_pImageGetClass)(m_pImage, i);
+                    if (m_pNamespace)
+                    {
+                        if (m_pNamespace[0] == '\0')
+                        {
+                            if (m_pClass->m_pNamespace[0] != '\0')
+                                continue;
+                        }
+                        else if (strcmp(m_pClass->m_pNamespace, m_pNamespace) != 0)
+                            continue;
+                    }
+
+                    m_pVector->emplace_back(m_pClass);
+                }
+            }
+        }
+
+        namespace Utils
+        {
+            int GetFieldOffset(Unity::il2cppClass* m_pClass, const char* m_pName)
+            {
+                void* m_pFieldIterator = nullptr;
+                while (1)
+                {
+                    Unity::il2cppFieldInfo* m_pField = GetFields(m_pClass, &m_pFieldIterator);
+                    if (!m_pField)
+                        break;
+
+                    if (strcmp(m_pField->m_pName, m_pName) == 0)
+                        return m_pField->m_iOffset;
+                }
+
+                return -1;
+            }
+
+            int GetFieldOffset(const char* m_pClassName, const char* m_pName)
+            {
+                Unity::il2cppClass* m_pClass = Find(m_pClassName);
+                if (m_pClass)
+                    return GetFieldOffset(m_pClass, m_pName);
+
+                return -1;
+            }
+
+            void* GetMethodPointer(Unity::il2cppClass* m_pClass, const char* m_pMethodName, int m_iArgs)
+            {
+                Unity::il2cppMethodInfo* pMethod = reinterpret_cast<Unity::il2cppMethodInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*, int)>(Data.Functions.m_pClassGetMethodFromName)(m_pClass, m_pMethodName, m_iArgs);
+                if (!pMethod) return nullptr;
+
+                return pMethod->m_pMethodPointer;
+            }
+
+            void* GetMethodPointer(const char* m_pClassName, const char* m_pMethodName, int m_iArgs)
+            {
+                Unity::il2cppClass* m_pClass = Find(m_pClassName);
+                if (m_pClass)
+                    return GetMethodPointer(m_pClass, m_pMethodName, m_iArgs);
+
+                return nullptr;
+            }
+
+            Unity::il2cppClass* FilterClass(std::vector<Unity::il2cppClass*>* m_pClasses, std::initializer_list<const char*> m_vNames, int m_iFoundCount)
+            {
+                int m_iNamesCount = static_cast<int>(m_vNames.size());
+                const char** m_pNames = const_cast<const char**>(m_vNames.begin());
+
+                if (0 >= m_iFoundCount || m_iFoundCount > m_iNamesCount)
+                    m_iFoundCount = m_iNamesCount;
+
+                Unity::il2cppClass* m_pReturn = nullptr;
+                for (size_t c = 0; m_pClasses->size() > c; ++c)
+                {
+                    int m_iFoundCountNow = 0;
+
+                    Unity::il2cppClass* m_pClass = m_pClasses->operator[](c);
+                    if (!m_pClass)
+                        continue;
+
+                    for (int i = 0; m_iNamesCount > i; ++i)
+                    {
+                        const char* m_pNameToFind = m_pNames[i];
+
+                        bool m_bFoundInClass = false;
+                        if (m_pNameToFind[0] == '~') // Field
+                            m_bFoundInClass = GetFieldOffset(m_pClass, &m_pNameToFind[1]) >= 0;
+                        else if (m_pNameToFind[0] == '-') // Method
+                            m_bFoundInClass = GetMethodPointer(m_pClass, &m_pNameToFind[1]) != nullptr;
+                        else // Both
+                        {
+                            m_bFoundInClass = GetFieldOffset(m_pClass, m_pNameToFind) >= 0;
+                            if (!m_bFoundInClass)
+                                m_bFoundInClass = GetMethodPointer(m_pClass, m_pNameToFind) != nullptr;
+                        }
+
+                        if (m_bFoundInClass)
+                            ++m_iFoundCountNow;
+                    }
+
+                    if (m_iFoundCount == m_iFoundCountNow)
+                    {
+                        m_pReturn = m_pClass;
+                        break;
+                    }
+                }
+
+                return m_pReturn;
+            }
+
+            void* FilterClassToMethodPointer(std::vector<Unity::il2cppClass*>* m_pClasses, const char* m_pMethodName, int m_iArgs)
+            {
+                void* m_pMethodPointer = nullptr;
+                for (size_t c = 0; m_pClasses->size() > c; ++c)
+                {
+                    Unity::il2cppClass* m_pClass = m_pClasses->operator[](c);
+                    if (!m_pClass)
+                        continue;
+
+                    m_pMethodPointer = GetMethodPointer(m_pClass, m_pMethodName, m_iArgs);
+                    if (m_pMethodPointer)
+                        break;
+                }
+
+                return m_pMethodPointer;
+            }
+        }
+	}
+}
+```
+
+`Functions/Class.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	namespace Class
+	{
+		Unity::il2cppFieldInfo* GetFields(Unity::il2cppClass* m_pClass, void** m_pIterator);
+
+		void FetchFields(Unity::il2cppClass* m_pClass, std::vector<Unity::il2cppFieldInfo*>* m_pVector, void* m_pFieldIterator = nullptr);
+
+		Unity::il2cppMethodInfo* GetMethods(Unity::il2cppClass* m_pClass, void** m_pIterator);
+
+		void FetchMethods(Unity::il2cppClass* m_pClass, std::vector<Unity::il2cppMethodInfo*>* m_pVector, void* m_pMethodIterator = nullptr);
+
+		Unity::il2cppType* GetType(Unity::il2cppClass* m_pClass);
+
+		Unity::il2cppObject* GetSystemType(Unity::il2cppClass* m_pClass);
+
+		Unity::il2cppObject* GetSystemType(const char* m_pClassName);
+
+		Unity::il2cppClass* GetFromName(Unity::il2cppImage* m_pImage, const char* m_pNamespace, const char* m_pName);
+
+		Unity::il2cppClass* Find(const char* m_pName);
+
+		/*
+		*   If you wanna fetch modules with custom classes use modulename: Assembly-CSharp
+		*   Nullptr namespace == pass any namespace
+		*/
+		void FetchClasses(std::vector<Unity::il2cppClass*>* m_pVector, const char* m_pModuleName, const char* m_pNamespace);
+
+		namespace Utils
+		{
+			int GetFieldOffset(Unity::il2cppClass* m_pClass, const char* m_pName);
+
+			int GetFieldOffset(const char* m_pClassName, const char* m_pName);
+
+			void* GetMethodPointer(Unity::il2cppClass* m_pClass, const char* m_pMethodName, int m_iArgs = -1);
+
+			void* GetMethodPointer(const char* m_pClassName, const char* m_pMethodName, int m_iArgs = -1);
+
+			/*
+			*	Name Prefixes
+			*		(Field)  ~
+			*		(Method) -
+			*/
+			Unity::il2cppClass* FilterClass(std::vector<Unity::il2cppClass*>* m_pClasses, std::initializer_list<const char*> m_vNames, int m_iFoundCount = -1);
+
+			void* FilterClassToMethodPointer(std::vector<Unity::il2cppClass*>* m_pClasses, const char* m_pMethodName, int m_iArgs = -1);
+		}
+	}
+
+	enum class m_eClassPropType : int
+	{
+		Unknown = 0,
+		Field,			// Member of class that can be accessed directly by RVA
+		Property,		// Member of class that can be accessed by calling function
+		Method,			// Function of class
+	};
+
+	class CClass
+	{
+	public:
+		Unity::il2cppObject m_Object = { 0 };
+		void* m_CachedPtr = nullptr;
+		
+		// Wrappers for namespace, ah...
+		Unity::il2cppFieldInfo* GetFields(void** m_pIterator)
+		{
+			return Class::GetFields(m_Object.m_pClass, m_pIterator);
+		}
+
+		void FetchFields(std::vector<Unity::il2cppFieldInfo*>* m_pVector, void* m_pFieldIterator = nullptr)
+		{
+			Class::FetchFields(m_Object.m_pClass, m_pVector, m_pFieldIterator);
+		}
+
+		Unity::il2cppMethodInfo* GetMethods(void** m_pIterator)
+		{
+			return Class::GetMethods(m_Object.m_pClass, m_pIterator);
+		}
+
+		void FetchMethods(std::vector<Unity::il2cppMethodInfo*>* m_pVector, void* m_pMethodIterator = nullptr)
+		{
+			Class::FetchMethods(m_Object.m_pClass, m_pVector, m_pMethodIterator);
+		}
+
+		void* GetMethodPointer(const char* m_pMethodName, int m_iArgs = -1)
+		{
+			return Class::Utils::GetMethodPointer(m_Object.m_pClass, m_pMethodName, m_iArgs);
+		}
+
+		m_eClassPropType GetPropType(const char* m_pPropType)
+		{
+			Unity::il2cppFieldInfo* pField = reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetFieldFromName)(m_Object.m_pClass, m_pPropType);
+			if (pField) 
+				return m_eClassPropType::Field;
+
+			Unity::il2cppPropertyInfo* pProperty = reinterpret_cast<Unity::il2cppPropertyInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetPropertyFromName)(m_Object.m_pClass, m_pPropType);
+			if (pProperty) 
+				return m_eClassPropType::Property;
+
+			Unity::il2cppMethodInfo* pMethod = reinterpret_cast<Unity::il2cppMethodInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*, int)>(Data.Functions.m_pClassGetMethodFromName)(m_Object.m_pClass, m_pPropType, -1);
+			if (pMethod) 
+				return m_eClassPropType::Method;
+
+			return m_eClassPropType::Unknown;
+		}
+
+		// Call Method
+		template<typename TReturn, typename... TArgs>
+		TReturn CallMethod(void* m_pMethod, TArgs... tArgs) { return reinterpret_cast<TReturn(UNITY_CALLING_CONVENTION)(void*, TArgs...)>(m_pMethod)(this, tArgs...); }
+
+		template<typename TReturn, typename... TArgs>
+		TReturn CallMethod(const char* m_pMethodName, TArgs... tArgs) { return CallMethod<TReturn>(GetMethodPointer(m_pMethodName), tArgs...); }
+
+		template<typename TReturn, typename... TArgs>
+		TReturn CallMethodSafe(void* m_pMethod, TArgs... tArgs)
+		{
+			if (!m_pMethod)
+			{
+				#ifdef _DEBUG 
+					__debugbreak(); // remove it when you wanna step through your code and be like why the fuck it doesn't do anything.
+				#endif
+
+				TReturn m_tDefault = {}; // void goes like illegal use of type. (use void* and fuck them)
+				return m_tDefault;
+			}
+
+			return CallMethod<TReturn>(m_pMethod, tArgs...);
+		}
+
+		template<typename TReturn, typename... TArgs>
+		TReturn CallMethodSafe(const char* m_pMethodName, TArgs... tArgs) { return CallMethodSafe<TReturn>(GetMethodPointer(m_pMethodName), tArgs...); }
+
+		// Properties/Fields
+
+		template<typename T>
+		T GetPropertyValue(const char* m_pPropertyName)
+		{
+			Unity::il2cppPropertyInfo* pProperty = reinterpret_cast<Unity::il2cppPropertyInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetPropertyFromName)(m_Object.m_pClass, m_pPropertyName);
+			if (pProperty && pProperty->m_pGet) 
+				return reinterpret_cast<T(UNITY_CALLING_CONVENTION)(void*)>(pProperty->m_pGet->m_pMethodPointer)(this);
+
+			T tDefault = {};
+			return tDefault;
+		}
+
+		template<typename T>
+		void SetPropertyValue(const char* m_pPropertyName, T m_tValue)
+		{
+			Unity::il2cppPropertyInfo* pProperty = reinterpret_cast<Unity::il2cppPropertyInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetPropertyFromName)(m_Object.m_pClass, m_pPropertyName);
+			if (pProperty && pProperty->m_pSet) 
+				return reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, T)>(pProperty->m_pSet->m_pMethodPointer)(this, m_tValue);
+		}
+
+		template<typename T>
+		__inline T GetMemberValue(int m_iOffset)
+		{
+			return *reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+		}
+
+		template<typename T>
+		__inline void SetMemberValue(int m_iOffset, T m_tValue)
+		{
+			*reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(this) + m_iOffset) = m_tValue;
+		}
+
+		template<typename T>
+		__inline T GetMemberValue(Unity::il2cppFieldInfo* m_pField)
+		{
+			if (!m_pField || 0 > m_pField->m_iOffset)
+			{
+				T m_tDefault = {};
+				return m_tDefault;
+			}
+
+			return GetMemberValue<T>(m_pField->m_iOffset);
+		}
+
+		template<typename T>
+		__inline void SetMemberValue(Unity::il2cppFieldInfo* m_pField, T m_tValue)
+		{
+			if (!m_pField || 0 > m_pField->m_iOffset)
+				return;
+
+			SetMemberValue<T>(m_pField->m_iOffset, m_tValue);
+		}
+
+		template<typename T>
+		T GetMemberValue(const char* m_pMemberName)
+		{
+			Unity::il2cppFieldInfo* pField = reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetFieldFromName)(m_Object.m_pClass, m_pMemberName);
+			if (pField)
+			{
+				if (pField->m_iOffset >= 0) return *reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(this) + pField->m_iOffset);
+			}
+			else
+				return GetPropertyValue<T>(m_pMemberName);
+
+			T tDefault = {};
+			return tDefault;
+		}
+
+		template<typename T>
+		void SetMemberValue(const char* m_pMemberName, T m_tValue)
+		{
+			Unity::il2cppFieldInfo* pField = reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetFieldFromName)(m_Object.m_pClass, m_pMemberName);
+			if (pField)
+			{
+				if (pField->m_iOffset >= 0) *reinterpret_cast<T*>(reinterpret_cast<uintptr_t>(this) + pField->m_iOffset) = m_tValue;
+				return;
+			}
+
+			SetPropertyValue<T>(m_pMemberName, m_tValue);
+		}
+
+		template<typename T>
+		__inline T GetObscuredViaOffset(int m_iOffset)
+		{
+			if (m_iOffset >= 0)
+			{
+				switch (sizeof(T))
+				{
+					case sizeof(double):
+					{
+						long long m_lKey = *reinterpret_cast<long long*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+						long long m_lValue = *reinterpret_cast<long long*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_lKey));
+
+						m_lValue ^= m_lKey;
+						return *reinterpret_cast<T*>(&m_lValue);
+					}
+					break;
+					case sizeof(int):
+					{
+						int m_iKey = *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+						int m_iValue = *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_iKey));
+
+						m_iValue ^= m_iKey;
+						return *reinterpret_cast<T*>(&m_iValue);
+					}
+					break;
+					case sizeof(bool):
+					{
+						unsigned char m_uKey = *reinterpret_cast<unsigned char*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+						int m_iValue = *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_uKey));
+
+						m_iValue ^= m_uKey;
+						return *reinterpret_cast<T*>(&m_iValue);
+					}
+					break;
+				}
+			}
+
+			T m_tDefault = { 0 };
+			return m_tDefault;
+		}
+
+		template<typename T>
+		T GetObscuredValue(const char* m_pMemberName)
+		{
+			Unity::il2cppFieldInfo* m_pField = reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetFieldFromName)(m_Object.m_pClass, m_pMemberName);	
+			return GetObscuredViaOffset<T>(m_pField ? m_pField->m_iOffset : -1);
+		}
+
+		template<typename T>
+		__inline void SetObscuredViaOffset(int m_iOffset, T m_tValue)
+		{
+			if (0 > m_iOffset)
+				return;
+
+			switch (sizeof(T))
+			{
+				case sizeof(double):
+				{
+					long long m_lKey = *reinterpret_cast<long long*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+					long long* m_pValue = reinterpret_cast<long long*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_lKey));
+
+					*m_pValue = *reinterpret_cast<long long*>(&m_tValue) ^ m_lKey;
+				}
+				break;
+				case sizeof(int):
+				{
+					int m_iKey = *reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+					int* m_pValue = reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_iKey));
+
+					*m_pValue = *reinterpret_cast<int*>(&m_tValue) ^ m_iKey;
+				}
+				break;
+				case sizeof(bool):
+				{
+					unsigned char m_uKey = *reinterpret_cast<unsigned char*>(reinterpret_cast<uintptr_t>(this) + m_iOffset);
+					int* m_pValue = reinterpret_cast<int*>(reinterpret_cast<uintptr_t>(this) + m_iOffset + sizeof(m_uKey));
+
+					*m_pValue = *reinterpret_cast<int*>(&m_tValue) ^ m_uKey;
+				}
+				break;
+			}
+		}
+
+		template<typename T>
+		void SetObscuredValue(const char* m_pMemberName, T m_tValue)
+		{
+			Unity::il2cppFieldInfo* m_pField = reinterpret_cast<Unity::il2cppFieldInfo*(IL2CPP_CALLING_CONVENTION)(void*, const char*)>(Data.Functions.m_pClassGetFieldFromName)(m_Object.m_pClass, m_pMemberName);
+			if (!m_pField)
+				return;
+			
+			SetObscuredViaOffset<T>(m_pField->m_iOffset, m_tValue);
+		}
+	};
+}
+
+```
+
+`Functions/Domain.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	namespace Domain
+	{
+		static void* Get()
+		{
+			return reinterpret_cast<void*(IL2CPP_CALLING_CONVENTION)()>(Data.Functions.m_pDomainGet)();
+		}
+
+		static Unity::il2cppAssembly** GetAssemblies(size_t* m_pSize)
+		{
+			return reinterpret_cast<Unity::il2cppAssembly**(IL2CPP_CALLING_CONVENTION)(void*, size_t*)>(Data.Functions.m_pDomainGetAssemblies)(Get(), m_pSize);
+		}
+	}
+}
+```
+
+`Functions/ResolveCall.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	// Without this function, you're pretty much fucked up.
+	static void* ResolveCall(const char* m_pName)
+	{
+		return reinterpret_cast<void*(IL2CPP_CALLING_CONVENTION)(const char*)>(Data.Functions.m_pResolveFunction)(m_pName);
+	}
+}
+```
+
+`Functions/String.cpp`:
+
+```cpp
+#include "../Includes.hpp"
+
+namespace IL2CPP
+{
+	namespace String
+	{
+		Unity::System_String* New(const char* m_pString)
+		{
+			return reinterpret_cast<Unity::System_String*(IL2CPP_CALLING_CONVENTION)(const char*)>(Data.Functions.m_pStringNew)(m_pString);
+		}
+
+		Unity::System_String* New(std::string m_sString) { return New(&m_sString[0]); }
+
+		namespace NoGC
+		{
+			Unity::System_String* New(const char* m_pString)
+			{
+				Unity::System_String* m_pNew = new Unity::System_String;
+				m_pNew->m_pClass = IL2CPP::Class::Find("System.String");
+				m_pNew->m_iLength = swprintf_s(m_pNew->m_wString, (sizeof(Unity::System_String::m_wString) / 4), L"%hs", m_pString);
+
+				return m_pNew;
+			}
+
+			Unity::System_String* New(std::string m_sString) { return New(&m_sString[0]); }
+		}
+	}
+}
+```
+
+`Functions/String.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	namespace String
+	{
+		Unity::System_String* New(const char* m_pString);
+
+		Unity::System_String* New(std::string m_sString);
+
+		// Make sure to delete it after you done using it.
+		namespace NoGC
+		{ 
+			Unity::System_String* New(const char* m_pString);
+
+			Unity::System_String* New(std::string m_sString);
+		}
+	}
+}
+```
+
+`Functions/Thread.cpp`:
+
+```cpp
+#include "../Includes.hpp"
+
+namespace IL2CPP
+{
+	DWORD __stdcall ThreadHandler(void* pReserved)
+	{
+		void* m_pIL2CPPThread = Thread::Attach(Domain::Get());
+
+		CThread* m_pThread = reinterpret_cast<CThread*>(pReserved);
+		void* m_pThreadStart = m_pThread->m_pThreadOnStart;
+		void* m_pThreadEnd = m_pThread->m_pThreadOnEnd;
+		delete m_pThread;
+
+		reinterpret_cast<void(*)()>(m_pThreadStart)();
+		if (m_pThreadEnd)
+			reinterpret_cast<void(*)()>(m_pThreadEnd)();
+
+		Thread::Detach(m_pIL2CPPThread);
+		return 0x0;
+	}
+}
+```
+
+`Functions/Thread.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	DWORD __stdcall ThreadHandler(void* pReserved);
+
+	class CThread
+	{
+	public:
+		void* m_pThreadOnStart = nullptr;
+		void* m_pThreadOnEnd = nullptr;
+
+		CThread() { /* Why would you even do this? */ }
+		CThread(void* m_pOnStart, void* m_pOnEnd)
+		{
+			m_pThreadOnStart = m_pOnStart;
+			m_pThreadOnEnd = m_pOnEnd;
+
+			if (!m_pThreadOnStart)
+			{
+				IL2CPP_ASSERT("IL2CPP::CThread - m_pThreadOnStart is nullptr");
+				return;
+			}
+
+			CreateThread(0, 0, ThreadHandler, this, 0, 0);
+		}
+	};
+
+	namespace Thread
+	{
+		static void Create(void* m_pOnStart, void* m_pOnEnd = nullptr)
+		{
+			CThread* pThread = new CThread(m_pOnStart, m_pOnEnd);
+			IL2CPP_ASSERT(pThread && "IL2CPP::Thread::Create - Failed!");
+		}
+
+		static void* Attach(void* m_pDomain)
+		{
+			return reinterpret_cast<void*(IL2CPP_CALLING_CONVENTION)(void*)>(IL2CPP::Data.Functions.m_pThreadAttach)(m_pDomain);
+		}
+
+		static void Detach(void* m_pThread)
+		{
+			reinterpret_cast<void(IL2CPP_CALLING_CONVENTION)(void*)>(IL2CPP::Data.Functions.m_pThreadDetach)(m_pThread);
+		}
+	}
+}
+```
+
+`Includes.hpp`:
+
+```hpp
+#pragma once
+// Disable Asserts
+// #define IL2CPP_ASSERT(x) ((void)(x))
+#include "Defines.hpp"
+
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <assert.h>
+#include <unordered_map>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <string>
+
+// Utils
+#include "Utils/Joaat.hpp"
+
+// Unity
+#include "Unity/Includes.hpp"
+
+// IL2CPP API
+#include "Data.hpp" // Pointers, Variables, etc...
+#include "Cache.hpp"
+
+// IL2CPP
+#include "Functions/Class.hpp"
+#include "Functions/Domain.hpp"
+#include "Functions/ResolveCall.hpp"
+#include "Functions/String.hpp"
+#include "Functions/Thread.hpp"
+
+// Unity API - Include here so we have access to some cute IL2CPP Features
+#include "Unity/API/_TEMPLATE_API.hpp"
+#include "Unity/API/Object.hpp"
+#include "Unity/API/Component.hpp"
+#include "Unity/API/GameObject.hpp"
+#include "Unity/API/Camera.hpp"
+#include "Unity/API/LayerMask.hpp"
+#include "Unity/API/Rigidbody.hpp"
+#include "Unity/API/Transform.hpp"
+```
+
+`LICENSE`:
+
+```
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>
+
+```
+
+`Main.cpp`:
+
+```cpp
+#include "Main.hpp"
+
+namespace IL2CPP
+{
+	bool Initialize(bool m_bWaitForModule)
+	{
+		if (m_bWaitForModule)
+		{
+			while (!Data.m_hGameAseembly)
+			{
+				Data.m_hGameAseembly = GetModuleHandleA(IL2CPP_MAIN_MODULE);
+				Sleep(1000); // Prevent high CPU usage!
+			}
+		}
+		else
+		{
+			Data.m_hGameAseembly = GetModuleHandleA(IL2CPP_MAIN_MODULE);
+			if (!Data.m_hGameAseembly) return false;
+		}
+
+		if (!UnityAPI::Initialize()) return false;
+
+		return true;
+	}
+
+	namespace UnityAPI
+	{
+		m_eExportObfuscationType m_ExportObfuscation = m_eExportObfuscationType::None;
+		int m_iROTObfuscationValue = -1;
+
+		void* ResolveExport(const char* m_pName)
+		{
+			switch (m_ExportObfuscation)
+			{
+				case m_eExportObfuscationType::ROT:
+				{
+					if (m_iROTObfuscationValue == -1) // Bruteforce
+					{
+						for (int i = 1; 26 > i; ++i)
+						{
+							void* pReturn = GetProcAddress(Data.m_hGameAseembly, &Unity::Obfuscators::ROT_String(m_pName, i)[0]);
+							if (pReturn)
+							{
+								m_iROTObfuscationValue = i;
+								return pReturn;
+							}
+						}
+
+						return nullptr;
+					}
+					
+					return GetProcAddress(Data.m_hGameAseembly, &Unity::Obfuscators::ROT_String(m_pName, m_iROTObfuscationValue)[0]);
+				}
+				default: return GetProcAddress(Data.m_hGameAseembly, m_pName);
+			}
+
+			return nullptr;
+		}
+
+		bool ResolveExport_Boolean(void** m_pAddress, const char* m_pName)
+		{
+			*m_pAddress = ResolveExport(m_pName);
+			IL2CPP_ASSERT(*m_pAddress != nullptr && "Couldn't resolve export!");
+			return *m_pAddress != nullptr;
+		}
+
+		bool Initialize()
+		{
+			bool m_bInitExportResolved = false;
+			for (int i = 0; m_eExportObfuscationType::MAX > i; ++i)
+			{
+				m_ExportObfuscation = static_cast<m_eExportObfuscationType>(i);
+				if (ResolveExport(IL2CPP_INIT_EXPORT))
+				{
+					m_bInitExportResolved = true;
+					break;
+				}
+			}
+
+			IL2CPP_ASSERT(m_bInitExportResolved && "Couldn't resolve il2cpp_init!");
+			if (!m_bInitExportResolved) return false;
+
+			std::unordered_map<const char*, void**> m_uExports =
+			{
+				{ IL2CPP_CLASS_FROM_NAME_EXPORT,				&Data.Functions.m_pClassFromName },
+				{ IL2CPP_CLASS_GET_FIELDS,						&Data.Functions.m_pClassGetFields },
+				{ IL2CPP_CLASS_GET_FIELD_FROM_NAME_EXPORT,		&Data.Functions.m_pClassGetFieldFromName },
+				{ IL2CPP_CLASS_GET_METHODS,						&Data.Functions.m_pClassGetMethods },
+				{ IL2CPP_CLASS_GET_METHOD_FROM_NAME_EXPORT,		&Data.Functions.m_pClassGetMethodFromName },
+				{ IL2CPP_CLASS_GET_PROPERTY_FROM_NAME_EXPORT,	&Data.Functions.m_pClassGetPropertyFromName },
+				{ IL2CPP_CLASS_GET_TYPE_EXPORT,					&Data.Functions.m_pClassGetType },
+				{ IL2CPP_DOMAIN_GET_EXPORT,						&Data.Functions.m_pDomainGet },
+				{ IL2CPP_DOMAIN_GET_ASSEMBLIES_EXPORT,			&Data.Functions.m_pDomainGetAssemblies },
+				{ IL2CPP_FREE_EXPORT,							&Data.Functions.m_pFree },
+				{ IL2CPP_IMAGE_GET_CLASS_EXPORT,				&Data.Functions.m_pImageGetClass },
+				{ IL2CPP_IMAGE_GET_CLASS_COUNT_EXPORT,			&Data.Functions.m_pImageGetClassCount },
+				{ IL2CPP_RESOLVE_FUNC_EXPORT,					&Data.Functions.m_pResolveFunction },
+				{ IL2CPP_STRING_NEW_EXPORT,						&Data.Functions.m_pStringNew },
+				{ IL2CPP_THREAD_ATTACH_EXPORT,					&Data.Functions.m_pThreadAttach },
+				{ IL2CPP_THREAD_DETACH_EXPORT,					&Data.Functions.m_pThreadDetach },
+				{ IL2CPP_TYPE_GET_OBJECT_EXPORT,				&Data.Functions.m_pTypeGetObject },
+			};
+
+			for (std::pair<const char*, void**> m_pExport : m_uExports)
+			{
+				if (!ResolveExport_Boolean(m_pExport.second, m_pExport.first))
+					return false;
+			}
+
+			// Unity APIs
+			Unity::Camera::Initialize();
+			Unity::Component::Initialize();
+			Unity::GameObject::Initialize();
+			Unity::LayerMask::Initialize();
+			Unity::Object::Initialize();
+			Unity::RigidBody::Initialize();
+			Unity::Transform::Initialize();
+
+			// Caches
+			IL2CPP::SystemTypeCache::Initializer::PreCache();
+
+			return true;
+		}
+	}
+}
+```
+
+`Main.hpp`:
+
+```hpp
+#pragma once
+#include "Includes.hpp"
+
+namespace IL2CPP
+{
+	/* Must be called once before using any other functions!
+	* Args:
+	* bWaitForModule: (Wait for GameAssembly - can result in infinite loop!) 
+	*/
+	bool Initialize(bool m_bWaitForModule = false);
+
+	namespace UnityAPI
+	{
+		enum m_eExportObfuscationType
+		{
+			None = 0,
+			ROT = 1,
+			MAX = 2,
+		};
+
+		extern m_eExportObfuscationType m_ExportObfuscation;
+
+		void* ResolveExport(const char* m_pName);
+
+		bool Initialize();
+	}
+}
+```
+
+`README.md`:
+
+```md
+## IL2CPP Resolver
+A run-time API resolver for IL2CPP Unity.
+
+[![Donate](https://img.shields.io/badge/Donate-PayPal-red.svg)](https://www.paypal.com/donate/?hosted_button_id=F86FFE644E55E)
+
+### Quick Example
+```cpp
+#include "Main.hpp"
+
+void SomeFunction()
+{
+    IL2CPP::Initialize(); // This needs to be called once!
+
+    Unity::CGameObject* pLocal = Unity::GameObject::Find("LocalPlayer");
+    Unity::CComponent* pLocalData = pLocal->GetComponent("PlayerData");
+    pLocalData->SetMemberValue<bool>("CanFly", true);
+}
+```
+
+### Creating Thread
+```cpp
+void ThreadStart()
+{ 
+    // Stuff ... Loop ... Smth
+}
+
+void ThreadEnd()
+{
+    // Called after ThreadStart
+}
+
+IL2CPP::Thread::Create(ThreadStart, ThreadEnd);
+```
+
+```
+
+`Unity/API/Camera.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SCameraFunctions CameraFunctions;
+
+	namespace Camera
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_CAMERA_CLASS);
+
+			CameraFunctions.m_pGetCurrent			= IL2CPP::ResolveCall(UNITY_CAMERA_GETCURRENT);
+			CameraFunctions.m_pGetMain				= IL2CPP::ResolveCall(UNITY_CAMERA_GETMAIN);
+			CameraFunctions.m_pGetDepth				= IL2CPP::ResolveCall(UNITY_CAMERA_GETDEPTH);
+			CameraFunctions.m_pSetDepth				= IL2CPP::ResolveCall(UNITY_CAMERA_SETDEPTH);
+			CameraFunctions.m_pGetFieldOfView		= IL2CPP::ResolveCall(UNITY_CAMERA_GETFIELDOFVIEW);
+			CameraFunctions.m_pSetFieldOfView		= IL2CPP::ResolveCall(UNITY_CAMERA_SETFIELDOFVIEW);
+			CameraFunctions.m_pWorldToScreen		= IL2CPP::ResolveCall(UNITY_CAMERA_WORLDTOSCREEN);
+		}
+
+		CCamera* GetCurrent()
+		{
+			return reinterpret_cast<CCamera*(UNITY_CALLING_CONVENTION)()>(CameraFunctions.m_pGetCurrent)();
+		}
+
+		CCamera* GetMain()
+		{
+			return reinterpret_cast<CCamera*(UNITY_CALLING_CONVENTION)()>(CameraFunctions.m_pGetMain)();
+		}
+	}
+}
+```
+
+`Unity/API/Camera.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SCameraFunctions
+	{
+		void* m_pGetCurrent = nullptr;
+		void* m_pGetMain = nullptr;
+		void* m_pGetDepth = nullptr;
+		void* m_pSetDepth = nullptr;
+		void* m_pGetFieldOfView = nullptr;
+		void* m_pSetFieldOfView = nullptr;
+		void* m_pWorldToScreen = nullptr;
+	};
+	extern SCameraFunctions CameraFunctions;
+
+	class CCamera : public CGameObject
+	{
+	public:
+		float GetDepth()
+		{
+			return reinterpret_cast<float(UNITY_CALLING_CONVENTION)(void*)>(CameraFunctions.m_pGetDepth)(this);
+		}
+
+		void SetDepth(float m_fValue)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, float)>(CameraFunctions.m_pSetDepth)(this, m_fValue);
+		}
+
+		float GetFieldOfView()
+		{
+			return reinterpret_cast<float(UNITY_CALLING_CONVENTION)(void*)>(CameraFunctions.m_pGetFieldOfView)(this);
+		}
+
+		void SetFieldOfView(float m_fValue)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, float)>(CameraFunctions.m_pSetFieldOfView)(this, m_fValue);
+		}
+
+		void WorldToScreen(Vector3& m_vWorld, Vector3& m_vScreen, int m_iEye = 2)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3&, int, Vector3&)>(CameraFunctions.m_pWorldToScreen)(this, m_vWorld, m_iEye, m_vScreen);
+		}
+	};
+
+	namespace Camera
+	{
+		void Initialize();
+
+		CCamera* GetCurrent();
+
+		CCamera* GetMain();
+	}
+
+	enum m_eCameraType : int
+	{
+		m_eCameraType_Game = 1,
+		m_eCameraType_SceneView = 2,
+		m_eCameraType_Preview = 4,
+		m_eCameraType_VR = 8,
+		m_eCameraType_Reflection = 16,
+	};
+
+	enum m_eCameraEye : int
+	{
+		m_eCameraEye_Left = 0,
+		m_eCameraEye_Right = 1,
+		m_eCameraEye_Center = 2,
+	};
+}
+```
+
+`Unity/API/Component.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SComponentFunctions ComponentFunctions;
+
+	namespace Component
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_COMPONENT_CLASS);
+
+			ComponentFunctions.m_pGetGameObject		= IL2CPP::ResolveCall(UNITY_COMPONENT_GETGAMEOBJECT);
+			ComponentFunctions.m_pGetTransform		= IL2CPP::ResolveCall(UNITY_COMPONENT_GETTRANSFORM);
+		}
+	}
+}
+```
+
+`Unity/API/Component.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SComponentFunctions
+	{
+		void* m_pGetGameObject = nullptr;
+		void* m_pGetTransform = nullptr;
+	};
+	extern SComponentFunctions ComponentFunctions;
+
+	class CComponent : public CObject
+	{
+	public:
+		CGameObject* GetGameObject()
+		{
+			return reinterpret_cast<CGameObject*(UNITY_CALLING_CONVENTION)(void*)>(ComponentFunctions.m_pGetGameObject)(this);
+		}
+
+		CTransform* GetTransform()
+		{
+			return reinterpret_cast<CTransform*(UNITY_CALLING_CONVENTION)(void*)>(ComponentFunctions.m_pGetTransform)(this);
+		}
+	};
+
+	namespace Component
+	{
+		void Initialize();
+	}
+}
+```
+
+`Unity/API/GameObject.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SGameObjectFunctions GameObjectFunctions;
+
+	namespace GameObject
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_GAMEOBJECT_CLASS);
+
+			GameObjectFunctions.m_pAddComponent				= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_ADDCOMPONENT);
+			GameObjectFunctions.m_pCreatePrimitive			= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_CREATEPRIMITIVE);
+			GameObjectFunctions.m_pFind						= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_FIND);
+			GameObjectFunctions.m_pFindGameObjectsWithTag	= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_FINDGAMEOBJECTWITHTAG);
+			GameObjectFunctions.m_pGetComponent				= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_GETCOMPONENT);
+			GameObjectFunctions.m_pGetComponents			= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_GETCOMPONENTS);
+			GameObjectFunctions.m_pGetActive				= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_GETACTIVE);
+			GameObjectFunctions.m_pGetLayer					= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_GETLAYER);
+			GameObjectFunctions.m_pGetTransform				= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_GETTRANSFORM);
+			GameObjectFunctions.m_pSetActive				= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_SETACTIVE);
+			GameObjectFunctions.m_pSetLayer					= IL2CPP::ResolveCall(UNITY_GAMEOBJECT_SETLAYER);
+		}
+
+		CGameObject* CreatePrimitive(m_ePrimitiveType m_eType)
+		{
+			return reinterpret_cast<CGameObject*(UNITY_CALLING_CONVENTION)(m_ePrimitiveType)>(GameObjectFunctions.m_pCreatePrimitive)(m_eType);
+		}
+
+		CGameObject* Find(const char* m_pName)
+		{
+			return reinterpret_cast<CGameObject*(UNITY_CALLING_CONVENTION)(System_String*)>(GameObjectFunctions.m_pFind)(IL2CPP::String::New(m_pName));
+		}
+		
+		il2cppArray<CGameObject*>* FindWithTag(const char* m_pTag)
+		{
+			return reinterpret_cast<il2cppArray<CGameObject*>*(UNITY_CALLING_CONVENTION)(void*)>(GameObjectFunctions.m_pFindGameObjectsWithTag)(IL2CPP::String::New(m_pTag));
+		}
+	}
+}
+
+```
+
+`Unity/API/GameObject.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SGameObjectFunctions
+	{
+		void* m_pAddComponent = nullptr;
+		void* m_pCreatePrimitive = nullptr;
+		void* m_pFind = nullptr;
+		void* m_pFindGameObjectsWithTag = nullptr;
+		void* m_pGetComponent = nullptr;
+		void* m_pGetComponents = nullptr;
+		void* m_pGetActive = nullptr;
+		void* m_pGetLayer = nullptr;
+		void* m_pGetTransform = nullptr;
+		void* m_pSetActive = nullptr;
+		void* m_pSetLayer = nullptr;
+	};
+	extern SGameObjectFunctions GameObjectFunctions;
+
+	class CGameObject : public CObject
+	{
+	public:
+		void AddComponent(il2cppObject* m_pSystemType)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, void*)>(GameObjectFunctions.m_pAddComponent)(this, m_pSystemType);
+		}
+
+		CComponent* GetComponent(const char* m_pName)
+		{
+			return reinterpret_cast<CComponent*(UNITY_CALLING_CONVENTION)(void*, System_String*)>(GameObjectFunctions.m_pGetComponent)(this, IL2CPP::String::New(m_pName));
+		}
+
+		il2cppArray<CComponent*>* GetComponents(il2cppObject* m_pSystemType)
+		{
+			/* 
+			0 - Object
+			1 - Type
+			2 - Use search type as array return type
+			3 - Recursive
+			4 - Include inactive
+			5 - Reverse
+			6 - Result list
+			*/
+			return reinterpret_cast<Unity::il2cppArray<CComponent*>*(UNITY_CALLING_CONVENTION)(void*, void*, bool, bool, bool, bool, void*)>(GameObjectFunctions.m_pGetComponents)(this, m_pSystemType, false, false, true, false, nullptr);
+		}
+
+		il2cppArray<CComponent*>* GetComponents(const char* m_pSystemTypeName)
+		{
+			il2cppClass* m_pClass = IL2CPP::Class::Find(m_pSystemTypeName);
+			if (!m_pClass) return nullptr;
+
+			return GetComponents(IL2CPP::Class::GetSystemType(m_pClass));
+		}
+
+		CComponent* GetComponentByIndex(il2cppObject* m_pSystemType, unsigned int m_uIndex = 0U)
+		{
+			il2cppArray<CComponent*>* m_pComponents = GetComponents(m_pSystemType);
+			if (!m_pComponents || m_uIndex >= m_pComponents->m_uMaxLength) return nullptr;
+
+			return m_pComponents->operator[](m_uIndex);
+		}
+
+		CComponent* GetComponentByIndex(const char* m_pSystemTypeName, unsigned int m_uIndex = 0U)
+		{
+			il2cppClass* m_pClass = IL2CPP::Class::Find(m_pSystemTypeName);
+			if (!m_pClass) return nullptr;
+
+			return GetComponentByIndex(IL2CPP::Class::GetSystemType(m_pClass), m_uIndex);
+		}
+
+		CTransform* GetTransform()
+		{
+			return reinterpret_cast<CTransform*(UNITY_CALLING_CONVENTION)(void*)>(GameObjectFunctions.m_pGetTransform)(this);
+		}
+
+		bool GetActive()
+		{
+			return reinterpret_cast<bool(UNITY_CALLING_CONVENTION)(void*)>(GameObjectFunctions.m_pGetActive)(this);
+		}
+
+		unsigned int GetLayer()
+		{
+			return reinterpret_cast<unsigned int(UNITY_CALLING_CONVENTION)(void*)>(GameObjectFunctions.m_pGetLayer)(this);
+		}
+
+		/*
+		* (WARNING) when you use GameObject::Find and you set the object to unactive, you won't find it anymore with that slow function.
+		*/
+		void SetActive(bool m_bActive)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, bool)>(GameObjectFunctions.m_pSetActive)(this, m_bActive);
+		}
+
+		void SetLayer(unsigned int m_uLayer)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, unsigned int)>(GameObjectFunctions.m_pSetLayer)(this, m_uLayer);
+		}
+	};
+
+	namespace GameObject
+	{
+		enum class m_ePrimitiveType : int
+		{
+			Default = 0,
+			Sphere = 0,
+			Capsule,
+			Cylinder,
+			Cube,
+			Plane,
+			Quad,
+		};
+
+		void Initialize();
+		
+		CGameObject* CreatePrimitive(m_ePrimitiveType m_eType);
+
+		CGameObject* Find(const char* m_pName);
+		
+		il2cppArray<CGameObject*>* FindWithTag(const char* m_pTag);
+	}
+}
+
+```
+
+`Unity/API/LayerMask.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SLayerMaskFunctions LayerMaskFunctions;
+
+	namespace LayerMask
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_LAYERMASK_CLASS);
+
+			LayerMaskFunctions.m_pLayerToName	= IL2CPP::ResolveCall(UNITY_LAYERMASK_LAYERTONAME);
+			LayerMaskFunctions.m_pNameToLayer	= IL2CPP::ResolveCall(UNITY_LAYERMASK_NAMETOLAYER);
+		}
+	}
+}
+```
+
+`Unity/API/LayerMask.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SLayerMaskFunctions
+	{
+		void* m_pLayerToName = nullptr;
+		void* m_pNameToLayer = nullptr;
+	};
+	extern SLayerMaskFunctions LayerMaskFunctions;
+
+	namespace LayerMask
+	{
+		void Initialize();
+
+		static System_String* LayerToName(unsigned int m_uLayer)
+		{
+			return reinterpret_cast<System_String*(UNITY_CALLING_CONVENTION)(unsigned int)>(LayerMaskFunctions.m_pLayerToName)(m_uLayer);
+		}
+
+		static unsigned int NameToLayer(const char* m_pName)
+		{
+			return reinterpret_cast<unsigned int(UNITY_CALLING_CONVENTION)(void*)>(LayerMaskFunctions.m_pNameToLayer)(IL2CPP::String::New(m_pName));
+		}
+	}
+}
+```
+
+`Unity/API/Object.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SObjectFunctions ObjectFunctions;
+
+	namespace Object
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_OBJECT_CLASS);
+
+			ObjectFunctions.m_pDestroy				= IL2CPP::ResolveCall(UNITY_OBJECT_DESTROY);
+			ObjectFunctions.m_pFindObjectsOfType	= IL2CPP::ResolveCall(UNITY_OBJECT_FINDOBJECTSOFTYPE);
+			ObjectFunctions.m_pGetName				= IL2CPP::ResolveCall(UNITY_OBJECT_GETNAME);
+		}
+	}
+}
+```
+
+`Unity/API/Object.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SObjectFunctions
+	{
+		void* m_pDestroy = nullptr;
+		void* m_pFindObjectsOfType = nullptr;
+		void* m_pGetName = nullptr;
+	};
+	extern SObjectFunctions ObjectFunctions;
+
+	class CObject : public IL2CPP::CClass
+	{
+	public:
+		void Destroy(float fTimeDelay = 0.f)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, float)>(ObjectFunctions.m_pDestroy)(this, fTimeDelay);
+		}
+
+		System_String* GetName()
+		{
+			return reinterpret_cast<System_String*(UNITY_CALLING_CONVENTION)(void*)>(ObjectFunctions.m_pGetName)(this);
+		}
+	};
+
+	namespace Object
+	{
+		void Initialize();
+
+		template<typename T>
+		static il2cppArray<T*>* FindObjectsOfType(il2cppObject* m_pSystemType)
+		{
+			return reinterpret_cast<Unity::il2cppArray<T*>*(UNITY_CALLING_CONVENTION)(void*)>(ObjectFunctions.m_pFindObjectsOfType)(m_pSystemType);
+		}
+
+		template<typename T>
+		static il2cppArray<T*>* FindObjectsOfType(const char* m_pSystemTypeName)
+		{
+			il2cppClass* m_pClass = IL2CPP::Class::Find(m_pSystemTypeName);
+			if (!m_pClass) return nullptr;
+
+			return FindObjectsOfType<T>(IL2CPP::Class::GetSystemType(m_pClass));
+		}
+
+		template<typename T>
+		static T* FindObjectOfType(il2cppObject* m_pSystemType)
+		{
+			il2cppArray<T>* m_pArray = FindObjectsOfType<T>(m_pSystemType);
+			if (!m_pArray || m_pArray->m_uMaxLength == 0U) return nullptr;
+
+			return m_pArray->m_Object[0];
+		}
+
+		template<typename T>
+		static T* FindObjectOfType(const char* m_pSystemTypeName)
+		{
+			il2cppClass* m_pClass = IL2CPP::Class::Find(m_pSystemTypeName);
+			if (!m_pClass) return nullptr;
+
+			return FindObjectOfType<T>(IL2CPP::Class::GetSystemType(m_pClass));
+		}
+	}
+}
+```
+
+`Unity/API/Rigidbody.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	SRigidbodyFunctions RigidbodyFunctions;
+
+	namespace RigidBody
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_RIGIDBODY_CLASS);
+
+			RigidbodyFunctions.m_pGetDetectCollisions	= IL2CPP::ResolveCall(UNITY_RIGIDBODY_GETDETECTCOLLISIONS);
+			RigidbodyFunctions.m_pGetVelocity			= IL2CPP::ResolveCall(UNITY_RIGIDBODY_GETVELOCITY);
+			RigidbodyFunctions.m_pSetDetectCollisions	= IL2CPP::ResolveCall(UNITY_RIGIDBODY_SETDETECTCOLLISIONS);
+			RigidbodyFunctions.m_pSetVelocity			= IL2CPP::ResolveCall(UNITY_RIGIDBODY_SETVELOCITY);
+
+		}
+	}
+}
+```
+
+`Unity/API/Rigidbody.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct SRigidbodyFunctions
+	{
+		void* m_pGetDetectCollisions = nullptr;
+		void* m_pGetVelocity = nullptr;
+		void* m_pSetDetectCollisions = nullptr;
+		void* m_pSetVelocity = nullptr;
+	};
+	extern SRigidbodyFunctions RigidbodyFunctions;
+
+	class CRigidbody : public IL2CPP::CClass
+	{
+	public:
+		bool GetDetectCollisions()
+		{
+			return reinterpret_cast<bool(UNITY_CALLING_CONVENTION)(void*)>(RigidbodyFunctions.m_pGetDetectCollisions)(this);
+		}
+
+		void SetDetectCollisions(bool m_bDetect)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, bool)>(RigidbodyFunctions.m_pSetDetectCollisions)(this, m_bDetect);
+		}
+
+		Vector3 GetVelocity()
+		{
+			Vector3 vRet;
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3&)>(RigidbodyFunctions.m_pGetVelocity)(this, vRet);
+			return vRet;
+		}
+
+		void SetVelocity(Vector3 m_vVector)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3)>(RigidbodyFunctions.m_pSetVelocity)(this, m_vVector);
+		}
+	};
+
+	namespace RigidBody
+	{
+		void Initialize();
+	}
+}
+```
+
+`Unity/API/Transform.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+
+namespace Unity
+{
+	STransformFunctions TransformFunctions;
+
+	namespace Transform
+	{
+		void Initialize()
+		{
+			IL2CPP::SystemTypeCache::Initializer::Add(UNITY_TRANSFORM_CLASS);
+
+			TransformFunctions.m_pGetParent				= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETPARENT);
+			TransformFunctions.m_pGetRoot				= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETROOT);
+			TransformFunctions.m_pGetChild				= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETCHILD);
+			TransformFunctions.m_pGetChildCount			= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETCHILDCOUNT);
+			TransformFunctions.m_pGetPosition			= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETPOSITION);
+			TransformFunctions.m_pGetRotation			= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETROTATION);
+			TransformFunctions.m_pGetLocalPosition		= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETLOCALPOSITION);
+			TransformFunctions.m_pGetLocalScale			= IL2CPP::ResolveCall(UNITY_TRANSFORM_GETLOCALSCALE);
+			TransformFunctions.m_pSetPosition			= IL2CPP::ResolveCall(UNITY_TRANSFORM_SETPOSITION);
+			TransformFunctions.m_pSetRotation			= IL2CPP::ResolveCall(UNITY_TRANSFORM_SETROTATION);
+			TransformFunctions.m_pSetLocalPosition		= IL2CPP::ResolveCall(UNITY_TRANSFORM_SETLOCALPOSITION);
+			TransformFunctions.m_pSetLocalScale			= IL2CPP::ResolveCall(UNITY_TRANSFORM_SETLOCALSCALE);
+		}
+	}
+}
+```
+
+`Unity/API/Transform.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct STransformFunctions
+	{
+		void* m_pGetParent = nullptr;
+		void* m_pGetRoot = nullptr;
+		void* m_pGetChild = nullptr;
+		void* m_pGetChildCount = nullptr;
+		void* m_pGetPosition = nullptr;
+		void* m_pGetRotation = nullptr;
+		void* m_pGetLocalPosition = nullptr;
+		void* m_pGetLocalScale = nullptr;
+		void* m_pSetPosition = nullptr;
+		void* m_pSetRotation = nullptr;
+		void* m_pSetLocalPosition = nullptr;
+		void* m_pSetLocalScale = nullptr;
+	};
+	extern STransformFunctions TransformFunctions;
+
+	class CTransform : public IL2CPP::CClass
+	{
+	public:
+		CTransform* GetParent()
+		{
+			return reinterpret_cast<CTransform*(UNITY_CALLING_CONVENTION)(void*)>(TransformFunctions.m_pGetParent)(this);
+		}
+
+		CTransform* GetRoot()
+		{
+			return reinterpret_cast<CTransform*(UNITY_CALLING_CONVENTION)(void*)>(TransformFunctions.m_pGetRoot)(this);
+		}
+
+		CTransform* GetChild(int m_iIndex)
+		{
+			return reinterpret_cast<CTransform*(UNITY_CALLING_CONVENTION)(void*, int)>(TransformFunctions.m_pGetChild)(this, m_iIndex);
+		}
+
+		int GetChildCount()
+		{
+			return reinterpret_cast<int(UNITY_CALLING_CONVENTION)(void*)>(TransformFunctions.m_pGetChildCount)(this);
+		}
+
+		Vector3 GetPosition()
+		{
+			Vector3 vRet;
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3&)>(TransformFunctions.m_pGetPosition)(this, vRet);
+			return vRet;
+		}
+
+		Quaternion GetRotation()
+		{
+			Quaternion m_qRet;
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Quaternion&)>(TransformFunctions.m_pGetRotation)(this, m_qRet);
+			return m_qRet;
+		}
+
+		Vector3 GetLocalPosition()
+		{
+			Vector3 vRet;
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3&)>(TransformFunctions.m_pGetLocalPosition)(this, vRet);
+			return vRet;
+		}
+
+		Vector3 GetLocalScale()
+		{
+			Vector3 vRet;
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3&)>(TransformFunctions.m_pGetLocalScale)(this, vRet);
+			return vRet;
+		}
+
+		void SetPosition(Vector3 m_vVector)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3)>(TransformFunctions.m_pSetPosition)(this, m_vVector);
+		}
+
+		void SetRotation(Quaternion m_qQuat)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Quaternion)>(TransformFunctions.m_pSetRotation)(this, m_qQuat);
+		}
+
+		void SetLocalPosition(Vector3 m_vVector)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3)>(TransformFunctions.m_pSetLocalPosition)(this, m_vVector);
+		}
+
+		void SetLocalScale(Vector3 m_vVector)
+		{
+			reinterpret_cast<void(UNITY_CALLING_CONVENTION)(void*, Vector3)>(TransformFunctions.m_pSetLocalScale)(this, m_vVector);
+		}
+	};
+
+	namespace Transform
+	{
+		void Initialize();
+	}
+}
+```
+
+`Unity/API/_TEMPLATE_API.cpp`:
+
+```cpp
+#include "../../Includes.hpp"
+// C+P Ready Template
+
+namespace Unity
+{
+	S_TEMPLATEFunctions _TEMPLATEFunctions;
+
+	namespace _TEMPLATE
+	{
+		void Initialize()
+		{
+
+		}
+	}
+}
+```
+
+`Unity/API/_TEMPLATE_API.hpp`:
+
+```hpp
+#pragma once
+// C+P Ready Template
+
+namespace Unity
+{
+	struct S_TEMPLATEFunctions
+	{
+
+	};
+	extern S_TEMPLATEFunctions _TEMPLATEFunctions;
+
+	class C_TEMPLATE : public IL2CPP::CClass
+	{
+	public:
+
+	};
+
+	namespace _TEMPLATE
+	{
+		void Initialize();
+	}
+}
+```
+
+`Unity/Defines.hpp`:
+
+```hpp
+#pragma once
+// Calling Convention
+#define UNITY_CALLING_CONVENTION __fastcall*
+
+// Camera
+#define UNITY_CAMERA_CLASS                                          "UnityEngine.Camera"
+#define UNITY_CAMERA_GETCURRENT                                     UNITY_CAMERA_CLASS"::get_current"
+#define UNITY_CAMERA_GETMAIN                                        UNITY_CAMERA_CLASS"::get_main"
+#define UNITY_CAMERA_GETDEPTH                                       UNITY_CAMERA_CLASS"::get_depth"
+#define UNITY_CAMERA_SETDEPTH                                       UNITY_CAMERA_CLASS"::set_depth"
+#define UNITY_CAMERA_GETFIELDOFVIEW                                 UNITY_CAMERA_CLASS"::get_fieldOfView"
+#define UNITY_CAMERA_SETFIELDOFVIEW                                 UNITY_CAMERA_CLASS"::set_fieldOfView"
+#define UNITY_CAMERA_WORLDTOSCREEN                                  UNITY_CAMERA_CLASS"::WorldToScreenPoint_Injected"
+
+// Component
+#define UNITY_COMPONENT_CLASS										"UnityEngine.Component"
+#define UNITY_COMPONENT_GETGAMEOBJECT								UNITY_COMPONENT_CLASS"::get_gameObject"
+#define UNITY_COMPONENT_GETTRANSFORM								UNITY_COMPONENT_CLASS"::get_transform"
+
+// GameObject
+#define UNITY_GAMEOBJECT_CLASS										"UnityEngine.GameObject"
+#define UNITY_GAMEOBJECT_ADDCOMPONENT 								UNITY_GAMEOBJECT_CLASS"::Internal_AddComponentWithType"
+#define UNITY_GAMEOBJECT_CREATEPRIMITIVE 							UNITY_GAMEOBJECT_CLASS"::CreatePrimitive"
+#define UNITY_GAMEOBJECT_FIND 										UNITY_GAMEOBJECT_CLASS"::Find"
+#define UNITY_GAMEOBJECT_GETCOMPONENT 								UNITY_GAMEOBJECT_CLASS"::GetComponentByName"
+#define UNITY_GAMEOBJECT_GETCOMPONENTS								UNITY_GAMEOBJECT_CLASS"::GetComponentsInternal"
+#define UNITY_GAMEOBJECT_GETACTIVE 									UNITY_GAMEOBJECT_CLASS"::get_active"
+#define UNITY_GAMEOBJECT_GETLAYER 									UNITY_GAMEOBJECT_CLASS"::get_layer"
+#define UNITY_GAMEOBJECT_GETTRANSFORM 								UNITY_GAMEOBJECT_CLASS"::get_transform"
+#define UNITY_GAMEOBJECT_SETACTIVE 									UNITY_GAMEOBJECT_CLASS"::set_active"
+#define UNITY_GAMEOBJECT_SETLAYER 									UNITY_GAMEOBJECT_CLASS"::set_layer"
+#define UNITY_GAMEOBJECT_FINDGAMEOBJECTWITHTAG					    		UNITY_GAMEOBJECT_CLASS"::FindGameObjectsWithTag"
+
+// LayerMask
+#define UNITY_LAYERMASK_CLASS										"UnityEngine.LayerMask"
+#define UNITY_LAYERMASK_LAYERTONAME									UNITY_LAYERMASK_CLASS"::LayerToName"
+#define UNITY_LAYERMASK_NAMETOLAYER									UNITY_LAYERMASK_CLASS"::NameToLayer"
+
+// Object
+#define UNITY_OBJECT_CLASS											"UnityEngine.Object"
+#define UNITY_OBJECT_DESTROY										UNITY_OBJECT_CLASS"::Destroy"
+#define UNITY_OBJECT_FINDOBJECTSOFTYPE								UNITY_OBJECT_CLASS"::FindObjectsOfType"
+#define UNITY_OBJECT_GETNAME										UNITY_OBJECT_CLASS"::GetName"
+
+// Rigidbody
+#define UNITY_RIGIDBODY_CLASS										"UnityEngine.Rigidbody"
+#define UNITY_RIGIDBODY_GETDETECTCOLLISIONS                         UNITY_RIGIDBODY_CLASS"::get_detectCollisions"
+#define UNITY_RIGIDBODY_GETVELOCITY                                 UNITY_RIGIDBODY_CLASS"::get_velocity_Injected"
+#define UNITY_RIGIDBODY_SETDETECTCOLLISIONS                         UNITY_RIGIDBODY_CLASS"::set_detectCollisions"
+#define UNITY_RIGIDBODY_SETVELOCITY                                 UNITY_RIGIDBODY_CLASS"::set_velocity_Injected"
+
+// Transform
+#define UNITY_TRANSFORM_CLASS										"UnityEngine.Transform"
+#define UNITY_TRANSFORM_GETPARENT                                   UNITY_TRANSFORM_CLASS"::GetParent"
+#define UNITY_TRANSFORM_GETROOT                                     UNITY_TRANSFORM_CLASS"::GetRoot"
+#define UNITY_TRANSFORM_GETCHILD                                    UNITY_TRANSFORM_CLASS"::GetChild"
+#define UNITY_TRANSFORM_GETCHILDCOUNT                               UNITY_TRANSFORM_CLASS"::get_childCount"
+#define UNITY_TRANSFORM_GETPOSITION									UNITY_TRANSFORM_CLASS"::get_position_Injected"
+#define UNITY_TRANSFORM_GETROTATION									UNITY_TRANSFORM_CLASS"::get_rotation_Injected"
+#define UNITY_TRANSFORM_GETLOCALPOSITION							UNITY_TRANSFORM_CLASS"::get_localPosition_Injected"
+#define UNITY_TRANSFORM_GETLOCALSCALE								UNITY_TRANSFORM_CLASS"::get_localScale_Injected"
+#define UNITY_TRANSFORM_SETPOSITION									UNITY_TRANSFORM_CLASS"::set_position_Injected"
+#define UNITY_TRANSFORM_SETROTATION									UNITY_TRANSFORM_CLASS"::set_rotation_Injected"
+#define UNITY_TRANSFORM_SETLOCALPOSITION							UNITY_TRANSFORM_CLASS"::set_localPosition_Injected"
+#define UNITY_TRANSFORM_SETLOCALSCALE								UNITY_TRANSFORM_CLASS"::set_localScale_Injected"
+
+namespace Unity
+{
+    enum m_eTypeEnum
+    {
+        Type_Void = 1,
+        Type_Boolean = 2,
+        Type_Character = 3,
+        Type_Integer = 8,
+        Type_Float = 12,
+        Type_String = 14,
+        Type_Pointer = 15,
+        Type_ValueType = 17,
+        Type_Class = 18,
+        Type_Variable = 19,
+        Type_Array = 20,
+        Type_Enum = 85,
+	};
+
+    enum m_eFieldAttribute
+    {
+        FieldAttribute_Compiler,
+        FieldAttribute_Private,
+        FieldAttribute_FamilyAndAssembly,
+        FieldAttribute_Assembly,
+        FieldAttribute_Family,
+        FieldAttribute_FamilyOrAssembly,
+        FieldAttribute_Public,
+        FieldAttribute_AccessMask,
+        FieldAttribute_Static = 16,
+        FieldAttribute_InitOnly = 32,
+        FieldAttribute_Literal = 64,
+        FieldAttribute_NotSerialized = 128,
+        FieldAttribute_HasRVA = 256,
+        FieldAttribute_SpecialName = 512,
+        FieldAttribute_RTSpecialName = 1024,
+        FieldAttribute_HasMarshal = 4096,
+        FieldAttribute_InvokeImpl = 8192,
+        FieldAttribute_Default = 32768,
+        FieldAttribute_Reserved = 38144,
+    };
+}
+
+```
+
+`Unity/Includes.hpp`:
+
+```hpp
+#pragma once
+#include "Defines.hpp"
+#include "Obfuscators.hpp"
+
+// Structures
+#include "Structures/Includes.hpp"
+
+// Class APIs - So they're accessible everywhere
+namespace Unity
+{
+	class CCamera;
+	class CComponent;
+	class CGameObject;
+	class CObject;
+	class CRigidbody;
+	class CTransform;
+}
+```
+
+`Unity/Obfuscators.cpp`:
+
+```cpp
+#include "../Includes.hpp"
+
+namespace Unity
+{
+    namespace Obfuscators
+    {
+        // Should do the basic work
+        std::string ROT_String(const char* pString, int iValue)
+        {
+            std::string sRet;
+            size_t sSize = strlen(pString);
+            for (size_t i = 0; sSize > i; ++i)
+            {
+                bool bIsUppercase = pString[i] >= 'A' && 'Z' >= pString[i];
+                bool bIsLowercase = !bIsUppercase && pString[i] >= 'a' && 'z' >= pString[i];
+                if (!bIsUppercase && !bIsLowercase)
+                {
+                    sRet += pString[i];
+                    continue;
+                }
+
+                int iNewValue = static_cast<int>(pString[i]) + iValue;
+                if (bIsUppercase)
+                {
+                    int iMaxValue = static_cast<int>('Z');
+                    while (iNewValue > iMaxValue) iNewValue = static_cast<int>('A') + (iNewValue - iMaxValue);
+                }
+                else
+                {
+                    int iMaxValue = static_cast<int>('z');
+                    while (iNewValue > iMaxValue) iNewValue = static_cast<int>('a') + (iNewValue - iMaxValue);
+                }
+
+                sRet += static_cast<char>(iNewValue);
+            }
+
+            sRet += '\0';
+            return sRet;
+        }
+    }
+}
+```
+
+`Unity/Obfuscators.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	namespace Obfuscators
+	{
+		std::string ROT_String(const char* pString, int iValue);
+	}
+}
+```
+
+`Unity/Structures/Engine.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct Vector2
+	{
+		float x, y;
+
+		Vector2() { x = y = 0.f; }
+		Vector2(float f1, float f2) { x = f1; y = f2; }
+	};
+
+	struct Vector3
+	{
+		float x, y, z;
+
+		Vector3() { x = y = z = 0.f; }
+		Vector3(float f1, float f2, float f3) { x = f1; y = f2; z = f3; }
+
+		void ToVectors(Vector3* m_pForward, Vector3* m_pRight, Vector3* m_pUp)
+		{
+			float m_fDeg2Rad = static_cast<float>(M_PI) / 180.f;
+
+			float m_fSinX = sinf(x * m_fDeg2Rad);
+			float m_fCosX = cosf(x * m_fDeg2Rad);
+
+			float m_fSinY = sinf(y * m_fDeg2Rad);
+			float m_fCosY = cosf(y * m_fDeg2Rad);
+
+			float m_fSinZ = sinf(z * m_fDeg2Rad);
+			float m_fCosZ = cosf(z * m_fDeg2Rad);
+
+			if (m_pForward)
+			{
+				m_pForward->x = m_fCosX * m_fCosY;
+				m_pForward->y = -m_fSinX;
+				m_pForward->z = m_fCosX * m_fSinY;
+			}
+
+			if (m_pRight)
+			{
+				m_pRight->x = -1.f * m_fSinZ * m_fSinX * m_fCosY + -1.f * m_fCosZ * -m_fSinY;
+				m_pRight->y = -1.f * m_fSinZ * m_fCosX;
+				m_pRight->z = -1.f * m_fSinZ * m_fSinX * m_fSinY + -1.f * m_fCosZ * m_fCosY;
+			}
+
+			if (m_pUp)
+			{
+				m_pUp->x = m_fCosZ * m_fSinX * m_fCosY + -m_fSinZ * -m_fSinY;
+				m_pUp->y = m_fCosZ * m_fCosX;
+				m_pUp->z = m_fCosZ * m_fSinX * m_fSinY + -m_fSinZ * m_fCosY;
+			}
+		}
+	};
+
+	struct Vector4
+	{
+		float x, y, z, w;
+
+		Vector4() { x = y = z = w = 0.f; }
+		Vector4(float f1, float f2, float f3, float f4) { x = f1; y = f2; z = f3; w = f4; }
+	};
+
+	struct Quaternion
+	{
+		float x, y, z, w;
+
+		Quaternion() { x = y = z = w = 0.f; }
+		Quaternion(float f1, float f2, float f3, float f4) { x = f1; y = f2; z = f3; w = f4; }
+
+		Quaternion Euler(float m_fX, float m_fY, float m_fZ)
+		{
+			float m_fDeg2Rad = static_cast<float>(M_PI) / 180.f;
+
+			m_fX = m_fX * m_fDeg2Rad * 0.5f;
+			m_fY = m_fY * m_fDeg2Rad * 0.5f;
+			m_fZ = m_fZ * m_fDeg2Rad * 0.5f;
+
+			float m_fSinX = sinf(m_fX);
+			float m_fCosX = cosf(m_fX);
+
+			float m_fSinY = sinf(m_fY);
+			float m_fCosY = cosf(m_fY);
+
+			float m_fSinZ = sinf(m_fZ);
+			float m_fCosZ = cosf(m_fZ);
+
+			x = m_fCosY * m_fSinX * m_fCosZ + m_fSinY * m_fCosX * m_fSinZ;
+			y = m_fSinY * m_fCosX * m_fCosZ - m_fCosY * m_fSinX * m_fSinZ;
+			z = m_fCosY * m_fCosX * m_fSinZ - m_fSinY * m_fSinX * m_fCosZ;
+			w = m_fCosY * m_fCosX * m_fCosZ + m_fSinY * m_fSinX * m_fSinZ;
+
+			return *this;
+		}
+
+		Quaternion Euler(Vector3 m_vRot)
+		{
+			return Euler(m_vRot.x, m_vRot.y, m_vRot.z);
+		}
+
+		Vector3 ToEuler()
+		{
+			Vector3 m_vEuler;
+
+			float m_fDist = (x * x) + (y * y) + (z * z) + (w * w);
+
+			float m_fTest = x * w - y * z;
+			if (m_fTest > 0.4995f * m_fDist)
+			{
+				m_vEuler.x = static_cast<float>(M_PI) * 0.5f;
+				m_vEuler.y = 2.f * atan2f(y, x);
+				m_vEuler.z = 0.f;
+			}
+			else if (m_fTest < -0.4995f * m_fDist)
+			{
+				m_vEuler.x = static_cast<float>(M_PI) * -0.5f;
+				m_vEuler.y = -2.f * atan2f(y, x);
+				m_vEuler.z = 0.f;
+			}
+			else
+			{
+				m_vEuler.x = asinf(2.f * (w * x - y * z));
+				m_vEuler.y = atan2f(2.f * w * y + 2.f * z * x, 1.f - 2.f * (x * x + y * y));
+				m_vEuler.z = atan2f(2.f * w * z + 2.f * x * y, 1.f - 2.f * (z * z + x * x));
+			}
+
+			float m_fRad2Deg = 180.f / static_cast<float>(M_PI);
+			m_vEuler.x *= m_fRad2Deg;
+			m_vEuler.y *= m_fRad2Deg;
+			m_vEuler.z *= m_fRad2Deg;
+
+			return m_vEuler;
+		}
+	};
+
+	struct Bounds
+	{
+		Vector3 m_vCenter;
+		Vector3 m_vExtents;
+	};
+
+	struct Plane
+	{
+		Vector3 m_vNormal;
+		float fDistance;
+	};
+
+	struct Ray
+	{
+		Vector3 m_vOrigin;
+		Vector3 m_vDirection;
+	};
+
+	struct Rect
+	{
+		float fX, fY;
+		float fWidth, fHeight;
+
+		Rect() { fX = fY = fWidth = fHeight = 0.f; }
+		Rect(float f1, float f2, float f3, float f4) { fX = f1; fY = f2; fWidth = f3; fHeight = f4; }
+	};
+
+	struct Color
+	{
+		float r, g, b, a;
+
+		Color() { r = g = b = a = 0.f; }
+		Color(float fRed = 0.f, float fGreen = 0.f, float fBlue = 0.f, float fAlpha = 1.f) { r = fRed; g = fGreen; b = fBlue; a = fAlpha; }
+	};
+
+	struct Matrix4x4
+	{
+		float m[4][4] = { 0 };
+
+		Matrix4x4() { }
+
+		float* operator[](int i) { return m[i]; }
+	};
+}
+```
+
+`Unity/Structures/Includes.hpp`:
+
+```hpp
+#pragma once
+#include "il2cpp.hpp"
+#include "il2cppArray.hpp"
+#include "il2cppDictionary.hpp"
+
+#include "Engine.hpp"
+#include "System_String.hpp"
+```
+
+`Unity/Structures/System_String.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct System_String : il2cppObject
+	{
+		int m_iLength;
+		wchar_t m_wString[1024];
+
+		void Clear()
+		{
+			if (!this) return;
+
+			memset(m_wString, 0, static_cast<size_t>(m_iLength) * 2);
+			m_iLength = 0;
+		}
+
+		std::string ToString()
+		{
+			if (!this) return "";
+
+			std::string sRet(static_cast<size_t>(m_iLength) + 1, '\0');
+			WideCharToMultiByte(CP_UTF8, 0, m_wString, m_iLength, &sRet[0], m_iLength, 0, 0);
+			return sRet;
+		}
+	};
+}
+```
+
+`Unity/Structures/il2cpp.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	struct il2cppImage
+	{
+		const char* m_pName;
+		const char* m_pNameNoExt;
+	};
+
+	struct il2cppAssemblyName
+	{
+		const char* m_pName;
+		const char* m_pCulture;
+		const char* m_pHash;
+		const char* m_pPublicKey;
+		unsigned int m_uHash;
+		int m_iHashLength;
+		unsigned int m_uFlags;
+		int m_iMajor;
+		int m_iMinor;
+		int m_iBuild;
+		int m_bRevision;
+		unsigned char m_uPublicKeyToken[8];
+	};
+
+	struct il2cppAssembly
+	{
+		il2cppImage* m_pImage;
+		unsigned int m_uToken;
+		int m_ReferencedAssemblyStart;
+		int m_ReferencedAssemblyCount;
+		il2cppAssemblyName m_aName;
+	};
+
+	struct il2cppClass
+	{
+		void* m_pImage;
+		void* m_pGC;
+		const char* m_pName;
+		const char* m_pNamespace;
+		void* m_pValue;
+		void* m_pArgs;
+		il2cppClass* m_pElementClass;
+		il2cppClass* m_pCastClass;
+		il2cppClass* m_pDeclareClass;
+		il2cppClass* m_pParentClass;
+		void* m_pGenericClass;
+		void* m_pTypeDefinition;
+		void* m_pInteropData;
+		void* m_pFields;
+		void* m_pEvents;
+		void* m_pProperties;
+		void** m_pMethods;
+		il2cppClass** m_pNestedTypes;
+		il2cppClass** m_ImplementedInterfaces;
+		void* m_pInterfaceOffsets;
+		void* m_pStaticFields;
+		void* m_pRGCTX;
+	};
+
+	struct il2cppObject
+	{
+		il2cppClass* m_pClass = nullptr;
+		void* m_pMonitor = nullptr;
+	};
+
+	struct il2cppType
+	{
+		union
+		{
+			void* m_pDummy;
+			unsigned int m_uClassIndex;
+			il2cppType* m_pType;
+			void* m_pArray;
+			unsigned int m_uGenericParameterIndex;
+			void* m_pGenericClass;
+		};
+		unsigned int m_uAttributes : 16;
+		unsigned int m_uType : 8;
+		unsigned int m_uMods : 6;
+		unsigned int m_uByref : 1;
+		unsigned int m_uPinned : 1;
+	};
+
+	struct il2cppFieldInfo
+	{
+		const char* m_pName;
+		il2cppType* m_pType;
+		il2cppClass* m_pParentClass;
+		int m_iOffset;
+		int m_iAttributeIndex;
+		unsigned int m_uToken;
+	};
+
+	struct il2cppMethodInfo
+	{
+		void* m_pMethodPointer;
+		void* m_pInvokerMethod;
+		const char* m_pName;
+		il2cppClass* m_pClass;
+		il2cppType* m_pReturnType;
+		void* m_pParameters;
+
+		union
+		{
+			void* m_pRGCTX;
+			void* m_pMethodDefinition;
+		};
+
+		union
+		{
+			void* m_pGenericMethod;
+			void* m_pGenericContainer;
+		};
+
+		unsigned int m_uToken;
+		unsigned short m_uFlags;
+		unsigned short m_uFlags2;
+		unsigned short m_uSlot;
+		unsigned char m_uArgsCount;
+		unsigned char m_uGeneric : 1;
+		unsigned char m_uInflated : 1;
+		unsigned char m_uWrapperType : 1;
+		unsigned char m_uMarshaledFromNative : 1;
+	};
+
+	struct il2cppPropertyInfo
+	{
+		il2cppClass* m_pParentClass;
+		const char* m_pName;
+		il2cppMethodInfo* m_pGet;
+		il2cppMethodInfo* m_pSet;
+		unsigned int m_uAttributes;
+		unsigned int m_uToken;
+	};
+
+	struct il2cppArrayBounds
+	{
+		uintptr_t m_uLength;
+		int m_iLowerBound;
+	};
+}
+```
+
+`Unity/Structures/il2cppArray.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	template<typename T>
+	struct il2cppArray : il2cppObject
+	{
+		il2cppArrayBounds* m_pBounds = nullptr;
+		uintptr_t m_uMaxLength = 0;
+		T* m_pValues = nullptr;
+
+		uintptr_t GetData()
+		{
+			return reinterpret_cast<uintptr_t>(&m_pValues);
+		}
+
+		T& operator[](unsigned int m_uIndex)
+		{
+			return *reinterpret_cast<T*>(GetData() + sizeof(T) * m_uIndex);
+		}
+
+		T& At(unsigned int m_uIndex)
+		{
+			return operator[](m_uIndex);
+		}
+
+		void Insert(T* m_pArray, uintptr_t m_uSize, uintptr_t m_uIndex = 0)
+		{
+			if ((m_uSize + m_uIndex) >= m_uMaxLength)
+			{
+				if (m_uIndex >= m_uMaxLength)
+					return;
+
+				m_uSize = m_uMaxLength - m_uIndex;
+			}
+
+			for (uintptr_t u = 0; m_uSize > u; ++u)
+				operator[](u + m_uIndex) = m_pArray[u];
+		}
+
+		void Fill(T m_tValue)
+		{
+			for (uintptr_t u = 0; m_uMaxLength > u; ++u)
+				operator[](u) = m_tValue;
+		}
+
+		void RemoveAt(unsigned int m_uIndex)
+		{
+			if (m_uIndex >= m_uMaxLength)
+				return;
+
+			if (m_uMaxLength > (m_uIndex + 1))
+			{
+				for (unsigned int u = m_uIndex; (static_cast<unsigned int>(m_uMaxLength) - m_uIndex) > u; ++u)
+					operator[](u) = operator[](u + 1);
+			}
+
+			--m_uMaxLength;
+		}
+
+		void RemoveRange(unsigned int m_uIndex, unsigned int m_uCount)
+		{
+			if (m_uCount == 0)
+				m_uCount = 1;
+
+			unsigned int m_uTotal = m_uIndex + m_uCount;
+			if (m_uTotal >= m_uMaxLength)
+				return;
+
+			if (m_uMaxLength > (m_uTotal + 1))
+			{
+				for (unsigned int u = m_uIndex; (static_cast<unsigned int>(m_uMaxLength) - m_uTotal) >= u; ++u)
+					operator[](u) = operator[](u + m_uCount);
+			}
+
+			m_uMaxLength -= m_uCount;
+		}
+
+		void RemoveAll()
+		{
+			if (m_uMaxLength > 0)
+			{
+				memset(GetData(), 0, sizeof(T) * m_uMaxLength);
+				m_uMaxLength = 0;
+			}
+		}
+	};
+
+	// Defined here because its basically same shit
+	template<typename T>
+	struct il2cppList : il2cppObject
+	{
+		il2cppArray<T>* m_pListArray;
+
+		il2cppArray<T>* ToArray() { return m_pListArray; }
+	};
+}
+```
+
+`Unity/Structures/il2cppDictionary.hpp`:
+
+```hpp
+#pragma once
+
+namespace Unity
+{
+	// Don't use! Untested
+	template<typename T>
+	struct il2cppDictionary : il2cppObject
+	{
+		il2cppArray<int>* m_pBuckets;
+		il2cppArray<T>* m_pEntries;
+		int m_iCount;
+		int m_iVersion;
+		int m_iFreeList;
+		int m_iFreeCount;
+		void* m_pComparer;
+		void* m_pKeys;
+		void* m_pValues;
+	};
+}
+```
+
+`Utils/Joaat.hpp`:
+
+```hpp
+#pragma once
+
+namespace IL2CPP
+{
+	namespace Utils
+	{
+		inline unsigned int JOAAT(const char* str)
+		{
+			unsigned int m_uHash = 0;
+
+			while (*str)
+			{
+				m_uHash += *(str++);
+				m_uHash += (m_uHash << 10);
+				m_uHash ^= (m_uHash >> 6);
+			}
+
+			m_uHash += (m_uHash << 3);
+			m_uHash ^= (m_uHash >> 11);
+			m_uHash += (m_uHash << 15);
+
+			return m_uHash;
+		}
+
+		inline constexpr unsigned int JOAAT_CONSTEXPR(const char* str)
+		{
+			unsigned int m_uHash = 0;
+
+			while (*str)
+			{
+				m_uHash += *(str++);
+				m_uHash += (m_uHash << 10);
+				m_uHash ^= (m_uHash >> 6);
+			}
+
+			m_uHash += (m_uHash << 3);
+			m_uHash ^= (m_uHash >> 11);
+			m_uHash += (m_uHash << 15);
+
+			return m_uHash;
+		}
+	}
+}
+```
