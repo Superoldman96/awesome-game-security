@@ -1,0 +1,2676 @@
+Project Path: arc_gmh5225_trinity_1g822j25
+
+Source Tree:
+
+```txt
+arc_gmh5225_trinity_1g822j25
+├── Cargo.toml
+├── README.md
+└── src
+    ├── builder
+    │   └── mod.rs
+    ├── context
+    │   ├── component.rs
+    │   ├── mod.rs
+    │   └── pod.rs
+    ├── ir
+    │   ├── mod.rs
+    │   ├── module.rs
+    │   ├── types
+    │   │   ├── arraytype.rs
+    │   │   ├── functype.rs
+    │   │   └── mod.rs
+    │   └── value
+    │       ├── block.rs
+    │       ├── consts.rs
+    │       ├── function.rs
+    │       ├── instruction
+    │       │   ├── instructions.rs
+    │       │   └── mod.rs
+    │       ├── mod.rs
+    │       └── value.rs
+    ├── lib.rs
+    └── machine.rs
+
+```
+
+`Cargo.toml`:
+
+```toml
+[package]
+name = "trinity"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+slab = "0.4.8"
+
+```
+
+`README.md`:
+
+```md
+# Trinity: Building LLVM-IR in Rust without Binding
+
+**Why yet another LLVM-IR infrastructure in Rust?**
+
+Correct me if I am wrong. I had a hard time to find a crate that exactly fits my requirement.
+I want to write a LLVM and Rust based compiler tutorial, but:
+
+0. [llvm-sys](https://docs.rs/llvm-sys/160.0.2/llvm_sys/) is a C-Rust
+   bind for the C interfaces exposed by LLVM,
+   which suffers from infinte `unsafe` annotations.
+1. [inkwell](https://github.com/TheDan64/inkwell) wraps all those C-interfaces
+   with Rust native data structures to get rid of `unsafe`s, but
+     - I had a hard time to convert back-and-forth across their `{Any/Basic}{Value/Type}`s.
+     - It makes me realize that both `llvm-sys` just exposes a subset of LLVM data structures,
+       and `inkwell` is a subset of `llvm-sys`. I need a full control to the struct fields.
+2. [llvm-ir](https://docs.rs/llvm-ir/latest/llvm_ir/) can only do
+   read and analysis, which is not a LLVM emitter.
+
+
+Admittedly, I learned many from `inkwell`'s API design, and I hope this will be easier to use.
+I will prove the usability of this set of APIs, through my compiler tutorial.
+
+Another two major issues of using a bind library is the dependences and backward compatibility.
+Bind-free gets rid of the dependences of downloading a specific LLVM version. Moreover,
+as far as I observed, LLVM has very good backward compatibiilty on the IR side, but very poor
+compatibility on the developer side. Therefore, I believe the generated LLVM IR will be
+useful across as many versions as possible.
+
+
+**Where does the name Trinity come from?**
+
+I just merge the `Context`, `Module`, and `IRBuilder` together
+to both fit Rust's convention, and deal with the redundancy of LLVM IR data structures.
+
+```
+
+`src/builder/mod.rs`:
+
+```rs
+use crate::context::component::AsSuper;
+
+use crate::ir::types::{VoidType, TKindCode};
+use crate::ir::value::consts::InlineAsm;
+use crate::ir::value::instruction::{CastOp, InstOpcode, CmpPred};
+use crate::ir::{
+  module::Module,
+  value::{ValueRef, VKindCode},
+  types::FunctionType,
+  value::block::Block,
+  value::function::Function,
+  value::function::{self, Argument},
+  types::{self, StructType, TypeRef, PointerType},
+  value::instruction::{self, Instruction, BinaryOp},
+  value::consts::{ConstExpr, ConstObject}
+};
+
+
+
+use crate::context::Context;
+
+pub struct Builder {
+  pub module: Module,
+  func: Option<ValueRef>,
+  block: Option<ValueRef>,
+  inst_idx: Option<usize>,
+}
+
+impl<'ctx> Builder {
+
+  pub fn new(module: Module) -> Builder {
+    Builder { module, func: None, block: None, inst_idx: None }
+  }
+
+  pub fn context(&mut self) -> &mut Context {
+    &mut self.module.context
+  }
+
+  /// Add a function to the module
+  pub fn create_function(&mut self, name: String, fty_ref: TypeRef) -> ValueRef {
+    // Create the function.
+    let func = function::Function {
+      skey: None,
+      name, args: Vec::new(), fty: fty_ref.clone(),
+      blocks: Vec::new(),
+    };
+    // Add the function to module.
+    let func_ref = self.context().add_instance(func);
+    let args = fty_ref.as_ref::<FunctionType>(self.context()).unwrap().args.clone();
+    self.module.functions.push(func_ref.skey);
+    let fidx = self.module.get_num_functions() - 1;
+    // Generate the arguments.
+    let fargs: Vec<usize> = args.iter().enumerate().map(|(i, ty)| {
+       let arg = Argument {
+         skey: None,
+         ty: ty.clone(),
+         arg_idx: i,
+         parent: func_ref.skey
+       };
+       self.context().add_instance(arg).skey
+    }).collect();
+    // Finalize the arguments.
+    let func = self.module.get_function_mut(fidx);
+    func.args = fargs;
+    func.as_super()
+  }
+
+  /// Get the current function to insert.
+  pub fn get_current_function(&self) -> Option<ValueRef> {
+    self.func.clone()
+  }
+
+  /// Set the current function to insert.
+  pub fn set_current_function(&mut self, func: ValueRef) {
+    assert!(func.kind == VKindCode::Function, "Given value is not a function");
+    self.func = Some(func);
+  }
+
+  /// Add a block to the current function.
+  pub fn add_block(&mut self, name: String) -> ValueRef {
+    let func_ref = self.func.clone().unwrap();
+    let block = Block{
+      skey: None,
+      name_prefix: if name.len() != 0 { name } else { "".to_string() },
+      insts: Vec::new(),
+      parent: func_ref.skey,
+    };
+    let block_ref = self.context().add_instance(block);
+    let func = func_ref.as_mut::<Function>(self.context()).unwrap();
+    func.blocks.push(block_ref.skey);
+    block_ref
+  }
+
+  /// Add a struct declaration to the context.
+  pub fn create_struct(&mut self, name: String) -> types::TypeRef {
+    let sty_ref = self.context().add_instance(StructType::new(name));
+    self.module.structs.push(sty_ref.skey);
+    sty_ref
+  }
+
+  /// Set the current block to insert.
+  pub fn set_current_block(&mut self, block: ValueRef) {
+    assert!(block.kind == VKindCode::Block, "Given value is not a block");
+    self.block = Some(block);
+    self.inst_idx = None
+  }
+
+  /// Set the instruction as the insert point.
+  pub fn set_insert_point(&mut self, inst_ref: ValueRef) {
+    assert!(inst_ref.kind == VKindCode::Instruction, "Given value is not a instruction");
+    let inst = inst_ref.as_ref::<Instruction>(&self.module.context).unwrap();
+    let block = inst.get_parent();
+    let block = block.as_ref::<Block>(&self.module.context).unwrap();
+    let idx = block.insts.iter().position(|i| *i == inst_ref.skey).unwrap();
+    self.inst_idx = Some(idx);
+  }
+
+  fn add_instruction(&mut self, mut inst: instruction::Instruction) -> ValueRef {
+    let block_ref = self.block.clone().unwrap();
+    inst.parent = Some(block_ref.skey);
+    let inst_ref = self.context().add_instance(inst);
+    let block = block_ref.as_mut::<Block>(&mut self.module.context).unwrap();
+    if let Some(inst_idx) = self.inst_idx {
+      block.insts.insert(inst_idx, inst_ref.skey);
+    } else {
+      block.insts.push(inst_ref.skey);
+    }
+    inst_ref
+  }
+
+  pub fn create_return(&mut self, val: Option<ValueRef>) -> ValueRef {
+    let ret_ty = self.context().void_type();
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: ret_ty,
+      opcode: instruction::InstOpcode::Return,
+      name_prefix: "ret".to_string(),
+      operands: if let None = val { vec![] } else {vec![val.unwrap()]},
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_alloca(&mut self, ty: types::TypeRef) -> ValueRef {
+    let ptr_ty = ty.ptr_type(self.context());
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: ptr_ty,
+      // TODO(@were): Make this alignment better
+      opcode: instruction::InstOpcode::Alloca(8),
+      name_prefix: "alloca".to_string(),
+      operands: Vec::new(),
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_string(&mut self, val: String) -> ValueRef {
+    let val = format!("{}\0", val);
+    let size = val.len();
+    let array_ty = self.context().int_type(8).array_type(self.context(), size);
+    let i8ty = self.context().int_type(8);
+    let init = val.chars().map(|x| { self.context().const_value(i8ty.clone(), x as u64) }).collect::<Vec<_>>();
+    let name = "str".to_string();
+    let res = array_ty.const_array(self.context(), name, init);
+    self.module.global_values.push(res.clone());
+    res
+  }
+
+  pub fn create_gep(&mut self, ty: TypeRef, ptr: ValueRef, indices: Vec<ValueRef>, inbounds: bool) -> ValueRef {
+    let mut operands = vec![ptr];
+    operands.extend(indices);
+    // All constants
+    if operands.iter().fold(true, |acc, val| acc && val.is_const()) {
+      let res = ConstExpr{
+        skey: None,
+        ty,
+        opcode: instruction::InstOpcode::GetElementPtr(inbounds),
+        operands,
+      };
+      let expr = self.context().add_instance::<ConstExpr, _>(res);
+      return expr
+    } else {
+      let inst = instruction::Instruction {
+        skey: None,
+        ty,
+        opcode: instruction::InstOpcode::GetElementPtr(inbounds),
+        name_prefix: "gep".to_string(),
+        operands,
+        parent: None
+      };
+      self.add_instruction(inst)
+    }
+  }
+
+  pub fn create_inbounds_gep(&mut self, ptr: ValueRef, indices: Vec<ValueRef>) -> ValueRef {
+    let ty = ptr.get_type(self.context());
+    let pty = ty.as_ref::<PointerType>(self.context()).unwrap();
+    let res_ty = pty.get_pointee_ty();
+    self.create_gep(res_ty, ptr, indices, true)
+  }
+
+  // TODO(@were): Add alignment
+  pub fn create_store(&mut self, value: ValueRef, ptr: ValueRef) -> Result<ValueRef, String> {
+    let ptr_ty = ptr.get_type(&self.context());
+    let pointee_ty = ptr_ty.as_ref::<PointerType>(&self.context()).unwrap().get_pointee_ty();
+    let value_ty = value.get_type(&self.context());
+    if pointee_ty != value_ty {
+      let pointee_ty = pointee_ty.to_string(&self.module.context);
+      let value_ty = value_ty.to_string(&self.module.context);
+      return Err(format!("PointerType: {} mismatches ValueType: {}", pointee_ty, value_ty))
+    }
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: self.context().void_type(),
+      opcode: instruction::InstOpcode::Store(8),
+      name_prefix: "store".to_string(),
+      operands: vec![value, ptr],
+      parent: None
+    };
+    Ok(self.add_instruction(inst))
+  }
+
+  pub fn create_typed_call(&mut self, ty: TypeRef, callee: ValueRef, args: Vec<ValueRef>) -> ValueRef {
+    let mut args = args.clone();
+    args.push(callee);
+    let inst = instruction::Instruction{
+      skey: None,
+      ty,
+      opcode: instruction::InstOpcode::Call,
+      name_prefix: "call".to_string(),
+      operands: args,
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_func_call(&mut self, callee: ValueRef, args: Vec<ValueRef>) -> ValueRef {
+    let fty = callee.get_type(self.context());
+    let ty = fty.as_ref::<FunctionType>(self.context()).unwrap().ret_ty.clone();
+    self.create_typed_call(ty, callee, args)
+  }
+
+  pub fn create_binary_op(&mut self, op: BinaryOp, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    // @were: Check type equality.
+    let ty = lhs.get_type(self.context());
+    let inst = instruction::Instruction {
+      skey: None,
+      ty,
+      opcode: instruction::InstOpcode::BinaryOp(op),
+      name_prefix: "binop".to_string(),
+      operands: vec![lhs, rhs],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_add(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    return self.create_binary_op(BinaryOp::Add, lhs, rhs)
+  }
+
+  pub fn create_sub(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    return self.create_binary_op(BinaryOp::Sub, lhs, rhs)
+  }
+
+  pub fn create_mul(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    return self.create_binary_op(BinaryOp::Mul, lhs, rhs)
+  }
+
+  pub fn create_sdiv(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    return self.create_binary_op(BinaryOp::SDiv, lhs, rhs)
+  }
+
+  pub fn create_srem(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    return self.create_binary_op(BinaryOp::SRem, lhs, rhs)
+  }
+
+  pub fn create_load(&mut self, ptr: ValueRef) -> ValueRef {
+    let ty = ptr.get_type(self.context());
+    let pty = ty.as_ref::<PointerType>(self.context()).unwrap();
+    let res_ty = pty.get_pointee_ty();
+    self.create_typed_load(res_ty, ptr)
+  }
+
+  // TODO(@were): Add alignment
+  pub fn create_typed_load(&mut self, ty: TypeRef, ptr: ValueRef) -> ValueRef {
+    let inst = instruction::Instruction {
+      skey: None,
+      ty,
+      opcode: instruction::InstOpcode::Load(8),
+      name_prefix: "load".to_string(),
+      operands: vec![ptr],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_global_struct(&mut self, ty: TypeRef, init: Vec<ValueRef>) -> ValueRef {
+    let gvs = ConstObject {
+      skey: None,
+      name: "globalobj".to_string(),
+      ty: ty.ptr_type(self.context()),
+      value: init
+    };
+    let gvs_ref = self.context().add_instance(gvs);
+    self.module.global_values.push(gvs_ref.clone());
+    gvs_ref
+  }
+
+  pub fn create_inline_asm(&mut self, ty: TypeRef, mnemonic: String,
+                           operands: String, sideeffect: bool) -> ValueRef {
+    let mut sideeffect = sideeffect;
+    if let Some(_) = ty.as_ref::<VoidType>(self.context()) {
+      sideeffect = true;
+    }
+    let asm = InlineAsm {
+      skey: None,
+      ty,
+      sideeffect,
+      mnemonic,
+      operands,
+    };
+    self.context().add_instance(asm)
+  }
+
+  pub fn create_op_cast(&mut self, cast_op: CastOp, val: ValueRef, dest: TypeRef) -> ValueRef {
+    // Skip casting if the same types.
+    let src_ty = val.get_type(&self.context());
+    if src_ty.skey == dest.skey {
+      return val;
+    }
+    let op = InstOpcode::CastInst(cast_op);
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: dest,
+      opcode: op,
+      name_prefix: "cast".to_string(),
+      operands: vec![val],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_bitcast(&mut self, val: ValueRef, dest: TypeRef) -> ValueRef {
+    self.create_op_cast(CastOp::Bitcast, val, dest)
+  }
+
+  pub fn create_cast(&mut self, val: ValueRef, dest: TypeRef) -> ValueRef {
+    let src_ty = val.get_type(&self.context());
+    // TODO(@were): This is messy, fix this later.
+    let cast_op = if src_ty.kind == TKindCode::IntType && dest.kind == TKindCode::IntType {
+      let src_bits = src_ty.get_scalar_size_in_bits(&self.module);
+      let dst_bits = dest.get_scalar_size_in_bits(&self.module);
+      if src_bits < dst_bits {
+        CastOp::SignExt
+      } else if src_bits > dst_bits {
+        CastOp::Trunc
+      } else {
+        return val
+      }
+    } else if (src_ty.kind == TKindCode::IntType && dest.kind == TKindCode::PointerType) ||
+              (src_ty.kind == TKindCode::PointerType && dest.kind == TKindCode::IntType) {
+      assert_eq!(src_ty.get_scalar_size_in_bits(&self.module), dest.get_scalar_size_in_bits(&self.module));
+      CastOp::Bitcast
+    } else {
+      panic!("Not supported casting!");
+    };
+    self.create_op_cast(cast_op, val, dest)
+  }
+
+  pub fn create_slt(&mut self, lhs: ValueRef, rhs: ValueRef) -> ValueRef {
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: self.context().int_type(1),
+      opcode: instruction::InstOpcode::ICompare(CmpPred::SLT),
+      name_prefix: "slt".to_string(),
+      operands: vec![lhs, rhs],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_unconditional_branch(&mut self, bb: ValueRef) -> ValueRef {
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: self.context().void_type(),
+      opcode: instruction::InstOpcode::Branch,
+      name_prefix: "br".to_string(),
+      operands: vec![bb],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+  pub fn create_conditional_branch(&mut self, cond: ValueRef, true_bb: ValueRef, false_bb: ValueRef) -> ValueRef {
+    let inst = instruction::Instruction {
+      skey: None,
+      ty: self.context().void_type(),
+      opcode: instruction::InstOpcode::Branch,
+      name_prefix: "br".to_string(),
+      operands: vec![cond, true_bb, false_bb],
+      parent: None
+    };
+    self.add_instruction(inst)
+  }
+
+}
+
+
+```
+
+`src/context/component.rs`:
+
+```rs
+use crate::ir::{
+  types::{IntType, VoidType, StructType, PointerType, FunctionType, ArrayType, TypeRef},
+  value::function::{Function, Argument},
+  value::instruction::Instruction,
+  value::block::Block,
+  value::consts::{ConstScalar, ConstArray, ConstExpr, ConstObject, InlineAsm},
+  ValueRef,
+};
+use crate::ir::value::VKindCode;
+use crate::ir::types::TKindCode;
+
+
+// TODO(@were): Make this private later.
+pub enum Component {
+  // Types
+  IntType(IntType),
+  VoidType(VoidType),
+  StructType(StructType),
+  PointerType(PointerType),
+  FunctionType(FunctionType),
+  ArrayType(ArrayType),
+  // Values
+  Function(Function),
+  Argument(Argument),
+  Instruction(Instruction),
+  Block(Block),
+  ConstScalar(ConstScalar),
+  ConstArray(ConstArray),
+  ConstExpr(ConstExpr),
+  ConstObject(ConstObject),
+  InlineAsm(InlineAsm),
+}
+
+impl Component {
+
+  pub(crate) fn set_skey(&mut self, skey: usize) {
+    match self {
+      Component::IntType(v) => v.skey = Some(skey),
+      Component::VoidType(v) => v.skey = Some(skey),
+      Component::StructType(v) => v.skey = Some(skey),
+      Component::PointerType(v) => v.skey = Some(skey),
+      Component::FunctionType(v) => v.skey = Some(skey),
+      Component::Function(v) => v.skey = Some(skey),
+      Component::Argument(v) => v.skey = Some(skey),
+      Component::Instruction(v) => v.skey = Some(skey),
+      Component::Block(v) => v.skey = Some(skey),
+      Component::ConstScalar(v) => v.skey = Some(skey),
+      Component::ArrayType(v) => v.skey = Some(skey),
+      Component::ConstArray(v) => v.skey = Some(skey),
+      Component::ConstExpr(v) => v.skey = Some(skey),
+      Component::ConstObject(v) => v.skey = Some(skey),
+      Component::InlineAsm(v) => v.skey = Some(skey),
+    }
+  }
+
+}
+
+
+pub trait WithKindCode<T> {
+  fn kind_code() -> T;
+}
+
+pub trait AsSuper<T> {
+  type SuperType;
+  fn as_super(&self) -> Self::SuperType;
+}
+
+pub trait GetSlabKey {
+  fn get_skey(&self) -> usize;
+}
+
+pub trait ComponentToRef<T> {
+  fn instance_to_self<'ctx>(value: &'ctx Component) -> &'ctx T;
+}
+
+pub trait ComponentToMut<T> {
+  fn instance_to_self_mut<'ctx>(value: &'ctx mut Component) -> &'ctx mut T;
+}
+
+macro_rules! impl_component_to_xx {
+  ($super:tt, $code_type:tt, $type:tt) => {
+
+    impl ComponentToRef<$type> for $type {
+      fn instance_to_self<'ctx>(value: &'ctx Component) -> &'ctx $type {
+        match value {
+          Component::$type(v) => v,
+          _ => panic!("Invalid type"),
+        }
+      }
+    }
+
+    impl ComponentToMut<$type> for $type {
+      fn instance_to_self_mut<'ctx>(value: &'ctx mut Component) -> &'ctx mut $type {
+        match value {
+          Component::$type(v) => v,
+          _ => panic!("Invalid type"),
+        }
+      }
+    }
+
+    impl AsSuper<$super> for $type {
+      type SuperType = $super;
+
+      fn as_super(&self) -> Self::SuperType {
+        $super{ skey: self.skey.clone().unwrap(), kind: $code_type::$type }
+      }
+
+    }
+
+    impl From<$type> for Component {
+      fn from(value: $type) -> Self {
+        Component::$type(value)
+      }
+    }
+
+    impl WithKindCode<$code_type> for $type {
+      fn kind_code() -> $code_type {
+        $code_type::$type
+      }
+    }
+
+    impl GetSlabKey for $type {
+      fn get_skey(&self) -> usize {
+        self.skey.unwrap()
+      }
+    }
+
+  };
+}
+
+// Types
+impl_component_to_xx!(TypeRef, TKindCode, IntType);
+impl_component_to_xx!(TypeRef, TKindCode, VoidType);
+impl_component_to_xx!(TypeRef, TKindCode, StructType);
+impl_component_to_xx!(TypeRef, TKindCode, PointerType);
+impl_component_to_xx!(TypeRef, TKindCode, FunctionType);
+impl_component_to_xx!(TypeRef, TKindCode, ArrayType);
+// Values
+impl_component_to_xx!(ValueRef, VKindCode, Function);
+impl_component_to_xx!(ValueRef, VKindCode, Argument);
+impl_component_to_xx!(ValueRef, VKindCode, Instruction);
+impl_component_to_xx!(ValueRef, VKindCode, Block);
+impl_component_to_xx!(ValueRef, VKindCode, ConstScalar);
+impl_component_to_xx!(ValueRef, VKindCode, ConstArray);
+impl_component_to_xx!(ValueRef, VKindCode, ConstExpr);
+impl_component_to_xx!(ValueRef, VKindCode, ConstObject);
+impl_component_to_xx!(ValueRef, VKindCode, InlineAsm);
+
+
+
+```
+
+`src/context/mod.rs`:
+
+```rs
+use slab::Slab;
+
+pub mod component;
+
+pub use component::*;
+
+mod pod;
+
+use component::{
+  Component, ComponentToMut, ComponentToRef, AsSuper, GetSlabKey
+};
+
+use crate::ir::{ types::TypeRef, value::ValueRef };
+
+pub struct Context {
+  /// All the instance of the IR components managed by the slab.
+  slab: Slab<Component>,
+  /// The cache of Plain Old Data (POD) related objects.
+  pod_cache: pod::Cache,
+}
+
+impl<'ctx> Context {
+
+  /// Create a new context.
+  pub fn new() -> Context {
+    Context {
+      slab: Slab::new(),
+      pod_cache: pod::Cache::new(),
+    }
+  }
+
+  pub(crate) fn dispose(&mut self, skey: usize) {
+    self.slab.remove(skey);
+  }
+
+  pub(crate) fn get_value_ref<T: ComponentToRef<T> + GetSlabKey>(&'ctx self, skey: usize) -> &'ctx T {
+    T::instance_to_self(&self.slab[skey])
+  }
+
+  pub(crate) fn get_value_mut<T: ComponentToMut<T> + GetSlabKey>(&'ctx mut self, skey: usize) -> &'ctx mut T {
+    T::instance_to_self_mut(&mut self.slab[skey])
+  }
+
+  pub fn capacity(&self) -> usize {
+    self.slab.capacity()
+  }
+
+  fn add_component(&mut self, instance: Component) -> usize {
+    let res = self.slab.insert(instance);
+    res
+  }
+
+  pub(super) fn add_instance<T, U>(&mut self, instance: T) -> T::SuperType
+    where T: Into<Component> + AsSuper<U> + ComponentToRef<T> + ComponentToMut<T> + GetSlabKey {
+    let skey = self.add_component(instance.into());
+    self.slab[skey].set_skey(skey);
+    let instance_ref = self.get_value_ref::<T>(skey);
+    instance_ref.as_super()
+  }
+
+  // TODO(@were): Move these to the context.
+  /// Get an integer type
+  pub fn int_type(&mut self, bits: usize) -> TypeRef {
+    pod::Cache::int_type(self, bits)
+  }
+
+  /// Get a void type
+  pub fn void_type(&mut self) -> TypeRef {
+    pod::Cache::void_type(self)
+  }
+
+  /// Get a pointer type
+  pub fn pointer_type(&mut self, pointee: TypeRef) -> TypeRef {
+    pod::Cache::pointer_type(self, pointee)
+  }
+
+  /// Get an array type
+  pub fn array_type(&mut self, element: TypeRef, num_elements: usize) -> TypeRef {
+    pod::Cache::array_type(self, element, num_elements)
+  }
+
+  /// Get a function type
+  pub fn function_type(&mut self, return_type: TypeRef, param_types: Vec<TypeRef>) -> TypeRef {
+    pod::Cache::function_type(self, return_type, param_types)
+  }
+
+  pub fn const_value(&mut self, ty: TypeRef, value: u64) -> ValueRef {
+    assert!(pod::is_pod(&ty));
+    pod::Cache::const_scalar(self, ty, value)
+    // let instance = ConstScalar{
+    //   skey: None, ty,
+    //   value: value as u64
+    // };
+    // self.add_instance(instance)
+  }
+
+
+}
+
+
+```
+
+`src/context/pod.rs`:
+
+```rs
+/// The cache of Plain Old Data (POD) related objects.
+
+use std::collections::HashMap;
+
+use crate::ir::types::{TypeRef, TKindCode};
+use crate::ir::{types, ValueRef};
+use crate::ir::value::consts;
+
+use super::Context;
+
+#[derive(Hash, PartialEq, Eq)]
+struct IntType {
+  bits: usize,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct VoidType {}
+
+#[derive(Hash, PartialEq, Eq)]
+struct PointerType {
+  pointee: TypeRef,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ArrayType {
+  element: TypeRef,
+  num_elements: usize,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct FunctionType {
+  return_type: TypeRef,
+  param_types: Vec<TypeRef>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+enum TypeHash {
+  IntType(IntType),
+  VoidType(VoidType),
+  ArrayType(ArrayType),
+  PointerType(PointerType),
+  FunctionType(FunctionType),
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ConstScalar {
+  ty: TypeRef,
+  value: u64,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+enum ConstHash {
+  ConstScalar(ConstScalar),
+}
+
+pub(super) struct Cache {
+  type_cache: HashMap<TypeHash, TypeRef>,
+  const_cache: HashMap<ConstHash, ValueRef>,
+}
+
+pub(super) fn is_pod(ty: &TypeRef) -> bool {
+  match ty.kind {
+    TKindCode::IntType => true,
+    TKindCode::VoidType => true,
+    TKindCode::PointerType => true,
+    _ => false,
+  }
+}
+
+impl Cache {
+
+  pub fn new() -> Self {
+    Cache {
+      type_cache: HashMap::new(),
+      const_cache: HashMap::new(),
+    }
+  }
+
+  fn get_type(&self, key: &TypeHash) -> Option<&TypeRef> {
+    self.type_cache.get(key)
+  }
+
+  fn insert_type(&mut self, key: TypeHash, ty: TypeRef) {
+    self.type_cache.insert(key, ty);
+  }
+
+  fn get_const(&self, key: &ConstHash) -> Option<&ValueRef> {
+    self.const_cache.get(key)
+  }
+
+  fn insert_const(&mut self, key: ConstHash, value: ValueRef) {
+    self.const_cache.insert(key, value);
+  }
+
+  pub fn int_type(ctx: &mut Context, bits: usize) -> TypeRef {
+    let key = TypeHash::IntType(IntType{ bits });
+    if let Some(res) = ctx.pod_cache.get_type(&key) {
+      res.clone()
+    } else {
+      let instance = types::IntType::new(bits);
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_type(key, res.clone());
+      res
+    }
+  }
+
+  pub fn void_type(ctx: &mut Context) -> TypeRef {
+    let key = TypeHash::VoidType(VoidType{});
+    if let Some(res) = ctx.pod_cache.get_type(&key) {
+      res.clone()
+    } else {
+      let instance = types::VoidType{skey: None};
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_type(key, res.clone());
+      res
+    }
+  }
+
+  pub fn function_type(ctx: &mut Context, return_type: TypeRef, param_types: Vec<TypeRef>) -> TypeRef {
+    let key = TypeHash::FunctionType(FunctionType{ return_type: return_type.clone(), param_types: param_types.clone() });
+    if let Some(res) = ctx.pod_cache.get_type(&key) {
+      res.clone()
+    } else {
+      let instance = types::FunctionType::new(return_type, param_types);
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_type(key, res.clone());
+      res
+    }
+  }
+
+  pub fn pointer_type(ctx: &mut Context, pointee: TypeRef) -> TypeRef {
+    let key = TypeHash::PointerType(PointerType{ pointee: pointee.clone() });
+    if let Some(res) = ctx.pod_cache.get_type(&key) {
+      res.clone()
+    } else {
+      let instance = types::PointerType::new(pointee);
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_type(key, res.clone());
+      res
+    }
+  }
+
+  pub fn array_type(ctx: &mut Context, element: TypeRef, num_elements: usize) -> TypeRef {
+    let key = TypeHash::ArrayType(ArrayType{ element: element.clone(), num_elements });
+    if let Some(res) = ctx.pod_cache.get_type(&key) {
+      res.clone()
+    } else {
+      let instance = types::ArrayType::new(element, num_elements);
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_type(key, res.clone());
+      res
+    }
+  }
+
+  pub fn const_scalar(ctx: &mut Context, ty: TypeRef, value: u64) -> ValueRef {
+    let key = ConstHash::ConstScalar(ConstScalar{ ty: ty.clone(), value });
+    if let Some(res) = ctx.pod_cache.get_const(&key) {
+      res.clone()
+    } else {
+      let instance = consts::ConstScalar::new(ty, value);
+      let res = ctx.add_instance(instance);
+      ctx.pod_cache.insert_const(key, res.clone());
+      res
+    }
+  }
+
+}
+
+
+```
+
+`src/ir/mod.rs`:
+
+```rs
+pub mod value;
+pub mod types;
+pub mod module;
+
+pub use value::{ValueRef, VKindCode};
+pub use value::function::{Function, Argument};
+pub use value::block::Block;
+pub use value::instruction::Instruction;
+pub use value::consts::{ConstArray, ConstExpr, ConstScalar};
+pub use types::{ArrayType, PointerType, StructType, FunctionType, IntType, VoidType, TypeRef, TKindCode};
+
+```
+
+`src/ir/module.rs`:
+
+```rs
+use std::fmt;
+
+
+use crate::context::Context;
+use crate::machine::{TargetTriple, DataLayout, TargetMachine};
+
+use super::{Function, Instruction, Block};
+use super::value::consts::ConstObject;
+use super::{value::function, ValueRef, ConstArray};
+use super::types::StructType;
+
+pub struct Module {
+  /// Context of this module.
+  pub context: Context,
+  /// The associated information of the target machine.
+  pub tm: TargetMachine,
+  /// The name of the module.
+  mod_name: String,
+  /// The source code file name.
+  src_name: String,
+  /// The function keys in this module.
+  pub(crate) functions: Vec<usize>,
+  /// The struct keys in this module.
+  pub(crate) structs: Vec<usize>,
+  /// The global values in this module.
+  pub(crate) global_values: Vec<ValueRef>,
+}
+
+impl<'ctx> Module {
+
+  /// Construct a module
+  pub fn new(mod_name: String, src_name: String, tt: String, layout: String) -> Module {
+    Module {
+      mod_name,
+      src_name,
+      tm: TargetMachine {
+        target_triple: TargetTriple::new(tt),
+        data_layout: DataLayout::new(layout)
+      },
+      context: Context::new(),
+      functions: Vec::new(),
+      structs: Vec::new(),
+      global_values: Vec::new(),
+    }
+  }
+
+  /// Get the number of structs in the module.
+  pub fn num_structs(&self) -> usize {
+    self.structs.len()
+  }
+
+  /// Get the struct reference by name
+  pub fn get_struct(&'ctx self, i: usize) -> &StructType {
+    self.context.get_value_ref::<StructType>(self.structs[i])
+  }
+
+  /// Get the struct mutable reference by name
+  pub fn get_struct_mut(&'ctx mut self, i: usize) -> &mut StructType {
+    self.context.get_value_mut::<StructType>(self.structs[i])
+  }
+
+  /// Remove the given instruction.
+  pub fn remove_inst(&'ctx mut self, v: ValueRef) {
+    let block = v.as_ref::<Instruction>(&self.context).unwrap().get_parent();
+    let block = block.as_mut::<Block>(&mut self.context).unwrap();
+    block.insts.retain(|x| *x != v.skey);
+    self.context.dispose(v.skey);
+  }
+
+  /// The number of functions in the module.
+  pub fn get_num_functions(&self) -> usize {
+    self.functions.len()
+  }
+
+  /// The number of global values in the module.
+  pub fn get_num_gvs(&self) -> usize {
+    self.global_values.len()
+  }
+
+  /// Get the global value by indices.
+  pub fn get_gv(&self, i: usize) -> ValueRef {
+    self.global_values[i].clone()
+  }
+
+  /// Get the function by indices.
+  pub fn get_function(&'ctx self, idx: usize) -> &'ctx function::Function {
+    self.context.get_value_ref::<function::Function>(self.functions[idx])
+  }
+
+  pub fn get_function_mut(&'ctx mut self, idx: usize) -> &'ctx mut function::Function {
+    self.context.get_value_mut::<function::Function>(self.functions[idx])
+  }
+
+  pub fn iter(&'ctx self) -> ModuleFuncIter<'ctx> {
+    return ModuleFuncIter{i: 0, module: self}
+  }
+
+}
+
+pub struct ModuleFuncIter <'ctx> {
+  i: usize,
+  module: &'ctx Module
+}
+
+impl<'ctx> Iterator for ModuleFuncIter<'ctx> {
+
+  type Item = &'ctx Function;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.i < self.module.functions.len() {
+      let skey = self.module.functions[self.i];
+      self.i += 1;
+      Some(self.module.context.get_value_ref::<Function>(skey))
+    } else {
+      None
+    }
+  }
+}
+
+pub(crate) fn namify(name: &String) -> String {
+  let mut res = String::new();
+  name.chars().into_iter().for_each(|c| match c {
+    'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => res.push(c),
+    _ => res.push_str(&format!("_{:x}_", c as u32)),
+  });
+  res
+}
+
+impl fmt::Display for Module {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "; ModuleID = '{}'\n", self.mod_name).unwrap();
+    write!(f, "source_filename = \"{}\"\n", self.src_name).unwrap();
+    write!(f, "target triple = \"{}\"\n", self.tm.target_triple.to_string()).unwrap();
+    write!(f, "target datalayout = \"{}\"\n", self.tm.data_layout.to_string()).unwrap();
+    write!(f, "\n").unwrap();
+    for i in 0..self.num_structs() {
+      let elem = self.get_struct(i);
+      write!(f, "{}\n", elem.to_string(&self.context)).unwrap();
+    }
+    for i in 0..self.get_num_gvs() {
+      let elem = self.get_gv(i);
+      match elem.kind {
+        super::VKindCode::ConstArray => {
+          let array = elem.as_ref::<ConstArray>(&self.context).unwrap();
+          write!(f, "{}\n", array.to_string(&self.context)).unwrap();
+        }
+        super::VKindCode::ConstObject => {
+          let obj = elem.as_ref::<ConstObject>(&self.context).unwrap();
+          write!(f, "{}\n", obj.to_string(&self.context)).unwrap();
+        }
+        _ => (),
+      }
+    }
+    write!(f, "\n").unwrap();
+    for i in 0..self.get_num_functions() {
+      let func = self.get_function(i);
+      write!(f, "{}", func.to_string(&self.context)).unwrap();
+      // TODO(@were): More linkage policies
+      write!(f, "\n\n").unwrap();
+    }
+    Ok(())
+  }
+}
+
+
+
+```
+
+`src/ir/types/arraytype.rs`:
+
+```rs
+use crate::context::Context;
+
+use super::TypeRef;
+
+/// Pointer type
+#[derive(Clone)]
+pub struct PointerType {
+  pub(crate) skey: Option<usize>,
+  pub(super) scalar_ty: TypeRef,
+}
+
+impl PointerType {
+
+  pub(crate) fn new(scalar_ty: TypeRef) -> Self {
+    PointerType {
+      skey: None,
+      scalar_ty,
+    }
+  }
+
+  pub fn to_string(&self, context: &Context) -> String {
+    format!("{}*", self.scalar_ty.to_string(context))
+  }
+
+  pub fn get_pointee_ty(&self) -> TypeRef {
+    self.scalar_ty.clone()
+  }
+
+}
+
+/// Array type
+#[derive(Clone)]
+pub struct ArrayType {
+  pub(crate) skey: Option<usize>,
+  pub(crate) elem_ty: TypeRef,
+  pub(crate) size: usize,
+}
+
+impl ArrayType {
+
+  pub(crate) fn new(elem_ty: TypeRef, size: usize) -> Self {
+    ArrayType {
+      skey: None,
+      elem_ty,
+      size,
+    }
+  }
+
+  pub fn to_string(&self, context: &Context) -> String {
+    format!("[{} x {}]", self.size, self.elem_ty.to_string(context))
+  }
+
+  pub fn get_elem_ty(&self) -> TypeRef {
+    self.elem_ty.clone()
+  }
+
+  pub fn to_pointer(&self, ctx: &mut Context) -> TypeRef {
+    self.elem_ty.ptr_type(ctx)
+  }
+}
+
+```
+
+`src/ir/types/functype.rs`:
+
+```rs
+use super::TypeRef;
+
+/// A function signature type
+pub struct FunctionType {
+  pub(crate) skey: Option<usize>,
+  pub(crate) args: Vec<TypeRef>,
+  pub(crate) ret_ty: TypeRef,
+}
+
+impl FunctionType {
+  pub(crate) fn new(ret_ty: TypeRef, args: Vec<TypeRef>) -> Self {
+    FunctionType {
+      skey: None,
+      args,
+      ret_ty,
+    }
+  }
+
+  pub fn ret_ty(&self) -> &TypeRef {
+    &self.ret_ty
+  }
+
+  pub fn args(&self) -> &[TypeRef] {
+    &self.args
+  }
+}
+
+```
+
+`src/ir/types/mod.rs`:
+
+```rs
+use std::fmt;
+
+pub mod arraytype;
+pub mod functype;
+
+pub use arraytype::{PointerType, ArrayType};
+pub use functype::FunctionType;
+
+use crate::context::Context;
+use crate::context::component::{ComponentToRef, ComponentToMut, WithKindCode, GetSlabKey};
+use crate::ir::value::consts::ConstArray;
+
+use super::module::Module;
+use super::value::ValueRef;
+
+// Register all the types here.
+
+#[derive(Clone, PartialEq, Hash, Eq)]
+pub enum TKindCode {
+  IntType,
+  VoidType,
+  StructType,
+  PointerType,
+  FunctionType,
+  ArrayType,
+  BlockType,
+}
+
+
+/// Very basic integer type
+#[derive(Clone)]
+pub struct IntType {
+  pub(crate) skey: Option<usize>,
+  bits: usize,
+}
+
+impl IntType {
+  
+  /// Construct an integer type
+  pub(crate) fn new(bits: usize) -> Self {
+    IntType { skey: None, bits }
+  }
+
+  /// Return the number of bits
+  pub fn get_bits(&self) -> usize {
+    self.bits
+  }
+
+}
+
+impl fmt::Display for IntType {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "i{}", self.bits)
+  }
+
+}
+
+/// Void type
+pub struct VoidType {
+  pub(crate) skey: Option<usize>,
+}
+
+impl fmt::Display for VoidType {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "void")
+  }
+
+}
+
+/// Struct type
+pub struct StructType {
+  pub(crate) skey: Option<usize>,
+  pub(crate) name: String,
+  pub(crate) attrs: Vec<TypeRef>,
+}
+
+impl StructType {
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let attrs = self.attrs.iter().map(|attr| attr.to_string(ctx)).collect::<Vec<_>>().join(", ");
+    format!("%{} = type {{ {} }}", self.name, attrs)
+  }
+
+  pub fn get_num_attrs(&self) -> usize {
+    self.attrs.len()
+  }
+
+  pub fn get_attr(&self, i: usize) -> TypeRef {
+    self.attrs[i].clone()
+  }
+
+  pub fn new(name: String) -> Self {
+    StructType {
+      skey: None,
+      name,
+      attrs: Vec::new(),
+    }
+  }
+
+  pub fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn set_body(&mut self, elements: Vec<TypeRef>) {
+    self.attrs = elements;
+  }
+
+}
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct TypeRef {
+  pub(crate) skey: usize,
+  pub(crate) kind: TKindCode
+}
+
+impl<'ctx> TypeRef {
+
+  pub fn kind(&self) -> &TKindCode {
+    &self.kind
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    match &self.kind {
+      TKindCode::IntType => {
+        let ty = ctx.get_value_ref::<IntType>(self.skey);
+        ty.to_string()
+      },
+      TKindCode::VoidType => {
+        let ty = ctx.get_value_ref::<VoidType>(self.skey);
+        ty.to_string()
+      },
+      TKindCode::StructType => {
+        let ty = ctx.get_value_ref::<StructType>(self.skey);
+        format!("%{}", ty.get_name().to_string())
+      },
+      TKindCode::PointerType => {
+        let ty = ctx.get_value_ref::<PointerType>(self.skey);
+        ty.to_string(ctx)
+      },
+      TKindCode::ArrayType => {
+        let ty = ctx.get_value_ref::<ArrayType>(self.skey);
+        ty.to_string(ctx)
+      },
+      TKindCode::BlockType => {
+        String::from("")
+      },
+      TKindCode::FunctionType => {
+        todo!("Function type dump not implemented");
+      },
+    }
+  }
+
+  pub fn as_ref<T: WithKindCode<TKindCode> + ComponentToRef<T> + GetSlabKey>(&'ctx self, ctx: &'ctx Context) -> Option<&'ctx T> {
+    if self.kind == T::kind_code() {
+      Some(ctx.get_value_ref::<T>(self.skey))
+    } else {
+      None
+    }
+  }
+
+  pub fn as_mut<T: WithKindCode<TKindCode> + ComponentToMut<T> + GetSlabKey>(&'ctx self, ctx: &'ctx mut Context) -> Option<&'ctx mut T> {
+    if self.kind == T::kind_code() {
+      Some(ctx.get_value_mut::<T>(self.skey))
+    } else {
+      None
+    }
+  }
+
+  pub fn ptr_type(&self, ctx: &mut Context) -> TypeRef {
+    ctx.pointer_type(self.clone())
+  }
+
+  pub fn fn_type(&self, ctx: &mut Context, args: Vec<TypeRef>) -> TypeRef {
+    ctx.function_type(self.clone(), args)
+  }
+
+  pub fn array_type(&self, ctx: &mut Context, size: usize) -> TypeRef {
+    ctx.array_type(self.clone(), size)
+  }
+
+  pub fn get_scalar_size_in_bits(&self, module: &Module) -> usize {
+    let ctx = &module.context;
+    let tm = &module.tm;
+    match self.kind {
+      TKindCode::IntType => {
+        let it = self.as_ref::<IntType>(ctx).unwrap();
+        it.bits
+      }
+      TKindCode::VoidType => {
+        1
+      }
+      TKindCode::StructType => {
+        let st = self.as_ref::<StructType>(ctx).unwrap();
+        st.attrs.iter().map(|x| x.get_scalar_size_in_bits(module)).fold(0, |x, acc| acc + x)
+      }
+      TKindCode::ArrayType => {
+        let at = self.as_ref::<ArrayType>(ctx).unwrap();
+        at.elem_ty.get_scalar_size_in_bits(module)
+      }
+      TKindCode::PointerType => {
+        tm.get_pointer_size_in_bits()
+      }
+      TKindCode::BlockType => {
+        // TODO(@were): Later have program pointer size.
+        tm.get_pointer_size_in_bits()
+      }
+      TKindCode::FunctionType => {
+        // TODO(@were): Later have program pointer size.
+        tm.get_pointer_size_in_bits()
+      }
+    }
+  }
+
+  pub fn const_array(&self, ctx: &mut Context, name: String, value: Vec<ValueRef>) -> ValueRef {
+    assert!(self.kind == TKindCode::ArrayType);
+    // TODO(@were): Check the types.
+    let const_array = ConstArray {
+      skey: None,
+      name,
+      ty: self.ptr_type(ctx),
+      value
+    };
+    ctx.add_instance(const_array)
+  }
+
+}
+
+
+```
+
+`src/ir/value/block.rs`:
+
+```rs
+use crate::context::Context;
+
+use super::{ValueRef, instruction::Instruction};
+
+pub struct Block {
+  pub(crate) skey: Option<usize>,
+  pub(crate) name_prefix: String,
+  pub(crate) insts: Vec<usize>,
+  pub(crate) parent: usize,
+}
+
+impl Block {
+
+  pub fn get_parent(&self) -> ValueRef {
+    ValueRef{skey: self.parent, kind: crate::ir::value::VKindCode::Function}
+  }
+
+  pub fn get_num_insts(&self) -> usize {
+    return self.insts.len();
+  }
+
+  pub fn get_name(&self) -> String {
+    format!("{}.{}", self.name_prefix, self.skey.unwrap())
+  }
+
+  pub fn get_inst(&self, i: usize) -> ValueRef {
+    ValueRef{skey: self.insts[i], kind: crate::ir::value::VKindCode::Instruction}
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let insts = self.insts.iter().map(|i| {
+      let inst_ref = ValueRef{skey: *i, kind: crate::ir::value::VKindCode::Instruction};
+      let inst = inst_ref.as_ref::<Instruction>(ctx).unwrap();
+      format!("  {}", inst.to_string(ctx))
+    }).collect::<Vec<String>>().join("\n");
+    format!("{}:\n{}\n", self.get_name(), insts)
+  }
+
+  pub fn iter(&self) -> BlockInstIter {
+    BlockInstIter { i: 0, block: self }
+  }
+}
+
+pub struct BlockInstIter <'ctx> {
+  i: usize,
+  block: &'ctx Block
+}
+
+impl <'ctx> Iterator for BlockInstIter <'ctx> {
+  type Item = ValueRef;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.i < self.block.insts.len() {
+      let res = self.block.get_inst(self.i);
+      self.i += 1;
+      Some(res)
+    } else {
+      None
+    }
+  }
+}
+
+
+```
+
+`src/ir/value/consts.rs`:
+
+```rs
+use crate::{context::Context, ir::types::{PointerType, StructType}};
+
+use crate::ir::types::TypeRef;
+use super::{ValueRef, instruction::InstOpcode};
+
+pub struct ConstScalar {
+  pub(crate) skey: Option<usize>,
+  pub(crate) ty: TypeRef,
+  pub(crate) value: u64
+}
+
+fn str2display(s: &String) -> String {
+  s.chars().map(|c| if ('\x20'..'\x7e').contains(&c) { c.to_string() } else { format!("\\{:02x}", c as u8) }).collect::<Vec<String>>().join("")
+}
+
+impl ConstScalar {
+
+  pub(crate) fn new(ty: TypeRef, value: u64) -> Self {
+    Self {
+      skey: None,
+      ty,
+      value
+    }
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    format!("{} = {}", self.ty.to_string(ctx), self.value)
+  }
+
+}
+
+pub struct ConstArray {
+  pub(crate) skey: Option<usize>,
+  pub(crate) name: String,
+  pub(crate) ty: TypeRef,
+  pub(crate) value: Vec<ValueRef>
+}
+
+impl ConstArray {
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let literal = self.value.iter().map(|x| x.to_string(ctx, true)).collect::<Vec<String>>().join(", ");
+    let pty = self.ty.as_ref::<PointerType>(ctx).unwrap();
+    format!("@{} = private unnamed_addr constant {} [{}], align 1", self.name, pty.get_pointee_ty().to_string(ctx), literal)
+  }
+
+}
+
+pub struct ConstExpr {
+  pub(crate) skey: Option<usize>,
+  pub(crate) ty: TypeRef,
+  pub(crate) opcode: InstOpcode,
+  pub(crate) operands: Vec<ValueRef>,
+}
+
+impl ConstExpr {
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let operands = self.operands.iter().map(|x| x.to_string(ctx, true)).collect::<Vec<String>>().join(", ");
+    match self.opcode {
+      InstOpcode::GetElementPtr(_) => {
+        let ptr_scalar = self.operands[0].get_type(ctx).as_ref::<PointerType>(ctx).unwrap().get_pointee_ty();
+        format!("{} {} ( {}, {} )", self.ty.to_string(ctx), self.opcode.to_string(), ptr_scalar.to_string(ctx) , operands)
+      }
+      _ => {
+        panic!("ConstExpr::to_string: not a constant opcode {:?}", self.opcode.to_string());
+      }
+    }
+  }
+
+}
+
+pub struct ConstObject {
+  pub(crate) skey: Option<usize>,
+  pub(crate) name: String,
+  pub(crate) ty: TypeRef,
+  pub(crate) value: Vec<ValueRef>
+}
+
+impl ConstObject {
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let pty = self.ty.as_ref::<PointerType>(ctx).unwrap();
+    let initializer = if self.value.len() != 0 {
+      format!("{{ {} }}", self.value.iter().map(|x| x.to_string(ctx, true)).collect::<Vec<String>>().join(", "))
+    } else {
+      "zeroinitializer".to_string()
+    };
+    format!("@{} = dso_local global {} {}, align 8", self.name, pty.get_pointee_ty().to_string(ctx), initializer)
+  }
+
+}
+
+/// Inline assembly
+pub struct InlineAsm {
+  pub(crate) skey: Option<usize>,
+  pub(crate) ty: TypeRef,
+  pub(crate) sideeffect: bool,
+  pub(crate) mnemonic: String,
+  pub(crate) operands: String,
+}
+
+impl InlineAsm {
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let ty = if let Some(sty) = self.ty.as_ref::<StructType>(ctx) {
+      sty.attrs.iter().map(|attr| attr.to_string(ctx)).collect::<Vec<_>>().join(", ")
+    } else {
+      self.ty.to_string(ctx)
+    };
+    let sideeffect = if self.sideeffect { "sideeffect" } else { "" };
+    let mnemonic = str2display(&self.mnemonic);
+    let operands = str2display(&self.operands);
+    format!("{} asm {} \"{}\", \"{}\"", ty, sideeffect, mnemonic, operands)
+  }
+}
+
+
+```
+
+`src/ir/value/function.rs`:
+
+```rs
+use super::{ValueRef, VKindCode, block::Block};
+use crate::ir::types::{TypeRef, FunctionType};
+use crate::ir::module::namify;
+
+use crate::context::Context;
+
+#[derive(Clone)]
+pub struct Argument {
+  pub(crate) skey: Option<usize>,
+  pub(crate) ty: TypeRef,
+  pub(crate) arg_idx: usize,
+  pub(crate) parent: usize
+}
+
+pub struct Function {
+  pub(crate) skey: Option<usize>,
+  pub(crate) name: String,
+  pub(crate) args: Vec<usize>,
+  pub(crate) fty: TypeRef,
+  pub(crate) blocks: Vec<usize>,
+}
+
+impl Function {
+
+  pub fn get_num_args(&self) -> usize {
+    return self.args.len();
+  }
+
+  pub fn get_arg(&self, i: usize) -> ValueRef {
+    return ValueRef{skey: self.args[i], kind: VKindCode::Argument};
+  }
+
+  pub fn get_num_blocks(&self) -> usize {
+    return self.blocks.len();
+  }
+
+  pub fn get_block(&self, i: usize) -> ValueRef {
+    return ValueRef{skey: self.blocks[i], kind: VKindCode::Block};
+  }
+
+  pub fn get_ret_ty(&self, ctx: &Context) -> TypeRef {
+    return self.fty.as_ref::<FunctionType>(ctx).unwrap().ret_ty.clone();
+  }
+
+  pub fn is_declaration(&self) -> bool {
+    return self.blocks.len() == 0;
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let mut res = String::new();
+    let fty = self.fty.as_ref::<FunctionType>(ctx).unwrap();
+    let prefix = if self.is_declaration() {
+      "declare"
+    } else {
+      "define dso_local"
+    };
+    res.push_str(format!("{} {} @{}(", prefix, fty.ret_ty.to_string(&ctx), namify(&self.name)).as_str());
+    for i in 0..self.get_num_args() {
+      if i != 0 {
+        res.push_str(", ");
+      }
+      let arg_ref = self.get_arg(i);
+      let arg = arg_ref.as_ref::<Argument>(ctx).unwrap();
+      res.push_str(format!("{}", arg.to_string(&ctx)).as_str());
+    }
+    res.push_str(")");
+    if !self.is_declaration() {
+      res.push_str(" {\n");
+      for block in self.iter() {
+        let block = block.as_ref::<Block>(ctx).unwrap();
+        res.push_str(block.to_string(&ctx).as_str());
+      }
+      res.push_str("}");
+    } else {
+      res.push_str(";");
+    }
+    return res;
+  }
+
+  pub fn iter(&self) -> FuncBlockIter {
+    FuncBlockIter{ i: 0, func: self }
+  }
+
+}
+
+pub struct FuncBlockIter<'ctx> {
+  i: usize,
+  func: &'ctx Function,
+}
+
+impl <'ctx>Iterator for FuncBlockIter<'ctx> {
+
+  type Item = ValueRef;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    if self.i < self.func.blocks.len() {
+      let res = self.func.get_block(self.i);
+      self.i += 1;
+      Some(res)
+    } else {
+      None
+    }
+  }
+
+}
+
+/// Function argument
+impl Argument {
+
+  pub fn get_parent(&self) -> ValueRef {
+    return ValueRef{ skey: self.parent, kind: VKindCode::Function };
+  }
+
+  pub fn name(&self) -> String {
+    format!("%arg.{}", self.arg_idx)
+  }
+
+  pub fn to_string(&self, context: &Context) -> String {
+    format!("{} {}", self.ty.to_string(context), self.name())
+  }
+
+}
+
+
+```
+
+`src/ir/value/instruction/instructions.rs`:
+
+```rs
+use crate::{context::Context, ir::{PointerType, ValueRef, value::instruction::InstOpcode, VoidType, TypeRef}};
+
+use super::{Instruction, CmpPred};
+
+/// Stack memory allocation.
+pub struct Alloca<'inst> {
+  inst: &'inst Instruction,
+  align: usize,
+}
+
+impl<'inst> Alloca <'inst> {
+
+  pub fn new(inst: &'inst Instruction, align: usize) -> Self {
+    if let InstOpcode::Alloca(_) = inst.opcode {
+      Self { inst, align, }
+    } else {
+      panic!("Invalid opcode for Alloca instruction.");
+    }
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let ptr_ty = self.inst.ty.as_ref::<PointerType>(ctx).unwrap();
+    let ptr_str = ptr_ty.get_pointee_ty().to_string(ctx);
+    return format!("%{} = alloca {}, align {}", self.inst.get_name(), ptr_str, self.align);
+  }
+
+}
+
+/// Load instruction.
+pub struct Load<'inst> {
+  inst: &'inst Instruction,
+  align: usize,
+}
+
+impl <'inst> Load <'inst> {
+
+  pub fn new(inst: &'inst Instruction, align: usize) -> Self {
+    if let InstOpcode::Load(_) = inst.opcode {
+      Self { inst, align, }
+    } else {
+      panic!("Invalid opcode for Load instruction.");
+    }
+  }
+
+  pub fn get_ptr(&self) -> &ValueRef {
+    &self.inst.operands[0]
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let inst = ctx.get_value_ref::<Instruction>(self.inst.skey.unwrap());
+    format!("%{} = load {}, {}, align {}",
+      inst.get_name(), inst.ty.to_string(ctx),
+      self.get_ptr().to_string(ctx, true), self.align)
+  }
+
+}
+
+
+/// Store instruction.
+pub struct Store<'inst> {
+  inst: &'inst Instruction,
+  align: usize,
+}
+
+impl <'inst> Store <'inst> {
+
+  pub fn new(inst: &'inst Instruction, align: usize) -> Self {
+    if let InstOpcode::Store(_) = inst.opcode {
+      Self { inst, align, }
+    } else {
+      panic!("Invalid opcode for Store instruction.");
+    }
+  }
+  
+  pub fn get_value(&self) -> &ValueRef {
+    &self.inst.operands[0]
+  }
+
+  pub fn get_ptr(&self) -> &ValueRef {
+    &self.inst.operands[1]
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    format!("store {}, {}, align {}", self.get_value().to_string(ctx, true), self.get_ptr().to_string(ctx, true), self.align)
+  }
+
+}
+
+/// GetElementPtr instruction.
+pub struct GetElementPtr<'inst> {
+  inst: &'inst Instruction,
+  inbounds: bool,
+}
+
+impl <'inst>GetElementPtr<'inst> {
+
+  pub fn new(inst: &'inst Instruction, inbounds: bool) -> Self {
+    if let InstOpcode::GetElementPtr(_) = inst.opcode {
+      Self { inst, inbounds, }
+    } else {
+      panic!("Invalid opcode for GetElementPtr instruction.");
+    }
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let inbounds = if self.inbounds {
+      "inbounds"
+    } else {
+      ""
+    };
+    // TODO(@were): What if this is not a pointer?
+    let ptr_scalar = self.inst.operands[0].get_type(ctx).as_ref::<PointerType>(ctx).unwrap().get_pointee_ty();
+    let ty_str = ptr_scalar.to_string(ctx);
+
+    let operands = (0..self.inst.get_num_operands()).map(|i| {
+      format!("{}", &self.inst.get_operand(i).to_string(ctx, true))
+    }).collect::<Vec<_>>().join(", ");
+    format!("%{} = getelementptr {} {}, {}", self.inst.get_name(), inbounds, ty_str, operands)
+  }
+
+}
+
+/// Call a callable value.
+pub struct Call<'inst> {
+  pub(super) inst: &'inst Instruction,
+}
+
+impl <'inst> Call<'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::Call = inst.opcode {
+      Self { inst, }
+    } else {
+      panic!("Invalid opcode for Call instruction.");
+    }
+  }
+
+  pub fn get_callee(&self) -> &ValueRef {
+    self.inst.operands.last().unwrap()
+  }
+
+  pub fn get_num_args(&self) -> usize {
+    self.inst.operands.len() - 1
+  }
+
+  pub fn get_arg(&self, idx: usize) -> &ValueRef {
+    &self.inst.operands[idx]
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let callee = self.get_callee();
+    let args_str = (0..self.get_num_args()).map(|i| {
+      self.get_arg(i).to_string(ctx, true)
+    }).collect::<Vec<_>>().join(", ");
+    if let None = self.inst.get_type().as_ref::<VoidType>(ctx) {
+      format!("%{} = call {}({})", self.inst.get_name(), callee.to_string(ctx, true), args_str)
+    } else {
+      format!("call {}({})", callee.to_string(ctx, true), args_str)
+    }
+  }
+
+}
+
+/// Call a callable value.
+pub struct Return <'inst> {
+  pub(super) base: &'inst Instruction,
+}
+
+impl <'inst> Return <'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::Return = inst.opcode {
+      Self { base: inst, }
+    } else {
+      panic!("Invalid opcode for Return instruction.");
+    }
+  }
+
+  pub fn get_ret_val(&self) -> Option<&ValueRef> {
+    self.base.operands.get(0)
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    match self.get_ret_val() {
+      Some(val) => format!("ret {}", val.to_string(ctx, true)),
+      None => String::from("ret void")
+    }
+  }
+
+}
+
+/// Binary operation.
+pub struct BinaryInst <'inst> {
+  pub(super) base: &'inst Instruction,
+}
+
+
+impl<'inst> BinaryInst <'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::BinaryOp(_) = inst.opcode {
+      Self { base: inst, }
+    } else {
+      panic!("Invalid opcode for BinaryOp instruction.");
+    }
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let lhs = self.lhs();
+    let rhs = self.rhs();
+    let op = self.base.opcode.to_string();
+    let ty = self.base.ty.to_string(ctx);
+    format!("%{} = {} {} {}, {}", self.base.get_name(), op, ty, lhs.to_string(ctx, false), rhs.to_string(ctx, false))
+  }
+
+  pub fn lhs(&self) -> &ValueRef {
+    &self.base.operands[0]
+  }
+
+  pub fn rhs(&self) -> &ValueRef {
+    &self.base.operands[1]
+  }
+
+}
+
+pub struct CastInst <'inst> {
+  pub(super) base: &'inst Instruction,
+}
+
+impl<'inst> CastInst <'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::CastInst(_) = inst.opcode {
+      Self { base: inst }
+    } else {
+      panic!("Not a cast instruction!");
+    }
+  }
+
+  pub fn dest_ty(&self) -> TypeRef {
+    return self.base.ty.clone()
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let operand = self.base.operands[0].to_string(ctx, true);
+    let dest_type = self.dest_ty().to_string(ctx);
+    format!("%{} = {} {} to {}", self.base.get_name(), self.base.opcode.to_string(), operand, dest_type)
+  }
+
+}
+
+pub struct CompareInst <'inst> {
+  pub(super) base: &'inst Instruction,
+}
+
+impl <'inst> CompareInst<'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::ICompare(_) = inst.opcode {
+      CompareInst { base: inst }
+    } else {
+      panic!("Invalid opcode!")
+    }
+  }
+
+  pub fn get_pred(&self) -> &CmpPred {
+    match self.base.get_opcode() {
+      InstOpcode::ICompare(x) => x,
+      _ => { panic!("Invalid opcode!") }
+    }
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    let opcode = self.base.opcode.to_string();
+    let pred = self.get_pred().to_string();
+    let lhs = self.base.operands.get(0).unwrap();
+    let ty = lhs.get_type(ctx).to_string(ctx);
+    let lhs = lhs.to_string(ctx, false);
+    let res = format!("%{} = {} {} {} {}", self.base.get_name(), opcode, pred, ty, lhs);
+    if let Some(rhs) = self.base.operands.get(1) {
+      let rhs = rhs.to_string(ctx, false);
+      format!("{}, {}", res, rhs)
+    } else {
+      res
+    }
+  }
+
+}
+
+pub struct BranchInst<'inst> {
+  pub(super) base: &'inst Instruction
+}
+
+impl <'inst> BranchInst <'inst> {
+
+  pub fn new(inst: &'inst Instruction) -> Self {
+    if let InstOpcode::Branch = inst.opcode {
+      BranchInst { base: inst }
+    } else {
+      panic!("Invalid opcode!")
+    }
+  }
+
+  pub fn is_cond_br(&self) -> bool {
+    self.base.get_num_operands() == 3
+  }
+
+  pub fn cond(&self) -> Option<&ValueRef> {
+    self.base.operands.get(0)
+  }
+
+  pub fn true_label(&self) -> Option<&ValueRef> {
+    self.base.operands.get(1)
+  }
+
+  pub fn false_label(&self) -> Option<&ValueRef> {
+    self.base.operands.get(2)
+  }
+
+  pub fn dest_label(&self) -> Option<&ValueRef> {
+    self.base.operands.get(0)
+  }
+
+  pub fn to_string(&self, ctx: &Context) -> String {
+    if self.base.get_num_operands() == 3 {
+      let cond = self.base.operands.get(0).unwrap();
+      let cond = cond.to_string(ctx, true);
+      let true_label = self.base.operands.get(1).unwrap();
+      let true_label = true_label.to_string(ctx, false);
+      let false_label = self.base.operands.get(2).unwrap();
+      let false_label = false_label.to_string(ctx, false);
+      format!("br {}, label {}, label {}", cond, true_label, false_label)
+    } else {
+      format!("br label {}", self.base.operands.get(0).unwrap().to_string(ctx, false))
+    }
+  }
+}
+
+```
+
+`src/ir/value/instruction/mod.rs`:
+
+```rs
+pub mod instructions;
+
+pub use instructions::*;
+
+use crate::ir::value::ValueRef;
+use crate::ir::types;
+
+#[derive(Clone)]
+pub struct Instruction {
+  pub(crate) skey: Option<usize>,
+  pub(crate) ty: types::TypeRef,
+  pub(crate) opcode: InstOpcode,
+  pub(crate) name_prefix: String,
+  pub(crate) operands: Vec<ValueRef>,
+  pub(crate) parent: Option<usize>,
+}
+
+// TODO(@were): Revisit this idea of code organization.
+/// This is not only the opcode, but also the additional information of
+/// these sub-instructions.
+#[derive(Clone, PartialEq)]
+pub enum InstOpcode {
+  /// Memory allocation (alignment).
+  Alloca(usize),
+  /// Load instruction (alignment).
+  Load(usize),
+  /// Store instruction (alignment).
+  Store(usize),
+  /// Return instruction.
+  Return,
+  /// GetElementPtr instruction (inbound).
+  GetElementPtr(bool),
+  /// Call a callable value.
+  Call,
+  /// Binary operation.
+  BinaryOp(BinaryOp),
+  /// Bitcast or reinterpret cast.
+  CastInst(CastOp),
+  /// Int value comparison.
+  ICompare(CmpPred),
+  /// Branch instruction
+  Branch
+}
+
+impl ToString for InstOpcode {
+  fn to_string(&self) -> String {
+    match self {
+      InstOpcode::Alloca(_) => "alloca".to_string(),
+      InstOpcode::Return => "ret".to_string(),
+      InstOpcode::GetElementPtr(_) => "getelementptr".to_string(),
+      InstOpcode::Load(_) => "load".to_string(),
+      InstOpcode::Store(_) => "store".to_string(),
+      InstOpcode::Call => "call".to_string(),
+      InstOpcode::ICompare(_) => "icmp".to_string(),
+      InstOpcode::Branch => "br".to_string(),
+      InstOpcode::BinaryOp(binop) => {
+        binop.to_string().to_string()
+      }
+      InstOpcode::CastInst(cast) => {
+        cast.to_string().to_string()
+      }
+    }
+  }
+}
+
+
+/// Sub-opcodes for binary operations.
+#[derive(Clone, PartialEq)]
+pub enum BinaryOp {
+  Add,
+  Sub,
+  Mul,
+  SDiv,
+  SRem,
+  Rem,
+  Shl,
+  Shr,
+  And,
+  Or,
+  Xor,
+  LogicalAnd,
+  LogicalOr,
+}
+
+impl BinaryOp {
+  fn to_string(&self) -> &str {
+    match &self {
+      BinaryOp::Add => "add",
+      BinaryOp::Sub => "sub",
+      BinaryOp::Mul => "mul",
+      BinaryOp::SDiv => "sdiv",
+      BinaryOp::SRem => "srem",
+      BinaryOp::Rem => "rem",
+      BinaryOp::Shl => "shl",
+      BinaryOp::Shr => "shr",
+      BinaryOp::And => "and",
+      BinaryOp::Or => "or",
+      BinaryOp::Xor => "xor",
+      BinaryOp::LogicalAnd => "and",
+      BinaryOp::LogicalOr => "or",
+    }
+  }
+}
+
+/// Sub-opcodes of cast operation.
+#[derive(Clone, PartialEq)]
+pub enum CastOp {
+  Bitcast,
+  FpToSi,
+  SignExt,
+  Trunc,
+}
+
+impl CastOp {
+  fn to_string(&self) -> &str {
+    match &self {
+      CastOp::Bitcast => "bitcast",
+      CastOp::FpToSi => "fptosi",
+      CastOp::SignExt => "sext",
+      CastOp::Trunc => "trunc"
+    }
+  }
+}
+
+/// Sub instructions of comparison.
+#[derive(Clone, PartialEq)]
+pub enum CmpPred {
+  /// Signed less than.
+  SLT
+}
+
+impl CmpPred {
+
+  pub fn to_string(&self) -> String {
+    match self {
+      CmpPred::SLT => "slt".to_string()
+    }
+  }
+
+}
+
+impl Instruction {
+
+  pub fn get_opcode(&self) -> &InstOpcode {
+    &self.opcode
+  }
+
+  pub fn get_name(&self) -> String {
+    format!("{}.{}", self.name_prefix, self.skey.unwrap())
+  }
+
+  pub fn get_type(&self) -> &types::TypeRef {
+    &self.ty
+  }
+
+  pub fn get_num_operands(&self) -> usize {
+    self.operands.len()
+  }
+
+  pub fn get_operand(&self, idx: usize) -> ValueRef {
+    self.operands[idx].clone()
+  }
+
+  pub fn set_operand(&mut self, idx: usize, new_value: ValueRef) {
+    self.operands[idx] = new_value;
+  }
+
+  pub fn get_parent(&self) -> ValueRef {
+    ValueRef{skey: self.parent.unwrap(), kind: super::VKindCode::Block}
+  }
+
+  pub fn to_string(&self, ctx: &crate::context::Context) -> String {
+    match self.opcode {
+      InstOpcode::Alloca(align) => { Alloca::new(self, align).to_string(ctx) },
+      InstOpcode::Return => { Return::new(self).to_string(ctx) },
+      InstOpcode::GetElementPtr(inbounds) => { GetElementPtr::new(self, inbounds).to_string(ctx) },
+      InstOpcode::Load(align) => { Load::new(self, align).to_string(ctx) },
+      InstOpcode::Store(align) => { Store::new(self, align).to_string(ctx) },
+      InstOpcode::Call => { Call::new(self).to_string(ctx) },
+      InstOpcode::BinaryOp(_) => { BinaryInst::new(self).to_string(ctx) },
+      InstOpcode::CastInst(_) => { CastInst::new(self).to_string(ctx) }
+      InstOpcode::ICompare(_) => { CompareInst::new(self).to_string(ctx) }
+      InstOpcode::Branch => { BranchInst::new(self).to_string(ctx) }
+    }
+  }
+
+}
+
+
+```
+
+`src/ir/value/mod.rs`:
+
+```rs
+pub mod function;
+pub mod instruction;
+pub mod block;
+pub mod consts;
+pub mod value;
+
+pub use value::{ValueRef, VKindCode};
+pub use function::{Function, Argument};
+pub use block::Block;
+pub use instruction::Instruction;
+pub use consts::{ConstArray, ConstExpr, ConstScalar};
+
+
+```
+
+`src/ir/value/value.rs`:
+
+```rs
+use crate::context::Context;
+use crate::context::component::{ComponentToRef, ComponentToMut, WithKindCode, GetSlabKey};
+use crate::ir::ConstExpr;
+use crate::ir::types::{TypeRef, TKindCode};
+use crate::ir::module::{Module, namify};
+
+use super::consts::ConstObject;
+use super::block::Block;
+use super::function::{Function, Argument};
+use super::instruction::Instruction;
+use super::consts::{ConstScalar, ConstArray, InlineAsm};
+
+#[derive(Clone, Hash, PartialEq, Eq)]
+pub struct ValueRef {
+  pub skey: usize,
+  pub kind: VKindCode
+}
+
+impl<'ctx> ValueRef {
+
+  pub fn undef() -> Self {
+    Self { skey: 0, kind: VKindCode::Unknown }
+  }
+
+  pub fn as_ref<T: WithKindCode<VKindCode> + ComponentToRef<T> + GetSlabKey>(&'ctx self, context: &'ctx Context) -> Option<&'ctx T> {
+    if self.kind == T::kind_code() {
+      Some(context.get_value_ref::<T>(self.skey))
+    } else {
+      None
+    }
+  }
+
+  pub fn as_mut<T>(&'ctx self, context: &'ctx mut Context) -> Option<&'ctx mut T> 
+    where T: WithKindCode<VKindCode> + ComponentToMut<T> + GetSlabKey {
+    if self.kind == T::kind_code() {
+      Some(context.get_value_mut::<T>(self.skey))
+    } else {
+      None
+    }
+  }
+
+  fn type_to_string(&self, ctx: &'ctx Context, with_type: bool) -> String {
+    self.get_type(ctx).to_string(ctx);
+    if with_type {
+      format!("{} ", self.get_type(ctx).to_string(ctx))
+    } else {
+      "".to_string()
+    }
+  }
+
+  pub fn to_string(&self, ctx: &'ctx Context, with_type: bool) -> String {
+    match self.kind {
+      VKindCode::Block => {
+        let block = ctx.get_value_ref::<Block>(self.skey);
+        format!("%{}", block.get_name())
+      },
+      VKindCode::Argument => {
+        let arg = ctx.get_value_ref::<Argument>(self.skey);
+        format!("{}%arg.{}", self.type_to_string(ctx, with_type), arg.arg_idx)
+      },
+      VKindCode::Instruction => {
+        let inst = ctx.get_value_ref::<Instruction>(self.skey);
+        format!("{}%{}", self.type_to_string(ctx, with_type), inst.get_name())
+      },
+      VKindCode::ConstScalar => {
+        let const_scalar = ctx.get_value_ref::<ConstScalar>(self.skey);
+        format!("{}{}", self.type_to_string(ctx, with_type), const_scalar.value)
+      },
+      VKindCode::Function => {
+        let func = ctx.get_value_ref::<Function>(self.skey);
+        format!("{}@{}", if with_type { func.get_ret_ty(ctx).to_string(ctx) + " " } else { "".to_string() }, namify(&func.name))
+      },
+      VKindCode::ConstArray => {
+        let const_array = ctx.get_value_ref::<ConstArray>(self.skey);
+        format!("{}@{}", self.type_to_string(ctx, with_type), const_array.name)
+      },
+      VKindCode::ConstExpr => {
+        let const_expr = ctx.get_value_ref::<ConstExpr>(self.skey);
+        format!("{}", const_expr.to_string(ctx))
+      },
+      VKindCode::ConstObject => {
+        let const_object = ctx.get_value_ref::<ConstObject>(self.skey);
+        format!("{}@{}", self.type_to_string(ctx, with_type), const_object.name)
+      },
+      VKindCode::InlineAsm => {
+        let inline_asm = ctx.get_value_ref::<InlineAsm>(self.skey);
+        inline_asm.to_string(ctx)
+      },
+      VKindCode::Unknown => {
+        format!("[unknown]")
+      }
+    }
+  }
+
+  pub fn get_type(&self, ctx: &'ctx Context) -> TypeRef {
+    match self.kind {
+      VKindCode::Block => {
+        TypeRef { skey: 0, kind: TKindCode::BlockType }
+      },
+      VKindCode::Argument => {
+        let arg = ctx.get_value_ref::<Argument>(self.skey);
+        arg.ty.clone()
+      },
+      VKindCode::Instruction => {
+        let inst = ctx.get_value_ref::<Instruction>(self.skey);
+        inst.get_type().clone()
+      },
+      VKindCode::ConstScalar => {
+        let const_scalar = ctx.get_value_ref::<ConstScalar>(self.skey);
+        const_scalar.ty.clone()
+      },
+      VKindCode::Function => {
+        let func = ctx.get_value_ref::<Function>(self.skey);
+        func.fty.clone()
+      },
+      VKindCode::ConstArray => {
+        let const_array = ctx.get_value_ref::<ConstArray>(self.skey);
+        const_array.ty.clone()
+      },
+      VKindCode::ConstExpr => {
+        let const_expr = ctx.get_value_ref::<ConstExpr>(self.skey);
+        const_expr.ty.clone()
+      },
+      VKindCode::ConstObject => {
+        let const_object = ctx.get_value_ref::<ConstObject>(self.skey);
+        const_object.ty.clone()
+      },
+      VKindCode::InlineAsm => {
+        let inline_asm = ctx.get_value_ref::<InlineAsm>(self.skey);
+        inline_asm.ty.clone()
+      },
+      VKindCode::Unknown => {
+        panic!("Unknown value type")
+      }
+    }
+  }
+
+  /// Returns true if the value is a constant.
+  pub fn is_const(&self) -> bool {
+    match self.kind {
+      VKindCode::ConstScalar | VKindCode::ConstArray | VKindCode::ConstExpr | VKindCode::ConstObject => true,
+      _ => false
+    }
+  }
+
+  /// Returns true if this value is callable.
+  pub fn is_callable(&self) -> bool {
+    match self.kind {
+      VKindCode::Function => true,
+      VKindCode::InlineAsm => true,
+      _ => false
+    }
+  }
+}
+
+#[derive(Clone, PartialEq, Hash, Eq)]
+pub enum VKindCode {
+  Argument,
+  Instruction,
+  Function,
+  Block,
+  ConstScalar,
+  ConstArray,
+  ConstExpr,
+  ConstObject,
+  InlineAsm,
+  Unknown
+}
+
+pub trait FindInstance<'ctx, T> {
+  fn find_instance(module: &'ctx Module, value: &'ctx ValueRef) -> &'ctx T;
+}
+
+pub trait FindInstanceMut<'ctx, T> {
+  fn find_instance(module: &'ctx mut Module, value: &'ctx ValueRef) -> &'ctx mut T;
+}
+
+
+```
+
+`src/lib.rs`:
+
+```rs
+/// Three core modules for the LLVM IR emission.
+
+pub mod ir;
+pub mod builder;
+pub mod context;
+pub mod machine;
+
+```
+
+`src/machine.rs`:
+
+```rs
+use std::collections::HashMap;
+
+pub struct TargetMachine {
+  /// The target triple of the target machine
+  pub target_triple: TargetTriple,
+  /// The data layout of the target machine
+  pub data_layout: DataLayout
+}
+
+impl TargetMachine {
+
+  /// Get the pointer size under this target machine.
+  pub fn get_pointer_size_in_bits(&self) -> usize {
+    if let Some(x) = self.data_layout.pointer_alignment.get(&(0 as usize)) {
+      return x.0;
+    }
+    return 64;
+  }
+
+}
+
+/// Target triple of the machine.
+pub struct TargetTriple {
+  /// Instruction set.
+  isa: String,
+  /// Hardware vendor, mostly unknown.
+  vendor: String,
+  /// Operating system.
+  os: String
+}
+
+impl TargetTriple {
+
+  /// Construct a new target triple from the given string.
+  pub fn new(tt: String) -> Self {
+    let triple = tt.split(r"-").map(|x| x.to_string()).collect::<Vec<_>>();
+    if triple.len() == 3 {
+      TargetTriple {
+        isa: triple[0].clone(),
+        vendor: triple[1].clone(),
+        os: triple[2].clone()
+      }
+    } else {
+      TargetTriple {
+        isa: String::from(""), vendor: String::from(""), os: String::from("")
+      }
+    }
+  }
+
+  /// Dump it to text.
+  pub fn to_string(&self) -> String {
+    format!("{}-{}-{}", self.isa, self.vendor, self.os)
+  }
+
+}
+
+/// The data layout of the target machine.
+pub struct DataLayout {
+  /// The endian of the machine
+  big_endian: bool,
+  /// The pointer alignment
+  pointer_alignment: HashMap<usize, (usize, usize, usize, usize)>,
+  /// LLVM naming mangling
+  mangling: char,
+  /// The value alignment in bits on the stack
+  stack_alignment: usize
+}
+
+impl DataLayout {
+
+  pub fn new(layout: String) -> Self {
+    let mut res = DataLayout {
+      big_endian: false,
+      pointer_alignment: HashMap::new(),
+      mangling: 'e',
+      stack_alignment: 64
+    };
+    for elem in layout.split(r"-") {
+      // TODO(@were): Support i, v, f, a, F, n, ni
+      match *elem.as_bytes().first().unwrap() as char {
+        'e' => {
+          // e -> small endian
+          res.big_endian = false
+        }
+        'E' => {
+          // E -> big endian
+          res.big_endian = true
+        }
+        'm' => {
+          // m:<mangling>
+          assert!(elem.as_bytes()[1] as char == ':');
+          res.mangling = elem.as_bytes()[2] as char
+        }
+        'S' => {
+          // S:<pref>
+          res.stack_alignment = elem[1..].parse::<usize>().unwrap()
+        }
+        'p' => {
+          // p[n]:<size>:<abi>[:<pref>][:<idx>]
+          let palign = elem.split(":").into_iter().collect::<Vec<_>>();
+          let n = if palign[0] == "p" {
+            0 as usize
+          } else {
+            palign[0].parse::<usize>().unwrap()
+          };
+          let psize = palign[1].parse::<usize>().unwrap();
+          let pabi = palign[2].parse::<usize>().unwrap();
+          let ppref = if 3 < palign.len() {
+            palign[2].parse::<usize>().unwrap()
+          } else {
+            psize
+          };
+          let pidx = if 4 < palign.len() {
+            palign[3].parse::<usize>().unwrap()
+          } else {
+            psize
+          };
+          res.pointer_alignment.insert(n, (psize, pabi, ppref, pidx));
+        }
+        _ => {
+          panic!("{} is not valid", elem)
+        }
+      }
+    }
+    res
+  }
+
+  /// Dump it to string.
+  pub fn to_string(&self) -> String {
+    let endian = if self.big_endian { 'E' } else { 'e' };
+
+    let mut res = format!("{}-m:{}-S{}", endian, self.mangling, self.stack_alignment);
+
+    if self.pointer_alignment.len() != 0 {
+      let pointers = self.pointer_alignment.iter().map(|x| {
+        format!("p{}:{}:{}:{}:{}", x.0, x.1.0, x.1.1, x.1.2, x.1.3)
+      }).collect::<Vec<_>>().join("-");
+      res = format!("{}-{}", res, pointers)
+    }
+
+    res
+  }
+
+}
+
+```
