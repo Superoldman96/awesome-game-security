@@ -1,0 +1,2243 @@
+Project Path: arc_gmh5225_cthash_8nmdchf1
+
+Source Tree:
+
+```txt
+arc_gmh5225_cthash_8nmdchf1
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── cmake
+│   ├── colors.cmake
+│   └── coverage.cmake
+├── example.cpp
+├── include
+│   ├── CMakeLists.txt
+│   └── cthash
+│       ├── cthash.hpp
+│       ├── hasher.hpp
+│       ├── internal
+│       │   ├── algorithm.hpp
+│       │   ├── assert.hpp
+│       │   ├── fixed-string.hpp
+│       │   └── hexdec.hpp
+│       ├── value.hpp
+│       └── variants
+│           ├── sha224.hpp
+│           ├── sha256.hpp
+│           ├── sha384.hpp
+│           ├── sha512
+│           │   └── t.hpp
+│           └── sha512.hpp
+├── shasum.cpp
+└── tests
+    ├── CMakeLists.txt
+    ├── hexdec.cpp
+    ├── internal
+    │   └── support.hpp
+    ├── sha224.cpp
+    ├── sha256.cpp
+    ├── sha384.cpp
+    ├── sha512.cpp
+    ├── sha512t.cpp
+    └── value.cpp
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.14)
+
+project(cthash VERSION 1.0 LANGUAGES CXX)
+
+list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+include(colors)
+include(coverage)
+
+option(CTHASH_TESTS "Enable CTHASH testing" ON)
+
+if (CTHASH_TESTS)
+	option(CTHASH_COVERAGE "Enable CTHASH test-coverage" ON)
+
+	if (CTHASH_COVERAGE)
+		enable_coverage()
+	endif()
+
+	add_subdirectory(tests)
+endif()
+
+add_subdirectory(include)
+
+add_executable(example example.cpp)
+target_link_libraries(example cthash)
+
+add_executable(shasum shasum.cpp)
+target_link_libraries(shasum cthash)
+```
+
+`LICENSE`:
+
+```
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+    TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+    1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+    2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+    3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+    4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+    5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+    6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+    7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+    8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+    9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+    END OF TERMS AND CONDITIONS
+
+    APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+    Copyright [yyyy] [name of copyright owner]
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+
+--- LLVM Exceptions to the Apache 2.0 License ----
+
+As an exception, if, as a result of your compiling your source code, portions
+of this Software are embedded into an Object form of such source code, you
+may redistribute such embedded portions in such Object form without complying
+with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
+
+In addition, if you combine or link compiled forms of this Software with
+software that is licensed under the GPLv2 ("Combined Software") and if a
+court of competent jurisdiction determines that the patent provision (Section
+3), the indemnity provision (Section 9) or other Section of the License
+conflicts with the conditions of the GPLv2, you may retroactively and
+prospectively choose to deem waived or otherwise exclude such Section(s) of
+the License, but only in their entirety and only with respect to the Combined
+Software.
+
+```
+
+`README.md`:
+
+```md
+# CTHASH (Compile Time Hash)
+
+This library is constexpr implementation of SHA-2 family of hashes.
+
+## Supported hash function
+
+The library also implements hash_value literals in namespace `cthash::literals` (suffixes in parenthesis for each hash function type).
+
+* SHA-224 (`_sha224`)
+* SHA-256 (`_sha256`)
+* SHA-384 (`_sha384`)
+* SHA-512 (`_sha512`)
+* SHA-512/t (only for T dividable by 8) (`_sha512_224`, `_sha512_256`)
+
+## Example
+
+```c++
+using namespace cthash::literals;
+
+constexpr auto my_hash = cthash::sha256{}.update("hello there!").final();
+// or
+constexpr auto my_hash = cthash::simple<cthash::sha256>("hello there!");
+
+static_assert(my_hash == "c69509590d81db2f37f9d75480c8efedf79a77933db5a8319e52e13bfd9874a3"_sha256);
+```
+
+Also look at [runtime example](example.cpp).
+
+### Including library
+
+You can include specific hash function only by `#include <cthash/variants/sha256.hpp>` or you can include whole library by `#include <cthash/cthash.hpp>`
+
+#### Specific include for SHA-512/t
+
+Just include `#include <cthash/variants/sha512/t.hpp>`.
+
+## Implementation note
+
+There is no allocation at all, everything is done as a value type from user's perspective. No explicit optimizations were done (for now).
+
+## Compiler support
+
+You need a C++23 compiler.
+
+* Clang 15.0.7+
+* GCC 12.2+ 
+
+```
+
+`cmake/colors.cmake`:
+
+```cmake
+option (FORCE_COLORED_OUTPUT "Always produce ANSI-colored output (GNU/Clang only)." ON)
+if (${FORCE_COLORED_OUTPUT})
+	if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+		add_compile_options ($<$<COMPILE_LANGUAGE:C>:-fdiagnostics-color=always>)
+		add_compile_options ($<$<COMPILE_LANGUAGE:CXX>:-fdiagnostics-color=always>)
+	elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+		add_compile_options ($<$<COMPILE_LANGUAGE:C>:-fcolor-diagnostics>)
+		add_compile_options ($<$<COMPILE_LANGUAGE:CXX>:-fcolor-diagnostics>)
+	endif ()
+endif ()
+```
+
+`cmake/coverage.cmake`:
+
+```cmake
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	if (NOT LLMV_PROFDATA)
+		set(LLMV_PROFDATA llvm-profdata)
+	endif(())
+	if (NOT LLVM_COV)
+		set(LLMV_COV llvm-cov)
+	endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+	if (NOT LLMV_PROFDATA)
+		set(LLMV_PROFDATA xcrun llvm-profdata)
+	endif()
+	if (NOT LLVM_COV)
+		set(LLMV_COV xcrun llvm-cov)
+	endif()
+endif()
+
+function(enable_coverage)
+	if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+		
+	elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+		set(LLMV_PROFDATA xcrun llvm-profdata)
+		set(LLMV_COV xcrun llvm-cov)
+	else()
+		message(FATAL_ERROR "Source level code coverage is supported only for Clang compiler! (CMAKE_CXX_COMPILER_ID = ${CMAKE_CXX_COMPILER_ID})")
+	endif()
+	
+	message(STATUS "Enabling Clang source code-coverage")
+	
+	# add flags to emit coverage
+	add_compile_options("-fprofile-instr-generate" "-fcoverage-mapping" "-g" "-O0")
+	add_link_options("-fprofile-instr-generate" "-fcoverage-mapping")
+	add_compile_options("-ffile-prefix-map=${CMAKE_SOURCE_DIR}/=/")
+endfunction()
+
+function(coverage_report_after EVENT TARGET)
+	if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+		# ok
+	elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+		
+	else()
+		return()
+	endif()
+	
+	SET(coverage_data_name "default.profraw")
+	
+	add_custom_command(TARGET ${EVENT} POST_BUILD COMMAND ${LLMV_PROFDATA} merge -sparse ${coverage_data_name} -o coverage.profdata COMMAND ${LLMV_COV} show $<TARGET_FILE:${TARGET}> -instr-profile=coverage.profdata "-ignore-filename-regex=\"(external/.*|tests/.*|cthash/internal/assert[.]hpp)\"" -format html -output-dir ${CMAKE_BINARY_DIR}/report -show-instantiations=true -show-expansions=false -show-line-counts -Xdemangler c++filt -Xdemangler -n -show-branches=percent -tab-size=4 -path-equivalence=/,${CMAKE_SOURCE_DIR} COMMAND cd ${CMAKE_BINARY_DIR} && zip -q -r -9 report.zip report BYPRODUCTS  ${CMAKE_BINARY_DIR}/report.zip COMMENT "Generating Code-Coverage report")
+	
+	add_custom_target(coverage COMMAND open ${CMAKE_BINARY_DIR}/report/index.html DEPENDS ${CMAKE_BINARY_DIR}/report.zip)
+endfunction()
+
+```
+
+`example.cpp`:
+
+```cpp
+#include <cthash/cthash.hpp>
+#include <iostream>
+
+int main(int argc, char ** argv) {
+	if (argc < 2) {
+		return 1;
+	}
+
+	const auto in = std::string_view(argv[1]);
+
+	std::cout << "    sha224 = " << cthash::sha224{}.update(in).final() << "\n";
+	std::cout << "    sha256 = " << cthash::sha256{}.update(in).final() << "\n";
+	std::cout << "    sha384 = " << cthash::sha384{}.update(in).final() << "\n";
+	std::cout << "    sha512 = " << cthash::sha512{}.update(in).final() << "\n";
+	std::cout << "sha512/224 = " << cthash::sha512t<224>{}.update(in).final() << "\n";
+	std::cout << "sha512/256 = " << cthash::sha512t<256>{}.update(in).final() << "\n";
+}
+```
+
+`include/CMakeLists.txt`:
+
+```txt
+add_library(cthash INTERFACE)
+
+target_compile_features(cthash INTERFACE cxx_std_23)
+target_include_directories(cthash INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+target_sources(cthash INTERFACE FILE_SET headers TYPE HEADERS FILES
+	cthash/sha2.hpp
+)
+
+add_custom_target(single-header DEPENDS single-header.hpp)
+
+add_custom_target(single-header.hpp COMMAND python3 -m quom ${CMAKE_CURRENT_SOURCE_DIR}/cthash/cthash.hpp ${CMAKE_CURRENT_SOURCE_DIR}/cthash-single-header.hpp)
+
+```
+
+`include/cthash/cthash.hpp`:
+
+```hpp
+#ifndef CTHASH_CTHASH_HPP
+#define CTHASH_CTHASH_HPP
+
+#include "variants/sha224.hpp"
+#include "variants/sha256.hpp"
+#include "variants/sha384.hpp"
+#include "variants/sha512.hpp"
+#include "variants/sha512/t.hpp"
+
+#endif
+
+```
+
+`include/cthash/hasher.hpp`:
+
+```hpp
+#ifndef CONSTEXPR_SHA2_HASHER_HPP
+#define CONSTEXPR_SHA2_HASHER_HPP
+
+#include "value.hpp"
+#include "internal/assert.hpp"
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <span>
+#include <cassert>
+#include <concepts>
+#include <cstdint>
+
+namespace cthash {
+
+template <typename T> concept one_byte_char = (sizeof(T) == 1zu);
+
+template <typename T> concept byte_like = (sizeof(T) == 1zu) && (std::same_as<T, char> || std::same_as<T, unsigned char> || std::same_as<T, char8_t> || std::same_as<T, std::byte> || std::same_as<T, uint8_t> || std::same_as<T, int8_t>);
+
+template <one_byte_char CharT, size_t N> void string_literal_helper(const CharT (&)[N]);
+
+template <typename T> concept string_literal = requires(const T & in) //
+{
+	string_literal_helper(in);
+};
+
+template <typename T> concept convertible_to_byte_span = requires(T && obj) //
+{
+	{ std::span(obj) };
+	requires byte_like<typename decltype(std::span(obj))::value_type>;
+	requires !string_literal<T>;
+};
+
+template <typename It1, typename It2, typename It3> constexpr auto byte_copy(It1 first, It2 last, It3 destination) {
+	return std::transform(first, last, destination, [](byte_like auto v) { return static_cast<std::byte>(v); });
+}
+
+template <std::unsigned_integral T> struct unwrap_bigendian_number {
+	static constexpr size_t bytes = sizeof(T);
+	static constexpr size_t bits = bytes * 8zu;
+
+	std::span<std::byte, bytes> ref;
+
+	constexpr void operator=(T value) noexcept {
+		[&]<size_t... Idx>(std::index_sequence<Idx...>) {
+			((ref[Idx] = static_cast<std::byte>(value >> ((bits - 8zu) - 8zu * Idx))), ...);
+		}
+		(std::make_index_sequence<bytes>());
+	}
+};
+
+unwrap_bigendian_number(std::span<std::byte, 8>)->unwrap_bigendian_number<uint64_t>;
+unwrap_bigendian_number(std::span<std::byte, 4>)->unwrap_bigendian_number<uint32_t>;
+
+template <typename T> constexpr auto cast_from_bytes(std::span<const std::byte, sizeof(T)> in) noexcept {
+	return [&]<size_t... Idx>(std::index_sequence<Idx...>) {
+		return ((static_cast<T>(in[Idx]) << ((sizeof(T) - 1zu - Idx) * 8zu)) | ...);
+	}
+	(std::make_index_sequence<sizeof(T)>());
+}
+
+template <typename Config> struct internal_hasher {
+	static constexpr auto config = Config{};
+	static constexpr size_t block_size_bytes = config.block_bits / 8zu;
+
+	// internal types
+	using state_value_t = std::remove_cvref_t<decltype(Config::initial_values)>;
+	using state_item_t = typename state_value_t::value_type;
+
+	using block_value_t = std::array<std::byte, block_size_bytes>;
+	using block_view_t = std::span<const std::byte, block_size_bytes>;
+
+	using staging_item_t = typename decltype(config.constants)::value_type;
+	static constexpr size_t staging_size = config.constants.size();
+	using staging_value_t = std::array<staging_item_t, staging_size>;
+	using staging_view_t = std::span<const staging_item_t, staging_size>;
+
+	using digest_span_t = std::span<std::byte, config.digest_length>;
+	using result_t = cthash::tagged_hash_value<Config>;
+	using length_t = typename Config::length_type;
+
+	// internal state
+	state_value_t hash;
+	length_t total_length;
+
+	block_value_t block;
+	unsigned block_used;
+
+	// constructors
+	constexpr internal_hasher() noexcept: hash{config.initial_values}, total_length{0zu}, block_used{0u} { }
+	constexpr internal_hasher(const internal_hasher &) noexcept = default;
+	constexpr internal_hasher(internal_hasher &&) noexcept = default;
+	constexpr ~internal_hasher() noexcept = default;
+
+	// take buffer and build staging
+	static constexpr auto build_staging(block_view_t chunk) noexcept -> staging_value_t {
+		staging_value_t w;
+
+		constexpr auto first_part_size = block_size_bytes / sizeof(staging_item_t);
+
+		// fill first part with chunk
+		for (int i = 0; i != int(first_part_size); ++i) {
+			w[i] = cast_from_bytes<staging_item_t>(chunk.subspan(i * sizeof(staging_item_t)).template first<sizeof(staging_item_t)>());
+		}
+
+		// fill the rest (generify)
+		for (int i = int(first_part_size); i != int(staging_size); ++i) {
+			w[i] = w[i - 16] + config.sigma_0(w[i - 15]) + w[i - 7] + config.sigma_1(w[i - 2]);
+		}
+
+		return w;
+	}
+
+	static constexpr auto choice(state_item_t e, state_item_t f, state_item_t g) noexcept -> state_item_t {
+		return (e bitand f) xor (~e bitand g);
+	}
+
+	static constexpr auto majority(state_item_t a, state_item_t b, state_item_t c) noexcept -> state_item_t {
+		return (a bitand b) xor (a bitand c) xor (b bitand c);
+	}
+
+	static constexpr void rounds(staging_view_t w, state_value_t & state) noexcept {
+		// create copy of internal state
+		auto wvar = state_value_t(state);
+
+		// just give them names
+		auto & a = wvar[0];
+		auto & b = wvar[1];
+		auto & c = wvar[2];
+		auto & d = wvar[3];
+		auto & e = wvar[4];
+		auto & f = wvar[5];
+		auto & g = wvar[6];
+		auto & h = wvar[7];
+
+		for (int i = 0; i != config.rounds_number; ++i) {
+			const state_item_t temp1 = h + config.sum_e(e) + choice(e, f, g) + config.constants[i] + w[i];
+			const state_item_t temp2 = config.sum_a(a) + majority(a, b, c);
+
+			// move around
+			h = g;
+			g = f;
+			f = e;
+			e = d + temp1;
+			d = c;
+			c = b;
+			b = a;
+			a = temp1 + temp2;
+		}
+
+		// add store back
+		for (int i = 0; i != (int)state.size(); ++i) {
+			state[i] += wvar[i];
+		}
+	}
+
+	// this implementation works only with input size aligned to bytes (not bits)
+	template <byte_like T> constexpr void update_to_buffer_and_process(std::span<const T> in) noexcept {
+		for (;;) {
+			const auto remaining_free_space = std::span<std::byte, block_size_bytes>(block).subspan(block_used);
+			const auto to_copy = in.first(std::min(in.size(), remaining_free_space.size()));
+
+			const auto it = byte_copy(to_copy.begin(), to_copy.end(), remaining_free_space.begin());
+
+			total_length += to_copy.size();
+
+			if (it != remaining_free_space.end()) {
+				block_used += static_cast<unsigned>(to_copy.size());
+				return;
+			} else {
+				block_used = 0zu;
+			}
+
+			CTHASH_ASSERT(it == remaining_free_space.end());
+
+			// we have block!
+			const staging_value_t w = build_staging(block);
+			rounds(w, hash);
+
+			// continue with the next block (if there is any)
+			in = in.subspan(to_copy.size());
+			// TODO maybe avoid copying the data and process it directly over span
+		}
+	}
+
+	static constexpr bool finalize_buffer(block_value_t & block, size_t block_used) noexcept {
+		CTHASH_ASSERT(block_used < block.size());
+		const auto free_space = std::span(block).subspan(block_used);
+
+		auto it = free_space.data();
+		*it++ = std::byte{0b1000'0000u};							   // first byte after data contains bit at MSB
+		std::fill(it, (block.data() + block.size()), std::byte{0x0u}); // rest is filled with zeros
+
+		// we don't have enough space to write length bits
+		return free_space.size() < (1zu + (config.length_size_bits / 8zu));
+	}
+
+	static constexpr void finalize_buffer_by_writing_length(block_value_t & block, length_t total_length) noexcept {
+		unwrap_bigendian_number{std::span(block).template last<sizeof(length_t)>()} = (total_length * 8zu);
+	}
+
+	constexpr void finalize() noexcept {
+		if (finalize_buffer(block, block_used)) {
+			// we didn't have enough space, we need to process block
+			const staging_value_t w = build_staging(block);
+			rounds(w, hash);
+
+			// zero it out
+			std::fill(block.begin(), block.end(), std::byte{0x0u});
+		}
+
+		// we either have space to write or we have zerod out block
+		finalize_buffer_by_writing_length(block, total_length);
+
+		// calculate last round
+		const staging_value_t w = build_staging(block);
+		rounds(w, hash);
+	}
+
+	constexpr void write_result_into(digest_span_t out) noexcept
+	requires(config.values_for_output != 0)
+	{
+		// copy result to byte result
+		static_assert(config.values_for_output <= config.initial_values.size());
+
+		for (int i = 0; i != config.values_for_output; ++i) {
+			unwrap_bigendian_number<state_item_t>{out.subspan(i * sizeof(state_item_t)).template first<sizeof(state_item_t)>()} = hash[i];
+		}
+	}
+
+	constexpr void write_result_into(digest_span_t out) noexcept
+	requires(config.values_for_output == 0)
+	{
+		// make sure digest size is smaller than hash state
+		static_assert(config.digest_length <= config.initial_values.size() * sizeof(state_item_t));
+
+		// copy result to byte result
+		std::array<std::byte, sizeof(state_item_t) * config.initial_values.size()> tmp_buffer;
+
+		for (int i = 0; i != (int)config.initial_values.size(); ++i) {
+			unwrap_bigendian_number<state_item_t>{std::span(tmp_buffer).subspan(i * sizeof(state_item_t)).template first<sizeof(state_item_t)>()} = hash[i];
+		}
+
+		std::copy_n(tmp_buffer.data(), config.digest_length, out.data());
+	}
+};
+
+// this is a convinience type for nicer UX...
+template <typename Config> struct hasher: private internal_hasher<Config> {
+	using super = internal_hasher<Config>;
+	using result_t = typename super::result_t;
+	using length_t = typename super::length_t;
+	using digest_span_t = typename super::digest_span_t;
+
+	constexpr hasher() noexcept: super() { }
+	constexpr hasher(const hasher &) noexcept = default;
+	constexpr hasher(hasher &&) noexcept = default;
+	constexpr ~hasher() noexcept = default;
+
+	// support for various input types
+	constexpr hasher & update(std::span<const std::byte> input) noexcept {
+		super::update_to_buffer_and_process(input);
+		return *this;
+	}
+
+	template <convertible_to_byte_span T> constexpr hasher & update(const T & something) noexcept {
+		using value_type = typename decltype(std::span(something))::value_type;
+		super::update_to_buffer_and_process(std::span<const value_type>(something));
+		return *this;
+	}
+
+	template <one_byte_char CharT> constexpr hasher & update(std::basic_string_view<CharT> in) noexcept {
+		super::update_to_buffer_and_process(std::span(in.data(), in.size()));
+		return *this;
+	}
+
+	template <string_literal T> constexpr hasher & update(const T & lit) noexcept {
+		super::update_to_buffer_and_process(std::span(lit, std::size(lit) - 1zu));
+		return *this;
+	}
+
+	// output (by reference or by value)
+	constexpr void final(digest_span_t digest) noexcept {
+		super::finalize();
+		super::write_result_into(digest);
+	}
+
+	constexpr auto final() noexcept {
+		result_t output;
+		this->final(output);
+		return output;
+	}
+
+	constexpr length_t size() const noexcept {
+		return super::total_length;
+	}
+};
+
+template <typename Hasher, typename T> constexpr auto simple(const T & value) noexcept {
+	return Hasher{}.update(value).final();
+}
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/internal/algorithm.hpp`:
+
+```hpp
+#ifndef CTHASH_INTERNAL_ALGORITHM_HPP
+#define CTHASH_INTERNAL_ALGORITHM_HPP
+
+#include <numeric>
+#include <compare>
+#include <cstddef>
+#include <cstdint>
+
+namespace cthash::internal {
+
+template <typename It1, typename It2> constexpr auto threeway_compare_of_same_size(It1 lhs, It2 rhs, size_t length) -> std::strong_ordering {
+	for (size_t i = 0; i != length; ++i) {
+		if (const auto r = (*lhs++ <=> *rhs++); r != 0) {
+			return r;
+		}
+	}
+
+	return std::strong_ordering::equal;
+}
+
+template <typename T, typename It1, typename It2, typename Stream> constexpr auto & push_to_stream_as(It1 f, It2 l, Stream & stream) {
+	constexpr auto cast_and_shift = [](Stream * s, const auto & rhs) { (*s) << T{rhs}; return s; };
+	return *std::accumulate(f, l, &stream, cast_and_shift);
+}
+
+} // namespace cthash::internal
+
+#endif
+
+```
+
+`include/cthash/internal/assert.hpp`:
+
+```hpp
+#ifndef CTHASH_INTERNAL_ASSERT_HPP
+#define CTHASH_INTERNAL_ASSERT_HPP
+
+#ifndef NDEBUG
+#define CTHASH_ASSERT(e) cthash::assert_this(static_cast<bool>(e), #e, __FILE__, __LINE__);
+#else
+#define CTHASH_ASSERT(e) ((void)(0))
+#endif
+
+#include <cstdio>
+#include <cstdlib>
+
+namespace cthash {
+
+constexpr void assert_this(bool value, const char * expression, const char * file, unsigned line) {
+	if (!value) {
+		printf("%s:%u: failed assertion '%s'\n", file, line, expression);
+		std::abort();
+	}
+}
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/internal/fixed-string.hpp`:
+
+```hpp
+#ifndef CTHASH_INTERNAL_FIXED_STRING_HPP
+#define CTHASH_INTERNAL_FIXED_STRING_HPP
+
+#include <algorithm>
+#include <span>
+#include <string_view>
+
+namespace cthash::internal {
+
+template <typename CharT, size_t N> struct fixed_string {
+	std::array<CharT, N> buffer;
+
+	consteval static auto from_string_literal(const CharT (&in)[N + 1]) -> std::array<CharT, N> {
+		std::array<CharT, N> out;
+		std::copy_n(in, N, out.data());
+		return out;
+	}
+
+	consteval fixed_string(const CharT (&in)[N + 1]) noexcept: buffer{from_string_literal(in)} { }
+
+	constexpr const CharT * data() const noexcept {
+		return buffer.data();
+	}
+
+	constexpr size_t size() const noexcept {
+		return buffer.size();
+	}
+
+	constexpr operator std::span<const CharT, N>() const noexcept {
+		return std::span<const CharT, N>(buffer.data(), buffer.size());
+	}
+
+	constexpr operator std::span<const CharT>() const noexcept {
+		return std::span<const CharT>(buffer.data(), buffer.size());
+	}
+
+	constexpr operator std::basic_string_view<CharT>() const noexcept {
+		return std::basic_string_view<CharT>(buffer.data(), buffer.size());
+	}
+};
+
+template <typename CharT, size_t N> fixed_string(const CharT (&)[N]) -> fixed_string<CharT, N - 1zu>;
+
+} // namespace cthash::internal
+
+#endif
+
+```
+
+`include/cthash/internal/hexdec.hpp`:
+
+```hpp
+#ifndef CTHASH_INTERNAL_HEXDEC_HPP
+#define CTHASH_INTERNAL_HEXDEC_HPP
+
+#include <array>
+#include <ostream>
+#include <span>
+#include <type_traits>
+
+namespace cthash::internal {
+
+consteval auto get_hexdec_table() noexcept {
+	std::array<uint8_t, 128> result;
+
+	auto char_to_hexdec = [](char c) {
+		if (c >= '0' && c <= '9') {
+			return static_cast<uint8_t>(c - '0');
+		} else if (c >= 'a' && c <= 'f') {
+			return static_cast<uint8_t>(c - 'a' + 10u);
+		} else if (c >= 'A' && c <= 'F') {
+			return static_cast<uint8_t>(c - 'A' + 10u);
+		} else {
+			return static_cast<uint8_t>(0);
+		}
+	};
+
+	for (int i = 0; i != static_cast<int>(result.size()); ++i) {
+		result[i] = char_to_hexdec(static_cast<char>(i));
+	}
+
+	return result;
+}
+
+constexpr auto hexdec_to_value_alphabet = get_hexdec_table();
+
+template <typename CharT> constexpr auto value_to_hexdec_alphabet = std::array<CharT, 16>{CharT('0'), CharT('1'), CharT('2'), CharT('3'), CharT('4'), CharT('5'), CharT('6'), CharT('7'), CharT('8'), CharT('9'), CharT('a'), CharT('b'), CharT('c'), CharT('d'), CharT('e'), CharT('f')};
+
+struct byte_hexdec_value {
+	std::byte val;
+
+	template <typename CharT, typename Traits> friend auto & operator<<(std::basic_ostream<CharT, Traits> & os, byte_hexdec_value rhs) {
+		return os << value_to_hexdec_alphabet<CharT>[unsigned(rhs.val >> 4u)] << value_to_hexdec_alphabet<CharT>[unsigned(rhs.val) & 0b1111u];
+	}
+};
+
+template <size_t N, typename CharT> constexpr auto hexdec_to_binary(std::span<const CharT, N * 2> in) -> std::array<std::byte, N> {
+	return [in]<size_t... Idx>(std::index_sequence<Idx...>) {
+		return std::array<std::byte, N>{static_cast<std::byte>(hexdec_to_value_alphabet[in[Idx * 2zu] & 0b0111'1111u] << 4u | hexdec_to_value_alphabet[in[Idx * 2zu + 1zu] & 0b0111'1111u])...};
+	}
+	(std::make_index_sequence<N>());
+}
+
+template <typename CharT, size_t N>
+requires((N - 1zu) % 2zu == 0zu) // -1 because of zero terminator in literals
+constexpr auto literal_hexdec_to_binary(const CharT (&in)[N]) -> std::array<std::byte, (N - 1zu) / 2> {
+	return hexdec_to_binary<N / 2>(std::span<const char, N - 1zu>(in, N - 1zu));
+}
+
+} // namespace cthash::internal
+
+#endif
+
+```
+
+`include/cthash/value.hpp`:
+
+```hpp
+#ifndef CTHASH_VALUE_HPP
+#define CTHASH_VALUE_HPP
+
+#include "internal/algorithm.hpp"
+#include "internal/fixed-string.hpp"
+#include "internal/hexdec.hpp"
+#include <array>
+#include <span>
+#include <string_view>
+#include <compare>
+
+namespace cthash {
+
+template <typename> struct identify;
+
+template <size_t N> struct hash_value: std::array<std::byte, N> {
+	using super = std::array<std::byte, N>;
+
+	constexpr hash_value() noexcept: super{} { }
+	explicit constexpr hash_value(super && s) noexcept: super(s) { }
+	template <typename CharT> explicit constexpr hash_value(const CharT (&in)[N * 2zu + 1zu]) noexcept: super{internal::hexdec_to_binary<N>(std::span<const CharT, N * 2zu>(in, N * 2zu))} { }
+	template <typename CharT> explicit constexpr hash_value(const internal::fixed_string<CharT, N * 2zu> & in) noexcept: super{internal::hexdec_to_binary<N>(std::span<const CharT, N * 2zu>(in.data(), in.size()))} { }
+
+	// comparison support
+	constexpr friend bool operator==(const hash_value & lhs, const hash_value & rhs) noexcept = default;
+	constexpr friend auto operator<=>(const hash_value & lhs, const hash_value & rhs) noexcept -> std::strong_ordering {
+		return internal::threeway_compare_of_same_size(lhs.data(), rhs.data(), N);
+	}
+
+	// print to ostream support
+	template <typename CharT, typename Traits> constexpr friend auto & operator<<(std::basic_ostream<CharT, Traits> & os, const hash_value & val) {
+		return internal::push_to_stream_as<internal::byte_hexdec_value>(val.begin(), val.end(), os);
+	}
+};
+
+template <typename CharT, size_t N> hash_value(const CharT (&)[N]) -> hash_value<(N - 1zu) / 2zu>;
+template <typename CharT, size_t N> hash_value(std::span<const CharT, N>) -> hash_value<N / 2zu>;
+template <typename CharT, size_t N> hash_value(const internal::fixed_string<CharT, N> &) -> hash_value<N / 2zu>;
+
+template <typename Tag> struct tagged_hash_value: hash_value<Tag::digest_length> {
+	static constexpr size_t N = Tag::digest_length;
+
+	using super = hash_value<Tag::digest_length>;
+	using super::super;
+	template <typename CharT> explicit constexpr tagged_hash_value(const internal::fixed_string<CharT, N * 2zu> & in) noexcept: super{in} { }
+
+	static constexpr size_t digest_length = Tag::digest_length;
+};
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	constexpr auto operator""_hash() {
+		return hash_value(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/variants/sha224.hpp`:
+
+```hpp
+#ifndef CTHASH_VARIANTS_SHA224_HPP
+#define CTHASH_VARIANTS_SHA224_HPP
+
+#include "sha256.hpp"
+
+namespace cthash {
+
+struct sha224_config: sha256_config {
+	// these are only changes against sha256 specification...
+
+	static constexpr size_t digest_length = 28u;
+
+	// we are omitting last one
+	static constexpr size_t values_for_output = 7zu;
+
+	static constexpr auto initial_values = std::array<uint32_t, 8>{0xc1059ed8ul, 0x367cd507ul, 0x3070dd17ul, 0xf70e5939ul, 0xffc00b31ul, 0x68581511ul, 0x64f98fa7ul, 0xbefa4fa4ul};
+};
+
+using sha224 = hasher<sha224_config>;
+using sha224_value = tagged_hash_value<sha224_config>;
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha224() {
+		return sha224_value(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/variants/sha256.hpp`:
+
+```hpp
+#ifndef CTHASH_VARIANTS_SHA256_HPP
+#define CTHASH_VARIANTS_SHA256_HPP
+
+#include "../hasher.hpp"
+
+namespace cthash {
+
+struct sha256_config {
+	using length_type = uint64_t;
+	static constexpr size_t length_size_bits = 64;
+
+	static constexpr size_t block_bits = 512u;
+	static constexpr size_t digest_length = 32u;
+
+	static constexpr auto initial_values = std::array<uint32_t, 8>{0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul, 0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
+
+	static constexpr size_t values_for_output = initial_values.size();
+
+	// staging sigmas
+	static constexpr auto sigma_0(uint32_t w_15) noexcept -> uint32_t {
+		return std::rotr(w_15, 7) xor std::rotr(w_15, 18) xor (w_15 >> 3);
+	}
+
+	static constexpr auto sigma_1(uint32_t w_2) noexcept -> uint32_t {
+		return std::rotr(w_2, 17) xor std::rotr(w_2, 19) xor (w_2 >> 10);
+	}
+
+	// rounds constants...
+	static constexpr int rounds_number = 64;
+
+	static constexpr auto constants = std::array<uint32_t, 64>{
+		0x428a2f98ul, 0x71374491ul, 0xb5c0fbcful, 0xe9b5dba5ul, 0x3956c25bul, 0x59f111f1ul, 0x923f82a4ul, 0xab1c5ed5ul,
+		0xd807aa98ul, 0x12835b01ul, 0x243185beul, 0x550c7dc3ul, 0x72be5d74ul, 0x80deb1feul, 0x9bdc06a7ul, 0xc19bf174ul,
+		0xe49b69c1ul, 0xefbe4786ul, 0x0fc19dc6ul, 0x240ca1ccul, 0x2de92c6ful, 0x4a7484aaul, 0x5cb0a9dcul, 0x76f988daul,
+		0x983e5152ul, 0xa831c66dul, 0xb00327c8ul, 0xbf597fc7ul, 0xc6e00bf3ul, 0xd5a79147ul, 0x06ca6351ul, 0x14292967ul,
+		0x27b70a85ul, 0x2e1b2138ul, 0x4d2c6dfcul, 0x53380d13ul, 0x650a7354ul, 0x766a0abbul, 0x81c2c92eul, 0x92722c85ul,
+		0xa2bfe8a1ul, 0xa81a664bul, 0xc24b8b70ul, 0xc76c51a3ul, 0xd192e819ul, 0xd6990624ul, 0xf40e3585ul, 0x106aa070ul,
+		0x19a4c116ul, 0x1e376c08ul, 0x2748774cul, 0x34b0bcb5ul, 0x391c0cb3ul, 0x4ed8aa4aul, 0x5b9cca4ful, 0x682e6ff3ul,
+		0x748f82eeul, 0x78a5636ful, 0x84c87814ul, 0x8cc70208ul, 0x90befffaul, 0xa4506cebul, 0xbef9a3f7ul, 0xc67178f2ul};
+
+	// rounds sums
+	static constexpr auto sum_a(uint32_t a) noexcept -> uint32_t {
+		return std::rotr(a, 2) xor std::rotr(a, 13) xor std::rotr(a, 22);
+	}
+
+	static constexpr auto sum_e(uint32_t e) noexcept -> uint32_t {
+		return std::rotr(e, 6) xor std::rotr(e, 11) xor std::rotr(e, 25);
+	}
+};
+
+using sha256 = hasher<sha256_config>;
+using sha256_value = tagged_hash_value<sha256_config>;
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha256() {
+		return sha256_value(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/variants/sha384.hpp`:
+
+```hpp
+#ifndef CTHASH_VARIANTS_SHA384_HPP
+#define CTHASH_VARIANTS_SHA384_HPP
+
+#include "sha512.hpp"
+
+namespace cthash {
+
+struct sha384_config: sha512_config {
+	static constexpr size_t digest_length = 48u;
+
+	static constexpr auto initial_values = std::array<uint64_t, 8>{0xcbbb9d5dc1059ed8ull, 0x629a292a367cd507ull, 0x9159015a3070dd17ull, 0x152fecd8f70e5939ull, 0x67332667ffc00b31ull, 0x8eb44a8768581511ull, 0xdb0c2e0d64f98fa7ull, 0x47b5481dbefa4fa4ull};
+
+	static constexpr size_t values_for_output = 6zu;
+};
+
+using sha384 = hasher<sha384_config>;
+using sha384_value = tagged_hash_value<sha384_config>;
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha384() {
+		return sha384_value(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/variants/sha512.hpp`:
+
+```hpp
+#ifndef CTHASH_VARIANTS_SHA512_HPP
+#define CTHASH_VARIANTS_SHA512_HPP
+
+#include "../hasher.hpp"
+
+namespace cthash {
+
+struct sha512_config {
+	using length_type = uint64_t;
+	static constexpr size_t length_size_bits = 128;
+
+	static constexpr size_t block_bits = 1024u;
+	static constexpr size_t digest_length = 64u;
+
+	static constexpr auto initial_values = std::array<uint64_t, 8>{0x6a09e667f3bcc908ull, 0xbb67ae8584caa73bull, 0x3c6ef372fe94f82bull, 0xa54ff53a5f1d36f1ull, 0x510e527fade682d1ull, 0x9b05688c2b3e6c1full, 0x1f83d9abfb41bd6bull, 0x5be0cd19137e2179ull};
+
+	static constexpr size_t values_for_output = 8zu;
+
+	// staging functions
+	static constexpr auto sigma_0(uint64_t w_15) noexcept -> uint64_t {
+		return std::rotr(w_15, 1) xor std::rotr(w_15, 8) xor (w_15 >> 7);
+	}
+
+	static constexpr auto sigma_1(uint64_t w_2) noexcept -> uint64_t {
+		return std::rotr(w_2, 19) xor std::rotr(w_2, 61) xor (w_2 >> 6);
+	}
+
+	// rounds constants...
+	static constexpr int rounds_number = 80;
+
+	static constexpr auto constants = std::array<uint64_t, 80>{
+		0x428a2f98d728ae22ull, 0x7137449123ef65cdull, 0xb5c0fbcfec4d3b2full, 0xe9b5dba58189dbbcull, 0x3956c25bf348b538ull,
+		0x59f111f1b605d019ull, 0x923f82a4af194f9bull, 0xab1c5ed5da6d8118ull, 0xd807aa98a3030242ull, 0x12835b0145706fbeull,
+		0x243185be4ee4b28cull, 0x550c7dc3d5ffb4e2ull, 0x72be5d74f27b896full, 0x80deb1fe3b1696b1ull, 0x9bdc06a725c71235ull,
+		0xc19bf174cf692694ull, 0xe49b69c19ef14ad2ull, 0xefbe4786384f25e3ull, 0x0fc19dc68b8cd5b5ull, 0x240ca1cc77ac9c65ull,
+		0x2de92c6f592b0275ull, 0x4a7484aa6ea6e483ull, 0x5cb0a9dcbd41fbd4ull, 0x76f988da831153b5ull, 0x983e5152ee66dfabull,
+		0xa831c66d2db43210ull, 0xb00327c898fb213full, 0xbf597fc7beef0ee4ull, 0xc6e00bf33da88fc2ull, 0xd5a79147930aa725ull,
+		0x06ca6351e003826full, 0x142929670a0e6e70ull, 0x27b70a8546d22ffcull, 0x2e1b21385c26c926ull, 0x4d2c6dfc5ac42aedull,
+		0x53380d139d95b3dfull, 0x650a73548baf63deull, 0x766a0abb3c77b2a8ull, 0x81c2c92e47edaee6ull, 0x92722c851482353bull,
+		0xa2bfe8a14cf10364ull, 0xa81a664bbc423001ull, 0xc24b8b70d0f89791ull, 0xc76c51a30654be30ull, 0xd192e819d6ef5218ull,
+		0xd69906245565a910ull, 0xf40e35855771202aull, 0x106aa07032bbd1b8ull, 0x19a4c116b8d2d0c8ull, 0x1e376c085141ab53ull,
+		0x2748774cdf8eeb99ull, 0x34b0bcb5e19b48a8ull, 0x391c0cb3c5c95a63ull, 0x4ed8aa4ae3418acbull, 0x5b9cca4f7763e373ull,
+		0x682e6ff3d6b2b8a3ull, 0x748f82ee5defb2fcull, 0x78a5636f43172f60ull, 0x84c87814a1f0ab72ull, 0x8cc702081a6439ecull,
+		0x90befffa23631e28ull, 0xa4506cebde82bde9ull, 0xbef9a3f7b2c67915ull, 0xc67178f2e372532bull, 0xca273eceea26619cull,
+		0xd186b8c721c0c207ull, 0xeada7dd6cde0eb1eull, 0xf57d4f7fee6ed178ull, 0x06f067aa72176fbaull, 0x0a637dc5a2c898a6ull,
+		0x113f9804bef90daeull, 0x1b710b35131c471bull, 0x28db77f523047d84ull, 0x32caab7b40c72493ull, 0x3c9ebe0a15c9bebcull,
+		0x431d67c49c100d4cull, 0x4cc5d4becb3e42b6ull, 0x597f299cfc657e2aull, 0x5fcb6fab3ad6faecull, 0x6c44198c4a475817ull};
+
+	static constexpr auto sum_a(uint64_t a) noexcept -> uint64_t {
+		return std::rotr(a, 28) xor std::rotr(a, 34) xor std::rotr(a, 39);
+	}
+
+	static constexpr auto sum_e(uint64_t e) noexcept -> uint64_t {
+		return std::rotr(e, 14) xor std::rotr(e, 18) xor std::rotr(e, 41);
+	}
+};
+
+using sha512 = hasher<sha512_config>;
+using sha512_value = tagged_hash_value<sha512_config>;
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha512() {
+		return sha512_value(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`include/cthash/variants/sha512/t.hpp`:
+
+```hpp
+#ifndef CTHASH_VARIANTS_SHA512_T_HPP
+#define CTHASH_VARIANTS_SHA512_T_HPP
+
+#include "../sha512.hpp"
+
+namespace cthash {
+
+namespace sha256t_support {
+
+	static consteval size_t width_of_decimal(unsigned t) {
+		if (t < 10u) {
+			return 1zu;
+		} else if (t < 100u) {
+			return 2zu;
+		} else if (t < 1000u) {
+			return 3zu;
+		} else {
+			throw "we don't support more than three digits!";
+		}
+	}
+
+	template <unsigned Width> static consteval auto generate_signature(unsigned t) {
+		const char a = '0' + ((t / 100u) % 10u);
+		const char b = '0' + ((t / 10u) % 10u);
+		const char c = '0' + ((t / 1u) % 10u);
+
+		if constexpr (Width == 1) {
+			return std::array<char, Width + 8zu>{'S', 'H', 'A', '-', '5', '1', '2', '/', c};
+		} else if constexpr (Width == 2) {
+			return std::array<char, Width + 8zu>{'S', 'H', 'A', '-', '5', '1', '2', '/', b, c};
+		} else if constexpr (Width == 3) {
+			return std::array<char, Width + 8zu>{'S', 'H', 'A', '-', '5', '1', '2', '/', a, b, c};
+		} else {
+			throw "we don't support greater width than 3";
+		}
+	}
+
+} // namespace sha256t_support
+
+static consteval auto calculate_sha512t_iv(std::span<const char> in) {
+	auto sha512hasher = internal_hasher<sha512_config>{};
+
+	// modify IV
+	for (auto & val: sha512hasher.hash) {
+		val = val xor 0xa5a5a5a5a5a5a5a5ull;
+	}
+
+	sha512hasher.update_to_buffer_and_process(in);
+	sha512hasher.finalize();
+	return sha512hasher.hash;
+}
+
+template <size_t T> constexpr auto signature_for_sha512t = sha256t_support::generate_signature<sha256t_support::width_of_decimal(T)>(T);
+template <size_t T> constexpr auto iv_for_sha512t = calculate_sha512t_iv(signature_for_sha512t<T>);
+
+template <unsigned T> struct sha512t_config: sha512_config {
+	static_assert(T % 8u == 0u, "only hashes aligned to bytes are supported");
+	static_assert(T != 384u, "sha-512/384 is not allowed, use sha-384 instead");
+	static_assert(T <= 512u, "T can't be larger than 512");
+	static_assert(T != 0u, "T can't be zero");
+
+	static constexpr size_t digest_length = T / 8zu;
+
+	static constexpr std::array<uint64_t, 8> initial_values = iv_for_sha512t<T>;
+
+	static constexpr size_t values_for_output = 0zu;
+};
+
+template <unsigned T> using sha512t = hasher<sha512t_config<T>>;
+template <unsigned T> using sha512t_value = tagged_hash_value<sha512t_config<T>>;
+
+namespace literals {
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha512_224() {
+		return sha512t_value<224>(Value);
+	}
+
+	template <internal::fixed_string Value>
+	consteval auto operator""_sha512_256() {
+		return sha512t_value<256>(Value);
+	}
+
+} // namespace literals
+
+} // namespace cthash
+
+#endif
+
+```
+
+`shasum.cpp`:
+
+```cpp
+#include <cthash/cthash.hpp>
+#include <chrono>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <iostream>
+
+struct mapped_file {
+	static constexpr int invalid = -1;
+
+	int fd{invalid};
+	size_t sz{0};
+	void * ptr{nullptr};
+
+	static size_t get_size(int fd) {
+		if (fd == invalid) {
+			return 0;
+		}
+
+		return (size_t)lseek(fd, 0, SEEK_END);
+	}
+
+	mapped_file(const char * path): fd{open(path, O_RDONLY)}, sz{get_size(fd)}, ptr{mmap(nullptr, sz, PROT_READ, MAP_PRIVATE, fd, 0)} { }
+
+	mapped_file(const mapped_file &) = delete;
+	mapped_file(mapped_file &&) = delete;
+
+	~mapped_file() {
+		if (ptr && fd != invalid) {
+			munmap(ptr, sz);
+			close(fd);
+		}
+	}
+
+	auto get_span() const noexcept {
+		return std::span<const std::byte>(reinterpret_cast<std::byte *>(ptr), sz);
+	}
+};
+
+int main(int argc, char ** argv) {
+	if (argc < 3) {
+		std::cerr << argv[0] << " hash file\n";
+		return 1;
+	}
+
+	const auto h = std::string_view(argv[1]);
+	const auto f = mapped_file(argv[2]);
+
+	if (f.fd == mapped_file::invalid) {
+		std::cerr << "can't open file!\n";
+		return 1;
+	}
+
+	const auto start = std::chrono::high_resolution_clock::now();
+
+	if (h == "224") {
+		std::cout << cthash::sha224{}.update(f.get_span()).final() << "\n";
+	} else if (h == "256") {
+		std::cout << cthash::sha256{}.update(f.get_span()).final() << "\n";
+	} else if (h == "384") {
+		std::cout << cthash::sha384{}.update(f.get_span()).final() << "\n";
+	} else if (h == "512") {
+		std::cout << cthash::sha512{}.update(f.get_span()).final() << "\n";
+	} else if (h == "512224") {
+		std::cout << cthash::sha512t<224>{}.update(f.get_span()).final() << "\n";
+	} else if (h == "512256") {
+		std::cout << cthash::sha512t<256>{}.update(f.get_span()).final() << "\n";
+	} else {
+		std::cerr << "unknown hash function!\n";
+		return 1;
+	}
+
+	const auto end = std::chrono::high_resolution_clock::now();
+	const auto dur = end - start;
+
+	std::cerr << "and it took " << std::chrono::duration_cast<std::chrono::milliseconds>(dur).count() << " ms\n";
+}
+```
+
+`tests/CMakeLists.txt`:
+
+```txt
+find_package(Catch2 3 REQUIRED)
+
+file(GLOB_RECURSE TESTS_SOURCES  LINK_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} "*.cpp")
+
+add_executable(test-runner ${TESTS_SOURCES})
+
+target_link_libraries(test-runner PRIVATE Catch2::Catch2WithMain cthash)
+target_compile_features(test-runner PUBLIC cxx_std_23)
+
+add_custom_target(test test-runner --skip-benchmarks --colour-mode ansi  DEPENDS test-runner)
+add_custom_target(long-test test-runner --skip-benchmarks --colour-mode ansi "*,\[.long\]" DEPENDS test-runner)
+add_custom_target(benchmark test-runner DEPENDS test-runner --colour-mode ansi)
+
+if (CTHASH_TESTS)
+	coverage_report_after(test test-runner)
+endif()
+```
+
+`tests/hexdec.cpp`:
+
+```cpp
+#include <cthash/internal/hexdec.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+TEST_CASE("hexdec basics") {
+	constexpr auto v1 = cthash::internal::literal_hexdec_to_binary("");
+	REQUIRE((v1 == std::array<std::byte, 0>{}));
+
+	constexpr auto v2 = cthash::internal::literal_hexdec_to_binary("00");
+	REQUIRE((v2 == std::array<std::byte, 1>{std::byte{0x00}}));
+
+	constexpr auto v3 = cthash::internal::literal_hexdec_to_binary("abcdef01");
+	REQUIRE((v3 == std::array<std::byte, 4>{std::byte{0xab}, std::byte{0xcd}, std::byte{0xef}, std::byte{0x01}}));
+}
+
+template <typename T> decltype(auto) runtime_pass(T && val) {
+	return val;
+}
+
+TEST_CASE("hexdec conversion") {
+	auto a = cthash::internal::literal_hexdec_to_binary(runtime_pass(""));
+	REQUIRE((a == std::array<std::byte, 0>{}));
+
+	auto b = cthash::internal::literal_hexdec_to_binary(runtime_pass("ab"));
+	REQUIRE((b == std::array<std::byte, 1>{std::byte{0xab}}));
+}
+```
+
+`tests/internal/support.hpp`:
+
+```hpp
+#ifndef CTHASH_TESTS_INTERNAL_SUPPORT_HPP
+#define CTHASH_TESTS_INTERNAL_SUPPORT_HPP
+
+#include <array>
+#include <span>
+#include <string_view>
+#include <cstddef>
+
+template <typename T> const auto & runtime_pass(const T & val) {
+	return val;
+}
+
+template <typename T, size_t N> auto runtime_pass(const std::array<T, N> & val) {
+	return std::span<const T>(val.data(), val.size());
+}
+
+template <size_t N, typename T = std::byte> consteval auto array_of(T value) {
+	std::array<T, N> output;
+	for (T & val: output) val = value;
+	return output;
+}
+
+template <size_t N, typename T = std::byte> consteval auto array_of_zeros() {
+	return array_of<N, T>(T{0});
+}
+
+template <size_t N> constexpr auto to_sv(const std::array<char, N> & in) {
+	return std::string_view{in.data(), in.size()};
+}
+
+template <size_t N> constexpr auto to_str(const std::array<char, N> & in) {
+	return std::string{in.data(), in.size()};
+}
+
+#endif
+
+```
+
+`tests/sha224.cpp`:
+
+```cpp
+#include "internal/support.hpp"
+#include <cthash/variants/sha224.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+
+TEST_CASE("sha224 basics") {
+	constexpr auto v1 = cthash::sha224{}.update("").final();
+	auto v1r = cthash::sha224{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f"_sha224);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha224{}.update("hana").final();
+	auto v2r = cthash::sha224{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "a814c3122b1a3f2402bbcd0faffe28a9a7c24d389af78b596c752684"_sha224);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha224{}.update(array_of_zeros<32>()).final();
+	auto v3r = cthash::sha224{}.update(runtime_pass(array_of_zeros<32>())).final();
+	REQUIRE(v3 == "b338c76bcffa1a0b3ead8de58dfbff47b63ab1150e10d8f17f2bafdf"_sha224);
+	REQUIRE(v3 == v3r);
+
+	constexpr auto v4 = cthash::sha224{}.update(array_of_zeros<64>()).final();
+	auto v4r = cthash::sha224{}.update(runtime_pass(array_of_zeros<64>())).final();
+	REQUIRE(v4 == "750d81a39c18d3ce27ff3e5ece30b0088f12d8fd0450fe435326294b"_sha224);
+	REQUIRE(v4 == v4r);
+
+	constexpr auto v5 = cthash::sha224{}.update(array_of_zeros<120>()).final();
+	auto v5r = cthash::sha224{}.update(runtime_pass(array_of_zeros<120>())).final();
+	REQUIRE(v5 == "83438028e7817c90b386a11c9a4e051f821b37c818bb4b5c08279584"_sha224);
+	REQUIRE(v5 == v5r);
+
+	constexpr auto v6 = cthash::sha224{}.update(array_of_zeros<128>()).final();
+	auto v6r = cthash::sha224{}.update(runtime_pass(array_of_zeros<128>())).final();
+	REQUIRE(v6 == "2fbd823ebcd9909d265827e4bce793a4fc572e3f39c7c3dd67749f3e"_sha224);
+	REQUIRE(v6 == v6r);
+
+	constexpr auto v7 = cthash::sha224{}.update(array_of_zeros<512>()).final();
+	auto v7r = cthash::sha224{}.update(runtime_pass(array_of_zeros<512, char>())).final();
+	REQUIRE(v7 == "4026dd4dbeb4d8a951dfd9a592897f46203ebe2d99c4a8837aa3afc9"_sha224);
+	REQUIRE(v7 == v7r);
+}
+
+```
+
+`tests/sha256.cpp`:
+
+```cpp
+#include "internal/support.hpp"
+#include <cthash/variants/sha256.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+
+TEST_CASE("sha256 size") {
+	auto h = cthash::sha256{};
+	h.update("aloha");
+	REQUIRE(h.size() == 5zu);
+	h.update("hana");
+	REQUIRE(h.size() == 9zu);
+}
+
+TEST_CASE("sha256 zero staging should be empty") {
+	const auto block = array_of_zeros<64>();
+	const auto staging = cthash::internal_hasher<cthash::sha256_config>::build_staging(block);
+
+	for (auto val: staging) {
+		REQUIRE(val == static_cast<decltype(val)>(0));
+	}
+}
+
+TEST_CASE("sha256 empty input") {
+	const auto block = [] {
+		auto r = array_of_zeros<64>();
+		r[0] = std::byte{0b1000'0000};
+		return r;
+	}();
+	const auto staging = cthash::internal_hasher<cthash::sha256_config>::build_staging(block);
+
+	auto it = staging.begin();
+
+	// from the block
+	REQUIRE(*it++ == 0x80000000ul);
+	for (int i = 1; i != 16; ++i) {
+		REQUIRE(*it++ == 0ull);
+	}
+
+	// calculated by staging function
+	REQUIRE(staging[16] == 0b10000000000000000000000000000000ul);
+	REQUIRE(staging[17] == 0b00000000000000000000000000000000ul);
+	REQUIRE(staging[18] == 0b00000000001000000101000000000000ul);
+	REQUIRE(staging[19] == 0b00000000000000000000000000000000ul);
+	REQUIRE(staging[20] == 0b00100010000000000000100000000000ul);
+	REQUIRE(staging[21] == 0b00000000000000000000000000000000ul);
+	REQUIRE(staging[22] == 0b00000101000010001001010101000010ul);
+	REQUIRE(staging[23] == 0b10000000000000000000000000000000ul);
+	REQUIRE(staging[24] == 0b01011000000010000000000000000000ul);
+	REQUIRE(staging[25] == 0b00000000010000001010000000000000ul);
+	REQUIRE(staging[26] == 0b00000000000101100010010100000101ul);
+	REQUIRE(staging[27] == 0b01100110000000000001100000000000ul);
+	REQUIRE(staging[28] == 0b11010110001000100010010110000000ul);
+	REQUIRE(staging[29] == 0b00010100001000100101010100001000ul);
+	REQUIRE(staging[30] == 0b11010110010001011111100101011100ul);
+	REQUIRE(staging[31] == 0b11001001001010000010000000000000ul);
+	REQUIRE(staging[32] == 0b11000011111100010000000010010100ul);
+	REQUIRE(staging[33] == 0b00101000010011001010011101100110ul);
+	REQUIRE(staging[34] == 0b00000110100010000110110111000110ul);
+	REQUIRE(staging[35] == 0b10100011011110111111000100010110ul);
+	REQUIRE(staging[36] == 0b01110001011111001011111010010110ul);
+	REQUIRE(staging[37] == 0b11111110110000101101011101001010ul);
+	REQUIRE(staging[38] == 0b10100111101101100111111100000000ul);
+	REQUIRE(staging[39] == 0b10000001000101011001011010100010ul);
+	REQUIRE(staging[40] == 0b10011000101001101110011101101000ul);
+	REQUIRE(staging[41] == 0b00000011101100100000110010000010ul);
+	REQUIRE(staging[42] == 0b01011101000111011010011111001001ul);
+	REQUIRE(staging[43] == 0b10110001010101101011100100110101ul);
+	REQUIRE(staging[44] == 0b11000011110111011100101000010001ul);
+	REQUIRE(staging[45] == 0b00100100100111000001000001111111ul);
+	REQUIRE(staging[46] == 0b11000100100011010010010011101111ul);
+	REQUIRE(staging[47] == 0b01011101111001010100110000110000ul);
+	REQUIRE(staging[48] == 0b11011110111111101100111001100101ul);
+	REQUIRE(staging[49] == 0b00101100101000010100100000001101ul);
+	REQUIRE(staging[50] == 0b00111100000101010011001100101100ul);
+	REQUIRE(staging[51] == 0b00000001110011101100100110101101ul);
+	REQUIRE(staging[52] == 0b00010110000011001100110011010000ul);
+	REQUIRE(staging[53] == 0b00001011101011001101101010011000ul);
+	REQUIRE(staging[54] == 0b00110110000110111000111111100000ul);
+	REQUIRE(staging[55] == 0b11010010001100100000101110100110ul);
+	REQUIRE(staging[56] == 0b00000010100110110111000000000111ul);
+	REQUIRE(staging[57] == 0b01110101010001100101100001111100ul);
+	REQUIRE(staging[58] == 0b00000111111101010100111100111001ul);
+	REQUIRE(staging[59] == 0b11111000000010001101110111000011ul);
+	REQUIRE(staging[60] == 0b11011100110010100111011000001000ul);
+	REQUIRE(staging[61] == 0b01011110010000100111000110001000ul);
+	REQUIRE(staging[62] == 0b01000100101111001110110001011101ul);
+	REQUIRE(staging[63] == 0b00111011010111101100010010011011ul);
+
+	REQUIRE(64 == staging.size());
+}
+
+TEST_CASE("sha256 basics (constexpr and runtime)") {
+	constexpr auto v1 = cthash::sha256{}.update("").final();
+	auto v1r = cthash::sha256{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"_sha256);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha256{}.update("hana").final();
+	auto v2r = cthash::sha256{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "599ba25a0d7c7d671bee93172ca7e272fc87f0c0e02e44df9e9436819067ea28"_sha256);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha256{}.update(array_of_zeros<96>()).final();
+	auto v3r = cthash::sha256{}.update(runtime_pass(array_of_zeros<96>())).final();
+	REQUIRE(v3 == "2ea9ab9198d1638007400cd2c3bef1cc745b864b76011a0e1bc52180ac6452d4"_sha256);
+	REQUIRE(v3 == v3r);
+
+	constexpr auto v4 = cthash::sha256{}.update(array_of_zeros<120>()).final();
+	auto v4r = cthash::sha256{}.update(runtime_pass(array_of_zeros<120>())).final();
+	auto v4b = cthash::sha256{}.update(runtime_pass(array_of_zeros<120, char>())).final();
+	REQUIRE(v4 == "6edd9f6f9cc92cded36e6c4a580933f9c9f1b90562b46903b806f21902a1a54f"_sha256);
+	REQUIRE(v4 == v4r);
+	REQUIRE(v4 == v4b);
+
+	constexpr auto v5 = cthash::sha256{}.update(array_of_zeros<128>()).final();
+	auto v5r = cthash::sha256{}.update(runtime_pass(array_of_zeros<128>())).final();
+	REQUIRE(v5 == "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"_sha256);
+	REQUIRE(v5 == v5r);
+}
+
+TEST_CASE("sha256 measurements") {
+	std::array<std::byte, 128> input{};
+
+	for (int i = 0; i != (int)input.size(); ++i) {
+		input[i] = static_cast<std::byte>(i);
+	}
+
+	BENCHMARK("16 byte input") {
+		return cthash::sha256{}.update(std::span(runtime_pass(input)).first(16)).final();
+	};
+
+	BENCHMARK("32 byte input") {
+		return cthash::sha256{}.update(std::span(runtime_pass(input)).first(32)).final();
+	};
+
+	BENCHMARK("48 byte input") {
+		return cthash::sha256{}.update(std::span(runtime_pass(input)).first(48)).final();
+	};
+
+	BENCHMARK("64 byte input") {
+		return cthash::sha256{}.update(std::span(runtime_pass(input)).first(64)).final();
+	};
+
+	BENCHMARK("96 byte input") {
+		return cthash::sha256{}.update(std::span(runtime_pass(input)).first(96)).final();
+	};
+}
+
+TEST_CASE("sha256 long hash over 512MB", "[.long]") {
+	cthash::sha256 h{};
+	for (int i = 0; i != 512 * 1024; ++i) {
+		h.update(array_of_zeros<1024>());
+	}
+	REQUIRE(h.size() == 512u * 1024u * 1024u);
+	const auto r = h.final();
+
+	REQUIRE(r == "9acca8e8c22201155389f65abbf6bc9723edc7384ead80503839f49dcc56d767"_sha256);
+}
+
+```
+
+`tests/sha384.cpp`:
+
+```cpp
+#include "internal/support.hpp"
+#include <cthash/variants/sha384.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+
+TEST_CASE("sha384 basics") {
+	constexpr auto v1 = cthash::sha384{}.update("").final();
+	auto v1r = cthash::sha384{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "38b060a751ac96384cd9327eb1b1e36a21fdb71114be07434c0cc7bf63f6e1da274edebfe76f65fbd51ad2f14898b95b"_sha384);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha384{}.update("hana").final();
+	auto v2r = cthash::sha384{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "f365fd3e040e79a664d21de719128557b1188463d2d92be43522ccd4c316958b29f1189750b0f8d55aca50b8492982e8"_sha384);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha384{}.update(array_of_zeros<32>()).final();
+	auto v3r = cthash::sha384{}.update(runtime_pass(array_of_zeros<32>())).final();
+	REQUIRE(v3 == "a38fff4ba26c15e4ac9cde8c03103ac89080fd47545fde9446c8f192729eab7bd03a4d5c3187f75fe2a71b0ee50a4a40"_sha384);
+	REQUIRE(v3 == v3r);
+
+	constexpr auto v4 = cthash::sha384{}.update(array_of_zeros<64>()).final();
+	auto v4r = cthash::sha384{}.update(runtime_pass(array_of_zeros<64>())).final();
+	REQUIRE(v4 == "c516aa8d3b457c636c6826937099c0d23a13f2c3701a388b3c8fe4bc2073281b0c4462610369884c4ababa8e97b6debe"_sha384);
+	REQUIRE(v4 == v4r);
+
+	constexpr auto v5 = cthash::sha384{}.update(array_of_zeros<120>()).final();
+	auto v5r = cthash::sha384{}.update(runtime_pass(array_of_zeros<120>())).final();
+	REQUIRE(v5 == "7212d895f4250ce1daa72e9e0caaef7132aed2e965885c55376818e45470de06fb6ebf7349c62fd342043f18010e46ac"_sha384);
+	REQUIRE(v5 == v5r);
+
+	constexpr auto v6 = cthash::sha384{}.update(array_of_zeros<128>()).final();
+	auto v6r = cthash::sha384{}.update(runtime_pass(array_of_zeros<128>())).final();
+	REQUIRE(v6 == "f809b88323411f24a6f152e5e9d9d1b5466b77e0f3c7550f8b242c31b6e7b99bcb45bdecb6124bc23283db3b9fc4f5b3"_sha384);
+	REQUIRE(v6 == v6r);
+
+	constexpr auto v7 = cthash::sha384{}.update(array_of_zeros<512, char>()).final();
+	auto v7r = cthash::sha384{}.update(runtime_pass(array_of_zeros<512, char>())).final();
+	REQUIRE(v7 == "d83d9a38c238ef3b7bc207bbea3287a8b37b37e731480a8d240d2a6953086c5ecbdf7ee4c72fec3a3e9d4a87f4f9b4fe"_sha384);
+	REQUIRE(v7 == v7r);
+}
+
+```
+
+`tests/sha512.cpp`:
+
+```cpp
+#include "internal/support.hpp"
+#include <cthash/variants/sha512.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+
+template <typename Id> struct identify;
+
+TEST_CASE("sha512 zero staging should be empty") {
+	const auto block = array_of_zeros<128>();
+	const auto staging = cthash::internal_hasher<cthash::sha512_config>::build_staging(block);
+
+	for (auto val: staging) {
+		REQUIRE(val == static_cast<decltype(val)>(0));
+	}
+}
+
+TEST_CASE("sha512 internal buffer at the end (two bytes)") {
+	using sha512_hasher = cthash::internal_hasher<cthash::sha512_config>;
+
+	auto h = sha512_hasher{};
+	h.update_to_buffer_and_process<std::byte>(std::array<std::byte, 2>{std::byte{'a'}, std::byte{'b'}});
+	h.finalize();
+
+	// message
+	REQUIRE(unsigned(h.block[0]) == unsigned('a'));
+	REQUIRE(unsigned(h.block[1]) == unsigned('b'));
+
+	// terminator
+	REQUIRE(unsigned(h.block[2]) == 0b1000'0000u);
+
+	// bit length
+	REQUIRE(unsigned(h.block[127]) == 16u); // 2*8 = 16
+
+	STATIC_REQUIRE(h.block.size() == 128zu);
+
+	// rest of the block must be zeros
+	for (int i = 0; i != 128; ++i) {
+		if (i > 2 && i < 127) {
+			REQUIRE(unsigned(h.block[i]) == unsigned{0b0000'0000u});
+		}
+	}
+}
+
+TEST_CASE("sha512 internal buffer at the end (111B)") {
+	using sha512_hasher = cthash::internal_hasher<cthash::sha512_config>;
+
+	auto h = sha512_hasher{};
+	h.update_to_buffer_and_process<std::byte>(array_of<111>(std::byte{42}));
+	h.finalize();
+
+	// message
+	for (int i = 0; i != 111; ++i) {
+		REQUIRE(unsigned(h.block[i]) == unsigned(42));
+	}
+
+	// terminator
+	REQUIRE(unsigned(h.block[111]) == 0b1000'0000u);
+
+	// bit length
+	REQUIRE(unsigned(h.block[112]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[113]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[114]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[115]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[116]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[117]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[118]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[119]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[120]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[121]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[122]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[123]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[124]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[125]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[126]) == 0b0000'0011u);
+	REQUIRE(unsigned(h.block[127]) == 0b0111'1000u);
+
+	STATIC_REQUIRE(h.block.size() == 128zu);
+}
+
+TEST_CASE("sha512 internal buffer at the end (112B, first block)") {
+	using sha512_hasher = cthash::internal_hasher<cthash::sha512_config>;
+
+	auto h = sha512_hasher{};
+	h.update_to_buffer_and_process<std::byte>(array_of<112>(std::byte{42}));
+	const bool overflow = sha512_hasher::finalize_buffer(h.block, h.block_used);
+	REQUIRE(overflow);
+
+	// there is no message (as it was in previous block)
+	for (int i = 0; i != 112; ++i) {
+		REQUIRE(unsigned(h.block[i]) == 42u);
+	}
+
+	// terminator
+	REQUIRE(unsigned(h.block[112]) == 0b1000'0000u);
+
+	// zero-padding
+	for (int i = 113; i != 128; ++i) {
+		REQUIRE(unsigned(h.block[i]) == 0u);
+	}
+
+	STATIC_REQUIRE(h.block.size() == 128zu);
+}
+
+TEST_CASE("sha512 internal buffer at the end (112B, second block)") {
+	using sha512_hasher = cthash::internal_hasher<cthash::sha512_config>;
+
+	auto h = sha512_hasher{};
+	h.update_to_buffer_and_process<std::byte>(array_of<112>(std::byte{42}));
+	h.finalize();
+
+	// there is no message (as it was in previous block)
+	for (int i = 0; i != 112; ++i) {
+		REQUIRE(unsigned(h.block[i]) == unsigned(0));
+	}
+
+	// bit length
+	REQUIRE(unsigned(h.block[112]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[113]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[114]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[115]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[116]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[117]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[118]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[119]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[120]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[121]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[122]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[123]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[124]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[125]) == 0b0000'0000u);
+	REQUIRE(unsigned(h.block[126]) == 0b0000'0011u);
+	REQUIRE(unsigned(h.block[127]) == 0b1000'0000u);
+
+	STATIC_REQUIRE(h.block.size() == 128zu);
+}
+
+TEST_CASE("sha512 empty input") {
+	const auto block = [] {
+		auto r = array_of_zeros<128>();
+		r[0] = std::byte{0b1000'0000};
+		return r;
+	}();
+	const auto staging = cthash::internal_hasher<cthash::sha512_config>::build_staging(block);
+
+	auto it = staging.begin();
+
+	// from the block
+	REQUIRE(*it++ == 0x80000000'00000000ull);
+	for (int i = 1; i != 16; ++i) {
+		REQUIRE(*it++ == 0ull);
+	}
+
+	// calculated by staging function
+	REQUIRE(staging[16] == 0x80000000'00000000ull);
+	REQUIRE(80 == staging.size());
+
+	REQUIRE(staging[17] == 0x0000000000000000ull);
+	REQUIRE(staging[18] == 0x0200100000000004ull);
+	REQUIRE(staging[19] == 0x0000000000000000ull);
+	REQUIRE(staging[20] == 0x1008000002000020ull);
+	REQUIRE(staging[21] == 0x0000000000000000ull);
+	REQUIRE(staging[22] == 0x8004220110080140ull);
+	REQUIRE(staging[23] == 0x8000000000000000ull);
+	REQUIRE(staging[24] == 0x0209108000400800ull);
+	REQUIRE(staging[25] == 0x0400200000000008ull);
+	REQUIRE(staging[26] == 0x1140a00320114028ull);
+	REQUIRE(staging[27] == 0x3018000006000060ull);
+	REQUIRE(staging[28] == 0xa24500b1180a2042ull);
+	REQUIRE(staging[29] == 0x0010880440200500ull);
+	REQUIRE(staging[30] == 0xd4a945c2a4270995ull);
+	REQUIRE(staging[31] == 0x43ad128001402810ull);
+	REQUIRE(staging[32] == 0xcb2a519703108414ull);
+	REQUIRE(staging[33] == 0x2faad072c8658034ull);
+	REQUIRE(staging[34] == 0x7d14cc9b14ba8338ull);
+	REQUIRE(staging[35] == 0x9867c5d3eb13eeffull);
+	REQUIRE(staging[36] == 0xc94dc04c92359678ull);
+	REQUIRE(staging[37] == 0x92aba5ae1ee4675dull);
+	REQUIRE(staging[38] == 0x00b560cd2d362129ull);
+	REQUIRE(staging[39] == 0x682916bbbf1eb0d9ull);
+	REQUIRE(staging[40] == 0xfd4ce54fb9c1fca2ull);
+	REQUIRE(staging[41] == 0x389bbafedf01a2ffull);
+	REQUIRE(staging[42] == 0xf80ad4187a704534ull);
+	REQUIRE(staging[43] == 0xfc8a6db46b916fabull);
+	REQUIRE(staging[44] == 0x0009308c4ca7d22bull);
+	REQUIRE(staging[45] == 0x49437d8543e9c98cull);
+	REQUIRE(staging[46] == 0x67f19b9756071662ull);
+	REQUIRE(staging[47] == 0x23d1b6fd5980db71ull);
+	REQUIRE(staging[48] == 0x044afa0ab38edb37ull);
+	REQUIRE(staging[49] == 0x332fd4ee79f5c755ull);
+	REQUIRE(staging[50] == 0xa55aa02bebfa6ad4ull);
+	REQUIRE(staging[51] == 0xd7c6eb0c613c793aull);
+	REQUIRE(staging[52] == 0x0d8e6b8077ea417cull);
+	REQUIRE(staging[53] == 0xd647ca451bde7ccbull);
+	REQUIRE(staging[54] == 0xb69eec4d0e03246full);
+	REQUIRE(staging[55] == 0xc913f017b2ac853aull);
+	REQUIRE(staging[56] == 0x66221af93a4225bbull);
+	REQUIRE(staging[57] == 0x022066fa965f2dbfull);
+	REQUIRE(staging[58] == 0x98519af83ac7c4d8ull);
+	REQUIRE(staging[59] == 0xa9d9b257ea80f60full);
+	REQUIRE(staging[60] == 0xb741f8b59c416c21ull);
+	REQUIRE(staging[61] == 0xa3de4a86a2cdbefbull);
+	REQUIRE(staging[62] == 0xa6e929fabf4b5fa6ull);
+	REQUIRE(staging[63] == 0xeabfcd669f8d15a1ull);
+}
+
+TEST_CASE("sha512 (round 1 for empty message)") {
+	const auto block = [] {
+		auto r = array_of_zeros<128>();
+		r[0] = std::byte{0b1000'0000};
+		return r;
+	}();
+	const auto staging = cthash::internal_hasher<cthash::sha512_config>::build_staging(block);
+}
+
+TEST_CASE("sha512 basics", "") {
+	constexpr auto v1 = cthash::sha512{}.update("").final();
+	auto v1r = cthash::sha512{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"_sha512);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha512{}.update("hana").final();
+	auto v2r = cthash::sha512{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "74d15692038cd747dce0f4ff287ce1d5a7930c7e5948183419584f142039b3b25a94d1bf7f321f2fd2da37af1b6552f3e5bfc6c40d0bd8e16ecde338ee153a02"_sha512);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha512{}.update(array_of_zeros<96>()).final();
+	auto v3r = cthash::sha512{}.update(array_of_zeros<96>()).final();
+	auto v3rb = cthash::sha512{}.update(array_of_zeros<96, char>()).final();
+	REQUIRE(v3 == "e866b15da9e5b18d4b3bde250fc08a208399440f37471313c5b4006e4151b0f4464b2cd7246899935d58660c0749cd11570bb8240760a6e46bb175be18cdaffe"_sha512);
+	REQUIRE(v3 == v3r);
+	REQUIRE(v3 == v3rb);
+
+	constexpr auto v4 = cthash::sha512{}.update(array_of_zeros<120>()).final();
+	auto v4r = cthash::sha512{}.update(array_of_zeros<120, char>()).final();
+	REQUIRE(v4 == "c106c47ad6eb79cd2290681cb04cb183effbd0b49402151385b2d07be966e2d50bc9db78e00bf30bb567ccdd3a1c7847260c94173ba215a0feabb0edeb643ff0"_sha512);
+	REQUIRE(v4 == v4r);
+
+	constexpr auto v5 = cthash::sha512{}.update(array_of_zeros<128>()).final();
+	auto v5r = cthash::sha512{}.update(array_of_zeros<128, char>()).final();
+	REQUIRE(v5 == "ab942f526272e456ed68a979f50202905ca903a141ed98443567b11ef0bf25a552d639051a01be58558122c58e3de07d749ee59ded36acf0c55cd91924d6ba11"_sha512);
+	REQUIRE(v5 == v5r);
+
+	constexpr auto v6 = cthash::sha512{}.update(array_of_zeros<512>()).final();
+	auto v6r = cthash::sha512{}.update(array_of_zeros<512, char>()).final();
+	auto v6rb = cthash::sha512{}.update(array_of_zeros<512>()).final();
+	REQUIRE(v6 == "df40d4a774e0b453a5b87c00d6f0ef5d753143454e88ee5f7b607134598294c7905ccbcf94bbc46e474db6eb44e56a6dbb6d9a1be9d4fb5d1b5f2d0c6ed34bfe"_sha512);
+	REQUIRE(v6 == v6r);
+	REQUIRE(v6 == v6rb);
+}
+
+```
+
+`tests/sha512t.cpp`:
+
+```cpp
+#include "internal/support.hpp"
+#include <cthash/variants/sha512/t.hpp>
+#include <catch2/benchmark/catch_benchmark.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+using namespace std::string_literals;
+
+TEST_CASE("sha512/t (init strings)") {
+	REQUIRE(to_str(cthash::signature_for_sha512t<8>) == "SHA-512/8"s);
+	REQUIRE(to_str(cthash::signature_for_sha512t<16>) == "SHA-512/16"s);
+	REQUIRE(to_str(cthash::signature_for_sha512t<128>) == "SHA-512/128"s);
+	REQUIRE(to_str(cthash::signature_for_sha512t<224>) == "SHA-512/224"s);
+	REQUIRE(to_str(cthash::signature_for_sha512t<256>) == "SHA-512/256"s);
+}
+
+TEST_CASE("sha512/224 (iv)") {
+	constexpr auto & iv = cthash::sha512t_config<224>::initial_values;
+	REQUIRE(iv[0] == 0x8C3D37C819544DA2ull);
+	REQUIRE(iv[1] == 0x73E1996689DCD4D6ull);
+	REQUIRE(iv[2] == 0x1DFAB7AE32FF9C82ull);
+	REQUIRE(iv[3] == 0x679DD514582F9FCFull);
+	REQUIRE(iv[4] == 0x0F6D2B697BD44DA8ull);
+	REQUIRE(iv[5] == 0x77E36F7304C48942ull);
+	REQUIRE(iv[6] == 0x3F9D85A86A1D36C8ull);
+	REQUIRE(iv[7] == 0x1112E6AD91D692A1ull);
+}
+
+TEST_CASE("sha512/256 (iv)") {
+	constexpr auto & iv = cthash::sha512t_config<256>::initial_values;
+	REQUIRE(iv[0] == 0x22312194FC2BF72Cull);
+	REQUIRE(iv[1] == 0x9F555FA3C84C64C2ull);
+	REQUIRE(iv[2] == 0x2393B86B6F53B151ull);
+	REQUIRE(iv[3] == 0x963877195940EABDull);
+	REQUIRE(iv[4] == 0x96283EE2A88EFFE3ull);
+	REQUIRE(iv[5] == 0xBE5E1E2553863992ull);
+	REQUIRE(iv[6] == 0x2B0199FC2C85B8AAull);
+	REQUIRE(iv[7] == 0x0EB72DDC81C52CA2ull);
+}
+
+TEST_CASE("sha512/224 (literals)") {
+	const auto v1 = "750d81a39c18d3ce27ff3e5ece30b0088f12d8fd0450fe435326294b"_sha512_224;
+}
+
+TEST_CASE("sha512/224 (basics)") {
+	constexpr auto v1 = cthash::sha512t<224>{}.update("").final();
+	auto v1r = cthash::sha512t<224>{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "6ed0dd02806fa89e25de060c19d3ac86cabb87d6a0ddd05c333b84f4"_sha512_224);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha512t<224>{}.update("hana").final();
+	auto v2r = cthash::sha512t<224>{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "53a276b702c0133dcec23f6ec5dc1ad56b224f386fdd57710dc53f9f"_sha512_224);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha512t<224>{}.update(array_of_zeros<32>()).final();
+	auto v3r = cthash::sha512t<224>{}.update(runtime_pass(array_of_zeros<32, char>())).final();
+	REQUIRE(v3 == "9e7d6080def4e1ccf4aeaac6f7fad008d060a6cf87062038d6166774"_sha512_224);
+	REQUIRE(v3 == v3r);
+
+	constexpr auto v4 = cthash::sha512t<224>{}.update(array_of_zeros<64>()).final();
+	auto v4r = cthash::sha512t<224>{}.update(runtime_pass(array_of_zeros<64>())).final();
+	REQUIRE(v4 == "1319d9b322452068e6f43c0ed3da115fbeccc169711dbbaee2846f90"_sha512_224);
+	REQUIRE(v4 == v4r);
+
+	constexpr auto v5 = cthash::sha512t<224>{}.update(array_of_zeros<120>()).final();
+	auto v5r = cthash::sha512t<224>{}.update(runtime_pass(array_of_zeros<120, char>())).final();
+	REQUIRE(v5 == "d4dfc5c3449b4e3b180d9fda54e1bd86e2c40e2b790db950b4b3d297"_sha512_224);
+	REQUIRE(v5 == v5r);
+
+	constexpr auto v6 = cthash::sha512t<224>{}.update(array_of_zeros<128>()).final();
+	auto v6r = cthash::sha512t<224>{}.update(runtime_pass(array_of_zeros<128>())).final();
+	REQUIRE(v6 == "9ae639d7038fa1946a6f032dc72cb38afb0de1765a82a31621196f44"_sha512_224);
+	REQUIRE(v6 == v6r);
+
+	constexpr auto v7 = cthash::sha512t<224>{}.update(array_of_zeros<512>()).final();
+	auto v7r = cthash::sha512t<224>{}.update(runtime_pass(array_of_zeros<512>())).final();
+	REQUIRE(v7 == "6992572b245cb279973a119cb7f2859e75dff8c5fb9ace89566ae06d"_sha512_224);
+	REQUIRE(v7 == v7r);
+}
+
+TEST_CASE("sha512/256 (basics)") {
+	constexpr auto v1 = cthash::sha512t<256>{}.update("").final();
+	auto v1r = cthash::sha512t<256>{}.update(runtime_pass("")).final();
+	REQUIRE(v1 == "c672b8d1ef56ed28ab87c3622c5114069bdd3ad7b8f9737498d0c01ecef0967a"_sha512_256);
+	REQUIRE(v1 == v1r);
+
+	constexpr auto v2 = cthash::sha512t<256>{}.update("hana").final();
+	auto v2r = cthash::sha512t<256>{}.update(runtime_pass("hana")).final();
+	REQUIRE(v2 == "2a0e3f7643580859507710f4569a60a86c83c025955298e7a93d766f71e8e399"_sha512_256);
+	REQUIRE(v2 == v2r);
+
+	constexpr auto v3 = cthash::sha512t<256>{}.update(array_of_zeros<32>()).final();
+	auto v3r = cthash::sha512t<256>{}.update(runtime_pass(array_of_zeros<32, char>())).final();
+	REQUIRE(v3 == "af13c048991224a5e4c664446b688aaf48fb5456db3629601b00ec160c74e554"_sha512_256);
+	REQUIRE(v3 == v3r);
+
+	constexpr auto v4 = cthash::sha512t<256>{}.update(array_of_zeros<64>()).final();
+	auto v4r = cthash::sha512t<256>{}.update(runtime_pass(array_of_zeros<64>())).final();
+	REQUIRE(v4 == "8aeecfa0b9f2ac7818863b1362241e4f32d06b100ae9d1c0fbcc4ed61b91b17a"_sha512_256);
+	REQUIRE(v4 == v4r);
+
+	constexpr auto v5 = cthash::sha512t<256>{}.update(array_of_zeros<120>()).final();
+	auto v5r = cthash::sha512t<256>{}.update(runtime_pass(array_of_zeros<120, char>())).final();
+	REQUIRE(v5 == "067880a5256c0584cff10526ed4c9761e584bf0ecdb1b12c2ae7f1dcedaf3dbf"_sha512_256);
+	REQUIRE(v5 == v5r);
+
+	constexpr auto v6 = cthash::sha512t<256>{}.update(array_of_zeros<128>()).final();
+	auto v6r = cthash::sha512t<256>{}.update(runtime_pass(array_of_zeros<128>())).final();
+	REQUIRE(v6 == "fe3d375e149b888e08e2521007764b422d2cd6f7b0606881b7fe1b1370d5fa88"_sha512_256);
+	REQUIRE(v6 == v6r);
+
+	constexpr auto v7 = cthash::sha512t<256>{}.update(array_of_zeros<512>()).final();
+	auto v7r = cthash::sha512t<256>{}.update(runtime_pass(array_of_zeros<512>())).final();
+	REQUIRE(v7 == "552b405c9716945bfc0caee69baec21b2a05560bfbf58db8bd1a4c2cc42b42a6"_sha512_256);
+	REQUIRE(v7 == v7r);
+}
+```
+
+`tests/value.cpp`:
+
+```cpp
+#include <cthash/value.hpp>
+#include <sstream>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace cthash::literals;
+
+TEST_CASE("hash_value (constexpr basics)") {
+	constexpr auto v1 = cthash::hash_value{"0011223300112233"};
+	constexpr auto v2 = cthash::hash_value{"00112233aabbccdd"};
+
+	STATIC_REQUIRE((v1 <=> v1) == 0); // appleclang doesn't have std::is_eq
+	STATIC_REQUIRE(v1 == v1);
+	STATIC_REQUIRE(v1 < v2);
+	STATIC_REQUIRE(v2 > v1);
+	STATIC_REQUIRE(v1 != v2);
+
+	constexpr auto v3 = cthash::hash_value{u8"00112233aabbccdd"};
+
+	STATIC_REQUIRE(v1 != v2);
+	STATIC_REQUIRE(v2 == v3);
+
+	constexpr auto v4 = "599ba25a0d7c7d671bee93172ca7e272fc87f0c0e02e44df9e9436819067ea28"_hash;
+	constexpr auto v5 = "00112233aabbccdd"_hash;
+
+	STATIC_REQUIRE(v5 == v3);
+
+	// constexpr bool comparable = requires(cthash::hash_value<8> l, cthash::hash_value<4> r) { v1 == v2; };
+}
+
+TEST_CASE("hash_value (runtime basics)") {
+	auto v1 = cthash::hash_value{"0011223300112233"};
+	auto v2 = cthash::hash_value{"00112233aabbccdd"};
+
+	REQUIRE((v1 <=> v1) == 0); // appleclang doesn't have std::is_eq
+	REQUIRE(v1 == v1);
+	REQUIRE(v1 < v2);
+	REQUIRE(v2 > v1);
+	REQUIRE(v1 != v2);
+
+	auto v3 = cthash::hash_value{u8"00112233aabbccdd"};
+
+	REQUIRE(v1 != v2);
+	REQUIRE(v2 == v3);
+
+	auto v4 = "599ba25a0d7c7d671bee93172ca7e272fc87f0c0e02e44df9e9436819067ea28"_hash;
+	auto v5 = "00112233aabbccdd"_hash;
+
+	REQUIRE(v5 == v3);
+
+	// constexpr bool comparable = requires(cthash::hash_value<8> l, cthash::hash_value<4> r) { v1 == v2; };
+}
+
+auto convert_to_string(auto && val) {
+	std::ostringstream os;
+	os << val;
+	return std::move(os).str();
+}
+
+TEST_CASE("hash stringification") {
+	auto v1 = cthash::hash_value{"00112233aabbccdd"};
+	REQUIRE(convert_to_string(v1) == "00112233aabbccdd");
+}
+
+```
