@@ -1,0 +1,106 @@
+Project Path: arc_gmh5225_FortniteOffsetsAndSigs_8norxtng
+
+Source Tree:
+
+```txt
+arc_gmh5225_FortniteOffsetsAndSigs_8norxtng
+├── FindPattern.cpp
+├── README.md
+├── offsets.h
+└── sigs.cpp
+
+```
+
+`FindPattern.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <psapi.h>
+#include <iostream>
+
+BOOLEAN MaskCompare(PVOID buffer, LPCSTR pattern, LPCSTR mask) {
+	for (auto b = reinterpret_cast<PBYTE>(buffer); *mask; ++pattern, ++mask, ++b) {
+		if (*mask == 'x' && *reinterpret_cast<LPCBYTE>(pattern) != *b) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+PBYTE FindPattern(LPCSTR pattern, LPCSTR mask) {
+	MODULEINFO info = { 0 };
+	GetModuleInformation(GetCurrentProcess(), GetModuleHandle(0), &info, sizeof(info));
+
+	info.SizeOfImage -= static_cast<DWORD>(strlen(mask));
+
+	for (auto i = 0UL; i < info.SizeOfImage; ++i) {
+		auto addr = reinterpret_cast<PBYTE>(info.lpBaseOfDll) + i;
+		if (MaskCompare(addr, pattern, mask)) {
+			return addr;
+		}
+	}
+}
+
+void Exemple()
+{
+       // Internal
+	auto UWORLD = FindPattern("\x48\x8B\x05\x00\x00\x00\x00\x4D\x8B\xC2", "xxx????xxx"); 
+}
+
+```
+
+`README.md`:
+
+```md
+# FortniteOffsetsAndSigs
+# > Fortnite Sigs &amp; Offsets 20.10
+# IGNORE -> Inso Web, Aserox, dragan et Oksis Web vont pouvoir update leur paste indétectable :)
+# > Need Help ? Join Discord : https://discord.gg/wKR8znUd6E
+
+
+```
+
+`offsets.h`:
+
+```h
+GWorld: 0xc3ef7c8
+FNamePool: 0xC42D200
+UObjectArray: 0xc2406d8
+GetNameByIndex: 0xe0b970
+GetBoneMatrix: 0x14aee58
+ProjectWorldToScreen: 0x81c0670
+Free: 0xe61350
+
+OFFSETS:
+BoneArray: 0x590
+CompToWorld: 0x240
+GameInstance 0x190
+RootComp: 0x188
+AcknowledgedPawn 0x320
+RelativeLocation 0x128
+RelativeRotation 0x140
+TeamIndex 0x1020
+PlayerState 0x2A0
+Mesh 0x300
+VehicleState 0x1EA8
+
+VTABLE: // MAYBE WRONG
+0x4B -> ProcessEvent index
+0x350 -> PlayerCameraManager
+0x6F0 -> GetLastFrameCameraCachePOV
+0x6E8 -> GetCameraCachePOV
+0x798 -> GetCameraRotation
+0x7A0 -> GetCameraLocation
+0x790 -> GetPlayerViewpoint
+0x700 -> SetControlRotation
+
+```
+
+`sigs.cpp`:
+
+```cpp
+ Uworld  | 48 ? ? ? ? ? ? 48 ? ? ? F6 ? ? ? ? ? ? 75 ? 8B ? ? ? 48 ? ? ? ? 4C ? ? ? ?
+ FNamePool   |  48 ? ? ? ? ? ? E8 ? ? ? ? C6 ? ? ? ? ? ? EB ? ? ? ? ? ? ? 40 ? 41 ? 48 ? ? ? 
+
+```
