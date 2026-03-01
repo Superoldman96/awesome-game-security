@@ -1,0 +1,1548 @@
+Project Path: arc_gmh5225_dfirtriage_2fcvjsvo
+
+Source Tree:
+
+```txt
+arc_gmh5225_dfirtriage_2fcvjsvo
+├── DFIRtriage.exe
+├── LICENSE
+├── README.md
+├── core-ir-MD5-hashlist.txt
+├── manifest.txt
+└── source
+    ├── DFIRtriage-v5-pub.py
+    ├── data
+    │   └── core.ir
+    └── dtfind.py
+
+```
+
+`LICENSE`:
+
+```
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org>
+
+```
+
+`README.md`:
+
+```md
+# **dfirtriage**
+Digital forensic acquisition tool for Windows-based incident response.
+
+How to Use
+=
+To run, drop dfirtriage.exe on the target and execute with admin rights, "-h" for help.
+
+***************************************************************************************
+
+**DFIRTriage v5.0 User's Manual**
+=
+
+Description
+-----------
+
+This document outlines the functionality and proper use of the DFIRtriage tool. Also included is detailed information to help with analysis of the output. The goal is to equip the Incident Responder with the tools needed to gather and analyze data quickly, to assist with accurate and timely escalation decisions.  
+
+About
+-----
+
+DFIRtriage is an incident response tool designed to provide the Incident Responder with rapid host data. Upon execution, select host data and information will be gathered and placed into the execution directory.  DFIRtriage may be ran from a USB drive or executed remotely on the target host.   
+
+What’s New?
+-----------
+
+*Updates*
+- Powershell event logs are now parsed with the "parse all" option (-elpa, --evtlogparseall)
+- Added headless argument (-hl) that bypasses the end prompt for SOC automation support
+- Collection of user registry files (NTUSER.DAT & USRCLASS.DAT) for all user profiles on system
+- SRUM database file now collected
+- DFIRtriage search tool (dtfind.exe) now bundled with DFIRtriage.exe for a more fluid user experience
+- Launching dtfind.exe will automatically export the LiveResponseData.zip content and present a prompt for immediate content searches
+- Parsing select Windows events by default, argument no longer required 
+
+*Fixes*
+- Fixed issue where memory dumps fail due to Windows 10 security updates
+- Preventing issues with output data size by skipping memory dump when system files is selected
+- Fixed issue where the parsed output of the NTUSER.DAT registry files were empty
+- Fixed issue with full Eventlog file collection and restored the -elf argument
+- Fixed issue with memory only (-mo, --memonly) argument ignoring low disk space check exiting if insufficient free space
+- Updated all embedded utilities with latest version
+- Removed functions that gathered overlapping network connection information
+- Fixed issue where tool crashes running Event log parsing argument (-elp)
+- Logged-in user information is now captured and added to Triage-info.txt for all supported versions of the Windows OS
+- Code cleanup
+
+
+Dependencies
+-
+The tool repository contains the full toolset required for proper execution and is packed into a single a single file named “core.ir”. This “.ir” file is the only required dependency of DFIRtriage when running in Python and should reside in a directory named data, (ie. "./data/core.ir").  The compiled version of DFIRtriage has the full toolset embedded and does not require the addition of the "./data/core.ir" file.  NOTE: TZWorks utilities are no longer utilized.   
+
+Contents
+-
+ * DFIRtriage.exe 
+   - compiled executable
+ * .\data\core.ir
+   - tool set repository (required for Python version only)
+ * manifest.txt
+   - file hashes for core components
+ * unlicense.txt
+   - copy of license agreement
+ * source directory
+   - all source code
+ * dtfind.exe 
+   - compiled search tool executable
+
+Operation
+-
+DFIRtriage acquires data from the host on which it is executed. For acquisitions of remote hosts, the DFIRtriage files will need to be copied to the target, then executed via remote shell. (ie. SSH or PSEXEC)  
+
+PSEXEC Usage
+-
+*WARNING: Do not use PSEXEC arguments to pass credentials to a remote system for authentication. Doing so will send your username and password across the network in the clear.*  
+
+**The following steps should be taken for proper usage of PSEXEC** 
+
+ 1. Map a network drive and authenticate with an account that has local administrative privileges on the target host.
+> You can used this mapped connection to copy DFIRtriage to the target.
+
+ 2. We can now shovel a remote shell to the target host using PSEXEC.
+
+    psexec \\target_host cmd
+
+ 3. You now have a remote shell on the target. All commands executed at this point are done so on the target host. 
+
+
+Usage
+
+1. Once the remote shell has been established on the target you can change directory to the location of the extracted DFIRtriage.exe file and execute. 
+
+2. Memory acquisition occurs by default, no arguments needed.  To bypass memory acquisition, the "--nomem" argument can be passed. 
+
+3. DFIRtriage must be executed with Administrative privileges.
+
+
+Output Analysis
+-
+Once complete, press enter to cleanup the output directory. If running the executable, the only data remaining with be a zipped archive of the output as well as DFIRtriage.exe. If running the Python code directly only DFIRtriage python script and a zipped archive of the output are left.   
+
+Output Folder
+-
+The output folder name includes the target hostname and a date/time code indicating when DFIRtriage was executed.  The date/time code format is YYYYMMDDHHMMSS.    
+
+Artifacts List
+=
+The following is a general listing of the information and artifacts gathered.  
+
+* **Memory Raw** --> image acquisition (optional) 
+
+* **System information** --> build, service pack level, installed patches, etc
+
+* **Prefetch** --> Collects all prefetch files an parses into a report 
+
+* **PowerShell command history** --> Gathers PowerShell command history for all users 
+
+* **User activity** --> HTML report of recent user activity 
+
+* **File hash** --> MD5 hash of all files in root of System32 
+
+* **Network information** --> Network configuration, routing tables, etc 
+
+* **Network connections** --> Established network connections 
+
+* **DNS cache entries** --> List of complete DNS cache contents 
+
+* **ARP table information** --> List of complete ARP cache contents 
+
+* **NetBIOS information** --> Active NetBIOS sessions, transferred files, etc 
+
+* **Windows Update Log** --> Gathers event tracelog information and builds Windows update log 
+
+* **Windows Defender Scanlog** --> Gathers event tracelog information and builds Windows update log 
+
+* **Windows Event Logs** --> Gathers and parses Windows Event Logs 
+
+* **Process information** --> Processes, PID, and image path 
+
+* **List of remotely opened files** --> Files on target system opened by remote hosts 
+
+* **Local user account names** --> List of local user accounts 
+
+* **List of hidden directories** --> List of all hidden directories on the system partition 
+
+* **Alternate Data Streams** --> List of files containing alternate data streams 
+
+* **Complete file listing** --> Full list of all files on the system partition 
+
+* **List of scheduled tasks** --> List of all configured scheduled tasks 
+
+* **Hash of all collected data** --> MD5 hash of all data collected by DFIRtriage
+
+* **Installed software** --> List of all installed software through WMI 
+
+* **Autorun information** --> All autorun locations and content 
+
+* **Logged on users** --> All users currently logged on to target system 
+
+* **Registry hives** --> Copy of all registry hives 
+
+* **USB artifacts** --> Collects data needed to parse USB usage info 
+
+* **Browser History** --> browser history collection from multiple browsers
+
+
+```
+
+`core-ir-MD5-hashlist.txt`:
+
+```txt
+5da3bd9b4055832266e816fadb2c9fc7
+4652c1fc1dcf724b3d381e50f620ab91
+1731039ee28f3d287177e84feea5a750
+5ad77de20e4eac2b359b4b94a8a80b81
+1d90637d5fcf5c09c59fc3fade0bc79b
+9dd3160679832165738bfabd7279aceb
+601a57649062fe40a1be83856e1ddb35
+3d45361f19418e3034c00694b34bb5eb
+236fabed3c3c178a0642db843d025d65
+c52dcf718f7dc532f85a92357aad8d49
+5daf7081a4bb112fa3f1915819330a3e
+05bdb783ee6514c8c072e47680af8ff7
+cc9ede9ba11450d2bc20ba779a8f37aa
+47cdd6753d424d2d572d3c0cde465bcd
+3a7ae95333e1948b4fb3091fc693c992
+3a6e57d97fb34c120fd31487de82f50d
+3a6e57d97fb34c120fd31487de82f50d
+a2a2e4737ddcf5c9345bd5981715eb32
+2605d4dc2bedd2fec06ee32c60f4c6f3
+92183c228042f20878a62fcf5504a178
+9862243fd3d5119960f5eec8fcbb82ef
+e580729592ba4a7573511361a0e3ed95
+ba700331e050f68cb1e0f1d677b3ca59
+0bdb51d768b84bc91f01c7cf0cd3dcab
+c3b3017de9035f9b080845f493943682
+23199a6d33c08ded09792980d4d6804d
+a14f54260a2d8eb51ae9d91b38b6c972
+201058594991d79d5d8891dbbeeee3c6
+624adb0f45cbb9cadad83c264df98891
+2c23d6223d4aff81ac137b6989bce05c
+e3ea271e748ccdad6a6d3e692d6f337e
+bd35132c7a1e78364f4b908ebaf8cb5d
+e25add3f10fdc894e4c1f889350dc290
+539ee51322320a9102e8295c1c5c6f02
+0d9540f8ed3ec25cf65b21454bd72123
+02ab314c209779e5cb306e0c23477a24
+fa473f6ee4568ff7277288c46c507e49
+005247e3057bc5d5c3f8c6f886ffc10c
+be5c7690d94f9dab63beed73d8ffabbe
+677cceade829839bb8979190a251b09c
+38b84c94c5a8af291adfea478ae54f93
+fd902835deaef4091799287736f3a028
+fb0462b7b7197fa52ca0095191f6d6b0
+0c52762c606bcf6a377d5e4688191a6b
+5ea9a0950f322bfa382af277801c0307
+8c852e02a5bce0422ddaaa20eb527e89
+e6e722818452d0bc4a6cb0474ee9e43b
+ffd67f437de8a18caffb5c8cad672f4f
+e9e22cff25328e2cab111233a06197f8
+5a9f70ca5b5fba2ad7a7073351e00ef2
+0464f693c59cc02cf261de7e4d33e5b7
+145ea278efc25a8fa1cfbebfbcc70dbd
+8bad6a48766a16f37c15cc38e08b8b59
+679f3d910c295b31026abd37e6b1c21a
+a84670c8c387295ae5d16a5c5c99ba7d
+58d767e475a4ff5394d78c6d1a7016a9
+b9274cdead3ddb17b5c3d0d5a6ea46f1
+5f5a6670345d97ddb50dfaa63687cb1e
+a56a458ac46a6931cbeca62ed843ec2e
+ea0a3f6ab3eecfe7abc2342007e027ea
+07ad88df9ef73215458867efc1bffe9e
+ddd0357a92fa843eff8915ed17253d6c
+619a67c9f617b7e69315bb28ecd5e1df
+6208d806878813b576201dcd2b3936ff
+23087a192a166ecc631fdfa2084ef87e
+19b07e7e8915d701225da41cb3877306
+c3423481d81ba71b407d7bc9d4a59f7f
+faf59c70934cf170adbf8a495d3c01a1
+0143db80dacfb7c2b5b7009ed9063353
+198a866996976f2aa552e53df3c53f85
+945d0fae2735ac677fda531f3d54700e
+0cc386ebbc87ccce81a3126ad09af83f
+e682696d7f982494a8cfc80c5b59d422
+ffc5e16eec33991e5a423781dd1ed0d6
+52700a1d0e5b4071f5d5d523a24bd0ed
+28bd3128dd85eeba6aef9a15d25b2346
+851c1b203b5eb4f85afc3a3006434797
+f2ac62cfa9d59fe10aead3906bd591ba
+ba8cecc3e813e1f7c441b20393d4f86c
+84989557565ecc4149c1ed43053bccf9
+fdd783cce4f42d0dda19daec8483f2a1
+3c49b7bff5ce9baf9d8aa47d0e46c747
+8639ce9b7e08feb29d286c480385f4e0
+a7c09a809e815c249f788d9ead4ac3d2
+13884065f22ef9011052682a1f1b50b4
+4a12919c441c351797261602997d5a54
+db8330fb66c2abc37c4f300c6621fd42
+f7832740e40e29e32ecb4d410eb34c91
+3a36d5490eec139742d735065b348655
+f5843778007d5a982f195f3c812cec02
+34a678a790d864636042acfc10e411cf
+a9c9c52bdb0d72f153d2177b803371be
+33853aa604135515f33fde60ab0d161e
+5ffa6d45e6d250bb3e2edfc15ff3a934
+87dffc0ab0fd993d13137f937e286aff
+8fa014a32e03fe148e2c84f38012f82c
+acda84da265a269e6bab0f5f971d69b6
+ae09925f8057616cf0b37ed9ea01eece
+1b17e04cb65c2c3e0dd63ec38e448012
+b5a21bb9ddc657de9957fb181b614b19
+54f3128bc76811b8f7ab97a9f57504db
+bfd680cd282c86b4b2dcb6de41ce4a8a
+f6416f767308a26e1419413b18d0ecfd
+1f080ccc567d222a2dcb7cc285c6a7ad
+075ea6c849ab0fe416a3d6dd65c3cf41
+ed485daddd3c939cd6bbe84e83e2a367
+c6510ac4008d1d7b42861f86aea5e240
+d3b1050dbfd44ccd1d0a2c3732d4f50b
+f399242a80c4066fd155efa4cf96658e
+119af756945981a123c1f130a15c5d1b
+284f3d07e0e03792a90cc09be429bb64
+aece69b05954076c781fe2a23003248a
+2c046fcd15dab01ffde9652569ce43e5
+493dd3ca91f94b878356364974ba691d
+410a23506f7056ab75b78d4a6f9e2f51
+c37d2314adefe2ddd207293caf0af142
+430cb92a5acb5c4077eaeaf339937fc4
+c68e69419f1315b3d0fc592aece947b2
+0139f6697d38a2118397364cfc9d48f9
+da9085635e53f6d12606d71356bf7544
+a380ef599344602b3a0e15a9d0dccee7
+```
+
+`manifest.txt`:
+
+```txt
+==================================================
+Filename          : core.ir
+MD5               : 52437fddadd0510f5980ef6b4d38c0d0
+SHA1              : 28d064057dc169cfeb9ee63dd6f2a657caf8b1d3
+CRC32             : 7d214bc8
+SHA-256           : bbc556ff6cf469ad533a9cb681e525c56532bf2ceb5b342e3e69ff58065162d2
+SHA-512           : 066dc0401160bb2171590e8ed1c3ac97bb606baed8ba63619ab3fadb903f7496313e77b3e614e84b28ebe88dc788b2b4a3242a5af3f0513b314b22d228a5f9e6
+SHA-384           : 77613d78c184e08f5e2c3e6a9b80ce59f8a14307ebfd3d0875d7e18d65fe18e570f2a30f998cbc01f1d4e545afa7e993
+Modified Time     : 10/28/2021 3:08:51 PM
+Created Time      : 7/6/2020 3:39:18 PM
+Entry Modified Time: 10/28/2021 3:43:31 PM
+File Size         : 21,697,729
+Extension         : ir
+File Attributes   : A
+==================================================
+
+==================================================
+Filename          : DFIRtriage-v5-pub.py
+MD5               : 1604d64ea1047cff17a7b5ef98d75206
+SHA1              : 68618f51f36f8aafc7b887bb558a98e8103696d7
+CRC32             : 0c44486a
+SHA-256           : 8883c0281081698e3cdadbf09f8b21034815140dab14f5349ed764d274cb1ca3
+SHA-512           : 0d960c9a1074effbf2134b39288efe85bcddc063d2e4a49e3ba53b498d09a772bd86beecd655315f728e940515bb902b5b12373b6b117b6761da3179e5494f7e
+SHA-384           : 00bc17a0993a2fcf034c7072468be31f82382f835dd7d81074d8cdac854b3d5a0bb9f920fabd4212399764a6aed588bb
+Modified Time     : 10/28/2021 3:20:09 PM
+Created Time      : 10/28/2021 3:09:33 PM
+Entry Modified Time: 10/28/2021 3:51:35 PM
+File Size         : 41,148
+Extension         : py
+File Attributes   : A
+==================================================
+
+==================================================
+Filename          : DFIRtriage.exe
+MD5               : d61b6ce10d4a116e6af2a0c98764c24a
+SHA1              : f8d80e402ffe62332a114d5599d70cb29459695e
+CRC32             : 4a9801a0
+SHA-256           : 9670f6a439c658c9927e76faef03e7bbde49e1f99df2c24951c55f019074f4fc
+SHA-512           : f91acda19087f414c896504ec6ca2a5809527b6ceec738a29ca11340774723da5cb599c48a83f34bc15d5747b1fffdfbd3dff184a8300f0b7fb6093d373a8902
+SHA-384           : 32cffb95b9a47bae079f5d95eed2699188499e2397c1452a6cf61d4c07f464eb8af32879a63f56de0457cf3e5d8c8f98
+Modified Time     : 10/28/2021 3:31:33 PM
+Created Time      : 12/14/2020 11:10:58 AM
+Entry Modified Time: 10/28/2021 3:46:04 PM
+File Size         : 31,016,757
+Extension         : exe
+File Attributes   : A
+==================================================
+
+
+```
+
+`source/DFIRtriage-v5-pub.py`:
+
+```py
+# python3
+
+"""Digital forensic acquisition tool for Windows based incident response"""
+
+#############################################################################
+##                                                                         ##
+## Unlicense                                                               ##
+## No Copyright                                                            ##
+##                                                                         ##
+## This is free and unencumbered software released into the public domain. ##
+## Anyone is free to copy, modify, publish, use, compile, sell, or         ##
+## distribute this software, either in source code form or as a compiled   ##
+## binary, for any purpose, commercial or non-commercial, and by any       ##
+## means.                                                                  ##
+##                                                                         ##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,         ##
+## EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF      ##
+## MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  ##
+## IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR       ##
+## OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   ##
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR   ##
+## OTHER DEALINGS IN THE SOFTWARE.                                         ##
+##                                                                         ##
+##  For more information, please refer to  http://unlicense.org            ##
+##                                                                         ##
+##  Author: Travis Foley, travis.foley@gmail.com                           ##
+##                                                                         ##
+#############################################################################
+
+#############################################################################
+##                                                                         ##
+## DESCRIPTION: Forensic acquisition of volatile data and system           ##
+## information for use with initial Incident Response.                     ##
+##                                                                         ##
+## FILENAME: DFIRtriage.py                                                 ##
+## VERSION: 5.0.1                                                          ##
+## STATUS: PUB                                                             ##
+## LAST MOD: 10/28/21 @ 15:11                                              ##
+## AUTHORS: Travis Foley                                                   ##
+#############################################################################
+
+# Built-in Imports:
+import os
+import time
+import socket
+import sys
+import ctypes
+import subprocess
+import shutil
+import zipfile
+import hashlib
+import argparse
+import getpass
+
+NOERROR = open(os.devnull, 'w')
+TARGETNAME = socket.gethostname()
+DATEANDTIME = time.strftime("%Y%m%d%H%M%S")
+CASEFOLDER = TARGETNAME + "." + DATEANDTIME
+# the amount of free space required to get a full memory image in GB's
+OSARCH = ''
+MD5_PATH = ''
+CPORTSDIR = ''
+WMICDIR = ''
+BVHRUN = ''
+OSVERSION = sys.getwindowsversion()
+if OSVERSION.major == 10:
+    LOGGEDUSERS = subprocess.getoutput("whoami")
+else:
+    LOGGEDUSERS = getpass.getuser()
+
+#setup commandline options
+PARSER = argparse.ArgumentParser(
+    description='Forensic acquisition of volatile data and system information for use '
+    'in initial incident response ', epilog='Example usage: "dfirtriage.exe" (runs all) OR "dfirtriage -bho -nm" (pulls browser history, bypasses memory, exits)')
+GROUP = PARSER.add_mutually_exclusive_group(required=False)
+GROUP.add_argument('-mo', '--memonly', action='store_true', help="Acquires memory then exits")
+GROUP.add_argument('-nm', '--nomem', action='store_true', help="Bypasses memory acquisition")
+PARSER.add_argument('-elpa', '--evtlogparseall', action='store_true',
+                    help="Parses all Application, System, and Security event log events")
+PARSER.add_argument('-elf', '--evtlogfiles', action='store_true', \
+ help="Pulls full APP, SEC, & SYS evtx files")
+PARSER.add_argument('-ho', '--hashonly', action='store_true', help=r"Hashes all files on C:\ drive then exits")
+PARSER.add_argument('-bho', '--browserhistonly', action='store_true', help="Pulls browser history then exits")
+PARSER.add_argument('-hl', '--headless', action='store_true', help="Automation support, no user input required")
+PARSER.add_argument('-sf', '--systemfiles', action='store_true', help="Collect locked system files, force --nomem argument")
+ARGS = PARSER.parse_args()
+
+VERSION = "5.0.1"
+CURRENTUSER = getpass.getuser()
+
+#This is a test to see if we are compiled into a binary or we are just a script
+
+if getattr(sys, 'frozen', False):
+    COMPILED = 1
+    BUNDLE_DIR = sys._MEIPASS + "/core.ir/"
+
+else:
+    COMPILED = 0
+    BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__)) + "/data"
+
+# Forcing stdout to flush so all print() and stdout.write()
+# functions will display in the console when executing
+# over a remote shell with psexec
+sys.stdout.flush()
+os.system('color 0A')
+
+def has_admin_access():
+    """Admin rights check and exit if they are not found """
+    try:
+        is_admin = os.getuid() == 0
+    except AttributeError:
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    if not is_admin:
+        print("\n[+] Has Local Admin rights? [NO]\n")
+        open("DFIRTriage must be ran as Local ADMIN.txt", 'w')
+        sys.exit(0)
+    else:
+        print("\n[+] Has Local Admin rights? [YES]")
+
+def env_setup():
+    """Setup all the enviroment stuff"""
+    print("\n[+] Setting up environment\n", flush=True)
+    # Exporting tools
+    zip_file_name = BUNDLE_DIR + '\\core.ir'
+    zip_core = zipfile.ZipFile(zip_file_name)
+    zip_core.extractall(r'.')
+    #Check OS Type
+    global OSARCH
+    global MD5_PATH
+    global CPORTSDIR
+    global WMICDIR
+    global BVHRUN
+    if 'PROGRAMFILES(X86)' in os.environ:
+        print("[+] Detecting OS and System Architecture [64-BIT]", flush=True)
+        sys.stdout.flush()
+        OSARCH = 64
+        MD5_PATH = "{}\\md5deep-4.4\\md5deep64.exe".format(os.path.realpath('.'))
+        CPORTSDIR = os.path.realpath('.') + "/cports-x64/"
+        WMICDIR = os.path.realpath('.') + "\\WMIC\\"
+        BVHRUN = "BrowsingHistoryView.exe"
+
+    else:
+        print("[+] Detecting OS and System Architecture [32bit system]")
+        sys.stdout.flush()
+        OSARCH = 32
+        MD5_PATH = "{}\\md5deep-4.4\\md5deep.exe".format(os.path.realpath('.'))
+        CPORTSDIR = os.path.realpath('.') + "/cports/"
+        WMICDIR = os.path.realpath('.') + "\\WMIC32\\"
+        BVHRUN = "BrowsingHistoryView32.exe"
+
+    print("\n[+] Building acquisition directory structure\n", flush=True)
+    # This list contains list of all directories that need to be created for output
+    app_folders = ["ForensicImages/Memory", "ForensicImages/HDD", "ForensicImages/SystemFiles",
+                   "LiveResponseData/BasicInfo", "LiveResponseData/UserInfo",
+                   "LiveResponseData/EventLogs",
+                   "LiveResponseData/NetworkInfo", "LiveResponseData/PersistenceMechanisms",
+                   "LiveResponseData/Registry/regripped-out",
+                   "LiveResponseData/Registry/usb-install-log",
+                   "LiveResponseData/Prefetch", "LiveResponseData/Prefetch/parsed_prefetch", "LiveResponseData/FileSystem"]
+    if not os.path.exists(CASEFOLDER):
+        os.makedirs(CASEFOLDER)
+    for folder in app_folders:
+        os.makedirs(CASEFOLDER + "/" + folder)
+    pversion = sys.version_info
+    pversion_final = ''
+    for ver_sec in pversion:
+        pversion_final += str(ver_sec) + '.'
+    # Capture version and commandline options
+    with open('Triage_info.txt', 'w') as fout:
+        fout.write('Hostname: ' + TARGETNAME + '\n')
+        fout.write('User : ' + CURRENTUSER + '\n')
+        fout.write('Time: ' + DATEANDTIME + '\n')
+        fout.write('Version: ' + VERSION + '\n')
+        fout.write('Commandline options: ' +str(sys.argv)  + '\n')
+        fout.write('Python Version: ' + pversion_final + '\n')
+        fout.write('Logged in Users: ' + LOGGEDUSERS + '\n')
+
+    # moving triage info file & dtfind.exe to case folder
+    move_to_casefolder = ["Triage_info.txt", "dtfind.exe"]
+    for file in move_to_casefolder:
+        os.rename(os.path.realpath('.') + "\\{}".format(file), CASEFOLDER + "\\{}".format(file))
+
+def env_cleanup():
+    """[END] Compress and Move Output"""
+    if ARGS.headless:
+        pass
+    else:
+        print("[*] DFIRtriage process is now complete.\n")
+        print("[*] Press any key to clean up.")
+        input()
+
+    util_list = ["cports", "cports-x64", "lastactivityview", "md5deep-4.4", "PrcView",
+                 "sysinternals", "PECmd", "winutils", "WMIC", "WMIC32", "xcopy", "xcopy64",
+                 "memory", "regripper", "BrowsingHistoryView", "FGET"]
+
+    #These are files that need to be cleaned up and not included in the zip
+    file_clean_up = ["DFIRtriage must be ran as Local ADMIN.txt", "0", "1", "2", "3", "dtfind.exe"]
+    tool_path = os.path.realpath('.')
+
+    for tool in util_list:
+        shutil.rmtree(tool_path + "\\" + tool)
+
+    for files in file_clean_up:
+        if os.path.exists(files):
+            os.remove(files)
+
+    print("[x] Clean up complete.")
+    if os.path.exists(__file__):
+        os.remove(__file__)
+
+def mem_scrape():
+    """Acquires a raw memory dump from the target system"""
+    print("[+] Memory acquisition\n", flush=True)
+    # variable to point to the "memory" subdir of current directory
+    mem_dir = os.path.realpath('.') + "\\memory\\"
+    # setting up variables to run winpemem with different parameters
+    mem_acq_get = mem_dir + "winpmem_mini_x64_rc2.exe memdump.raw"
+    # executing winpmem
+    subprocess.call(mem_acq_get, stderr=NOERROR)
+    # moving acquired memory image to case folder
+    os.rename(os.path.realpath('.') + "\\" + "memdump.raw", CASEFOLDER \
+        + "\\ForensicImages\\Memory" + "\\" + "memdump.raw")
+
+def pre_fetch():
+    """Collects the Prefetch"""
+    print("[+] Prefetch collection\n", flush=True)
+
+    # Detecting system architecture
+    if os.path.exists("c:\\windows\\system32\\"):
+        # variable to point to the location of "xcopy" on the remote system
+        xcopy_dir = "c:\\windows\\system32\\"
+        # setting up variables to run xcopy with appropriate parameters
+        xcopy_param = xcopy_dir + "xcopy.exe /s/e/h/i C:\\Windows\\Prefetch\\*.pf "
+        xcopy_out = CASEFOLDER + "\\LiveResponseData\\Prefetch"
+        xcopy_pf = xcopy_param + xcopy_out
+
+        # copying prefetch files from target
+        subprocess.call(xcopy_pf, stdout=NOERROR, stderr=NOERROR)
+
+    else:
+        print("\nXcopy missing from target\n", flush=True)
+
+def list_users():
+    """Get a list of the users from the system"""
+    list_stuff = "cmd.exe /C dir c:\\Users /b "
+    all_system_users = subprocess.check_output(list_stuff, stderr=NOERROR, universal_newlines=True)
+    list_of_users = all_system_users.rsplit("\n")
+    del list_of_users[-1]
+    return list_of_users
+
+def last_user():
+    """[BEGIN] Begin LastUser Activity Data Collection"""
+    print("[+] Last User Activity collection\n", flush=True)
+
+    # variable to point to the "lastactivityview" subdir of current directory
+    lav_dir = os.path.realpath('.') + "/lastactivityview/"
+
+    # setting up variables to run LastActivityView with output parameters
+    lav_run = lav_dir + "LastActivityView.exe /shtml "
+    lav_param = CASEFOLDER + "/LiveResponseData/BasicInfo" + "/LastActivityView.html"
+    lav_exe = lav_run + lav_param
+
+    # executing lastactivityview
+    subprocess.call(lav_exe)
+
+def hashing_new(output, source_dir):
+    """Hash Files"""
+    print("[+] Hash " + source_dir + "\n", flush=True)
+    md5_param = " -oe -u -t -r " + source_dir
+    md5_run = MD5_PATH + md5_param
+    #print(md5_run)
+    with open(CASEFOLDER + "/" + output, 'w') as fout:
+        subprocess.call(md5_run, stdout=fout, stderr=NOERROR)
+
+def hash_dir(output, source_dir):
+    """hash directory"""
+    print("[+] Hash " + source_dir + "\n", flush=True)
+    sha256_param = " -rect " + CASEFOLDER + "\\LiveResponseData\\* "
+    sha256_run = MD5_PATH + sha256_param
+    with open(CASEFOLDER + "/" + output, 'w') as fout:
+        subprocess.call(sha256_run, stdout=fout)
+
+def core_integrity():
+    """Check the validity of the core"""
+    if os.path.isfile(BUNDLE_DIR + "\\core.ir"):
+        print("\n[+] Verifying core integrity", flush=True)
+
+    else:
+        os.system('color 4F')
+        print("\n[!] This copy is corrupt. Please download a new copy of DFIRtriage.", flush=True)
+        sys.exit()
+
+    hasher = hashlib.md5()
+    core_val = "52437fddadd0510f5980ef6b4d38c0d0"
+    with open(BUNDLE_DIR + '\\core.ir', 'rb') as corefile:
+        buf = corefile.read()
+        hasher.update(buf)
+
+    core_check = hasher.hexdigest()
+    if core_val == core_check:
+        print("\n[+] Core integrity [OK]", flush=True)
+
+    else:
+        os.system('color 4F')
+        print("\n[!] Hash values do not match. Integrity check failed. Please download a new copy of DFIRtriage.", flush=True)
+        sys.exit()
+
+def banner():
+
+    print('''
+    
+                - - - - - - - - - - - - - - - - - - - 
+  ______   _______ ___  _______  __         __                    
+ |   _  \ |   _   |   ||   _   \|  |_.----.|__|.---.-.-----.-----.
+ |.  |   \|.  1___|.  ||.  l   /|   _|   _||  ||  _  |  _  |  -__|
+ |.  |    \.  __) |.  ||.  _   1|____|__|  |__||___._|___  |_____|
+ |:  1    /:  |   |:  ||:  |   |                     |_____|      
+ |::.. . /|::.|   |::.||::.|:. |                                       
+ `------' `---'   `---'`--- ---'                                
+                - - - - - - - - - - - - - - - - - - - 
+                     P U B L I C  R E L E A S E  
+                                v{}
+                - - - - - - - - - - - - - - - - - - -
+    
+    
+    '''.format(VERSION))
+
+
+def volatile_data_gather():
+    """Gathers the volatile data"""
+    print("\n[+] Gather additional volatile data\n", flush=True)
+
+    # grabbing host file
+    hosts_file = "C:\\Windows\\System32\\drivers\\etc\\hosts"
+    hosts_file_dst = "{}/LiveResponseData/NetworkInfo/{}".format(CASEFOLDER, "hosts.txt")
+    os.system("type {} > {}".format(hosts_file, hosts_file_dst))
+
+    procs = [
+        {'Command': "cmd.exe /C tasklist /V", 'output': "Running_processes.txt",
+         'outdir': "/BasicInfo/"},
+        {'Command': "{}/pv.exe -m -e *".format(os.path.realpath('./prcview')), 'output': "Loaded_dlls.txt",
+         'outdir': "/PersistenceMechanisms/"},
+        {'Command': "cmd.exe /C tasklist /SVC", 'output': "services_aw_processes.txt",
+         'outdir': "/PersistenceMechanisms/"},
+        {'Command': "cmd.exe /C ipconfig /all", 'output': "Internet_settings.txt",
+         'outdir': "/NetworkInfo/"},
+        {'Command': "cmd.exe /C netstat -anbo", 'output': "Open_network_connections.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C ipconfig /displaydns", 'output': "DNS_cache.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C arp -a", 'output': "ARP.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C net user", 'output': "List_users.txt",
+         'outdir':"/UserInfo/"},
+        {'Command': "cmd.exe /C netstat -rn", 'output': "routing_table.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C net sessions", 'output': "NetBIOS_sessions.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C net file", 'output': "NetBIOS_transferred_files.txt",
+         'outdir':"/NetworkInfo/"},
+        {'Command': "cmd.exe /C schtasks /query /fo LIST /v", 'output': "scheduled_tasks.txt",
+         'outdir':"/PersistenceMechanisms/"},
+        {'Command': "cmd.exe /C date /T", 'output': "current_date.txt",
+         'outdir':"/BasicInfo/"},
+        {'Command': "cmd.exe /C time /T", 'output': "current_time.txt",
+         'outdir':"/BasicInfo/"},
+        {'Command': "cmd.exe /C systeminfo", 'output': "system_info.txt",
+         'outdir':"/BasicInfo/"},
+        {'Command': "cmd.exe /C ver", 'output': "Windows_Version.txt",
+         'outdir':"/BasicInfo/"},
+        {'Command': "cmd.exe /C dir /S /B /AHD C:\\Windows\\*",
+         'output': "List_hidden_directories.txt", 'outdir':"/BasicInfo/"},
+        {'Command': r"cmd.exe /C tree C:\ /F /A", 'output': "Full_file_listing.txt",
+         'outdir':"/BasicInfo/"},
+        {'Command': "{}\\system32\\chcp.com".format(os.getenv('WINDIR')),
+         'output': "Windows_codepage.txt", 'outdir':"/BasicInfo/"},
+        {'Command': "{}/whoami.exe".format(os.path.realpath('./winutils')), 'output': "whoami.txt",
+         'outdir':"/UserInfo/"}
+    ]
+    for processes in procs:
+        running_procs = processes['Command']
+        with open(processes['output'], "w+") as fout:
+            subprocess.call(running_procs, stdout=fout)
+    for files in procs:
+        os.rename(os.path.realpath('.') + "/" + files['output'],
+                  CASEFOLDER + "/LiveResponseData" + files['outdir'] + files['output'])
+
+def network_data_gathering():
+    """Get open TCP and UDP ports"""
+    print("[+] Network information gathering", flush=True)
+    print("\n\t" + "[-] Collecting currently open TCP/UDP ports", flush=True)
+    # setting up variables to run cports with output parameters
+    c_ports_run = CPORTSDIR + "cports.exe /shtml cports.html /sort 1 /sort ~'Remote Address'"
+    c_ports_param = CASEFOLDER + "/LiveResponseData/NetworkInfo" + "/cports.html"
+    c_ports_exe = c_ports_run + c_ports_param
+    # executing cports
+    subprocess.call(c_ports_exe)
+    # moving cports output case folder
+    os.rename(os.path.realpath('.') + "/" + "cports.html", CASEFOLDER +
+              "/LiveResponseData/NetworkInfo" + "/" + "cports.html")
+
+def windows_update_log():
+    '''Convert ETL files to Windows Update log'''
+    winuplog_src = "c:\\temp\\WindowsUpdate.log"
+    winuplog_dst = CASEFOLDER + "\\LiveResponseData\\BasicInfo\\WindowsUpdate.log"
+    winuplog_run = "cmd /c powershell Get-WindowsUpdateLog -LogPath c:\\temp\\WindowsUpdate.log > nul"
+    print("\n[+] Building Windows Update log from event trace log files", flush=True)
+
+    if not os.path.isdir("C:\\Program Files (x86)\\Windows Defender\\"):
+        try:
+            os.makedirs("C:\\Program Files (x86)\\Windows Defender\\")
+        except PermissionError:
+            pass
+    if not os.path.isfile("C:\\Program Files (x86)\\Windows Defender\\SymSrv.dll"):
+        try:
+            with open("C:\\Program Files (x86)\\Windows Defender\\SymSrv.dll", "w") as plug:
+                plug.write("Pluggin a hole")
+            plug.close()
+        except PermissionError:
+            pass
+
+    subprocess.call(winuplog_run)
+
+    try:
+        if os.path.isfile(winuplog_src):
+            shutil.move(winuplog_src, winuplog_dst)
+        else:
+            print("\n[!] Windows Update log was not generated correctly.")
+    except IOError as io_error:
+        print(io_error)
+        sys.exit("\n[!] Ouch! Something went wrong, but I'm not sure what :).")
+
+def powershell_history():
+    """Grab powershell console command history file"""
+    print("[+] Acquiring existing powershell command history for all users\n", flush=True)
+    user_list = os.popen("cmd.exe /C dir c:\\Users /b ")
+    for users in user_list:
+        users = users.strip()
+        ps_history_src = "c:\\users\\{}\\AppData\\Roaming\\Microsoft\\Windows\\PowerShell\\PSReadLine\\ConsoleHost_history.txt".format(users)
+        ps_history_dst = CASEFOLDER + "\\LiveResponseData\\BasicInfo\\powershell_command_history_{}.txt".format(users)
+
+        try:
+            if os.path.isfile(ps_history_src):
+                print("\t[+] Checking '{}' [OK]".format(users))
+                shutil.copy(ps_history_src, ps_history_dst)
+            else:
+                print("\t[-] Checking '{}' [NOT FOUND]".format(users))
+        except IOError as io_error_2:
+            print(io_error_2)
+            sys.exit("\n[!] Ouch! Something went wrong, but I'm not sure what :).")
+    print()
+
+def system_data_gathering():
+    """Gather system data"""
+    # [BEGIN] System Data Gathering
+    print("[+] Gather system data\n", flush=True)
+    print("[+] Run Sysinternals tools\n", flush=True)
+    print("\t[-] Accepting EULA", flush=True)
+    print("\t[-] Executing toolset", flush=True)
+    sys_internals_list = ['Autoruns', 'PsFile', 'PsInfo', 'PsList', 'PsLoggedOn',
+                          'PsLogList', 'Tcpvcon', 'TCPView', 'Streams']
+
+    for program in sys_internals_list:
+        eula = "cmd.exe /C reg.exe ADD HKCU\\Software\\Sysinternals\\" + \
+        program + " /v EulaAccepted /t REG_DWORD /d 1 /f"
+        subprocess.call(eula, stdout=NOERROR, stderr=NOERROR)
+
+    si_dir = os.path.realpath('.') + "\\sysinternals\\"
+    # [autorunsc] setting up path to Sysinternals tools
+
+    sys_proc = [
+        {'Command': "autorunsc.exe", 'output': "autorunsc.txt",
+         'outdir': "/PersistenceMechanisms/"},
+        {'Command': "psfile.exe", 'output': "psfile.txt", 'outdir': "/BasicInfo/"},
+        {'Command': "psinfo.exe", 'output': "psinfo.txt", 'outdir': "/BasicInfo/"},
+        {'Command': "pslist.exe", 'output': "pslist.txt", 'outdir': "/BasicInfo/"},
+        {'Command': "PsLoggedon.exe", 'output': "PsLoggedon.txt", 'outdir':"/BasicInfo/"},
+        {'Command': "Tcpvcon.exe -a ", 'output': "Tcpvcon.txt", 'outdir':"/NetworkInfo/"},
+        {'Command': "streams.exe  -s {}\\ ".format(os.getenv('WINDIR')),
+         'output': "Alternate_data_streams.txt", 'outdir':"/BasicInfo/"}
+    ]
+    for sys_internals in sys_proc:
+        sys_running_procs = si_dir + sys_internals['Command']
+        with open(sys_internals['output'], "w+") as fout:
+            subprocess.call(sys_running_procs, stdout=fout, stderr=NOERROR)
+        os.rename(os.path.realpath('.') + "/" + sys_internals['output'],
+                  CASEFOLDER + "/LiveResponseData" + sys_internals['outdir']
+                  + sys_internals['output'])
+
+def evtparseall():
+    """Function to parse all events in the APP, SEC, & SYS event logs"""
+    print("[+] Parsing all events in the APP, SEC, & SYS event logs\n", flush=True)
+    # [psloglist] setting up path to EXE
+    si_dir = os.path.realpath('.') + "\\sysinternals\\"
+    si_psloglist_exe_path = si_dir + "psloglist.exe -accepteula"
+
+    # [psloglist] setting parameters
+    si_psloglist_app_param = " -s -x application"
+    si_psloglist_sec_param = " -s -x security"
+    si_psloglist_sys_param = " -s -x system"
+    si_psloglist_ps_param = ' -s -x "Windows PowerShell"'
+
+    # [psloglist] setting execution command
+    si_psloglist_app_exec = si_psloglist_exe_path + si_psloglist_app_param
+    si_psloglist_sec_exec = si_psloglist_exe_path + si_psloglist_sec_param
+    si_psloglist_sys_exec = si_psloglist_exe_path + si_psloglist_sys_param
+    si_psloglist_ps_exec = si_psloglist_exe_path + si_psloglist_ps_param
+
+    # [psloglist] running
+    with open('eventlogs-all.csv', 'w') as fout:
+        subprocess.call(si_psloglist_app_exec, stdout=fout, stderr=NOERROR)
+        subprocess.call(si_psloglist_sec_exec, stdout=fout, stderr=NOERROR)
+        subprocess.call(si_psloglist_sys_exec, stdout=fout, stderr=NOERROR)
+        subprocess.call(si_psloglist_ps_exec, stdout=fout, stderr=NOERROR)
+
+    # [psloglist] moving output to case folder
+    os.rename(os.path.realpath('.') + "/" + "eventlogs-all.csv",\
+     CASEFOLDER + "/LiveResponseData/EventLogs" + "/" + "eventlogs-all.csv")
+
+def evtparse():
+    """Function to collect event logs"""
+    print("\n[+] Parsing key events from APP, SEC, SYS, & PowerShell event logs\n", flush=True)
+    si_dir = os.path.realpath('.') + "\\sysinternals\\"
+    si_psloglist_app_evt_list = "1022,1033,1034,11707,11708,11724"
+    si_psloglist_sec_evt_list = "1102,4624,4625,4634,4647,4672,4648,\
+4688,4697,4698,4699,4700,4701,4702,4720,4722,4724,4728,4732,\
+4735,4738,4756,4776,4778,4779,4798,4799,5140,5145,7034,7036,7040"
+    si_psloglist_sys_evt_list = "6,104,7035,7045"
+    si_psloglist_ps_evt_list = "600,4105,4106"
+    pslog_list = [
+        {'Command': "psloglist.exe -accepteula -s -x -i {} \
+         Application".format(si_psloglist_app_evt_list),
+         'output': "eventlogs_key_events.csv", 'outdir':"/EventLogs/"},
+        {'Command': "psloglist.exe -accepteula -s -x -i {} \
+         Security".format(si_psloglist_sec_evt_list),
+         'output': "eventlogs_key_events.csv", 'outdir':"/EventLogs/"},
+        {'Command': "psloglist.exe -accepteula -s -x -i {} \
+         System".format(si_psloglist_sys_evt_list),
+         'output': "eventlogs_key_events.csv", 'outdir':"/EventLogs/"},
+        {'Command': 'psloglist.exe -accepteula -s -x -i {} \
+         "Windows PowerShell"'.format(si_psloglist_ps_evt_list),
+         'output': "eventlogs_key_events.csv", 'outdir':"/EventLogs/"}
+        ]
+    for pslog in pslog_list:
+        pslog_running_procs = pslog['Command']
+        with open(pslog['output'], "a") as fout:
+            subprocess.call(si_dir + pslog_running_procs, stdout=fout, stderr=subprocess.STDOUT, shell=True)
+    os.rename(os.path.realpath('.') + "/" + pslog_list[0]['output'],
+              CASEFOLDER + "/LiveResponseData" + pslog_list[0]['outdir'] + pslog_list[0]['output'])
+
+def evtxall():
+    """Function to pull full APP, SYS, and SEC event log (evtx) files"""
+    print("[+] Grabbing App, Sys, and Sec (.evtx) files\n", flush=True)
+
+    # Setting System32 dir reference based on the target system architecture
+    # ref. https://www.samlogic.net/articles/sysnative-folder-64-bit-windows.htm
+
+    if COMPILED == 0:
+        event_log_path = r"C:\Windows\System32\winevt\Logs"
+    else:
+        if OSARCH == 64:
+            event_log_path = r"C:\Windows\Sysnative\winevt\Logs"
+        else:
+            event_log_path = r"C:\Windows\System32\winevt\Logs"
+
+    app_log_src = r"{}\Application.evtx".format(event_log_path)
+    app_log_dst = CASEFOLDER + r"\LiveResponseData\EventLogs"
+    sys_log_src = r"{}\System.evtx".format(event_log_path)
+    sys_log_dst = CASEFOLDER + r"\LiveResponseData\EventLogs"
+    sec_log_src = r"{}\Security.evtx".format(event_log_path)
+    sec_log_dst = CASEFOLDER + r"\LiveResponseData\EventLogs"
+
+    # executing file copy using shutil.copy2 in order to preserve file metadata
+    shutil.copy2(app_log_src, app_log_dst)
+    shutil.copy2(sys_log_src, sys_log_dst)
+    shutil.copy2(sec_log_src, sec_log_dst)
+
+
+def prefetch_p():
+    """Parse the Prefetch"""
+    # [BEGIN] Prefetch Parsing
+    print("\n[+] Parsing prefetch data\n", flush=True)
+
+    # [pf] setting up path to Eric Zimmermans tools
+    pecmd_dir = os.path.realpath('.') + "\\PECmd\\"
+
+    # [pf] setting up path to EXE and adding the -d option for directory
+    pf_exe_path = pecmd_dir + "PECmd.exe -d  "
+
+    # [pf] directory location of Prefetch files
+    pf_directory = "{}\\LiveResponseData\\Prefetch".format(CASEFOLDER)
+
+    # [pf] setting full pf.exe command with args
+    pf_command = pf_exe_path + pf_directory
+
+    # Execute the pf command and directing output to a file
+    with open('prefetch-out.txt', 'w') as fout:
+        subprocess.call(pf_command, stdout=fout)
+
+    # moving prefetch info to case folder
+    os.rename(os.path.realpath('.') + "/" + "prefetch-out.txt",
+              CASEFOLDER + "\\LiveResponseData\\Prefetch\\parsed_prefetch/"
+              "prefetch-out.txt")
+
+def registry_stuff():
+    """[BEGIN] Registry Extraction"""
+    print("[+] Dumping registry hives\n", flush=True)
+    registry_dump_hives = {"SAM": r'HKLM\SAM', "SYSTEM": r'HKLM\SYSTEM',
+                           "SECURITY": r'HKLM\SECURITY', "SOFTWARE": r'HKLM\SOFTWARE'}
+    for hive in registry_dump_hives:
+        reg = "cmd.exe /C reg.exe SAVE " + registry_dump_hives[hive]
+        reg_out = " " + CASEFOLDER + "\\LiveResponseData\\Registry\\" + hive + " " + hive + ".hiv"
+        reg_dump = reg + reg_out
+        subprocess.call(reg_dump, stdout=NOERROR, stderr=NOERROR)
+
+    # [END] Registry Extraction
+
+    # [BEGIN] Registry Parsing
+    print("[+] Parsing registry hives\n", flush=True)
+
+    # [Regripper] setting up path to Regripper
+    rr_dir = os.path.realpath('.') + "\\regripper\\"
+
+    # [Regripper] setting up path to EXE
+    rr_exe_path = rr_dir + "rip.exe"
+
+    # [Regripper] setting parameters
+    registry_hives_os = ["SAM", "SYSTEM", "SECURITY", "SOFTWARE"]
+    for hives in registry_hives_os:
+        param_1 = " -r " + CASEFOLDER + "\\LiveResponseData\\Registry\\" + hives + " -f " + hives
+        reg_exec = rr_exe_path + param_1
+        out_put_file = "rr." + hives + "-out.txt"
+        with open(out_put_file, 'w') as fout:
+            subprocess.call(reg_exec, stdout=fout, stderr=NOERROR)
+        os.rename(os.path.realpath('.') + "/" + out_put_file, CASEFOLDER +
+                  "/LiveResponseData/Registry/regripped-out" + "/" + out_put_file)
+
+    # [Regripper] building user reg file list
+    for root, dirs, files in os.walk(CASEFOLDER + "\\LiveResponseData\\Registry\\"):
+        registry_hives_users = [file for file in files if file.endswith(".DAT")]
+        # [Regripper] processing user reg files with regripper
+        for userreg in registry_hives_users:
+            if "USRCLASS" in userreg:
+                param_2 = " -r " + CASEFOLDER + "\\LiveResponseData\\Registry\\" + userreg + " -f USRCLASS"
+                reg_exec2 = rr_exe_path + param_2
+                out_put_file2 = "rr." + userreg + "-out.txt"
+                with open(out_put_file2, 'w') as fout2:
+                    subprocess.call(reg_exec2, stdout=fout2, stderr=NOERROR)
+                fout2.close()
+                os.rename(os.path.realpath('.') + "/" + out_put_file2, CASEFOLDER + "/LiveResponseData/Registry/regripped-out" + "/" + out_put_file2)
+            if "NTUSER" in userreg:
+                param_3 = " -r " + CASEFOLDER + "\\LiveResponseData\\Registry\\" + userreg + " -f NTUSER"
+                reg_exec3 = rr_exe_path + param_3
+                out_put_file3 = "rr." + userreg + "-out.txt"
+                with open(out_put_file3, 'w') as fout3:
+                    subprocess.call(reg_exec3, stdout=fout3, stderr=NOERROR)
+                fout3.close()
+                os.rename(os.path.realpath('.') + "/" + out_put_file3, CASEFOLDER + "/LiveResponseData/Registry/regripped-out" + "/" + out_put_file3)
+
+def usb_ap():
+    """Gather the USB artifacts"""
+    # [BEGIN] USB Artifact Parsing
+    print("[+] Grab more USB artifacts\n", flush=True)
+
+    # Detecting system architecture
+    if os.path.exists("c:\\windows\\system32\\"):
+        # variable to point to the location of "xcopy" on the remote system
+        xcopy_dir = "c:\\windows\\system32\\"
+        # setting up variables to run xcopy with appropriate parameters
+        xcopy_param = xcopy_dir + "xcopy.exe C:\\Windows\\inf\\setupapi.dev.log "
+        xcopy_out = CASEFOLDER + "\\LiveResponseData\\Registry\\usb-install-log"
+        xcopy_usb = xcopy_param + xcopy_out
+
+        # copying USB setup log from target
+        subprocess.call(xcopy_usb, stdout=NOERROR, stderr=NOERROR)
+
+    else:
+        print("Xcopy missing from target", flush=True)
+
+
+def data_compress():
+    """Allows compression for files """
+    print("[+] Compressing triage output, please wait", flush=True)
+    # Compress Case Folder output data
+    # The Liveresponsedata is compressed to save space but the Forensic
+    # images are not so we do not corrupt them
+    file_compress_out = TARGETNAME + "." + DATEANDTIME +".zip"
+    file_compress_in = "LiveResponseData.zip"
+    zip_file_1 = zipfile.ZipFile(file_compress_in, "w", zipfile.ZIP_DEFLATED)
+    current_dir = os.getcwd()
+    os.chdir(CASEFOLDER)
+    for dirname, subdirs, files in os.walk("LiveResponseData"):
+        #Make pylint happy :)
+        print(subdirs, file=NOERROR)
+        zip_file_1.write(dirname)
+        for filename in files:
+            zip_file_1.write(os.path.join(dirname, filename))
+
+    zip_file_1.close()
+    os.chdir(current_dir)
+    zip_file_2 = zipfile.ZipFile(file_compress_out, "w")
+    os.rename(os.path.realpath('.') + "/" + file_compress_in, CASEFOLDER + "/" + file_compress_in)
+    shutil.rmtree(os.path.realpath(CASEFOLDER + "/LiveResponseData"))
+    for dirname, subdirs, files in os.walk(CASEFOLDER):
+        zip_file_2.write(dirname)
+        for filename in files:
+            zip_file_2.write(os.path.join(dirname, filename))
+    zip_file_2.close()
+    shutil.rmtree(os.path.realpath(CASEFOLDER))
+
+def get_browser_history():
+    """Collect the browser history"""
+    print("[+] Getting User Browsing History\n", flush=True)
+    bhv_dir = os.path.realpath('.') + "\\BrowsingHistoryView\\"
+    bhv_exe_path = bhv_dir + BVHRUN
+    bhv_param = " /SaveDirect /sort 3 /VisitTimeFilterType 1 /cfg " + "BrowsingHistoryView.cfg /scomma " + CASEFOLDER + "/LiveResponseData/BasicInfo/BrowsingHistoryView.csv  "
+    bhv_command = bhv_exe_path + bhv_param
+    bhv_run = bhv_command
+    subprocess.call(bhv_run, stderr=NOERROR)
+
+def freespace_check(drive, minspace):
+    """Check for free space on given drive"""
+    usage = shutil.disk_usage(drive)
+    if (usage.free // (2**30)) < minspace:
+        if ARGS.nomem:
+            print("\n[+] Checking free space", flush=True)
+            print("\n\t[-] Free space is {} GB".format(usage.free // (2**30)), flush=True)
+            print("\n\t[!] Disk space low on target, good thing you weren't wanting memory", flush=True)
+        if ARGS.memonly:
+            print("\n[+] Checking free space", flush=True)
+            print("\n\t[-] Free space is {} GB".format(usage.free // (2**30)), flush=True)
+            print("\n\t[!] Disk space low on target, unable to dump memory. Please free up space on target and retry.", flush=True)
+            sys.exit()
+        if ARGS.systemfiles:
+            print("\n[+] Checking for additional free space for locked system files", flush=True)
+            print("\n\t[-] Free space is {} GB".format(usage.free // (2**30)), flush=True)
+            print("\n\t[!] Disk space too low on target, unable to grab system files\n. \n\t[!] Free up space or remove -sf argument and retry.\n", flush=True)
+            env_cleanup()
+            sys.exit()
+        else:
+            print("\n[+] Checking free space", flush=True)
+            print("\n\t[-] Free space is {} GB".format(usage.free // (2**30)), flush=True)
+            print("\n\t[!] Disk space low on target, memory will need to be skipped\n", flush=True)
+            ARGS.nomem = True
+
+
+def get_defender_scanlogs():
+    """Grab Windows Defender scan log"""
+    print("\n[+] Pulling Windows Defender scanlog", flush=True)
+    scanlog_dir = "c:\\programdata\\microsoft\\windows defender\\support\\"
+    for root, dirs, files in os.walk(scanlog_dir):
+        #Make pylint happy :)
+        print(dirs, root, file=NOERROR)
+        for file in files:
+            if file.startswith("MPLog-"):
+                scanlog_src = "{}\\{}".format(scanlog_dir, file)
+                scanlog_dst = "{}/LiveResponseData/BasicInfo/Windows_Defender_Scanlogs_{} \
+                ".format(CASEFOLDER, file)
+                shutil.copy(scanlog_src, scanlog_dst)
+            else:
+                pass
+
+def fget_copy(val):
+    """Use fget to copy User registry files that are in use"""
+
+    if " Documents" in val:
+        pass
+    elif val == "Public":
+        pass
+    elif val == "ADMINI~1":
+        pass
+    else:
+        print("[+] Grab locked files from " + val + "\n")
+        files = ""
+        file_list = "cmd.exe /C dir /a c:\\Users\\" + "\"" + val + "\"" + "\\" +"NTUSER.dat*" + " /b "
+        all_ntuser_dat = subprocess.check_output(file_list, stderr=NOERROR, universal_newlines=True)
+        list_of_files = all_ntuser_dat.rsplit("\n")
+        fget_dir = os.path.realpath('.') + "\\FGET\\"
+        for files in list_of_files:
+            if files == "":
+                pass
+            else:
+                fget_usrclass_output = CASEFOLDER + "/LiveResponseData/Registry/" + val + "_" + "USRCLASS.DAT"
+                fget_ntuser_output = CASEFOLDER + "/LiveResponseData/Registry/" + "\"" + val + "\"" + "_" + files
+                fget_exe_path = fget_dir + "FGET.exe -extract" + r' c:\Users\\' + "\"" + val + "\""+ "\\" + files + " " + fget_ntuser_output
+                fget_exe_usrclass_path = fget_dir + "FGET.exe -extract" + " c:\\Users\\" + val + "\\AppData\\Local\\Microsoft\\Windows\\USRCLASS.DAT" + " " + fget_usrclass_output
+                # Foresic copy of users NTUSER.DAT & USRCLASS.DAT
+                subprocess.call(fget_exe_path, stdout=NOERROR, stderr=NOERROR)
+                subprocess.call(fget_exe_usrclass_path, stdout=NOERROR, stderr=NOERROR)
+
+def collect_locked_system_files():
+    """Using Fget to copy locked system files"""
+    print("[+] Collecting locked system files \n")
+
+    if COMPILED == 0:
+        system_files = {"hiberfil.sys" : r'c:', "pagefile.sys" : r'c:', "srudb.dat" : r'c:\windows\system32\sru'}
+    else:
+        if OSARCH == 64:
+            system_files = {"hiberfil.sys" : r'c:', "pagefile.sys" : r'c:', "srudb.dat" : r'c:\windows\Sysnative\sru'}
+        else:
+            system_files = {"hiberfil.sys" : r'c:', "pagefile.sys" : r'c:', "srudb.dat" : r'c:\windows\system32\sru'}
+
+    fget_dir = os.path.realpath('.') + "\\FGET\\"
+
+    for sysfiles in system_files:
+        col_sys_file_output = CASEFOLDER + "/ForensicImages/SystemFiles/" + sysfiles
+        col_sys_file_exe_path = fget_dir + "FGET.exe -extract" + " " + system_files[sysfiles] + "\\" + sysfiles + " " + col_sys_file_output
+        subprocess.call(col_sys_file_exe_path, stdout=NOERROR, stderr=NOERROR)
+
+
+##########################################################################
+#   All function calls should be defined above this.                     #
+##########################################################################
+
+banner()
+sys.stdout.flush()
+has_admin_access()
+core_integrity()
+env_setup()
+
+
+if ARGS.memonly:
+    freespace_check("C:", 60)
+    mem_scrape()
+    data_compress()
+    banner()
+    sys.stdout.flush()
+    env_cleanup()
+    sys.exit(0)
+
+# Collect memory as early as possible for all options unless no memory or system files is selected
+if not ARGS.nomem:
+    if ARGS.systemfiles:
+        print("[i] Acquiring both memory and system files in a single run is not recommended [BYPASSING MEMDUMP]\n")
+    else:
+        mem_scrape()
+
+if ARGS.browserhistonly:
+    get_browser_history()
+    hash_dir('Triage_File_Collection_Hashlist.csv', CASEFOLDER)
+    data_compress()
+    banner()
+    sys.stdout.flush()
+    env_cleanup()
+    sys.exit(0)
+
+if ARGS.hashonly:
+    hashing_new("LiveResponseData/BasicInfo/Full_System_Hash.txt", "c:\\")
+    hash_dir('Triage_File_Collection_Hashlist.csv', CASEFOLDER)
+    data_compress()
+    banner()
+    sys.stdout.flush()
+    env_cleanup()
+    sys.exit(0)
+
+if ARGS.evtlogparseall:
+    evtparseall()
+
+if ARGS.evtlogfiles:
+    evtxall()
+
+if ARGS.systemfiles:
+    freespace_check("C:", 100)
+    collect_locked_system_files()
+
+pre_fetch()
+powershell_history()
+last_user()
+USERS_LIST = list_users()
+
+#Hash temp dir for all users who have logged onto the system
+for user in USERS_LIST:
+    hashing_new('LiveResponseData/BasicInfo/Hashes_md5_' + user + \
+                '_TEMP_WindowsPE_and_Dates.txt', 'c:\\Users\\'
+                + user + '\\AppData\\Local\\Temp')
+    sys.stdout.flush()
+
+hashing_new('LiveResponseData/BasicInfo/Hashes_md5_System32_WindowsPE_and_Dates.txt', 'c:\\windows\\system32')
+hashing_new('LiveResponseData/BasicInfo/Hashes_md5_System_TEMP_WindowsPE_and_Dates.txt', 'c:\\temp')
+
+
+for user in USERS_LIST:
+    fget_copy(user)
+
+network_data_gathering()
+volatile_data_gather()
+system_data_gathering()
+windows_update_log()
+get_defender_scanlogs()
+evtparse()
+prefetch_p()
+registry_stuff()
+usb_ap()
+get_browser_history()
+
+# [BEGIN] Hashing all Collected Triage Data
+print("[+] Hashing collected triage data\n", flush=True)
+hash_dir('Triage_File_Collection_Hashlist.csv', CASEFOLDER)
+
+data_compress()
+banner()
+sys.stdout.flush()
+env_cleanup()
+sys.exit(0)
+
+```
+
+`source/dtfind.py`:
+
+```py
+#! python3
+"""A search utility for DFIRtriage output"""
+#############################################################################
+##                                                                         ##
+## Unlicense                                                               ##
+## No Copyright                                                            ##
+##                                                                         ##
+## This is free and unencumbered software released into the public domain. ##
+## Anyone is free to copy, modify, publish, use, compile, sell, or         ##
+## distribute this software, either in source code form or as a compiled   ##
+## binary, for any purpose, commercial or non-commercial, and by any       ##
+## means.                                                                  ##
+##                                                                         ##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,         ##
+## EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF      ##
+## MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  ##
+## IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR       ##
+## OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   ##
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR   ##
+## OTHER DEALINGS IN THE SOFTWARE.                                         ##
+##                                                                         ##
+##  For more information, please refer to  http://unlicense.org            ##
+##                                                                         ##
+##  Author: Travis Foley, travis.foley@gmail.com                           ##
+##                                                                         ##
+#############################################################################
+
+#############################################################################
+##                                                                         ##
+## DESCRIPTION: Searches DFIRtriage output for a given string and          ##
+## writes the results to a text file.                                      ##
+##                                                                         ##
+## FILENAME: dtfind.py                                                     ##
+## VERSION: 2.0.1                                                          ##
+## STATUS: PROD                                                            ##
+## WRITTEN: 7/28/17                                                        ##
+## LAST MOD: 5/14/20 @2:39                                                 ##
+## NOTE:                                                                   ##
+##   > added ext blacklist to avoid scanning memory dumps & system files   ##
+#############################################################################
+
+
+# environment setup ------------------------------------------------------------------------------------------------------------#
+import argparse
+import os
+import sys
+import zipfile
+from datetime import datetime
+
+reg_files = ["NTUSER", "SYSTEM", "SOFTWARE", "SAM", "SECURITY"]
+version = "dtfind v2.0.1"
+# environment setup ------------------------------------------------------------------------------------------------------------#
+
+
+# commandline options ---------------------------------------------------------------------------------------------------------#
+parser = argparse.ArgumentParser(description='DESCRIPTION: dtfind finds all instances of a given string in the DFIRTriage output and logs the findings.  dtfind can' 
+' be ran from the commandline using the -kw argument or by executing and following the prompts.  the following chars are invalid:  * "" \ / ?', 
+epilog='Example usage: dtfind.exe -kw "netcat"  OR  dtfind.exe -kw "program files"')
+parser.add_argument('-kw', '--keyword', nargs="+", help="specify keyword string for search.")
+args = parser.parse_args()
+# commandline options ---------------------------------------------------------------------------------------------------------#
+
+
+# banner ----------------------------------------------------------------------------------------------------------------------#
+def banner():
+    print('\n--------------------------')
+    print('DFIRtriage Search Utility')
+    print('      {}           '.format(version))
+    print('--------------------------')
+# banner ----------------------------------------------------------------------------------------------------------------------#
+
+
+# establish key word if not entered on command line ---------------------------------------------------------------------------#
+def get_keyword():
+    global search_string
+    search_string = input("\nEnter search term at the prompt.\n\n[dtfind]:> ")
+    search_string = str(search_string)
+# establish key word if not entered on command line ---------------------------------------------------------------------------#
+
+
+# set path to LiveResponseData directory --------------------------------------------------------------------------------------#
+def set_start_dir():
+    global start_dir
+    start_dir = os.path.dirname(os.path.abspath(__file__))
+    dir_flag = 0
+    if os.path.isdir("{}\\LiveResponseData".format(start_dir)):
+        dir_flag = 1
+    if os.path.isfile("{}\\LiveResponseData.zip".format(start_dir)):
+        if dir_flag == 0:
+            lrd_zip = zipfile.ZipFile("LiveResponseData.zip")
+            lrd_zip.extractall()
+            lrd_zip.close()
+        else:
+            pass
+    else:
+        sys.exit("\nLiveResponseData.zip missing. Fix and retry.")
+# set path to LiveResponseData directory --------------------------------------------------------------------------------------#
+
+
+# check search string for invalid characters ----------------------------------------------------------------------------------#
+def search_string_check():
+    global search_string
+    bad_char = ['*', '""', '\\', '/', '?']
+    for i in bad_char:
+        if i in search_string:
+            print("\n\n\t[!] SEARCH ERROR [!]\n")
+            print("\n\tYou cannot use the following characters in your search string:  \n")
+            print("\n\t {} \n".format(str(bad_char).strip("[]")))
+            print("\n\tNOTE: All searches are wildcard searches.")
+            print("\n\tIe. A search for the term 'badware' is the same as *badware*.  Any instance of the string "
+                  "'badware' will be returned.")
+            print("\n\n\t(Please retry your search.)\n")
+            exit()
+        else:
+            continue
+# check search string for invalid characters ----------------------------------------------------------------------------------#
+
+
+# prints search results to console --------------------------------------------------------------------------#
+def run_search():  
+    print(start_dir)
+    os.chdir(start_dir)
+    global search_string
+    search_list = search_file_list_no_highlight(curr_dir, search_string)
+    for x in search_list:
+        try:
+            print("\n-------------------------------------------------------------\n")
+            print("Data File Name: ", x[0])
+            print("Info: ", x[1])
+            print("Line Number: ", x[2])
+        except UnicodeEncodeError:
+            continue
+    log_file = "search_results({}).txt".format(search_string)
+    print("\n-------------------------------------------------------------\n\n\nSearch complete. Your results have been saved in:  {}\n".format(log_file))
+
+def search_file_list_no_highlight(filenamelist, searchString):
+    global results
+    results = []
+    for filename in filenamelist:
+        if filename.startswith(".\\Registry\\regripped-out\\rr."):
+            with open(filename, encoding="UTF-8", errors="surrogateescape") as datafile:
+                lineNum = 1
+                for line in datafile:
+                    if searchString in line:
+                        results.append([filename, line.rstrip(), lineNum])
+                    lineNum += 1
+        elif searchString in open(filename, errors="surrogateescape").read():
+            with open(filename, errors="surrogateescape") as datafile:
+                lineNum = 1
+                for line in datafile:
+                    if searchString in line:
+                        results.append([filename, line.rstrip(), lineNum])
+                    lineNum += 1
+        else:
+            continue
+    return results
+# prints search results to console --------------------------------------------------------------------------#
+
+
+# returns list containing full path to each file in current dir and all subdirs -----------------------------#
+def get_file_list(dirPath):  
+    fileList = []
+    blacklist = [".exe", ".pf", ".raw", ".sys"]
+    for dirname, dirnames, filenames in os.walk(dirPath):
+        for filename in filenames:
+            if "search_results" in filename:
+                break
+            if "dtfind." in filename:
+                break
+            for r in reg_files:
+                if filename == r:
+                    break
+            for ext in blacklist:
+                if filename.endswith(ext):
+                    break
+            else:
+                fileList.append(os.path.join(dirname, filename))
+    return fileList
+# returns list containing full path to each file in current dir and all subdirs -----------------------------#
+
+
+# writes results to log file with search term in name -------------------------------------------------------#
+def log_results():
+    ''' writes results to log file with search term in name ''' 
+    global search_string
+    log_file = "saved search ({}).txt".format(search_string.replace(":", "."))
+    search_list_log = search_file_list_no_highlight(curr_dir, search_string)
+    original = sys.stdout
+    sys.stdout = open(log_file, 'w', errors="surrogateescape")
+    time_stamp = datetime.now().strftime('%m-%d-%Y %H:%M')
+    print("# DFIR Triage Search LOG\n# {}\n# Time of search: {} \n# Keyword: '{}'\n".format(version, time_stamp, search_string))
+    print("\n[BEGIN LOG]")
+    for x in search_list_log:
+        try:
+            print("\n-------------------------------------------------------------\n")
+            print("Data File Name: ", x[0])
+            print("Info: ", x[1])
+            print("Line Number: ", x[2])
+        except UnicodeEncodeError:
+            continue
+    print("\n\n[END LOG]")
+    sys.stdout.close()
+    sys.stdout = original
+    os.startfile(".")
+    sys.exit(0)
+# writes results to log file with search term in name -------------------------------------------------------#
+
+
+##########################################################################
+################     All function calls defined above     ################
+##########################################################################
+
+
+# functions called everytime --------------------------------------------------------------------------------#
+banner()
+# functions called everytime --------------------------------------------------------------------------------#
+
+
+# function order determined by commandline args -------------------------------------------------------------#
+if not args.keyword:
+    set_start_dir()
+    get_keyword()
+    curr_dir = get_file_list(start_dir)
+    search_string_check()
+    run_search()
+    log_results()
+else:
+    # provides search term
+    search_string = str(args.keyword).strip("['']")
+    set_start_dir()
+    curr_dir = get_file_list(start_dir)
+    search_string_check()
+    run_search()
+    log_results()
+# function order determined by commandline args -------------------------------------------------------------#
+
+```
