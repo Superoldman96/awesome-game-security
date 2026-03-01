@@ -1,0 +1,3484 @@
+Project Path: arc_gmh5225_comon_0aacnh9c
+
+Source Tree:
+
+```txt
+arc_gmh5225_comon_0aacnh9c
+├── CMakeLists.txt
+├── CmakePresets.json
+├── LICENSE
+├── README.md
+├── comon
+│   ├── CMakeLists.txt
+│   ├── arch.cpp
+│   ├── cohelp.cpp
+│   ├── cometa.cpp
+│   ├── comonitor.cpp
+│   ├── dbgsession.cpp
+│   ├── ext.cpp
+│   ├── ext.def
+│   ├── helpers.cpp
+│   └── include
+│       ├── arch.h
+│       ├── cometa.h
+│       ├── comon.h
+│       ├── comonitor.h
+│       ├── dbgsession.h
+│       └── lfu_cache.h
+├── comon.gif
+├── pack
+│   └── CMakeLists.txt
+├── vcpkg
+└── vcpkg.json
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.22)
+
+set(VCPKG_INSTALLED_DIR "${CMAKE_BINARY_DIR}/vcpkg_installed")
+
+project(comon)
+set(CMAKE_PROJECT_VERSION_MAJOR 1)
+set(CMAKE_PROJECT_VERSION_MINOR 0)
+if (DEFINED ENV{GITHUB_RUN_NUMBER})
+    set(CMAKE_PROJECT_VERSION_PATCH $ENV{GITHUB_RUN_NUMBER})
+else()
+    set(CMAKE_PROJECT_VERSION_PATCH 0)
+endif()
+
+add_compile_definitions(UNICODE)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4 /WX")
+
+add_subdirectory(comon)
+
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    add_subdirectory(pack)
+endif()
+
+```
+
+`CmakePresets.json`:
+
+```json
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ninja-x86",
+      "displayName": "Ninja (x86)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_TARGET_TRIPLET": {
+          "value": "x86-windows-static"
+        }
+      }
+    },
+    {
+      "name": "ninja-x64",
+      "displayName": "Ninja (x64)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": {
+          "type": "FILEPATH",
+          "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        },
+        "VCPKG_TARGET_TRIPLET": {
+          "value": "x64-windows-static"
+        }
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja-x86-debug",
+      "configurePreset": "ninja-x86",
+      "displayName": "Debug (x86)",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-x86-release",
+      "configurePreset": "ninja-x86",
+      "displayName": "Release (x86)",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "ninja-x64-debug",
+      "configurePreset": "ninja-x64",
+      "displayName": "Debug (x64)",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-x64-release",
+      "configurePreset": "ninja-x64",
+      "displayName": "Release (x64)",
+      "configuration": "RelWithDebInfo"
+    }
+  ]
+}
+```
+
+`LICENSE`:
+
+```
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+
+```
+
+`README.md`:
+
+```md
+# comon - a WinDbg extension to trace COM
+
+![comon](https://github.com/lowleveldesign/comon/workflows/build/badge.svg)
+
+**The project homepage is at <https://wtrace.net>.**
+
+**Comon** is a WinDbg extension that can help you trace COM interactions (COM class creations and interface querying). You may use it to investigate various COM issues and better understand application logic. During a debugging session, comon will record virtual table addresses (for the newly created COM objects) and allow you to query them or even set breakpoints on COM interface methods. If COM metadata is available (either in the registry or in a standalone TLB/DLL file), you may load it into comon, and it will automatically decode COM identifiers.
+
+Check [**the documentation**](https://wtrace.net/documentation/comon) to learn more.
+
+![](comon.gif)
+
+## Available commands:
+
+```
+  !cometa index
+      - indexes COM metadata found in the system (registered type libraries, CLSIDs,
+        and interfaces). The results are saved to a cometa.db3 file in the user temporary
+        folder. They should be automatically loaded on the next run.
+  !cometa index <path_to_tlb_or_dll_file>
+      - indexes COM metadata from the provided TLB or DLL file. The results are saved
+        to a cometa.db3 file in the user temporary folder. They should be automatically
+        loaded on the next run.
+
+  !cometa showi <iid>
+      - shows information about a given IID (COM interface ID). This command will show
+        interface methods (if available) and virtual tables registered for this IID.
+  !cometa showc <clsid>
+      - shows virtual tables registered for a given CLSID (COM class ID)
+
+  !comon attach
+      - starts COM monitor for the active process. If you're debugging a 32-bit WOW64
+        process in a 64-bit debugger, make sure you set the effective CPU architecture to x86
+        (.effmach x86)
+  !comon detach
+      - stops COM monitor for the active process.
+  !comon pause
+      - pauses COM monitoring for the active process.
+  !comon resume
+      - resumes COM monitoring for the active process.
+
+  !colog
+      - shows current log filter settings.
+  !colog none
+      - do not log QueryInterface calls for any CLSIDs. This command will clear previously
+        set filters.
+  !colog include <clsid>
+      - log QueryInterface calls only for a specific CLSID. You may call this command
+        multiple times with various CLSIDs, adding them to the inclusion list. If, before
+        calling this command, colog was in EXCLUDING mode, the filter list will be cleared. 
+  !colog exclude <clsid>
+      - log QueryInterface calls for CLSIDs different than the given CLSID. You may call
+        this command multiple times with various CLSIDs, adding them to the exclusion list.
+        If, before calling this command, colog was in INCLUDING mode, the filter list will
+        be cleared. 
+  !colog all
+      - log QueryInterface calls for all the CLSIDs. This command will clear previously
+        set filters.
+
+  !cobp <clsid> <iid> <method_name>
+      - creates a breakpoint on a method (identified by its name) in a given COM
+        interface (IID) in a given COM class (CLSID)
+  !cobp <clsid> <iid< <method_num>
+      - creates a breakpoint on a method (identified by its index) in a given COM
+        interface (IID) in a given COM class (CLSID)
+
+  !coadd <clsid> <iid> <vtable_address>
+      - manually add a virtual table address to the COM monitor and bind them with
+        a given COM interface (IID) and COM class (CLSID)
+```
+
+## Building
+
+Comon is built with CMake, using [vcpkg](https://vcpkg.io) as a package manager.
+
+You may use one of the CMake presets to build a specific configuration, for example:
+
+```
+cmake --preset=ninja-x64
+cmake --build --preset=ninja-x64-release
+```
+
+```
+
+`comon/CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.22)
+
+set(BUILD_SHARED_LIBS YES)
+
+find_package(WIL CONFIG REQUIRED)
+find_package(SQLiteCpp CONFIG REQUIRED)
+
+add_library(comon
+	"cometa.cpp" "comonitor.cpp" "ext.cpp" "ext.def" "helpers.cpp" "cohelp.cpp" 
+	  "dbgsession.cpp" "include/comon.h" "include/lfu_cache.h" 
+	 "include/cometa.h" "include/comonitor.h" "include/dbgsession.h" "include/arch.h" "arch.cpp")
+
+target_include_directories(comon PRIVATE "include")
+
+set_property(TARGET comon PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+target_link_libraries(comon PRIVATE
+	WIL::WIL
+	SQLiteCpp
+	dbgeng
+)
+
+target_compile_definitions(comon PRIVATE
+	EXT_MAJOR_VER=${CMAKE_PROJECT_VERSION_MAJOR}
+	EXT_MINOR_VER=${CMAKE_PROJECT_VERSION_MINOR}
+)
+
+set_target_properties(comon PROPERTIES
+    LINK_OPTIONS LINKER:/MANIFEST:NO
+)
+
+install(TARGETS comon RUNTIME DESTINATION ".")
+install(FILES $<TARGET_PDB_FILE:comon> DESTINATION ".")
+
+
+```
+
+`comon/arch.cpp`:
+
+```cpp
+
+#include <array>
+#include <vector>
+
+#include "cometa.h"
+#include "arch.h"
+
+using namespace comon_ext;
+
+HRESULT call_context::read_method_frame(std::vector<ULONG64>& args, ULONG64& ret_addr) {
+    auto read_x86 = [this, &args, &ret_addr](const arch_x86& arch) {
+        DEBUG_VALUE esp{};
+        RETURN_IF_FAILED(_dbgregisters->GetValue(arch.esp, &esp));
+
+        std::vector<ULONG> stack(args.size() + 1);
+        RETURN_IF_FAILED(read_object(esp.I64, stack.data(), static_cast<ULONG>(stack.size() * sizeof(ULONG))));
+        ret_addr = stack[0];
+        args.assign(std::cbegin(stack) + 1, std::cend(stack));
+
+        return S_OK;
+    };
+
+    auto read_amd64 = [this, &args, &ret_addr](const arch_x64& arch) {
+        std::array<DEBUG_VALUE, arch_x64::X64_REG_ARGS> reg_pass_args{};
+        std::array<ULONG, arch_x64::X64_REG_ARGS> params_idx{ arch.rcx, arch.rdx, arch.r8, arch.r9 };
+
+        RETURN_IF_FAILED(_dbgregisters->GetValues2(DEBUG_REGSRC_DEBUGGEE,
+            arch_x64::X64_REG_ARGS, params_idx.data(), 0, reg_pass_args.data()));
+
+        auto len{ reg_pass_args.size() < args.size() ? reg_pass_args.size() : args.size() };
+        std::transform(std::cbegin(reg_pass_args), std::cbegin(reg_pass_args) + len, std::begin(args),
+            [](const DEBUG_VALUE& v) { return v.I64; });
+
+        DEBUG_VALUE rsp{};
+        RETURN_IF_FAILED(_dbgregisters->GetValue(arch.rsp, &rsp));
+        if (args.size() > arch_x64::X64_REG_ARGS) {
+            // the resf of the arguments and the return address we need to read from the stack
+            std::vector<ULONG64> stack(args.size() + 1);
+            RETURN_IF_FAILED(read_object(rsp.I64, stack.data(), static_cast<ULONG>(stack.size() * sizeof(ULONG64))));
+            ret_addr = stack[0];
+            // we start from X64_REG_ARGS because of the shadow space
+            for (size_t i{ arch_x64::X64_REG_ARGS }; i < stack.size() - 1; i++) {
+                args[i] = stack[i + 1];
+            }
+        } else {
+            RETURN_IF_FAILED(read_pointer(rsp.I64, ret_addr));
+        }
+        return S_OK;
+    };
+
+    if (std::holds_alternative<arch_x86>(_arch)) {
+        return read_x86(std::get<arch_x86>(_arch));
+    } else if (std::holds_alternative<arch_x64>(_arch)) {
+        return read_amd64(std::get<arch_x64>(_arch));
+    } else {
+        return E_UNEXPECTED;
+    }
+}
+
+
+
+```
+
+`comon/cohelp.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+#include <format>
+
+#include <DbgEng.h>
+#include <Windows.h>
+
+#include <wil/com.h>
+#include <wil/result.h>
+
+#include "comon.h"
+
+using namespace comon_ext;
+
+extern "C" HRESULT CALLBACK cohelp(IDebugClient *dbgclient, [[maybe_unused]] PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), dbgcontrol.put_void()));
+
+    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"==============================================================\n");
+    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L" comon v%d.%d - Copyright 2022 Sebastian Solnica\n", EXT_MAJOR_VER, EXT_MINOR_VER);
+    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"==============================================================\n\n");
+
+    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, LR"(Available commands:
+
+  !cometa index
+      - indexes COM metadata found in the system (registered type libraries, CLSIDs,
+        and interfaces). The results are saved to a cometa.db3 file in the user temporary
+        folder. They should be automatically loaded on the next run.
+  !cometa index <path_to_tlb_or_dll_file>
+      - indexes COM metadata from the provided TLB or DLL file. The results are saved
+        to a cometa.db3 file in the user temporary folder. They should be automatically
+        loaded on the next run.
+
+  !cometa showi <iid>
+      - shows information about a given IID (COM interface ID). This command will show
+        interface methods (if available) and virtual tables registered for this IID.
+  !cometa showc <clsid>
+      - shows virtual tables registered for a given CLSID (COM class ID)
+
+  !comon attach
+      - starts COM monitor for the active process. If you're debugging a 32-bit WOW64
+        process in a 64-bit debugger, make sure you set the effective CPU architecture to x86
+        (.effmach x86)
+  !comon detach
+      - stops COM monitor for the active process.
+  !comon pause
+      - pauses COM monitoring for the active process.
+  !comon resume
+      - resumes COM monitoring for the active process.
+
+  !colog
+      - shows current log filter settings.
+  !colog none
+      - do not log QueryInterface calls for any CLSIDs. This command will clear previously
+        set filters.
+  !colog include <clsid>
+      - log QueryInterface calls only for a specific CLSID. You may call this command
+        multiple times with various CLSIDs, adding them to the inclusion list. If, before
+        calling this command, colog was in EXCLUDING mode, the filter list will be cleared. 
+  !colog exclude <clsid>
+      - log QueryInterface calls for CLSIDs different than the given CLSID. You may call
+        this command multiple times with various CLSIDs, adding them to the exclusion list.
+        If, before calling this command, colog was in INCLUDING mode, the filter list will
+        be cleared. 
+  !colog all
+      - log QueryInterface calls for all the CLSIDs. This command will clear previously
+        set filters.
+
+  !cobp <clsid> <iid> <method_name>
+      - creates a breakpoint on a method (identified by its name) in a given COM
+        interface (IID) in a given COM class (CLSID)
+  !cobp <clsid> <iid< <method_num>
+      - creates a breakpoint on a method (identified by its index) in a given COM
+        interface (IID) in a given COM class (CLSID)
+
+  !coadd <clsid> <iid> <vtable_address>
+      - manually add a virtual table address to the COM monitor and bind them with
+        a given COM interface (IID) and COM class (CLSID)
+==============================================================
+)");
+
+    return S_OK;
+}
+
+```
+
+`comon/cometa.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#include <filesystem>
+#include <string>
+#include <array>
+#include <cassert>
+#include <ranges>
+#include <algorithm>
+#include <variant>
+#include <functional>
+#include <memory>
+
+#include <SQLiteCpp/Database.h>
+#include <SQLiteCpp/Statement.h>
+#include <SQLiteCpp/Transaction.h>
+
+#include <Windows.h>
+#include <wil/com.h>
+#include <wil/result.h>
+#include <wil/resource.h>
+
+#include "comon.h"
+#include "cometa.h"
+
+using namespace comon_ext;
+
+namespace ranges = std::ranges;
+namespace views = std::ranges::views;
+namespace fs = std::filesystem;
+
+/* *** COM METADATA *** */
+
+// increment whenever the database schema changes
+static const int schema_version{ 4 };
+
+class version
+{
+    std::array<int32_t, 4> _version_nums{};
+
+public:
+    version(const std::wstring& version) : _version{ version } {
+        std::wistringstream wss{ version };
+        std::wstring token{};
+
+        for (size_t i = 0; i < _version_nums.size(); i++) {
+            std::getline(wss, token, L'.');
+            if (!wss.good()) {
+                break;
+            }
+            _version_nums[i] = std::stoi(token, nullptr, 16);
+        }
+    }
+
+    [[nodiscard]] bool operator==(const version& rhs) const {
+        return std::lexicographical_compare_three_way(_version_nums.cbegin(), _version_nums.cend(),
+            rhs._version_nums.cbegin(), rhs._version_nums.cend()) == std::strong_ordering::equal;
+    }
+
+    std::strong_ordering operator<=>(const version& rhs) const {
+        return std::lexicographical_compare_three_way(_version_nums.cbegin(), _version_nums.cend(),
+            rhs._version_nums.cbegin(), rhs._version_nums.cend());
+    }
+
+    std::wstring _version;
+};
+
+namespace registry
+{
+std::vector<std::wstring> get_child_key_names(HKEY parent_hkey) {
+    std::vector<std::wstring> key_names{};
+
+    std::array<wchar_t, 256> key_name{};
+    for (DWORD i = 0; ; i++) {
+        auto len{ static_cast<DWORD>(key_name.size()) };
+        auto enum_result{ ::RegEnumKeyEx(parent_hkey, i, key_name.data(), &len, nullptr, nullptr, nullptr, nullptr) };
+        if (enum_result == ERROR_NO_MORE_ITEMS) {
+            break;
+        }
+        assert(enum_result != ERROR_MORE_DATA);
+        if (enum_result != NO_ERROR) {
+            LOG_WIN32(enum_result);
+            break;
+        }
+
+        key_names.push_back(std::wstring{ key_name.data(), len });
+    }
+
+    return key_names;
+}
+
+std::variant<std::wstring, HRESULT> read_text_value(HKEY hkey, const wchar_t* subkey, const wchar_t* value_name) {
+    DWORD len = 1024;
+    auto buffer{ std::make_unique<wchar_t[]>(len) };
+
+    auto win32err{ ::RegGetValue(hkey, subkey, value_name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, buffer.get(), &len) };
+    if (win32err == ERROR_MORE_DATA) {
+        buffer = std::make_unique<wchar_t[]>(len);
+        win32err = ::RegGetValue(hkey, subkey, value_name, RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, nullptr, buffer.get(), &len);
+    }
+
+    RETURN_IF_WIN32_ERROR(win32err);
+
+    return std::wstring{ buffer.get() };
+}
+}
+
+namespace typelib
+{
+using typeattr_t = std::unique_ptr<TYPEATTR, std::function<void(TYPEATTR*)>>;
+using funcdesc_t = std::unique_ptr<FUNCDESC, std::function<void(FUNCDESC*)>>;
+
+std::variant<typelib_info, HRESULT> get_tlbinfo(HKEY typelib_hkey) {
+    std::vector<version> versions{};
+    ranges::transform(registry::get_child_key_names(typelib_hkey), std::back_inserter(versions),
+        [](const std::wstring& v) { return version{ v }; });
+
+    auto latest_version{ ranges::max_element(versions) };
+    if (latest_version != std::end(versions)) {
+        wil::unique_hkey latest_version_hkey{};
+        RETURN_IF_WIN32_ERROR(::RegOpenKeyEx(typelib_hkey, latest_version->_version.c_str(), 0, KEY_READ, latest_version_hkey.put()));
+        auto name_kv{ registry::read_text_value(latest_version_hkey.get(), nullptr, nullptr) };
+        if (std::holds_alternative<HRESULT>(name_kv)) {
+            return std::get<HRESULT>(name_kv);
+        }
+
+#if _WIN32
+        auto path_kv{ registry::read_text_value(latest_version_hkey.get(), L"0\\win32", nullptr) };
+#else
+        auto path_kv{ registry::read_text_value(latest_version_hkey.get(), L"0\\win64", nullptr) };
+#endif
+
+        if (std::holds_alternative<HRESULT>(path_kv)) {
+            return std::get<HRESULT>(path_kv);
+        }
+
+        return typelib_info{ std::get<std::wstring>(name_kv), latest_version->_version, std::get<std::wstring>(path_kv) };
+    }
+
+    return E_INVALIDARG;
+}
+
+std::variant<typeattr_t, HRESULT> get_typeinfo_attr(ITypeInfo* typeinfo) {
+    auto typeattr_deleter = [typeinfo](TYPEATTR* ta) { typeinfo->ReleaseTypeAttr(ta); };
+
+    TYPEATTR* p_typeattr;
+    RETURN_IF_FAILED(typeinfo->GetTypeAttr(&p_typeattr));
+
+    return typeattr_t{ p_typeattr, typeattr_deleter };
+}
+
+std::variant<GUID, HRESULT> get_type_parent_iid(ITypeInfo* typeinfo, WORD parent_type_cnt) {
+    if (parent_type_cnt == 0) {
+        // special case for the IUnknown interface
+        return __uuidof(IUnknown);
+    }
+    assert(parent_type_cnt == 1);
+    HREFTYPE href = NULL;
+    RETURN_IF_FAILED(typeinfo->GetRefTypeOfImplType(0, &href));
+
+    wil::com_ptr_t<ITypeInfo> parent_ti{};
+    RETURN_IF_FAILED(typeinfo->GetRefTypeInfo(href, parent_ti.put()));
+
+    auto attr_res{ get_typeinfo_attr(parent_ti.get()) };
+    if (std::holds_alternative<HRESULT>(attr_res)) {
+        return std::get<HRESULT>(attr_res);
+    }
+    return std::get<typeattr_t>(attr_res)->guid;
+};
+
+std::variant<std::vector<std::wstring>, HRESULT> get_type_methods(ITypeInfo* typeinfo, TYPEATTR* typeattr) {
+    auto funcdesc_deleter = [typeinfo](FUNCDESC* fd) { typeinfo->ReleaseFuncDesc(fd); };
+
+    std::vector<std::wstring> methods{};
+    for (int j = 0; j < typeattr->cFuncs; j++) {
+        FUNCDESC* p_fd;
+        RETURN_IF_FAILED(typeinfo->GetFuncDesc(j, &p_fd));
+
+        wil::unique_bstr raw_name{};
+        funcdesc_t fd{ p_fd, funcdesc_deleter };
+        RETURN_IF_FAILED(typeinfo->GetDocumentation(fd->memid, raw_name.put(), nullptr, nullptr, nullptr));
+
+        std::wstring name{ raw_name.get() };
+        if (fd->invkind & INVOKE_PROPERTYPUTREF) {
+            name.insert(0, L"putref_");
+        } else if (fd->invkind & INVOKE_PROPERTYPUT) {
+            name.insert(0, L"put_");
+        } else if (fd->invkind & INVOKE_PROPERTYGET) {
+            name.insert(0, L"get_");
+        }
+
+        methods.push_back(name);
+    }
+
+    return methods;
+}
+}
+
+std::unique_ptr<SQLite::Database> cometa::init_db(const fs::path& path, IDebugControl4* dbgcontrol) {
+    dbgeng_logger log{ dbgcontrol };
+
+    if (path.empty()) {
+        log.log_info(L"Could not open the metadata database from the dafault location. Switching to a temporary database.");
+    } else {
+        log.log_info(std::format(L"Creating a new metadata database at '{}'.", path.c_str()));
+    }
+
+    auto db{ std::make_unique<SQLite::Database>(to_utf8(path.c_str()), SQLite::OPEN_CREATE | SQLite::OPEN_READWRITE) };
+
+    db->exec(R"(create table schema_version (version integer not null);)");
+    db->exec(std::format("insert into schema_version values({})", schema_version));
+
+    db->exec(R"(create table cotypes (
+iid blob primary key, 
+type integer not null,
+name text not null,
+parent_iid blob not null,
+methods_available int not null) without rowid)");
+
+    db->exec(R"(create table cotype_methods (
+iid blob not null,
+ordinal integer not null,
+name text not null,
+primary key (iid, ordinal)) without rowid)");
+
+    db->exec(R"(create table coclasses (
+clsid blob primary key, 
+name text not null
+) without rowid)");
+
+    db->exec(R"(create table modules (
+id integer not null,
+name text not null,
+timestamp integer not null,
+bitness integer not null,
+primary key (id),
+unique (name, timestamp)))");
+
+    db->exec(R"(create table vtables (
+module_id integer not null,
+clsid blob not null, 
+iid blob not null,
+vtable integer not null,
+primary key (module_id, clsid, iid),
+foreign key (module_id) references modules (id))
+without rowid;
+create index IX_vtables_iid on vtables (iid);
+create index IX_vtables_clsid on vtables (clsid);
+)");
+
+    return db;
+}
+
+std::unique_ptr<SQLite::Database> cometa::open_db(const fs::path& path, IDebugControl4* dbgcontrol) {
+    dbgeng_logger log{ dbgcontrol };
+    log.log_info(std::format(L"Opening an existing metadata database from '{}'.", path.c_str()));
+
+    auto db{ std::make_unique<SQLite::Database>(to_utf8(path.c_str()), SQLite::OPEN_READWRITE) };
+    if (SQLite::Statement query{ *db, "select version from schema_version" };
+        !query.executeStep() || query.getColumn("version").getInt() != schema_version) {
+        throw std::invalid_argument{ "incorrect database schema" };
+    }
+    return db;
+}
+
+bool cometa::is_valid_db(const fs::path& path) {
+    try {
+        auto db{ std::make_unique<SQLite::Database>(to_utf8(path.c_str()), SQLite::OPEN_READWRITE) };
+        SQLite::Statement query{ *db, "select version from schema_version" };
+        return query.executeStep() && query.getColumn("version").getInt() == schema_version;
+    } catch (...) {
+        return false;
+    }
+}
+
+void cometa::insert_cotype(const cotype& typedesc) {
+    assert(_db);
+    auto u8name{ to_utf8(typedesc.name) };
+
+    SQLite::Statement stmt{ *_db, "insert or ignore into cotypes values (:iid, :type, :name, :parent_iid, :methods_available)" };
+    stmt.bindNoCopy(":iid", &typedesc.iid, sizeof(GUID));
+    stmt.bind(":type", static_cast<int>(typedesc.type));
+    stmt.bindNoCopy(":name", u8name);
+    stmt.bindNoCopy(":parent_iid", &typedesc.parent_iid, sizeof(GUID));
+    stmt.bind(":methods_available", static_cast<int>(typedesc.methods_available));
+
+    stmt.exec();
+}
+
+void cometa::insert_cotype_methods(const GUID& iid, std::vector<std::wstring>methods) {
+    assert(_db);
+    for (int ordinal = 0; ordinal < static_cast<int>(methods.size()); ordinal++) {
+        auto u8mname{ to_utf8(methods[ordinal]) };
+
+        SQLite::Statement stmt{ *_db, "insert or ignore into cotype_methods values (:iid, :ordinal, :name)" };
+        stmt.bindNoCopy(":iid", &iid, sizeof(GUID));
+        stmt.bind(":ordinal", ordinal);
+        stmt.bindNoCopy(":name", u8mname);
+
+        stmt.exec();
+    }
+}
+
+void cometa::insert_coclass(const coclass& classdesc) {
+    assert(_db);
+    auto u8name{ to_utf8(classdesc.name) };
+
+    SQLite::Statement stmt{ *_db, "insert or ignore into coclasses values (:clsid, :name)" };
+    stmt.bindNoCopy(":clsid", &classdesc.clsid, sizeof(GUID));
+    stmt.bindNoCopy(":name", u8name);
+
+    stmt.exec();
+}
+
+std::vector<covtable> cometa::get_module_vtables(const comodule& comodule) {
+    assert(_db);
+    auto u8_module_name{ to_utf8(comodule.name) };
+
+    SQLite::Statement query{ *_db,
+R"(select clsid,iid,vtable from vtables where module_id in (
+    select id from modules where name = :module_name and timestamp = :module_timestamp and bitness = :bitness))" };
+    query.bindNoCopy(":module_name", u8_module_name);
+    query.bind(":module_timestamp", static_cast<long>(comodule.timestamp));
+    query.bind(":bitness", comodule.is_64bit ? 64 : 32);
+
+    std::vector<covtable> vtables{};
+    while (query.executeStep()) {
+        vtables.push_back({
+            *(reinterpret_cast<const GUID*>(query.getColumn("clsid").getBlob())),
+            *(reinterpret_cast<const GUID*>(query.getColumn("iid").getBlob())),
+            static_cast<ULONG>(query.getColumn("vtable").getInt64())
+            });
+    }
+    return vtables;
+}
+
+void cometa::save_module_vtable(const comodule& comodule, const covtable& covtable) {
+    assert(_db);
+    auto u8_module_name{ to_utf8(comodule.name) };
+
+    auto get_module_id = [this, &u8_module_name, &comodule]() -> std::optional<int64_t> {
+        SQLite::Statement query{ *_db,
+            "select id from modules where name = :name and timestamp = :timestamp and bitness = :bitness" };
+        query.bindNoCopy(":name", u8_module_name);
+        query.bind(":timestamp", static_cast<long>(comodule.timestamp));
+        query.bind(":bitness", comodule.is_64bit ? 64 : 32);
+
+        if (query.executeStep()) {
+            return query.getColumn("id").getInt64();
+        } else {
+            return std::nullopt;
+        }
+    };
+
+    auto save_module = [this, &u8_module_name, &comodule]() -> std::optional<int64_t> {
+        SQLite::Statement query{ *_db, "insert into modules (name, timestamp, bitness) values (:name, :timestamp, :bitness)" };
+        query.bindNoCopy(":name", u8_module_name);
+        query.bind(":timestamp", static_cast<long>(comodule.timestamp));
+        query.bind(":bitness", comodule.is_64bit ? 64 : 32);
+
+        if (query.exec() == 1) {
+            // module_id is just an alias for rowid
+            return _db->getLastInsertRowid();
+        } else {
+            return std::nullopt;
+        }
+    };
+
+    auto save_vtable = [this, &covtable](long long module_id) {
+        SQLite::Statement query{ *_db,
+            "insert or ignore into vtables values (:module_id, :clsid, :iid, :vtable)" };
+        query.bind(":module_id", module_id);
+        query.bindNoCopy(":clsid", &covtable.clsid, sizeof(GUID));
+        query.bindNoCopy(":iid", &covtable.iid, sizeof(GUID));
+        query.bind(":vtable", static_cast<long long>(covtable.address));
+
+        query.exec();
+    };
+
+    if (auto module_id{ get_module_id() }; module_id) {
+        save_vtable(*module_id);
+    } else if (module_id = save_module()) {
+        save_vtable(*module_id);
+    } else {
+        _logger.log_error(std::format(L"Error when saving module data: '{}'", comodule.name), E_FAIL);
+    }
+}
+
+HRESULT cometa::index_tlb(std::wstring_view tlb_path) {
+    assert(_db);
+
+    wil::com_ptr_t<ITypeLib> typelib{};
+    RETURN_IF_FAILED(::LoadTypeLibEx(tlb_path.data(), REGKIND_NONE, typelib.put()));
+
+    auto types_len = typelib->GetTypeInfoCount();
+    for (UINT i = 0; i < types_len; i++) {
+        wil::com_ptr_t<ITypeInfo> typeinfo{};
+        RETURN_IF_FAILED(typelib->GetTypeInfo(i, typeinfo.put()));
+
+        wil::unique_bstr name{};
+        RETURN_IF_FAILED(typeinfo->GetDocumentation(MEMBERID_NIL, name.put(), nullptr, nullptr, nullptr));
+
+        auto typeattr_res{ typelib::get_typeinfo_attr(typeinfo.get()) };
+        if (std::holds_alternative<HRESULT>(typeattr_res)) {
+            return std::get<HRESULT>(typeattr_res);
+        }
+
+        auto typeattr{ std::move(std::get<typelib::typeattr_t>(typeattr_res)) };
+        switch (typeattr->typekind) {
+        case TKIND_INTERFACE:
+        case TKIND_DISPATCH: {
+            auto type{ typeattr->typekind == TKIND_INTERFACE ? cotype_type::Interface : cotype_type::DispInterface };
+
+            auto parent_iid_v{ typelib::get_type_parent_iid(typeinfo.get(), typeattr->cImplTypes) };
+            if (std::holds_alternative<HRESULT>(parent_iid_v)) {
+                return std::get<HRESULT>(parent_iid_v);
+            }
+            auto& parent_iid{ std::get<GUID>(parent_iid_v) };
+
+            if (auto methods_v{ typelib::get_type_methods(typeinfo.get(), typeattr.get()) }; std::holds_alternative<HRESULT>(methods_v)) {
+                insert_cotype({ typeattr->guid, name.get(), type, parent_iid, false });
+            } else {
+                SQLite::Transaction transaction{ *_db };
+
+                insert_cotype({ typeattr->guid, name.get(), type, parent_iid, true });
+                insert_cotype_methods(typeattr->guid, std::get<std::vector<std::wstring>>(methods_v));
+
+                transaction.commit();
+            }
+            break;
+        }
+        case TKIND_COCLASS: {
+            insert_coclass({ typeattr->guid, name.get() });
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    return S_OK;
+}
+
+HRESULT cometa::save([[maybe_unused]] std::wstring_view dbpath) {
+    assert(_db);
+    try {
+        _db->backup(to_utf8(dbpath).c_str(), SQLite::Database::BackupType::Save);
+        return S_OK;
+    } catch (const SQLite::Exception& ex) {
+        _logger.log_error(std::format(L"Error {} when trying to save COM metadata database: '{}'.",
+            ex.getErrorCode(), widen(ex.getErrorStr())), E_FAIL);
+        return E_FAIL;
+    }
+}
+
+HRESULT cometa::index() {
+    assert(_db);
+
+    auto index_typelibs = [this]() {
+        // HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Wow6432Node\Typelib is linked to HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Typelib
+        // so we don't need to query it. However, the typelibs may contain both win32 and win64 folders, for example:
+        // 
+        // Computer\HKEY_CLASSES_ROOT\WOW6432Node\TypeLib\{00000201-0000-0010-8000-00AA006D2EA4}
+        // - 2.1
+        //   - 0
+        //     - win32 -> C:\Program Files (x86)\Common Files\System\ado\msado21.tlb
+        //     - win64 -> C:\Program Files\Common Files\System\ado\msado21.tlb
+        //   - FLAGS
+        _logger.log_info(L"\nIndexing TypeLibraries...");
+
+        wil::unique_hkey typelibs_hkey{};
+        RETURN_IF_WIN32_ERROR(::RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Classes\\TypeLib", 0, KEY_READ, typelibs_hkey.put()));
+        for (const auto& name : registry::get_child_key_names(typelibs_hkey.get())) {
+            wil::unique_hkey typelib_hkey{};
+            if (auto err{ ::RegOpenKeyEx(typelibs_hkey.get(), name.c_str(), 0, KEY_READ, typelib_hkey.put()) }; err != NO_ERROR) {
+                _logger.log_error(name, HRESULT_FROM_WIN32(err));
+                continue;
+            }
+
+            if (auto ti{ typelib::get_tlbinfo(typelib_hkey.get()) }; std::holds_alternative<HRESULT>(ti)) {
+                auto hr = std::get<HRESULT>(ti);
+                _logger.log_error(name, hr);
+            } else {
+                auto& tlbinfo{ std::get<typelib_info>(ti) };
+                if (auto hr{ index_tlb(tlbinfo.tlb_path.c_str()) }; SUCCEEDED(hr)) {
+                    _logger.log_info_dml(std::format(L"{} ({}) : <col fg=\"srccmnt\" bg=\"wbg\">PARSED</col>", name, tlbinfo.name));
+                } else {
+                    _logger.log_error(std::format(L"{} ({})", name, tlbinfo.name), hr);
+                }
+            }
+        }
+        return S_OK;
+    };
+
+    auto index_coclasses = [this](bool request_wow6432 = false) {
+        _logger.log_info(request_wow6432 ? L"Indexing CLSIDs... (only errors are reported) - 32-bit" :
+            L"Indexing CLSIDs... (only errors are reported)");
+
+        auto flags{ request_wow6432 ? KEY_READ | KEY_WOW64_32KEY : KEY_READ };
+        wil::unique_hkey clsids_hkey{};
+        RETURN_IF_WIN32_ERROR(::RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Classes\\CLSID", 0, flags, clsids_hkey.put()));
+        for (const auto& name : registry::get_child_key_names(clsids_hkey.get())) {
+            if (name == L"CLSID") {
+                // special key name to skip
+                continue;
+            }
+
+            GUID clsid{};
+            if (auto hr{ try_parse_guid(name, clsid) }; FAILED(hr)) {
+                _logger.log_error(name, hr);
+                continue;
+            }
+
+            wil::unique_hkey clsid_hkey{};
+            if (auto err{ ::RegOpenKeyEx(clsids_hkey.get(), name.c_str(), 0, KEY_READ, clsid_hkey.put()) }; err != NO_ERROR) {
+                auto hr{ HRESULT_FROM_WIN32(err) };
+                _logger.log_error(name, hr);
+                continue;
+            }
+
+            if (auto v{ registry::read_text_value(clsid_hkey.get(), nullptr, nullptr) }; std::holds_alternative<HRESULT>(v)) {
+                insert_coclass({ .clsid = clsid, .name = L"" });
+            } else {
+                insert_coclass({ .clsid = clsid, .name = std::get<std::wstring>(v) });
+            }
+        }
+        return S_OK;
+    };
+
+    auto index_interfaces = [this](bool request_wow6432 = false) {
+        _logger.log_info(request_wow6432 ? L"Indexing interfaces... (only errors are reported) - 32-bit" :
+            L"Indexing interfaces... (only errors are reported)");
+
+        auto flags{ request_wow6432 ? KEY_READ | KEY_WOW64_32KEY : KEY_READ };
+        wil::unique_hkey interfaces_hkey{};
+        RETURN_IF_WIN32_ERROR(::RegOpenKeyEx(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Classes\\Interface", 0, flags, interfaces_hkey.put()));
+        for (const auto& name : registry::get_child_key_names(interfaces_hkey.get())) {
+            GUID iid{};
+            if (auto hr{ try_parse_guid(name, iid) }; FAILED(hr)) {
+                _logger.log_error(name, hr);
+                continue;
+            }
+
+            wil::unique_hkey iid_hkey{};
+            if (auto err{ ::RegOpenKeyEx(interfaces_hkey.get(), name.c_str(), 0, KEY_READ, iid_hkey.put()) }; err != NO_ERROR) {
+                _logger.log_error(name, HRESULT_FROM_WIN32(err));
+                continue;
+            }
+
+            if (auto v{ registry::read_text_value(iid_hkey.get(), nullptr, nullptr) }; std::holds_alternative<HRESULT>(v)) {
+                insert_cotype({ iid, L"", cotype_type::Interface, __uuidof(IUnknown), false });
+            } else {
+                insert_cotype({ iid, std::get<std::wstring>(v), cotype_type::Interface, __uuidof(IUnknown), false });
+            }
+        }
+        return S_OK;
+    };
+
+    RETURN_IF_FAILED(index_typelibs());
+
+#if _WIN64
+    // index 32-bit nodes first before indexing 64-bit
+    RETURN_IF_FAILED(index_coclasses(true));
+    RETURN_IF_FAILED(index_interfaces(true));
+#endif
+
+    RETURN_IF_FAILED(index_coclasses());
+    RETURN_IF_FAILED(index_interfaces());
+
+    return S_OK;
+}
+
+std::optional<cotype> cometa::resolve_type(const IID& iid) {
+    if (iid == __uuidof(IUnknown)) {
+        return cotype{ __uuidof(IUnknown), L"IUnknown", cotype_type::Interface, __uuidof(IUnknown) };
+    }
+
+    if (_cotype_cache.contains(iid)) {
+        return _cotype_cache.get(iid);
+    }
+
+    assert(_db);
+    SQLite::Statement query{ *_db, "select * from cotypes where iid = :iid" };
+    query.bindNoCopy(":iid", &iid, sizeof(IID));
+
+    auto result{ !query.executeStep() ? std::nullopt :
+        std::make_optional(cotype { iid, from_utf8(query.getColumn("name").getText()),
+            static_cast<cotype_type>(query.getColumn("type").getInt()),
+            *(reinterpret_cast<const GUID*>(query.getColumn("parent_iid").getBlob())),
+            static_cast<bool>(query.getColumn("methods_available").getInt())}) };
+    _cotype_cache.insert(iid, result);
+
+    return result;
+}
+
+std::optional<method_collection> cometa::get_type_methods(const IID& iid) {
+    if (iid == __uuidof(IUnknown)) {
+        return method_collection{ L"QueryInterface", L"AddRef", L"Release" };
+    }
+
+    assert(_db);
+    auto query_methods = [this](const IID& iid) {
+        SQLite::Statement method_query{ *_db, "select name from cotype_methods where iid = :iid order by ordinal" };
+        method_query.bindNoCopy(":iid", &iid, sizeof(IID));
+        method_collection methods{};
+        while (method_query.executeStep()) {
+            methods.push_back(from_utf8(method_query.getColumn(0).getText()));
+        }
+        return methods;
+    };
+
+    if (auto type{ resolve_type(iid) }; type && type->methods_available) {
+        if (auto methods{ query_methods(iid) }; methods.size() == 0 || methods.at(0) != L"QueryInterface") {
+            // The initial methods must be from the IUnknown interface. We will try to resolve the parent type...
+            if (auto parent_methods{ get_type_methods(type->parent_iid) }; parent_methods) {
+                std::ranges::copy(std::crbegin(*parent_methods), std::crend(*parent_methods), std::front_inserter(methods));
+                return methods;
+            } else {
+                // we are missing some interface methods - it's safer to show nothing
+                return std::nullopt;
+            }
+        } else {
+            return methods;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<coclass> cometa::resolve_class(const CLSID& clsid) {
+    if (_coclass_cache.contains(clsid)) {
+        return _coclass_cache.get(clsid);
+    }
+
+    assert(_db);
+    SQLite::Statement query{ *_db, "select * from coclasses where clsid = :clsid" };
+    query.bindNoCopy(":clsid", &clsid, sizeof(CLSID));
+    auto result{ !query.executeStep() ? std::nullopt :
+        std::make_optional(coclass{ clsid, from_utf8(query.getColumn("name").getText()) })
+    };
+    return result;
+}
+
+std::vector<std::tuple<std::wstring, CLSID, bool, ULONG64>> cometa::find_vtables_by_iid(const IID& iid) {
+    SQLite::Statement query{ *_db,
+R"(select m.name,m.bitness,v.clsid,v.vtable from vtables v
+    inner join modules m on m.id = v.module_id where v.iid = :iid)" };
+    query.bindNoCopy(":iid", &iid, sizeof(IID));
+
+    std::vector<std::tuple<std::wstring, CLSID, bool, ULONG64>> vtables{};
+    while (query.executeStep()) {
+        vtables.push_back({
+            from_utf8(query.getColumn("name").getString()),
+            *(reinterpret_cast<const GUID*>(query.getColumn("clsid").getBlob())),
+            query.getColumn("bitness").getInt() == 64 ? true : false,
+            query.getColumn("vtable").getInt64()
+            });
+    }
+    return vtables;
+}
+
+std::vector<std::tuple<std::wstring, IID, bool, ULONG64>> cometa::find_vtables_by_clsid(const CLSID& clsid) {
+    SQLite::Statement query{ *_db,
+R"(select m.name,m.bitness,v.iid,v.vtable from vtables v
+    inner join modules m on m.id = v.module_id where v.clsid = :clsid)" };
+    query.bindNoCopy(":clsid", &clsid, sizeof(CLSID));
+
+    std::vector<std::tuple<std::wstring, IID, bool, ULONG64>> vtables{};
+    while (query.executeStep()) {
+        vtables.push_back({
+            from_utf8(query.getColumn("name").getString()),
+            *(reinterpret_cast<const GUID*>(query.getColumn("iid").getBlob())),
+            query.getColumn("bitness").getInt() == 64 ? true : false,
+            query.getColumn("vtable").getInt64()
+            });
+    }
+    return vtables;
+}
+
+
+```
+
+`comon/comonitor.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <filesystem>
+#include <format>
+#include <ranges>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <variant>
+
+#include <DbgEng.h>
+#include <Windows.h>
+#include <wil/com.h>
+#include <wil/result.h>
+
+#include "comon.h"
+#include "comonitor.h"
+
+using namespace comon_ext;
+
+namespace views = std::ranges::views;
+namespace fs = std::filesystem;
+
+arch comonitor::get_process_arch(IDebugControl4 *dbgcontrol, IDebugSymbols3 *dbgsymbols, IDebugRegisters2 *dbgregisters) {
+    auto init_arch_x86 = [dbgcontrol, dbgregisters](bool is_wow64) {
+        ULONG eax, esp;
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("eax", &eax));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("esp", &esp));
+        return arch_x86{IMAGE_FILE_MACHINE_I386, is_wow64, esp, eax};
+    };
+
+    auto init_arch_x64 = [dbgcontrol, dbgregisters]() {
+        ULONG rax, rsp, rcx, rdx, r8, r9;
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("rax", &rax));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("rsp", &rsp));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("rcx", &rcx));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("rdx", &rdx));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("r8", &r8));
+        THROW_IF_FAILED(dbgregisters->GetIndexByName("r9", &r9));
+
+        return arch_x64{IMAGE_FILE_MACHINE_AMD64, rcx, rdx, r8, r9, rsp, rax};
+    };
+
+    ULONG effmach{};
+    THROW_IF_FAILED(dbgcontrol->GetEffectiveProcessorType(&effmach));
+
+    bool is_wow64{};
+    if (ULONG idx;
+        SUCCEEDED(dbgsymbols->GetModuleByModuleName2Wide(L"wow64", 0, DEBUG_GETMOD_NO_UNLOADED_MODULES, &idx, nullptr)) && idx >= 0) {
+        is_wow64 = true;
+    }
+
+    if (effmach == IMAGE_FILE_MACHINE_I386) {
+        return init_arch_x86(is_wow64);
+    } else if (effmach == IMAGE_FILE_MACHINE_AMD64) {
+        return is_wow64 ? arch{init_arch_x86(true)} : arch{init_arch_x64()};
+    } else {
+        throw std::invalid_argument{"unsupported effective CPU architecture"};
+    }
+}
+
+comonitor::comonitor(IDebugClient5 *dbgclient, std::shared_ptr<cometa> cometa, std::shared_ptr<cofilter> log_filter)
+    : _dbgclient{dbgclient}, _dbgcontrol{_dbgclient.query<IDebugControl4>()}, _dbgsymbols{_dbgclient.query<IDebugSymbols3>()},
+      _dbgdataspaces{_dbgclient.query<IDebugDataSpaces>()}, _dbgsystemobjects{_dbgclient.query<IDebugSystemObjects>()},
+      _dbgregisters{_dbgclient.query<IDebugRegisters2>()}, _cometa{cometa}, _log_filter{log_filter}, _logger{_dbgcontrol.get()},
+      _arch{get_process_arch(_dbgcontrol.get(), _dbgsymbols.get(), _dbgregisters.get())} {
+    if (ULONG loaded_modules_cnt, unloaded_modules_cnt;
+        SUCCEEDED(_dbgsymbols->GetNumberModules(&loaded_modules_cnt, &unloaded_modules_cnt))) {
+        std::vector<DEBUG_MODULE_PARAMETERS> modules(loaded_modules_cnt);
+        if (auto hr{_dbgsymbols->GetModuleParameters(loaded_modules_cnt, nullptr, 0, modules.data())}; SUCCEEDED(hr)) {
+            for (auto &m : modules) {
+                if (auto buffer{std::make_unique<wchar_t[]>(m.ModuleNameSize)}; SUCCEEDED(_dbgsymbols->GetModuleNameStringWide(
+                        DEBUG_MODNAME_MODULE, DEBUG_ANY_ID, m.Base, buffer.get(), m.ModuleNameSize, nullptr))) {
+                    handle_module_load({buffer.get(), m.ModuleNameSize - 1}, m.TimeDateStamp, m.Base);
+                }
+            }
+        } else {
+            _logger.log_error(L"Error when retrieving information about module.", hr);
+        }
+    }
+
+    for (const auto &m : {L"combase!CoCreateInstance", L"combase!CoGetClassObject"}) {
+        if (auto hr{set_breakpoint(function_breakpoint{m})}; FAILED(hr)) {
+            _logger.log_error(std::format(L"Failed to set a breakpoint on method '{}'", m), hr);
+        }
+    }
+}
+
+comonitor::~comonitor() {
+    for (auto iter{std::begin(_breakpoints)}; iter != std::end(_breakpoints);) {
+        if (auto hr{unset_breakpoint(iter)}; FAILED(hr)) {
+            LOG_HR(hr);
+            iter++;
+        }
+    }
+    _cotype_with_vtables.clear();
+}
+
+HRESULT comonitor::set_breakpoint(const breakpoint &brk, PULONG id) {
+    bool one_time{};
+
+    IDebugBreakpoint2 *dbgbrk{};
+    RETURN_IF_FAILED(_dbgcontrol->AddBreakpoint2(DEBUG_BREAKPOINT_CODE, DEBUG_ANY_ID, &dbgbrk));
+    if (std::holds_alternative<function_breakpoint>(brk)) {
+        RETURN_IF_FAILED(dbgbrk->SetOffsetExpressionWide(std::get<function_breakpoint>(brk).function_name.c_str()));
+    } else {
+        ULONG64 address{};
+        if (std::holds_alternative<function_return_breakpoint>(brk)) {
+            address = std::get<function_return_breakpoint>(brk).address;
+            one_time = true;
+        } else if (std::holds_alternative<IUnknown_QueryInterface_breakpoint>(brk)) {
+            address = std::get<IUnknown_QueryInterface_breakpoint>(brk).address;
+        } else if (std::holds_alternative<IClassFactory_CreateInstance_breakpoint>(brk)) {
+            address = std::get<IClassFactory_CreateInstance_breakpoint>(brk).address;
+        } else {
+            assert(false);
+        }
+        RETURN_IF_FAILED(dbgbrk->SetOffset(address));
+    }
+    ULONG brk_id{};
+    RETURN_IF_FAILED(dbgbrk->GetId(&brk_id));
+    auto flags = DEBUG_BREAKPOINT_ENABLED | DEBUG_BREAKPOINT_ADDER_ONLY | (one_time ? DEBUG_BREAKPOINT_ONE_SHOT : 0);
+    RETURN_IF_FAILED(dbgbrk->AddFlags(flags));
+    _breakpoints.insert({brk_id, brk});
+    if (id != nullptr) {
+        *id = brk_id;
+    }
+    return S_OK;
+}
+
+HRESULT comonitor::create_cobreakpoint(const CLSID &clsid, const IID &iid, DWORD method_num, std::wstring_view method_display_name) {
+    assert(method_num >= 0);
+    if (auto vtable{_cotype_with_vtables.find({clsid, iid})}; vtable != std::end(_cotype_with_vtables)) {
+        call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+        ULONG64 addr{};
+        RETURN_IF_FAILED(cc.read_pointer(vtable->second + method_num * cc.get_pointer_size(), addr));
+
+        IDebugBreakpoint2 *brk{};
+        RETURN_IF_FAILED(_dbgcontrol->AddBreakpoint2(DEBUG_BREAKPOINT_CODE, DEBUG_ANY_ID, &brk));
+        RETURN_IF_FAILED(brk->SetOffset(addr));
+
+        auto clsid_name{_cometa->resolve_class_name(clsid)};
+        auto iid_name{_cometa->resolve_type_name(iid)};
+        auto cmd{std::format(
+            L".printf /D \"== Method <b>{} [{}]</b> called on a COM object (CLSID: <b>{:b} ({})</b>, IID <b>{:b} ({})</b>) ==\"; .echo",
+            method_display_name, method_num, iid, iid_name ? *iid_name : L"N/A", clsid, clsid_name ? *clsid_name : L"N/A")};
+        RETURN_IF_FAILED(brk->SetCommandWide(cmd.c_str()));
+
+        ULONG brk_id{};
+        RETURN_IF_FAILED(brk->GetId(&brk_id));
+        RETURN_IF_FAILED(brk->AddFlags(DEBUG_BREAKPOINT_ENABLED));
+
+        return S_OK;
+    } else {
+        return E_INVALIDARG;
+    }
+}
+
+HRESULT comonitor::create_cobreakpoint(const CLSID &clsid, const IID &iid, DWORD method_num) {
+    if (method_num < 0) {
+        return E_INVALIDARG;
+    }
+
+    auto cotype{_cometa->resolve_type(iid)};
+
+    std::wstring method_name{};
+    if (cotype && cotype->methods_available) {
+        if (auto methods{_cometa->get_type_methods(iid)}; methods && methods->size() > method_num) {
+            method_name = methods->at(method_num);
+        }
+    }
+    return create_cobreakpoint(clsid, iid, method_num, method_name);
+}
+
+HRESULT comonitor::create_cobreakpoint(const CLSID &clsid, const IID &iid, std::wstring_view method_name) {
+    if (auto methods{_cometa->get_type_methods(iid)}; methods) {
+        if (auto res{std::ranges::find(*methods, method_name)}; res != std::end(*methods)) {
+            auto method_num = static_cast<DWORD>(res - std::begin(*methods));
+            return create_cobreakpoint(clsid, iid, method_num, method_name);
+        } else {
+            _logger.log_error(L"Could not resolve the method name.", E_INVALIDARG);
+            return E_INVALIDARG;
+        }
+    } else {
+        _logger.log_error(L"No methods found for the type.", E_INVALIDARG);
+        return E_INVALIDARG;
+    }
+}
+
+HRESULT comonitor::register_vtable(const CLSID &clsid, const IID &iid, ULONG64 vtable_addr, bool save_in_database) {
+    // the vtable might have been already added by the IClassFactory_CreateInstance method
+    if (!_cotype_with_vtables.contains({clsid, iid})) {
+
+        // save info about vtable in the database
+        if (ULONG64 base_addr{}; save_in_database && SUCCEEDED(_dbgsymbols->GetModuleByOffset2(
+                                                         vtable_addr, 0, DEBUG_GETMOD_NO_UNLOADED_MODULES, nullptr, &base_addr))) {
+
+            std::wstring module_name;
+            ULONG module_size{}, module_timestamp{};
+            if (auto hr{get_module_info(base_addr, module_name, module_timestamp, module_size)}; SUCCEEDED(hr)) {
+                _cometa->save_module_vtable({module_name, module_timestamp, std::holds_alternative<arch_x64>(_arch)},
+                                            {clsid, iid, vtable_addr - base_addr});
+            } else {
+                LOG_HR(hr);
+            }
+        } else {
+            _logger.log_warning(std::format(L"Virtual table address {:x} does not belong to any module.", vtable_addr));
+        }
+
+        call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+        // the first method is always the QueryInterface and we need to break on cv_it
+        ULONG64 fn_address{};
+        RETURN_IF_FAILED(cc.read_pointer(vtable_addr, fn_address));
+
+        if (_log_filter->is_clsid_allowed(clsid)) {
+            ULONG brk_id{};
+            if (auto hr{set_breakpoint(IUnknown_QueryInterface_breakpoint{clsid, iid, fn_address}, &brk_id)}; FAILED(hr)) {
+                _logger.log_error(std::format(L"Failed to set a breakpoint on QueryInterface method (CLSID: {:b}, IID: {:b})", clsid, iid), hr);
+            }
+        }
+
+        _cotype_with_vtables.insert({{clsid, iid}, vtable_addr});
+
+        // special case for IClassFactory when we need to set breakpoint on the CreateInstance (4th method in the vtbl)
+        if (iid == __uuidof(IClassFactory) && SUCCEEDED((cc.read_pointer(vtable_addr + 3 * cc.get_pointer_size(), fn_address)))) {
+            if (auto hr{set_breakpoint(IClassFactory_CreateInstance_breakpoint{clsid, fn_address})}; FAILED(hr)) {
+                _logger.log_error(std::format(L"Failed to set a breakpoint on CreateInstance method (CLSID: {:b})", clsid), hr);
+            }
+        }
+    } else {
+        // a given vtable could be used by a different pair <CLSID, IID>,
+        // so we always update the cotypes vtables map
+        _cotype_with_vtables[{clsid, iid}] = vtable_addr;
+    }
+
+    return S_OK;
+}
+
+void comonitor::pause() noexcept {
+    for (const auto &[brk_id, brk] : _breakpoints) {
+        if (std::holds_alternative<function_return_breakpoint>(brk)) {
+            continue;
+        }
+        if (auto hr{modify_breakpoint_flag(brk_id, DEBUG_BREAKPOINT_ENABLED, false)}; FAILED(hr)) {
+            _logger.log_error(std::format(L"Error when modifying flag for breakpoint {}", brk_id), hr);
+        }
+    }
+}
+
+void comonitor::resume() noexcept {
+    for (const auto &[brk_id, brk] : _breakpoints) {
+        if (std::holds_alternative<function_return_breakpoint>(brk)) {
+            continue;
+        }
+        if (auto hr{modify_breakpoint_flag(brk_id, DEBUG_BREAKPOINT_ENABLED, true)}; FAILED(hr)) {
+            _logger.log_error(std::format(L"Error when modifying flag for breakpoint {}", brk_id), hr);
+        }
+    }
+}
+
+void comonitor::handle_module_load(std::wstring_view module_name, ULONG module_timestamp, ULONG64 module_base_addr) {
+    for (auto &[clsid, iid, vtable] :
+         _cometa->get_module_vtables({module_name, module_timestamp, std::holds_alternative<arch_x64>(_arch)})) {
+        if (_log_filter->is_clsid_allowed(clsid)) {
+            call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+            if (ULONG64 fn_query_interface{}; SUCCEEDED(cc.read_pointer(module_base_addr + vtable, fn_query_interface))) {
+                if (auto hr{set_breakpoint(IUnknown_QueryInterface_breakpoint{clsid, iid, fn_query_interface})}; FAILED(hr)) {
+                    _logger.log_error(
+                        std::format(L"Failed to set a breakpoint on QueryInterface method (CLSID: {:b}, IID: {:b})", clsid, iid), hr);
+                }
+            }
+        }
+        _cotype_with_vtables.insert({{clsid, iid}, module_base_addr + vtable});
+    }
+}
+
+void comonitor::handle_module_unload(ULONG64 base_address) {
+    std::wstring module_name;
+    ULONG module_size{}, module_timestamp{};
+
+    if (auto hr{get_module_info(base_address, module_name, module_timestamp, module_size)}; SUCCEEDED(hr)) {
+        // remove all function name breakpoints from the specified module
+        for (auto iter{std::begin(_breakpoints)}; iter != std::end(_breakpoints);) {
+            if (auto fbrk{std::get_if<function_breakpoint>(&iter->second)};
+                fbrk != nullptr && fbrk->function_name.starts_with(module_name + L'!')) {
+                if (auto hr2{unset_breakpoint(iter)}; FAILED(hr2)) {
+                    _logger.log_error(std::format(L"Failed to remove a breakpoint {}", iter->first), hr2);
+                    iter++;
+                }
+            } else {
+                iter++;
+            }
+        }
+
+        for (auto iter{std::begin(_cotype_with_vtables)}; iter != std::end(_cotype_with_vtables);) {
+            auto &[key, vtlb]{*iter};
+            if (vtlb >= base_address && vtlb <= base_address + module_size) {
+                iter = _cotype_with_vtables.erase(iter);
+            } else {
+                iter++;
+            }
+        }
+
+        for (auto iter{std::begin(_breakpoints)}; iter != std::end(_breakpoints);) {
+            if (auto b{std::get_if<IUnknown_QueryInterface_breakpoint>(&iter->second)};
+                b != nullptr && b->address >= base_address && b->address <= base_address + module_size) {
+                if (auto hr2{unset_breakpoint(iter)}; FAILED(hr2)) {
+                    _logger.log_error(std::format(L"Failed to remove a breakpoint {}", iter->first), hr2);
+                    iter++;
+                }
+                continue;
+            }
+            if (auto b{std::get_if<IClassFactory_CreateInstance_breakpoint>(&iter->second)};
+                b != nullptr && b->address >= base_address && b->address <= base_address + module_size) {
+                if (auto hr2{unset_breakpoint(iter)}; FAILED(hr2)) {
+                    _logger.log_error(std::format(L"Failed to remove a breakpoint {}", iter->first), hr2);
+                    iter++;
+                }
+                continue;
+            }
+            if (auto b{std::get_if<function_return_breakpoint>(&iter->second)};
+                b != nullptr && b->address >= base_address && b->address <= base_address + module_size) {
+                if (auto hr2{unset_breakpoint(iter)}; FAILED(hr2)) {
+                    _logger.log_error(std::format(L"Failed to remove a breakpoint {}", iter->first), hr2);
+                    iter++;
+                }
+                continue;
+            }
+            iter++;
+        }
+    } else {
+        LOG_HR(hr);
+    }
+}
+
+void comonitor::list_breakpoints() const {
+    for (const auto &[brk_id, brk] : _breakpoints) {
+        if (std::holds_alternative<function_return_breakpoint>(brk)) {
+            auto &fbrk{std::get<function_return_breakpoint>(brk)};
+            _dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, std::format(L"{}: return breakpoint, CLSID: {:b}, IID: {:b}, address: {:#x}\n",
+                                                                     brk_id, fbrk.clsid, fbrk.iid, fbrk.address)
+                                                             .c_str());
+        } else if (std::holds_alternative<function_breakpoint>(brk)) {
+            auto &fbrk{std::get<function_breakpoint>(brk)};
+            _dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                    std::format(L"{}: function breakpoint, function name: {}\n", brk_id, fbrk.function_name).c_str());
+        } else if (std::holds_alternative<IUnknown_QueryInterface_breakpoint>(brk)) {
+            auto &qibrk{std::get<IUnknown_QueryInterface_breakpoint>(brk)};
+            _dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                    std::format(L"{}: IUnknown::QueryInterface breakpoint, CLSID: {:b}, IID: {:b}, address: {:#x}\n",
+                                                brk_id, qibrk.clsid, qibrk.iid, qibrk.address)
+                                        .c_str());
+        } else if (std::holds_alternative<IClassFactory_CreateInstance_breakpoint>(brk)) {
+            auto &cibrk{std::get<IClassFactory_CreateInstance_breakpoint>(brk)};
+            _dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                    std::format(L"{}: IClassFactory::CreateInstance breakpoint, CLSID: {:b}, address: {:#x}\n", brk_id,
+                                                cibrk.clsid, cibrk.address)
+                                        .c_str());
+        } else {
+            assert(false);
+        }
+    }
+}
+
+void comonitor::set_filter(std::shared_ptr<cofilter> log_filter) {
+    _log_filter = log_filter;
+
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+    for (auto &[key, vtbl] : _cotype_with_vtables) {
+        auto &[clsid, iid] = key;
+        if (_log_filter->is_clsid_allowed(clsid)) {
+            if (ULONG64 fn_address{}; SUCCEEDED(cc.read_pointer(vtbl, fn_address))) {
+                if (auto hr{set_breakpoint(IUnknown_QueryInterface_breakpoint{clsid, iid, fn_address})}; FAILED(hr)) {
+                    _logger.log_error(
+                        std::format(L"Failed to set a breakpoint on QueryInterface method (CLSID: {:b}, IID: {:b})", clsid, iid), hr);
+                }
+            }
+        }
+    }
+
+    for (auto iter{std::begin(_breakpoints)}; iter != std::end(_breakpoints);) {
+        if (auto b{std::get_if<IUnknown_QueryInterface_breakpoint>(&iter->second)};
+            b != nullptr && !_log_filter->is_clsid_allowed(b->clsid)) {
+            if (auto hr{unset_breakpoint(iter)}; FAILED(hr)) {
+                _logger.log_error(std::format(L"Failed to remove a breakpoint {}", iter->first), hr);
+                iter++;
+            }
+        } else {
+            iter++;
+        }
+    }
+}
+
+// Breakpoint handling
+
+bool comonitor::handle_breakpoint(ULONG id) {
+    if (auto found_brk{_breakpoints.find(id)}; found_brk != std::end(_breakpoints)) {
+        if (auto brk{found_brk->second}; std::holds_alternative<function_return_breakpoint>(brk)) {
+            _breakpoints.erase(found_brk); // one time breakpoint - cv_it won't fire again
+            handle_fuction_return(std::get<function_return_breakpoint>(brk));
+        } else if (std::holds_alternative<function_breakpoint>(brk)) {
+            auto &fbrk{std::get<function_breakpoint>(brk)};
+            if (fbrk.function_name == L"combase!CoCreateInstance") {
+                handle_CoCreateInstance(std::get<function_breakpoint>(brk));
+            } else if (fbrk.function_name == L"combase!CoGetClassObject") {
+                handle_CoGetClassObject(std::get<function_breakpoint>(brk));
+            }
+        } else if (std::holds_alternative<IUnknown_QueryInterface_breakpoint>(brk)) {
+            handle_IUnknown_QueryInterface(std::get<IUnknown_QueryInterface_breakpoint>(brk));
+        } else if (std::holds_alternative<IClassFactory_CreateInstance_breakpoint>(brk)) {
+            handle_IClassFactory_CreateInstance(std::get<IClassFactory_CreateInstance_breakpoint>(brk));
+        } else {
+            assert(false);
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void comonitor::handle_fuction_return(const function_return_breakpoint &brk) {
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+    HRESULT function_return_code{};
+    RETURN_VOID_IF_FAILED(cc.read_method_return_code(function_return_code));
+
+    if (SUCCEEDED(function_return_code)) {
+        ULONG64 addr{};
+        RETURN_VOID_IF_FAILED(cc.read_pointer(brk.object_address, addr));
+        ULONG64 vtbl_address{};
+        RETURN_VOID_IF_FAILED(cc.read_pointer(addr, vtbl_address));
+
+        log_com_call(brk.clsid, brk.iid, brk.create_function_name);
+
+        register_vtable(brk.clsid, brk.iid, vtbl_address, true);
+    } else {
+        log_com_error(brk.clsid, brk.iid, brk.create_function_name, function_return_code);
+    }
+}
+
+void comonitor::handle_CoCreateInstance(const function_breakpoint &brk) {
+    assert(brk.function_name == L"combase!CoCreateInstance");
+
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+    std::vector<ULONG64> args(5);
+    ULONG64 return_addr{};
+    RETURN_VOID_IF_FAILED(cc.read_method_frame(args, return_addr));
+
+    CLSID clsid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[0], &clsid, sizeof(decltype(clsid))));
+    IID iid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[3], &iid, sizeof(decltype(iid))));
+
+    set_function_return_breakpoint(clsid, iid, args[4], brk.function_name, return_addr);
+}
+
+void comonitor::handle_CoGetClassObject(const function_breakpoint &brk) {
+    assert(brk.function_name == L"combase!CoGetClassObject");
+
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+    std::vector<ULONG64> args(5);
+    ULONG64 return_addr{};
+    RETURN_VOID_IF_FAILED(cc.read_method_frame(args, return_addr));
+
+    CLSID clsid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[0], &clsid, sizeof(decltype(clsid))));
+    IID iid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[3], &iid, sizeof(decltype(iid))));
+
+    set_function_return_breakpoint(clsid, iid, args[4], brk.function_name, return_addr);
+}
+
+void comonitor::handle_IUnknown_QueryInterface(const IUnknown_QueryInterface_breakpoint &brk) {
+    static const std::wstring_view function_name{L"IUnknown::QueryInterface"};
+
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+    std::vector<ULONG64> args(3);
+    ULONG64 return_addr{};
+    RETURN_VOID_IF_FAILED(cc.read_method_frame(args, return_addr));
+
+    IID iid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[1], &iid, sizeof(decltype(iid))));
+
+    set_function_return_breakpoint(brk.clsid, iid, args[2], function_name.data(), return_addr);
+};
+
+void comonitor::handle_IClassFactory_CreateInstance(const IClassFactory_CreateInstance_breakpoint &brk) {
+    static const std::wstring_view function_name{L"IClassFactory::CreateInstance"};
+
+    call_context cc{_dbgcontrol.get(), _dbgdataspaces.get(), _dbgregisters.get(), _arch};
+
+    std::vector<ULONG64> args(5);
+    ULONG64 return_addr{};
+    RETURN_VOID_IF_FAILED(cc.read_method_frame(args, return_addr));
+
+    IID iid{};
+    RETURN_VOID_IF_FAILED(cc.read_object(args[2], &iid, sizeof(decltype(iid))));
+
+    set_function_return_breakpoint(brk.clsid, iid, args[3], function_name.data(), return_addr);
+}
+
+```
+
+`comon/dbgsession.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#include <filesystem>
+
+#include <DbgEng.h>
+
+#include "dbgsession.h"
+
+using namespace comon_ext;
+
+namespace fs = std::filesystem;
+
+static const std::wstring_view combase_module_name{ L"combase" };
+
+dbgsession::dbgsession() :
+    _dbgclient{ create_IDebugClient() },
+    _dbgcontrol{ _dbgclient.query<IDebugControl4>() },
+    _dbgsymbols{ _dbgclient.query<IDebugSymbols3>() },
+    _dbgsystemobjects{ _dbgclient.query<IDebugSystemObjects>() },
+    _cometa{ std::make_shared<cometa>(_dbgcontrol.get(), get_cometa_db_path()) },
+    _logger{ _dbgcontrol.get() },
+    _log_filter{ std::make_shared<cofilter>(cofilter::filter_type::Disabled) }
+{
+    THROW_IF_FAILED(_dbgclient->GetEventCallbacksWide(_prev_callback.put()));
+    THROW_IF_FAILED(_dbgclient->SetEventCallbacksWide(this));
+}
+
+HRESULT __stdcall dbgsession::Breakpoint(PDEBUG_BREAKPOINT2 bp) {
+    ULONG id;
+    if (SUCCEEDED(bp->GetId(&id))) {
+        if (auto monitor{ _monitors.find(get_active_process_id()) }; monitor != std::end(_monitors)) {
+            return monitor->second.handle_breakpoint(id) ? DEBUG_STATUS_GO : DEBUG_STATUS_NO_CHANGE;
+        }
+    }
+    return DEBUG_STATUS_NO_CHANGE;
+}
+
+HRESULT __stdcall dbgsession::LoadModule([[maybe_unused]] ULONG64 image_file_handle,
+    ULONG64 base_offset,
+    [[maybe_unused]] ULONG module_size,
+    PCWSTR module_name,
+    [[maybe_unused]] PCWSTR image_name,
+    [[maybe_unused]] ULONG checksum,
+    ULONG timestamp) {
+
+    if (auto monitor{ _monitors.find(get_active_process_id()) }; monitor != std::end(_monitors)) {
+        monitor->second.handle_module_load(module_name, timestamp, base_offset);
+    }
+    return DEBUG_STATUS_NO_CHANGE;
+}
+
+HRESULT __stdcall dbgsession::UnloadModule([[maybe_unused]] PCWSTR image_base_name, ULONG64 image_base_addr) {
+    if (auto monitor{ _monitors.find(get_active_process_id()) }; monitor != std::end(_monitors)) {
+        monitor->second.handle_module_unload(image_base_addr);
+    }
+    return DEBUG_STATUS_NO_CHANGE;
+}
+
+HRESULT __stdcall dbgsession::ExitProcess([[maybe_unused]] ULONG exit_code) {
+    detach();
+    return DEBUG_STATUS_NO_CHANGE;
+}
+
+void dbgsession::pause() noexcept {
+    if (auto monitor{ find_active_monitor() }; monitor) {
+        monitor->pause();
+    } else {
+        _logger.log_warning(L"Comon is not monitoring the current process.");
+    }
+}
+
+void dbgsession::resume() noexcept {
+    if (auto monitor{ find_active_monitor() }; monitor) {
+        monitor->resume();
+    } else {
+        _logger.log_warning(L"Comon is not monitoring the current process.");
+    }
+}
+
+
+```
+
+`comon/ext.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#include <algorithm>
+#include <filesystem>
+#include <format>
+#include <functional>
+#include <memory>
+#include <tuple>
+#include <vector>
+
+#include <DbgEng.h>
+#include <wil/com.h>
+
+#include "comon.h"
+#include "dbgsession.h"
+
+using namespace comon_ext;
+
+namespace fs = std::filesystem;
+
+dbgsession g_dbgsession{};
+
+extern "C" HRESULT CALLBACK DebugExtensionInitialize(PULONG version, PULONG flags) {
+    *version = DEBUG_EXTENSION_VERSION(EXT_MAJOR_VER, EXT_MINOR_VER);
+    *flags = 0;
+    return S_OK;
+}
+
+extern "C" void CALLBACK DebugExtensionNotify([[maybe_unused]] ULONG notify, [[maybe_unused]] ULONG64 argument) {}
+
+extern "C" void CALLBACK DebugExtensionUninitialize(void) { g_dbgsession.detach(); }
+
+extern "C" HRESULT CALLBACK cometa(IDebugClient *dbgclient, PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), reinterpret_cast<LPVOID *>(dbgcontrol.put())));
+
+    auto vargs{split_args(args)};
+
+    if (vargs.size() == 0) {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+
+    auto &cometa{g_dbgsession.get_metadata()};
+    if (vargs[0] == "index") {
+        return vargs.size() == 1 ? cometa.index() : cometa.index(widen(vargs[1]));
+    } else if (vargs[0] == "save") {
+        if (vargs.size() != 2) {
+            dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+            return E_INVALIDARG;
+        }
+        return cometa.save(widen(vargs[1]));
+    } else if (vargs[0] == "showi") {
+        if (vargs.size() != 2) {
+            dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+            return E_INVALIDARG;
+        }
+        if (IID iid{}; SUCCEEDED(try_parse_guid(widen(vargs[1]), iid))) {
+            if (auto cotype{cometa.resolve_type(iid)}; cotype) {
+                dbgcontrol->ControlledOutputWide(DEBUG_OUTCTL_AMBIENT_DML, DEBUG_OUTPUT_NORMAL,
+                                                 std::format(L"Found: {:b} ({})\n\n", iid, cotype->name).c_str());
+
+                if (auto methods{cometa.get_type_methods(iid)}; methods) {
+                    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"Methods:\n");
+                    for (size_t i = 0; i < methods->size(); i++) {
+                        dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, std::format(L"- [{}] {}\n", i, methods->at(i)).c_str());
+                    }
+                } else {
+                    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"No information about the interface methods :(\n");
+                }
+
+                dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"\nRegistered VTables for IID:\n");
+                for (auto &[module_name, clsid, is_64bit, vtbl] : cometa.find_vtables_by_iid(iid)) {
+                    auto clsid_name{cometa.resolve_class_name(clsid)};
+                    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                           std::format(L"- Module: {} ({}), CLSID: {:b} ({}), VTable offset: {:#x}\n", module_name,
+                                                       is_64bit ? L"64-bit" : L"32-bit", clsid, clsid_name ? *clsid_name : L"N/A", vtbl)
+                                               .c_str());
+                }
+            } else {
+                dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                       std::format(L"Could not find any COM type with IID: {:b} in the metadata.\n", iid).c_str());
+            }
+            return S_OK;
+        } else {
+            dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: incorrect format of IID.\n");
+            return E_INVALIDARG;
+        }
+    } else if (vargs[0] == "showc") {
+        if (vargs.size() != 2) {
+            dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+            return E_INVALIDARG;
+        }
+        if (CLSID clsid{}; SUCCEEDED(try_parse_guid(widen(vargs[1]), clsid))) {
+            if (auto coclass{cometa.resolve_class(clsid)}; coclass) {
+                dbgcontrol->ControlledOutputWide(DEBUG_OUTCTL_AMBIENT_DML, DEBUG_OUTPUT_NORMAL,
+                                                 std::format(L"Found: {:b} ({})\n\n", clsid, coclass->name).c_str());
+
+                dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"Registered VTables for CLSID:\n");
+                for (auto &[module_name, iid, is_64bit, vtbl] : cometa.find_vtables_by_clsid(clsid)) {
+                    auto iid_name{cometa.resolve_type_name(iid)};
+                    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                           std::format(L"- module: {} ({}), IID: {:b} ({}), VTable offset: {:#x}\n", module_name,
+                                                       is_64bit ? L"64-bit" : L"32-bit", iid, iid_name ? *iid_name : L"N/A", vtbl)
+                                               .c_str());
+                }
+            } else {
+                dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL,
+                                       std::format(L"Could not find any COM class with CLSID: {:b} in the metadata.\n", clsid).c_str());
+            }
+            return S_OK;
+        } else {
+            dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: incorrect format of CLSID.\n");
+            return E_INVALIDARG;
+        }
+    } else {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: unknown subcommand. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+}
+
+extern "C" HRESULT CALLBACK cobp(IDebugClient *dbgclient, PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), reinterpret_cast<LPVOID *>(dbgcontrol.put())));
+
+    auto vargs{split_args(args)};
+
+    if (vargs.size() < 3) {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+
+    CLSID clsid;
+    RETURN_IF_FAILED(try_parse_guid(widen(vargs[0]), clsid));
+    IID iid;
+    RETURN_IF_FAILED(try_parse_guid(widen(vargs[1]), iid));
+    try {
+        DWORD method_num{std::stoul(vargs[2])};
+        return g_dbgsession.create_cobreakpoint(clsid, iid, method_num);
+    } catch (const std::invalid_argument &) {
+        // we will try with a method name
+        return g_dbgsession.create_cobreakpoint(clsid, iid, widen(vargs[2]));
+    }
+}
+
+extern "C" HRESULT CALLBACK cobl([[maybe_unused]] IDebugClient *dbgclient, [[maybe_unused]] PCSTR args) {
+    g_dbgsession.list_breakpoints();
+    return S_OK;
+}
+
+extern "C" HRESULT CALLBACK coadd(IDebugClient *dbgclient, PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), reinterpret_cast<LPVOID *>(dbgcontrol.put())));
+
+    auto vargs{split_args(args)};
+
+    if (vargs.size() < 3) {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+
+    CLSID clsid;
+    RETURN_IF_FAILED(try_parse_guid(widen(vargs[0]), clsid));
+    IID iid;
+    RETURN_IF_FAILED(try_parse_guid(widen(vargs[1]), iid));
+    try {
+        ULONG64 vtable_addr{std::stoull(vargs[2])};
+        return g_dbgsession.register_vtable(clsid, iid, vtable_addr);
+    } catch (const std::invalid_argument &) {
+        // we will try with a method name
+        return g_dbgsession.create_cobreakpoint(clsid, iid, widen(vargs[2]));
+    }
+}
+
+extern "C" HRESULT CALLBACK colog(IDebugClient *dbgclient, PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), dbgcontrol.put_void()));
+    try {
+        auto &filter{g_dbgsession.get_log_filter()};
+
+        if (auto vargs{split_args(args)}; vargs.empty()) {
+            dbgcontrol->OutputWide(
+                DEBUG_OUTPUT_NORMAL,
+                std::format(L"COM monitor log filter: {}\n", cofilter::get_filter_type_name(filter.get_filter_type())).c_str());
+            if (!filter.get_filtered_clsids().empty()) {
+                dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, L"\nCLSIDs:\n");
+                for (auto &clsid : filter.get_filtered_clsids()) {
+                    dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, std::format(L"- {:b}\n", clsid).c_str());
+                }
+            }
+        } else if (vargs.size() == 2 && (vargs[0] == "include" || vargs[0] == "exclude")) {
+            auto new_filter_type = vargs[0] == "include" ? cofilter::filter_type::Including : cofilter::filter_type::Excluding;
+
+            if (filter.get_filter_type() != new_filter_type) {
+                dbgcontrol->OutputWide(
+                    DEBUG_OUTPUT_NORMAL,
+                    std::format(L"COM monitor log filter switched to: {}\n", cofilter::get_filter_type_name(new_filter_type)).c_str());
+                g_dbgsession.set_log_filter(
+                    std::make_shared<cofilter>(new_filter_type, std::unordered_set<CLSID>{parse_guid(widen(vargs[1]))}));
+            } else {
+                auto filter_set{filter.get_filtered_clsids()};
+                filter_set.insert(parse_guid(widen(vargs[1])));
+                g_dbgsession.set_log_filter(std::make_shared<cofilter>(new_filter_type, filter_set));
+            }
+        } else if (vargs.size() == 1 && vargs[0] == "none") {
+            g_dbgsession.set_log_filter(std::make_shared<cofilter>(cofilter::filter_type::Including));
+        } else if (vargs.size() == 1 && vargs[0] == "all") {
+            g_dbgsession.set_log_filter(std::make_shared<cofilter>(cofilter::filter_type::Disabled));
+        } else {
+            throw std::invalid_argument{"Invalid arguments. Run !cohelp to check the syntax."};
+        }
+        return S_OK;
+    } catch (const std::exception &ex) {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, std::format(L"Error: {}\n", widen(ex.what())).c_str());
+        return E_FAIL;
+    }
+}
+
+extern "C" HRESULT CALLBACK comon(IDebugClient *dbgclient, PCSTR args) {
+    wil::com_ptr_t<IDebugControl4> dbgcontrol;
+    RETURN_IF_FAILED(dbgclient->QueryInterface(__uuidof(IDebugControl4), dbgcontrol.put_void()));
+
+    auto vargs{split_args(args)};
+    if (vargs.size() != 1) {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+
+    if (vargs[0] == "attach") {
+        g_dbgsession.attach();
+    } else if (vargs[0] == "pause") {
+        g_dbgsession.pause();
+    } else if (vargs[0] == "resume") {
+        g_dbgsession.resume();
+    } else if (vargs[0] == "detach") {
+        g_dbgsession.detach();
+    } else {
+        dbgcontrol->OutputWide(DEBUG_OUTPUT_ERROR, L"ERROR: invalid arguments. Run !cohelp to check the syntax.\n");
+        return E_INVALIDARG;
+    }
+
+    return S_OK;
+}
+
+```
+
+`comon/ext.def`:
+
+```def
+
+;   lldext.def
+;--------------------------------------------------------------------
+EXPORTS
+     DebugExtensionNotify
+     DebugExtensionInitialize
+     DebugExtensionUninitialize
+
+     cometa
+     colog
+     cobp
+     cobl
+	 cohelp
+     comon
+```
+
+`comon/helpers.cpp`:
+
+```cpp
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#include <string>
+#include <cassert>
+#include <vector>
+#include <sstream>
+#include <ranges>
+#include <format>
+#include <functional>
+#include <Windows.h>
+#include <wil/result.h>
+
+#include "comon.h"
+
+namespace comon_ext
+{
+
+std::wstring widen(std::string_view s) {
+    std::wstring out{};
+    if (!s.empty()) {
+        int len = ::MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s.data(), static_cast<int>(s.size()), nullptr, 0);
+        if (len == 0) {
+            THROW_LAST_ERROR();
+        }
+
+        out.resize(len, '\0');
+        assert(static_cast<int>(out.size()) == len);
+
+        if (len != ::MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, s.data(), static_cast<int>(s.size()),
+            out.data(), static_cast<int>(out.size()))) {
+            THROW_LAST_ERROR();
+        }
+    }
+    return out;
+}
+
+std::string narrow(std::wstring_view ws) {
+    std::string out{};
+    if (!ws.empty()) {
+        int len = ::WideCharToMultiByte(CP_ACP, 0, ws.data(), static_cast<int>(ws.size()), nullptr, 0, nullptr, nullptr);
+        if (len == 0) {
+            THROW_LAST_ERROR();
+        }
+
+        out.resize(len, '\0');
+        assert(static_cast<int>(out.size()) == len);
+
+        if (len != ::WideCharToMultiByte(CP_ACP, 0, ws.data(), static_cast<int>(ws.size()), out.data(),
+            static_cast<int>(out.size()), nullptr, nullptr)) {
+            THROW_LAST_ERROR();
+        }
+    }
+    return out;
+}
+
+
+std::string to_utf8(std::wstring_view ws) {
+    std::string out{};
+    if (!ws.empty()) {
+        int len = ::WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()), nullptr, 0, nullptr, nullptr);
+        if (len == 0) {
+            THROW_LAST_ERROR();
+        }
+
+        out.resize(len, '\0');
+        assert(static_cast<int>(out.size()) == len);
+
+        if (len != ::WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()), out.data(),
+            static_cast<int>(out.size()), nullptr, nullptr)) {
+            THROW_LAST_ERROR();
+        }
+    }
+    return out;
+}
+
+std::wstring from_utf8(std::string_view s) {
+    std::wstring out{};
+    if (!s.empty()) {
+        int len = ::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+        if (len == 0) {
+            THROW_LAST_ERROR();
+        }
+
+        out.resize(len, '\0');
+        assert(static_cast<int>(out.size()) == len);
+
+        if (len != ::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()),
+            out.data(), static_cast<int>(out.size()))) {
+            THROW_LAST_ERROR();
+        }
+    }
+    return out;
+}
+
+std::wstring wstring_from_guid(const GUID& guid) {
+    wil::unique_cotaskmem_string s{};
+    auto hr = ::StringFromIID(guid, s.put());
+    if (SUCCEEDED(hr)) {
+        return { s.get() };
+    }
+    return std::format(L"<invalid: {:#x}>", static_cast<DWORD>(hr));
+}
+
+GUID parse_guid(std::wstring_view ws) {
+    GUID guid;
+    THROW_IF_FAILED(try_parse_guid(ws, guid));
+    return guid;
+}
+
+HRESULT try_parse_guid(std::wstring_view ws, GUID& guid) {
+    if (ws.size() > 2 && ws[0] != '{' && ws[ws.size() - 1] != '}') {
+        std::wstring nws(ws.size() + 2, '\0');
+        nws[0] = '{';
+        std::ranges::copy(ws.cbegin(), ws.cend(), nws.begin() + 1);
+        nws[nws.size() - 1] = '}';
+
+        return ::IIDFromString(nws.c_str(), &guid);
+    }
+
+    return ::IIDFromString(ws.data(), &guid);
+}
+
+std::vector<std::string> split_args(std::string_view args) {
+    char citation_char{ '\0' };
+    std::vector<std::string> vargs{};
+    std::string token{};
+
+    for (auto c : args) {
+        if (citation_char != '\0') {
+            if (c == citation_char) {
+                if (!token.empty()) {
+                    vargs.push_back(token);
+                    token.clear();
+                }
+                citation_char = '\0';
+            } else {
+                token.push_back(c);
+            }
+        } else if (c == '"' || c == '\'') {
+            citation_char = c;
+        } else if (std::isspace(c)) {
+            if (!token.empty()) {
+                vargs.push_back(token);
+                token.clear();
+            }
+        } else {
+            token.push_back(c);
+        }
+    }
+
+    if (!token.empty()) {
+        vargs.push_back(token);
+    }
+
+    return vargs;
+}
+}
+
+```
+
+`comon/include/arch.h`:
+
+```h
+
+#pragma once
+
+#include <variant>
+
+#include <Windows.h>
+#include <DbgEng.h>
+
+#include <wil/com.h>
+
+namespace comon_ext
+{
+struct arch_x86
+{
+    const ULONG effmach_code;
+    const bool is_wow64;
+
+    const ULONG esp, eax;
+};
+
+struct arch_x64
+{
+    static constexpr int X64_REG_ARGS{ 4 };
+
+    const ULONG effmach_code;
+
+    const ULONG rcx, rdx, r8, r9, rsp, rax;
+};
+
+using arch = std::variant<arch_x86, arch_x64>;
+
+// decodes stdcall method call context (arguments and the return address)
+class call_context
+{
+    const wil::com_ptr<IDebugControl4> _dbgcontrol;
+    const wil::com_ptr<IDebugDataSpaces> _dbgdataspaces;
+    const wil::com_ptr<IDebugRegisters2> _dbgregisters;
+
+    const arch _arch;
+    const ULONG _pointer_size;
+
+public:
+    explicit call_context(IDebugControl4* dbgcontrol, IDebugDataSpaces* dbgdataspaces,
+        IDebugRegisters2* dbgregisters, const arch& arch) :
+        _dbgcontrol{ dbgcontrol }, _dbgdataspaces{ dbgdataspaces },
+        _dbgregisters{ dbgregisters }, _arch{ arch },
+        _pointer_size{ std::holds_alternative<arch_x86>(arch) ? 4UL : 8UL } {
+    }
+
+    HRESULT read_pointer(ULONG64 addr, ULONG64& value) {
+        ULONG bytes_read{};
+        RETURN_IF_FAILED(_dbgdataspaces->ReadVirtual(addr, &value, _pointer_size, &bytes_read));
+        RETURN_HR_IF(E_UNEXPECTED, bytes_read != _pointer_size);
+        return S_OK;
+    }
+
+    HRESULT read_object(ULONG64 addr, PVOID obj, ULONG obj_size) {
+        ULONG bytes_read{};
+        RETURN_IF_FAILED(_dbgdataspaces->ReadVirtual(addr, obj, obj_size, &bytes_read));
+        RETURN_HR_IF(E_UNEXPECTED, bytes_read != obj_size);
+        return S_OK;
+    }
+
+    HRESULT read_method_return_code(HRESULT& hr) {
+        if (std::holds_alternative<arch_x86>(_arch)) {
+            DEBUG_VALUE r{};
+            RETURN_IF_FAILED(_dbgregisters->GetValue(
+                std::get<arch_x86>(_arch).eax, &r));
+            hr = static_cast<HRESULT>(r.I32);
+            return S_OK;
+        } else if (std::holds_alternative<arch_x64>(_arch)) {
+            DEBUG_VALUE r{};
+            RETURN_IF_FAILED(_dbgregisters->GetValue(
+                std::get<arch_x64>(_arch).rax, &r));
+            hr = static_cast<HRESULT>(r.I64);
+            return S_OK;
+        } else {
+            hr = E_FAIL;
+            return E_UNEXPECTED;
+        }
+    }
+
+    // works only when called at the method breakpoint (before first instruction)
+    HRESULT read_method_frame(std::vector<ULONG64>& args, ULONG64& ret_addr);
+
+    ULONG64 get_pointer_size() const noexcept {
+        return _pointer_size;
+    }
+};
+
+}
+
+
+```
+
+`comon/include/cometa.h`:
+
+```h
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#pragma once
+
+#include <format>
+#include <optional>
+#include <deque>
+#include <filesystem>
+
+#include <SQLiteCpp/Database.h>
+
+#include "comon.h"
+#include "lfu_cache.h"
+
+namespace fs = std::filesystem;
+
+namespace comon_ext
+{
+
+enum class cotype_type
+{
+    Interface,
+    DispInterface
+};
+
+using method_collection = std::deque<std::wstring>;
+
+struct covtable
+{
+    const CLSID clsid;
+    const IID iid;
+    const ULONG64 address;
+};
+
+struct comodule
+{
+    const std::wstring_view name;
+    const ULONG timestamp;
+    const bool is_64bit;
+};
+
+struct cotype
+{
+    GUID iid{};
+    std::wstring name;
+    cotype_type type{};
+    GUID parent_iid{};
+    bool methods_available{};
+};
+
+struct coclass
+{
+    GUID clsid{};
+    std::wstring name;
+};
+
+struct typelib_info
+{
+    std::wstring name;
+    std::wstring version;
+    std::wstring tlb_path;
+};
+
+class cometa
+{
+    const std::unique_ptr<SQLite::Database> _db;
+    const dbgeng_logger _logger;
+
+    lfu_cache<IID, const std::optional<const cotype>> _cotype_cache{ 100 };
+    lfu_cache<CLSID, const std::optional<const coclass>> _coclass_cache{ 50 };
+
+    HRESULT index_tlb(std::wstring_view tlb_path);
+
+    void insert_cotype(const cotype& typedesc);
+    void insert_cotype_methods(const GUID& iid, std::vector<std::wstring>methods);
+    void insert_coclass(const coclass& classdesc);
+
+    static std::unique_ptr<SQLite::Database> init_db(const fs::path& path, IDebugControl4* dbgcontrol);
+    static std::unique_ptr<SQLite::Database> open_db(const fs::path& path, IDebugControl4* dbgcontrol);
+
+public:
+
+    static bool is_valid_db(const fs::path& path);
+
+    explicit cometa(IDebugControl4* dbgcontrol, const fs::path& db_path) : _logger{ dbgcontrol },
+        _db{ fs::exists(db_path) ? open_db(db_path, dbgcontrol) : init_db(db_path, dbgcontrol) } { }
+
+    HRESULT index();
+
+    HRESULT index(std::wstring_view tlb_path) {
+        if (!_db) {
+            _logger.log_error(L"no open database", E_FAIL);
+            return E_FAIL;
+        }
+
+        if (auto hr{ index_tlb(tlb_path) }; SUCCEEDED(hr)) {
+            _logger.log_info_dml(std::format(L"'{}' : <col fg=\"srccmnt\" bg=\"wbg\">PARSED</col>", tlb_path));
+            return S_OK;
+        } else {
+            _logger.log_error_dml(std::format(L"'{}'", tlb_path), hr);
+            return hr;
+        }
+    }
+
+    HRESULT save(std::wstring_view dbpath);
+
+    std::optional<std::wstring> resolve_type_name(const IID& iid) {
+        if (auto t{ resolve_type(iid) }; t) {
+            return t->name;
+        }
+        return std::nullopt;
+    }
+
+    std::optional<cotype> resolve_type(const IID& iid);
+
+    std::optional<coclass> resolve_class(const CLSID& clsid);
+
+    std::vector<std::tuple<std::wstring, CLSID, bool, ULONG64>> find_vtables_by_iid(const IID& iid);
+
+    std::vector<std::tuple<std::wstring, IID, bool, ULONG64>> find_vtables_by_clsid(const CLSID& clsid);
+
+    std::optional<method_collection> get_type_methods(const IID& iid);
+
+    std::optional<std::wstring> resolve_class_name(const CLSID& clsid) {
+        if (auto c{ resolve_class(clsid) }; c) {
+            return c->name;
+        }
+        return std::nullopt;
+    }
+
+    void save_module_vtable(const comodule& comodule, const covtable& covtable);
+
+    std::vector<covtable> get_module_vtables(const comodule& comodule);
+};
+
+}
+
+```
+
+`comon/include/comon.h`:
+
+```h
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#pragma once
+
+#include <string>
+#include <format>
+#include <unordered_set>
+#include <unordered_map>
+#include <span>
+
+#include <Windows.h>
+#include <DbgEng.h>
+
+#include <wil/com.h>
+
+namespace comon_ext
+{
+std::wstring widen(std::string_view s);
+
+std::string narrow(std::wstring_view ws);
+
+std::string to_utf8(std::wstring_view ws);
+
+std::wstring from_utf8(std::string_view s);
+
+std::wstring wstring_from_guid(const GUID& guid);
+
+HRESULT try_parse_guid(std::wstring_view ws, GUID& guid);
+
+GUID parse_guid(std::wstring_view ws);
+
+std::vector<std::string> split_args(std::string_view args);
+}
+
+// inspired by boost container hash
+template <typename T>
+inline void hash_combine(std::size_t& seed, const T& v) {
+    std::hash<T> hasher;
+    seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+template<> struct std::hash<GUID>
+{
+    std::size_t operator()(const GUID& g) const noexcept {
+        const unsigned long* r{ &g.Data1 };
+        return *r ^ *(r + 1) ^ *(r + 2) ^ *(r + 3);
+    }
+};
+
+template<> struct std::hash<std::pair<CLSID, IID>>
+{
+    std::size_t operator()(const std::pair<CLSID, IID>& p) const noexcept {
+        std::hash<GUID> hasher{};
+        auto seed{ hasher(p.first) };
+        hash_combine(seed, p.second);
+        return seed;
+    }
+};
+
+template<>
+class std::formatter<GUID, wchar_t>
+{
+public:
+    constexpr auto parse(auto& context) {
+        auto iter{ context.begin() };
+        const auto end{ context.end() };
+        if (iter == end || *iter == L'}') {  // {} format specifier
+            _output_type = L'd';
+            return iter;
+        }
+
+        switch (*iter) {
+        case L'n':
+        case L'd':
+        case L'b':
+            _output_type = *iter;
+            break;
+        default:
+            throw std::format_error{ "Invalid GUID format specifier." };
+        }
+
+        ++iter;
+        if (iter != end && *iter != L'}') {
+            throw format_error{ "Invalid GUID format specifier." };
+        }
+
+        return iter;
+    }
+
+    auto format(const GUID& g, auto& context) {
+        auto gstr{ comon_ext::wstring_from_guid(g) };
+
+        if (_output_type == L'n') {
+            auto iter{ gstr.begin() };
+            while (iter != gstr.end()) {
+                if (*iter == L'{' || *iter == L'}' || *iter == L'-') {
+                    iter = gstr.erase(iter);
+                } else {
+                    iter++;
+                }
+            }
+        } else if (_output_type != L'b') {
+            gstr.erase(0, 1);
+            gstr.pop_back();
+        }
+
+        return format_to(context.out(), L"{}", gstr.c_str());
+    }
+
+private:
+    wchar_t _output_type{ L'd' };
+};
+
+#define RETURN_VOID_IF_FAILED(hr)  __WI_SUPPRESS_4127_S do { const auto __hrRet = wil::verify_hresult(hr); if (FAILED(__hrRet)) { __R_INFO_ONLY(#hr); return; }} __WI_SUPPRESS_4127_E while ((void)0, 0)
+
+namespace comon_ext
+{
+class cofilter
+{
+public:
+    enum class filter_type
+    {
+        Including,
+        Excluding,
+        Disabled
+    };
+
+private:
+    const filter_type _type;
+    const std::unordered_set<CLSID> _clsids{};
+
+public:
+    cofilter(filter_type type) :
+        _type{ type }, _clsids{} { }
+
+    cofilter(filter_type type, const std::unordered_set<CLSID>& clsids) :
+        _type{ type },
+        _clsids{ clsids } { }
+
+    auto is_clsid_allowed(const CLSID& clsid) {
+        return _type == filter_type::Disabled ||
+            (_type == filter_type::Including && _clsids.contains(clsid)) ||
+            (_type == filter_type::Excluding && !_clsids.contains(clsid));
+    }
+
+    filter_type get_filter_type() const {
+        return _type;
+    }
+
+    auto& get_filtered_clsids() const {
+        return _clsids;
+    }
+
+    static std::wstring_view get_filter_type_name(filter_type type) {
+        static std::unordered_map<filter_type, std::wstring_view> names{
+            { filter_type::Including, L"INCLUDING" },
+            { filter_type::Excluding, L"EXCLUDING" },
+            { filter_type::Disabled, L"DISABLED" }
+        };
+
+        return names.at(type);
+    };
+};
+
+class dbgeng_logger
+{
+private:
+    const wil::com_ptr<IDebugControl4> _dbgcontrol;
+
+    static std::wstring_view get_error_msg(HRESULT hr) {
+        static std::unordered_map<HRESULT, std::wstring> error_messages{};
+        if (!error_messages.contains(hr)) {
+            wchar_t error_msg[256];
+            auto cnt{ ::FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr,
+                            hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), error_msg, ARRAYSIZE(error_msg), nullptr) };
+            if (cnt == 0) {
+                return L"";
+            }
+            // skip new line at the end
+            if (cnt >= 2 && error_msg[cnt - 2] == '\r' && error_msg[cnt - 1] == '\n') {
+                cnt -= 2;
+            }
+
+            error_messages.insert({ hr, { error_msg, cnt } });
+        }
+        return error_messages.at(hr);
+    };
+
+public:
+    dbgeng_logger(IDebugControl4* dbgcontrol) :
+        _dbgcontrol{ dbgcontrol } {}
+
+    void log_info(std::wstring_view message) const {
+        LOG_IF_FAILED(_dbgcontrol->OutputWide(DEBUG_OUTPUT_NORMAL, std::format(L"[comon] {}\n", message).c_str()));
+    }
+
+    void log_info_dml(std::wstring_view message) const {
+        LOG_IF_FAILED(_dbgcontrol->ControlledOutputWide(DEBUG_OUTCTL_AMBIENT_DML, DEBUG_OUTPUT_NORMAL,
+            std::format(L"[comon] {}\n", message).c_str()));
+    }
+
+    void log_warning(std::wstring_view message) const {
+        LOG_IF_FAILED(_dbgcontrol->OutputWide(DEBUG_OUTPUT_WARNING, std::format(L"[comon] {}\n", message).c_str()));
+    }
+
+    void log_error(std::wstring_view message, HRESULT hr) const {
+        log_error_dml(message, hr);
+    }
+
+    void log_error_dml(std::wstring_view message, HRESULT hr) const {
+        LOG_IF_FAILED(_dbgcontrol->ControlledOutputWide(DEBUG_OUTCTL_AMBIENT_DML, DEBUG_OUTPUT_ERROR,
+            std::format(L"[comon] {}, <col fg=\"srcstr\" bg=\"wbg\">error: {:#x} - {}</col>\n",
+                message, static_cast<unsigned long>(hr), get_error_msg(hr)).c_str()));
+    }
+};
+}
+
+
+```
+
+`comon/include/comonitor.h`:
+
+```h
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#pragma once
+
+#include <array>
+#include <unordered_map>
+#include <unordered_set>
+#include <variant>
+#include <memory>
+#include <filesystem>
+
+#include <Windows.h>
+#include <wil/com.h>
+#include <wil/result.h>
+
+#include "comon.h"
+#include "cometa.h"
+#include "arch.h"
+
+namespace comon_ext
+{
+
+namespace fs = std::filesystem;
+
+class comonitor
+{
+private:
+    struct function_return_breakpoint
+    {
+        const CLSID clsid;
+        const IID iid;
+        const ULONG64 object_address;
+        const std::wstring create_function_name;
+        const ULONG64 address;
+    };
+
+    struct function_breakpoint
+    {
+        const std::wstring function_name;
+    };
+
+    struct IUnknown_QueryInterface_breakpoint
+    {
+        const CLSID clsid;
+        const IID iid;
+        const ULONG64 address;
+    };
+
+    struct IClassFactory_CreateInstance_breakpoint
+    {
+        const CLSID clsid;
+        const ULONG64 address;
+    };
+
+    static wil::com_ptr_t<IDebugClient5> create_IDebugClient() {
+        wil::com_ptr_t<IDebugClient5> client;
+        THROW_IF_FAILED(::DebugCreate(__uuidof(IDebugClient5), client.put_void()));
+        return client;
+    }
+
+    static arch get_process_arch(IDebugControl4* dbgcontrol, IDebugSymbols3* dbgsymbols, IDebugRegisters2* dbgregisters);
+
+    const wil::com_ptr<IDebugClient5> _dbgclient;
+    const wil::com_ptr<IDebugControl4> _dbgcontrol;
+    const wil::com_ptr<IDebugSymbols3> _dbgsymbols;
+    const wil::com_ptr<IDebugDataSpaces> _dbgdataspaces;
+    const wil::com_ptr<IDebugSystemObjects> _dbgsystemobjects;
+    const wil::com_ptr<IDebugRegisters2> _dbgregisters;
+    const dbgeng_logger _logger;
+
+    using breakpoint = std::variant<function_breakpoint, function_return_breakpoint,
+        IUnknown_QueryInterface_breakpoint, IClassFactory_CreateInstance_breakpoint>;
+
+    std::unordered_map<ULONG, breakpoint> _breakpoints{};
+    std::unordered_map<std::pair<CLSID, IID>, ULONG64> _cotype_with_vtables{};
+    std::shared_ptr<cofilter> _log_filter;
+
+    const std::shared_ptr<cometa> _cometa;
+
+    const arch _arch;
+
+    HRESULT get_module_info(ULONG64 base_address, std::wstring& module_name, ULONG& module_timestamp, ULONG& module_size) {
+        DEBUG_MODULE_PARAMETERS m{};
+        RETURN_IF_FAILED(_dbgsymbols->GetModuleParameters(1, &base_address, DEBUG_ANY_ID /* ignored */, &m));
+
+        module_timestamp = m.TimeDateStamp;
+        module_size = m.Size;
+
+        auto buffer{ std::make_unique<wchar_t[]>(m.ModuleNameSize) };
+        RETURN_IF_FAILED(_dbgsymbols->GetModuleNameStringWide(DEBUG_MODNAME_MODULE, DEBUG_ANY_ID, base_address,
+            buffer.get(), m.ModuleNameSize, nullptr));
+        module_name.assign(buffer.get(), static_cast<size_t>(m.ModuleNameSize) - 1);
+
+        return S_OK;
+    }
+
+    HRESULT set_breakpoint(const breakpoint& brk, PULONG id = nullptr);
+
+    HRESULT unset_breakpoint(decltype(_breakpoints)::iterator& iter) {
+        IDebugBreakpoint2* bp;
+        RETURN_IF_FAILED(_dbgcontrol->GetBreakpointById2(iter->first, &bp));
+        RETURN_IF_FAILED(_dbgcontrol->RemoveBreakpoint2(bp));
+
+        iter = _breakpoints.erase(iter);
+
+        return S_OK;
+    }
+
+    HRESULT modify_breakpoint_flag(ULONG brk_id, ULONG flag, bool enable) {
+        IDebugBreakpoint2* bp;
+        RETURN_IF_FAILED(_dbgcontrol->GetBreakpointById2(brk_id, &bp));
+
+        ULONG flags{};
+        RETURN_IF_FAILED(bp->GetFlags(&flags));
+        flags = enable ? (flags | flag) : (flags & ~flag);
+        return bp->SetFlags(flags);
+    }
+
+    auto log_com_call(const CLSID& clsid, const IID& iid, std::wstring_view caller_name) {
+        if (_log_filter->is_clsid_allowed(clsid)) {
+            ULONG pid{}; _dbgsystemobjects->GetCurrentProcessId(&pid);
+            ULONG tid{}; _dbgsystemobjects->GetCurrentThreadId(&tid);
+
+            auto clsid_name{ _cometa->resolve_class_name(clsid) };
+            auto iid_name{ _cometa->resolve_type_name(iid) };
+            _logger.log_info_dml(std::format(L"<col fg=\"normfg\" bg=\"normbg\">{}:{:03} [{}] CLSID: <b>{:b} ({})</b>, IID: <b>{:b} ({})</b></col>",
+                    pid, tid, caller_name, clsid, clsid_name ? *clsid_name : L"N/A", iid, iid_name ? *iid_name : L"N/A"));
+        }
+    }
+
+    auto log_com_error(const CLSID& clsid, const IID& iid, std::wstring_view caller_name, HRESULT result_code) {
+        if (_log_filter->is_clsid_allowed(clsid)) {
+            ULONG pid{}; _dbgsystemobjects->GetCurrentProcessId(&pid);
+            ULONG tid{}; _dbgsystemobjects->GetCurrentThreadId(&tid);
+
+            auto clsid_name{ _cometa->resolve_class_name(clsid) };
+            auto iid_name = _cometa->resolve_type_name(iid);
+            _logger.log_error_dml(std::format(L"<col fg=\"changed\" bg=\"normbg\">{}:{:03} [{}] CLSID: <b>{:b} ({})</b>, IID: <b>{:b} ({})</b></col>",
+                    pid, tid, caller_name, clsid, clsid_name ? *clsid_name : L"N/A", iid, iid_name ? *iid_name : L"N/A"), result_code);
+        }
+    }
+
+    void set_function_return_breakpoint(const CLSID& clsid, const IID& iid,
+        ULONG64 object_addr, const std::wstring& function_name, ULONG64 return_addr) {
+        if (!_cotype_with_vtables.contains({ clsid, iid })) {
+            if (auto hr{ set_breakpoint(function_return_breakpoint{clsid, iid, object_addr, function_name, return_addr}) }; FAILED(hr)) {
+                _logger.log_error(std::format(L"Failed to set a breakpoint on function {} (CLSID: {:b}, IID: {:b})", 
+                    function_name, clsid, iid), hr);
+            }
+        } else {
+            log_com_call(clsid, iid, function_name);
+        }
+    }
+
+    HRESULT create_cobreakpoint(const CLSID& clsid, const IID& iid, DWORD method_num, std::wstring_view method_display_name);
+
+    /* Breakpoints handling */
+    void handle_fuction_return(const function_return_breakpoint& brk);
+
+    void handle_CoCreateInstance(const function_breakpoint&);
+
+    void handle_IUnknown_QueryInterface(const IUnknown_QueryInterface_breakpoint& brk);
+
+    void handle_CoGetClassObject(const function_breakpoint&);
+
+    void handle_IClassFactory_CreateInstance(const IClassFactory_CreateInstance_breakpoint& brk);
+
+public:
+
+    explicit comonitor(IDebugClient5* dbgclient, std::shared_ptr<cometa> cometa, std::shared_ptr<cofilter> log_filter);
+
+    comonitor(const comonitor&) = delete;
+
+    comonitor(comonitor&&) = default;
+
+    ~comonitor();
+
+    bool handle_breakpoint(ULONG id);
+
+    void handle_module_load(std::wstring_view module_name, ULONG module_timestamp, ULONG64 module_base_addr);
+    void handle_module_unload(ULONG64 base_address);
+
+    void list_breakpoints() const;
+
+    HRESULT create_cobreakpoint(const CLSID& clsid, const IID& iid, DWORD method_num);
+    HRESULT create_cobreakpoint(const CLSID& clsid, const IID& iid, std::wstring_view method_name);
+
+    HRESULT register_vtable(const CLSID& clsid, const IID& iid, ULONG64 vtable_addr, bool save_in_database);
+
+    void pause() noexcept;
+
+    void resume() noexcept;
+
+    void set_filter(std::shared_ptr<cofilter> log_filter);
+};
+
+}
+
+
+```
+
+`comon/include/dbgsession.h`:
+
+```h
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#pragma once
+
+#include <array>
+#include <unordered_map>
+#include <unordered_set>
+#include <functional>
+#include <variant>
+#include <memory>
+
+#include <Windows.h>
+#include <wil/com.h>
+#include <wil/result.h>
+
+#include "comon.h"
+#include "cometa.h"
+#include "comonitor.h"
+
+namespace comon_ext
+{
+
+class dbgsession : public DebugBaseEventCallbacksWide
+{
+private:
+    const wil::com_ptr<IDebugClient5> _dbgclient;
+    const wil::com_ptr<IDebugControl4> _dbgcontrol;
+    const wil::com_ptr<IDebugSymbols3> _dbgsymbols;
+    const wil::com_ptr<IDebugSystemObjects> _dbgsystemobjects;
+    const dbgeng_logger _logger;
+
+    const std::shared_ptr<cometa> _cometa;
+
+    std::shared_ptr<cofilter> _log_filter;
+
+    wil::com_ptr<IDebugEventCallbacksWide> _prev_callback{};
+
+    // maps Engine Process IDs with monitor instances
+    std::unordered_map<ULONG, comonitor> _monitors{};
+
+    static wil::com_ptr_t<IDebugClient5> create_IDebugClient() {
+        wil::com_ptr_t<IDebugClient5> client;
+        THROW_IF_FAILED(::DebugCreate(__uuidof(IDebugClient5), client.put_void()));
+        return client;
+    }
+
+    static fs::path get_cometa_db_path() {
+        if (auto path{ fs::temp_directory_path() / "cometa.db3" }; fs::exists(path)) {
+            if (cometa::is_valid_db(path)) {
+                return path;
+            } else {
+                return "";
+            }
+        } else {
+            return path;
+        }
+    }
+
+    auto get_active_process_id() const {
+        ULONG pid{};
+        _dbgsystemobjects->GetCurrentProcessId(&pid);
+        return pid;
+    }
+
+    comonitor* find_active_monitor() {
+        if (auto monitor{ _monitors.find(get_active_process_id()) }; monitor != std::end(_monitors)) {
+            return &monitor->second;
+        }
+        return nullptr;
+    }
+
+public:
+
+    dbgsession();
+
+    ~dbgsession() {
+        if (_dbgclient) {
+            _dbgclient->SetEventCallbacksWide(_prev_callback.get());
+        }
+    }
+
+    virtual ULONG __stdcall AddRef(void) override { return 1; }
+
+    virtual ULONG __stdcall Release(void) override { return 1; }
+
+    virtual HRESULT __stdcall GetInterestMask(PULONG mask) override {
+        *mask = DEBUG_EVENT_EXIT_PROCESS | DEBUG_EVENT_BREAKPOINT |
+            DEBUG_EVENT_LOAD_MODULE | DEBUG_EVENT_UNLOAD_MODULE;
+        return S_OK;
+    }
+
+    virtual HRESULT __stdcall Breakpoint(PDEBUG_BREAKPOINT2 bp) override;
+
+    virtual HRESULT __stdcall LoadModule(ULONG64 image_file_handle, ULONG64 base_offset, ULONG module_size,
+        PCWSTR module_name, PCWSTR image_name, ULONG checksum, ULONG timestamp) override;
+
+    virtual HRESULT __stdcall UnloadModule(PCWSTR image_base_name, ULONG64 base_offset) override;
+
+    virtual HRESULT __stdcall ExitProcess(ULONG exit_code) override;
+
+    void attach() {
+        if (auto pid{ get_active_process_id() }; _monitors.contains(pid)) {
+            _logger.log_info(std::format(L"COM monitor is already enabled for process {0}.", pid));
+        } else {
+            _monitors.insert({ pid, comonitor { _dbgclient.get(), _cometa, _log_filter } });
+            _logger.log_info_dml(std::format(L"<b>COM monitor enabled for process {0}.</b>", pid));
+        }
+    }
+
+    void detach() {
+        if (auto monitor{ _monitors.find(get_active_process_id()) }; monitor != std::end(_monitors)) {
+            _monitors.erase(monitor);
+        }
+    }
+
+    HRESULT create_cobreakpoint(const CLSID& clsid, const IID& iid, DWORD method_num) {
+        if (auto monitor{ find_active_monitor() }; monitor) {
+            return monitor->create_cobreakpoint(clsid, iid, method_num);
+        } else {
+            _logger.log_warning(L"COM monitor is not enabled for the current process.");
+            return S_OK;
+        }
+    }
+
+    HRESULT create_cobreakpoint(const CLSID& clsid, const IID& iid, std::wstring_view method_name) {
+        if (auto monitor{ find_active_monitor() }; monitor) {
+            return monitor->create_cobreakpoint(clsid, iid, method_name);
+        } else {
+            _logger.log_warning(L"COM monitor is not enabled for the current process.");
+            return S_OK;
+        }
+    }
+
+    cometa& get_metadata() { return *_cometa; }
+
+    const cofilter& get_log_filter() const { return *_log_filter; }
+
+    void set_log_filter(std::shared_ptr<cofilter> log_filter) {
+        // FIXME: what happens here?
+        _log_filter = log_filter;
+        for (auto& [pid, monitor] : _monitors) {
+            monitor.set_filter(log_filter);
+        }
+    }
+
+    HRESULT register_vtable(const CLSID& clsid, const IID& iid, ULONG64 vtable_addr) {
+        if (auto monitor{ find_active_monitor() }; monitor) {
+            return monitor->register_vtable(clsid, iid, vtable_addr, false);
+        } else {
+            _logger.log_warning(L"COM monitor is not enabled for the current process.");
+            return S_OK;
+        }
+    }
+
+    const dbgeng_logger& get_logger() const { return _logger; }
+
+    void pause() noexcept;
+
+    void resume() noexcept;
+
+    void list_breakpoints() {
+        if (auto monitor{ find_active_monitor() }; monitor) {
+            monitor->list_breakpoints();
+        } else {
+            _logger.log_warning(L"COM monitor is not enabled for the current process.");
+        }
+    }
+};
+
+}
+
+
+```
+
+`comon/include/lfu_cache.h`:
+
+```h
+/*
+   Copyright 2022 Sebastian Solnica
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+#pragma once
+
+#include <tuple>
+#include <utility>
+#include <map>
+#include <unordered_map>
+#include <unordered_set>
+#include <cassert>
+#include <stdexcept>
+#include <ranges>
+#include <algorithm>
+
+#include <Windows.h>
+
+namespace views = std::ranges::views;
+
+namespace comon_ext
+{
+	template<typename K, typename O>
+	class lfu_cache
+	{
+		const size_t _capacity;
+		std::unordered_map<K, std::pair<O, int32_t>> _cache{};
+		std::map<int, std::unordered_set<K>> _cache_freqs{};
+
+		void discard_from_frequency(int32_t freq, const K& key);
+
+		void add_to_frequency(int32_t freq, const K& key);
+
+		K extract_least_frequent();
+
+	public:
+
+		lfu_cache(size_t capacity) : _capacity{ capacity } {
+			if (capacity <= 0) {
+				throw std::invalid_argument{ "capacity" };
+			}
+		}
+
+		bool contains(const K& key) const;
+
+		const O& get(const K& key);
+
+		void insert(const K& key, const O& data);
+	};
+
+	template<typename K, typename O>
+	void lfu_cache<K, O>::discard_from_frequency(int32_t freq, const K& key) {
+		assert(_cache_freqs.contains(freq));
+		auto& freqs{ _cache_freqs[freq] };
+		assert(freqs.contains(key));
+		freqs.erase(key);
+
+		if (freqs.empty()) {
+			_cache_freqs.erase(freq);
+		}
+	}
+
+	template<typename K, typename O>
+	void lfu_cache<K, O>::add_to_frequency(int32_t freq, const K& key) {
+		if (auto freqs_iter{ _cache_freqs.find(freq) }; freqs_iter == std::end(_cache_freqs)) {
+			_cache_freqs.emplace(std::make_pair(freq, std::unordered_set<K>{key}));
+		} else {
+			freqs_iter->second.insert(key);
+		}
+	}
+
+	template<typename K, typename O>
+	K lfu_cache<K, O>::extract_least_frequent() {
+		assert(!_cache_freqs.empty());
+		auto freqs_iter{ std::begin(_cache_freqs) };
+
+		auto& freqs{ freqs_iter->second };
+		assert(!freqs.empty());
+		auto key_iter{ std::begin(freqs) };
+		auto res{ *key_iter };
+		freqs.erase(key_iter);
+
+		if (freqs.empty()) {
+			_cache_freqs.erase(freqs_iter);
+		}
+		return res;
+	}
+
+	template<typename K, typename O>
+	bool lfu_cache<K, O>::contains(const K& key) const {
+		return _cache.contains(key);
+	}
+
+	template<typename K, typename O>
+	const O& lfu_cache<K, O>::get(const K& key) {
+		assert(_cache.contains(key));
+		auto& elem{ _cache[key] };
+
+		auto freq{ elem.second };
+		auto new_freq{ freq + 1 };
+
+		elem.second = new_freq;
+		discard_from_frequency(freq, key);
+		add_to_frequency(new_freq, key);
+
+		return elem.first;
+	}
+
+	template<typename K, typename O>
+	void lfu_cache<K, O>::insert(const K& key, const O& data) {
+		if (!_cache.contains(key)) {
+			if (_cache.size() >= _capacity) {
+				// we need to free some space
+				assert(_cache.size() == _capacity);
+				_cache.erase(extract_least_frequent());
+			}
+			_cache.emplace(std::make_pair(key, std::make_pair(data, 1)));
+			add_to_frequency(1, key);
+		}
+	}
+}
+
+```
+
+`pack/CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.18)
+
+set(CPACK_PACKAGE_NAME "comon")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Comon Windbg extension")
+set(CPACK_PACKAGE_DESCRIPTION "Comon - a WinDbg extension to debug COM calls")
+set(CPACK_PACKAGE_VENDOR "Sebastian Solnica (wtrace.net)")
+
+set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
+
+set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CMAKE_PROJECT_VERSION_PATCH}")
+
+set(CPACK_GENERATOR ZIP)
+
+set(CPACK_VERBATIM_VARIABLES ON)
+
+include(CPack)
+
+
+```
+
+`vcpkg.json`:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "comon",
+  "version": "1.0.0",
+  "dependencies": [
+    "wil",
+    "sqlitecpp"
+  ]
+}
+```
