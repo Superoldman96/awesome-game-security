@@ -1,0 +1,2131 @@
+Project Path: arc_gmh5225_inject__xs50_hc
+
+Source Tree:
+
+```txt
+arc_gmh5225_inject__xs50_hc
+├── README.md
+├── makefile
+└── src
+    ├── arp.c
+    ├── arp.h
+    ├── checksum.c
+    ├── checksum.h
+    ├── data.c
+    ├── data.h
+    ├── error_func.c
+    ├── error_func.h
+    ├── eth.c
+    ├── eth.h
+    ├── get_addr.c
+    ├── get_addr.h
+    ├── icmp.c
+    ├── icmp.h
+    ├── ip.c
+    ├── ip.h
+    ├── listen.c
+    ├── listen.h
+    ├── main.c
+    ├── output.c
+    ├── output.h
+    ├── random.c
+    ├── random.h
+    ├── send.c
+    ├── send.h
+    ├── sockf.c
+    ├── sockf.h
+    ├── tcp.c
+    ├── tcp.h
+    ├── type.h
+    ├── udp.c
+    ├── udp.h
+    ├── usage.c
+    └── usage.h
+
+```
+
+`README.md`:
+
+```md
+Inject
+---
+
+Inject is a raw socket packet crafter, injector and sniffer.
+
+### Supported Protocols and Features
+- ETHERNET (MAC Addresses, Protocol, Payload)
+- ARP (MAC Addresses, IP Addresses, ARP operation)
+- IP (IP Adresses, TTL, Service)
+- ICMP (Type, Code)
+- TCP (Ports, Flag, Payload)
+- UDP (Ports, Payload)
+- Packet sniffing (Ethernet, ARP, IP, ICMP, TCP, UDP)
+
+### Installation
+* For installation, go to the project directory and compile with : 
+    `make`
+* For uninstallation : 
+    `make clean`
+
+### Example Usages
+* ETHERNET packet :
+    `./inject eth -i wlan0 -M aa:bb:cc:dd:ee:ff -K ff:ee:dd:cc:bb:aa`
+
+> send ethernet packet with a payload using file
+* ETHERNET packet with data :
+    `./inject eth -i wlan0 -M aa:bb:cc:dd:ee:ff -K ff:ee:dd:cc:bb:aa -a (file)`
+
+* ARP packet :
+    `./inject arp -i wlan0 -S 192.168.1.50 -D 192.168.1.1 -r 1`
+
+* IP packet :
+    `./inject ip -S 192.168.1.50 -D 192.168.1.1`
+
+* ICMP echo request :
+    `./inject icmp -S 192.168.1.50 -D 192.168.1.1 -t 8`
+
+* TCP syn packet :
+     `./inject tcp -S 192.168.1.50 -D 192.168.1.1 -s 5000 -d 80 -f syn`
+
+> you can use multiple flags together
+* TCP syn, ack packet :
+     `./inject tcp -S 192.168.1.50 -D 192.168.1.1 -s 5000 -d 80 -f syn -f ack`
+
+> send tcp packet with a payload using file
+* TCP psh packet with data :
+     `./inject tcp -S 192.168.1.50 -D 192.168.1.1 -s 5000 -d 80 -f psh -a (file)`
+
+* UDP packet :
+     `./inject udp -S 192.168.1.50 -D 192.168.1.1 -s 5000 -d 4000`
+
+> send udp packet with a payload using file
+* UDP packet with data :
+     `./inject udp -S 192.168.1.50 -D 192.168.1.1 -s 5000 -d 4000 -a (file)`
+
+* Sniff network :
+    `./inject sniff`
+
+```
+
+`makefile`:
+
+```
+CC = gcc
+CFLAGS = -Wall
+
+SOURCES = $(wildcard src/*.c)
+OBJECTS = $(SOURCES:.c=.o)
+TARGET = inject
+
+$(TARGET) : $(OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+.PHONY = clean
+clean:
+	rm -f $(TARGET) $(OBJECTS)
+
+```
+
+`src/arp.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <net/ethernet.h>
+#include <linux/if_packet.h>
+#include <net/if.h>
+
+#include "sockf.h"
+#include "get_addr.h"
+#include "send.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "eth.h"
+#include "arp.h"
+#include "usage.h"
+
+static unsigned char src_mac[6], dst_mac[6];
+static unsigned char *src_ip = NULL, *dst_ip = NULL;
+static unsigned short oper;
+static int count = 1, verbose = 0, src_mac_control = 0, dst_mac_control = 0;
+static char *iface = NULL;
+
+void set_arp(char *buffer, unsigned char *source_mac, unsigned char *source_ip,
+		unsigned char *target_mac, unsigned char *target_ip, unsigned short oper){
+	struct arp_hdr *arph = (struct arp_hdr *)(buffer + sizeof(struct eth_hdr));
+
+	arph->htype = htons(1);
+	arph->ptype = htons(ETH_P_IP);
+	arph->hlen = 6;
+	arph->plen = 4;
+	arph->oper = htons(oper);
+	memcpy(arph->src_mac, source_mac, 6);
+	inet_pton(AF_INET, (const char *)source_ip, &arph->src_ip);
+	memcpy(arph->dst_mac, target_mac, 6);
+	inet_pton(AF_INET, (const char *)target_ip, &arph->dst_ip);
+}
+
+static void usage()
+{
+	general_usage();
+	arp_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+	int opt;
+
+	if (argc < 3) usage();
+
+	while ((opt = getopt(argc, argv, "i:c:vhM:K:S:D:r:")) != -1) {
+		switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+		case 'c':
+			count = atoi(optarg);
+			break;
+		case 'v':
+			verbose = 1;
+			break;
+		case 'h':
+			usage();
+		case 'M':
+			sscanf(optarg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				&src_mac[0], &src_mac[1], &src_mac[2],
+				&src_mac[3], &src_mac[4], &src_mac[5]);
+			src_mac_control = 1;
+			break;
+		case 'K':
+			sscanf(optarg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				&dst_mac[0], &dst_mac[1], &dst_mac[2],
+				&dst_mac[3], &dst_mac[4], &dst_mac[5]);
+			dst_mac_control = 1;
+			break;
+		case 'S':
+			src_ip = (unsigned char *)optarg;
+			break;
+		case 'D':
+			dst_ip = (unsigned char *)optarg;
+			break;
+		case 'r':
+			oper = atoi(optarg);
+			break;
+		case '?':
+			break;
+		}
+	}
+}
+
+void inject_arp(int argc, char *argv[])
+{
+	char buffer[BUFF_SIZE];
+	struct ifreq ifr;
+	struct sockaddr_ll device;
+	int sockfd, ind, len;
+
+	parser(argc, argv);
+
+	if (!src_ip) err_exit("source ip address not specified.");
+	if (!dst_ip) err_exit("destination ip address not specified.");
+	if (!iface) err_exit("network interface not specified.");
+
+	memset(buffer, 0, BUFF_SIZE);
+	memset(&ifr, 0, sizeof(struct ifreq));
+	memset(&device, 0, sizeof(struct sockaddr_ll));
+
+	if ((sockfd = init_packet_socket()) == -1)
+		exit(EXIT_FAILURE);
+
+	if (!src_mac_control) {
+		memcpy(ifr.ifr_name, iface, strlen(iface));
+		if (ioctl(sockfd, SIOCGIFHWADDR, &ifr) == -1)
+			err_msg("arp.c", "inject_arp", __LINE__, errno);
+		
+		memcpy(src_mac, ifr.ifr_hwaddr.sa_data, 6);
+	}
+
+	if (!dst_mac_control) memset(dst_mac, 0xff, 6);
+
+	if ((device.sll_ifindex = if_nametoindex(iface)) == 0)
+		err_msg("arp.c", "inject_arp", __LINE__, errno);
+	device.sll_family = AF_PACKET;
+	memcpy(device.sll_addr, src_mac, 6);
+	device.sll_halen = 6;
+
+	set_eth(buffer, dst_mac, src_mac, ETH_P_ARP, NULL, 0);
+	set_arp(buffer, src_mac, src_ip, dst_mac, dst_ip, oper);
+
+	len = sizeof(struct eth_hdr) + sizeof(struct arp_hdr);
+	for (ind = 0; ind < count; ind += 1)
+		send_packet_data(sockfd, buffer, len, &device);
+
+	if (verbose) {
+		print_eth(buffer);
+		print_arp(buffer);
+	}
+
+	close_sock(sockfd);
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/arp.h`:
+
+```h
+#ifndef ARP
+#define ARP
+
+void set_arp(char *buffer, unsigned char *source_mac, unsigned char *source_ip,
+		unsigned char *target_mac, unsigned char *target_ip,
+		unsigned short oper);
+void inject_arp(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/checksum.c`:
+
+```c
+unsigned short checksum(unsigned short *ptr, int nbytes)
+{
+	unsigned short oddbyte = 0;
+	register long sum = 0;
+	register short answer = 0;
+
+	while (nbytes > 1) {
+		sum += *ptr++;
+		nbytes -= 2;
+	}
+	if (nbytes == 1) {
+		*((unsigned char *)&oddbyte) = *(unsigned char *)ptr;
+		sum += oddbyte;
+	}
+	sum = (sum >> 16) + (sum & 0xffff);
+	sum += (sum >> 16);
+	answer = (unsigned short)~sum;
+
+	return answer;
+}
+
+```
+
+`src/checksum.h`:
+
+```h
+#ifndef CHECKSUM
+#define CHECKSUM
+
+unsigned short checksum(unsigned short *ptr, int nbytes);
+
+#endif
+
+```
+
+`src/data.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include "error_func.h"
+#include "data.h"
+
+char *read_file(char *file_name)
+{
+	char *payload;
+	int fd;
+	struct stat st;
+
+	if ((fd = open(file_name, O_RDONLY)) == -1) {
+		err_msg("data.c", "read_file", __LINE__, errno);
+		return NULL;
+	}
+	if (fstat(fd, &st) == -1) {
+		err_msg("data.c", "read_file", __LINE__, errno);
+		return NULL;
+	}
+
+	payload = malloc(st.st_size);
+	memset(payload, 0, st.st_size);
+
+	if (read(fd, payload, st.st_size) == -1) {
+		err_msg("data.c", "read_file", __LINE__, errno);
+		return NULL;
+	}
+
+	close(fd);
+	return payload;
+}
+
+```
+
+`src/data.h`:
+
+```h
+#ifndef DATA
+#define DATA
+
+char *read_file(char *file_name);
+
+#endif
+
+```
+
+`src/error_func.c`:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include "error_func.h"
+
+void err_msg(char *file_name, char *func, int line, int err)
+{
+	fprintf(stderr, "[ERROR] [%s/%s/%d] : %s\n",
+		file_name, func, line, strerror(err));
+}
+
+void err_exit(char *msg)
+{
+	fprintf(stderr, "[ERROR] %s\n", msg);
+	exit(EXIT_FAILURE);
+}
+
+```
+
+`src/error_func.h`:
+
+```h
+#ifndef ERROR_FUNC
+#define ERROR_FUNC
+
+void err_msg(char *file_name, char *func, int line, int err);
+void err_exit(char *msg);
+
+#endif
+
+```
+
+`src/eth.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <net/ethernet.h>
+#include <linux/if_packet.h>
+#include <net/if.h>
+
+#include "sockf.h"
+#include "get_addr.h"
+#include "send.h"
+#include "data.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "eth.h"
+#include "usage.h"
+
+static unsigned char src_mac[6], dst_mac[6];
+static unsigned short protocol;
+static int count = 1, verbose = 0, src_mac_control = 0, dst_mac_control = 0;
+static char *file_name = NULL, *iface = NULL;
+
+void set_eth(char *buffer, unsigned char *dst, unsigned char *src,
+		unsigned short proto, char *payload, size_t payload_size)
+{
+	struct eth_hdr *ethh = (struct eth_hdr *)buffer;
+	char *ptr = (buffer + sizeof(struct eth_hdr));
+
+	strncat(ptr, payload, payload_size);
+	memcpy(ethh->dst, dst, 6);
+	memcpy(ethh->src, src, 6);
+	ethh->protocol = htons(proto);
+}
+
+static void usage()
+{
+	general_usage();
+	eth_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+	int opt;
+
+	if (argc < 3) usage();
+
+	while ((opt = getopt(argc, argv, "i:c:vhM:K:p:a:")) != -1) {
+		switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+		case 'c':
+			count = atoi(optarg);
+			break;
+		case 'v':
+			verbose = 1;
+			break;
+		case 'h':
+			usage();
+			break;
+		case 'M':
+			sscanf(optarg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				&src_mac[0], &src_mac[1], &src_mac[2],
+				&src_mac[3], &src_mac[4], &src_mac[5]);
+			src_mac_control = 1;
+			break;
+		case 'K':
+			sscanf(optarg, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+				&dst_mac[0], &dst_mac[1], &dst_mac[2],
+				&dst_mac[3], &dst_mac[4], &dst_mac[5]);
+			dst_mac_control = 1;
+			break;
+		case 'p':
+			protocol = atoi(optarg);
+			break;
+		case 'a':
+			file_name = optarg;
+			break;
+		case '?':
+			break;
+		}
+	}
+}
+
+void inject_eth(int argc, char *argv[])
+{
+	char buffer[BUFF_SIZE], *payload;
+	struct ifreq ifr;
+	struct sockaddr_ll device;
+	int sockfd, ind, len;
+	size_t payload_size = 0;
+
+	parser(argc, argv);
+
+	memset(buffer, 0, BUFF_SIZE);
+	memset(&ifr, 0, sizeof(struct ifreq));
+	memset(&device, 0, sizeof(struct sockaddr_ll));
+
+	if ((sockfd = init_packet_socket()) == -1)
+		exit(EXIT_FAILURE);
+
+	if (!iface) err_exit("network interface not specified.");
+
+	if (!src_mac_control) {
+		memcpy(ifr.ifr_name, iface, strlen(iface));
+		if (ioctl(sockfd, SIOCGIFHWADDR, &ifr) == -1)
+			err_msg("eth.c", "inject_eth", __LINE__, errno);
+
+		memcpy(src_mac, ifr.ifr_hwaddr.sa_data, 6);
+	}
+
+	if (!dst_mac_control) memset(dst_mac, 0xff, 6);
+
+	if ((device.sll_ifindex = if_nametoindex(iface)) == 0)
+		err_msg("eth.c", "inject_eth", __LINE__, errno);
+	device.sll_family = AF_PACKET;
+	memcpy(device.sll_addr, src_mac, 6);
+	device.sll_halen = 6;
+
+	if (file_name) {
+		if ((payload = read_file(file_name)) == NULL)
+			exit(EXIT_FAILURE);
+		payload_size = strlen(payload);
+	}
+
+	set_eth(buffer, dst_mac, src_mac, protocol, payload, payload_size);
+
+	len = sizeof(struct eth_hdr) + payload_size;
+	for (ind = 0; ind < count; ind += 1)
+		send_packet_data(sockfd, buffer, len, &device);
+
+	if (verbose)
+		print_eth(buffer);
+
+	close_sock(sockfd);
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/eth.h`:
+
+```h
+#ifndef ETH
+#define ETH
+
+void set_eth(char *buffer, unsigned char *dst, unsigned char *src,
+		unsigned short proto, char *payload, size_t payload_size);
+void inject_eth(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/get_addr.c`:
+
+```c
+#define _GNU_SOURCE
+
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include <ifaddrs.h>
+
+#include "error_func.h"
+#include "get_addr.h"
+
+unsigned int get_address()
+{
+	struct ifaddrs *addr, *temp;
+	struct sockaddr_in *ip_addr;
+	unsigned int ip;
+
+	if (getifaddrs(&addr) == -1) {
+		err_msg("get_addr.c", "get_address", __LINE__, errno);
+		return -1;
+	}
+
+	for (temp = addr; temp != NULL; temp = temp->ifa_next) {
+		if (temp->ifa_addr == NULL) continue;
+
+		if (temp->ifa_addr->sa_family == AF_INET &&
+		    strcmp(temp->ifa_name, "lo")) {
+			ip_addr = (struct sockaddr_in *)temp->ifa_addr;
+			ip = ip_addr->sin_addr.s_addr;
+
+			break;
+		}
+	}
+
+	freeifaddrs(addr);
+
+	return ip;
+}
+
+int list_interfaces()
+{
+	struct ifaddrs *addr, *temp;
+	struct sockaddr_in *ip_addr;
+	int ind = 0;
+
+	if (getifaddrs(&addr) == -1) {
+		err_msg("get_addr.c", "list_interfaces", __LINE__, errno);
+		return -1;
+	}
+
+	for (temp = addr; temp != NULL; temp = temp->ifa_next) {
+		if (temp->ifa_addr == NULL) continue;
+
+		ip_addr = (struct sockaddr_in *)temp->ifa_addr;
+
+		if (temp->ifa_addr->sa_family == AF_INET)
+			printf("[%d] [%s] -> [%s]\n", ind, temp->ifa_name,
+				inet_ntoa(ip_addr->sin_addr));
+		ind += 1;
+	}
+
+	freeifaddrs(addr);
+
+	return 0;
+}
+
+```
+
+`src/get_addr.h`:
+
+```h
+#ifndef GET_ADDR
+#define GET_ADDR
+
+unsigned int get_address();
+int list_interfaces();
+
+#endif
+
+```
+
+`src/icmp.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "sockf.h"
+#include "send.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "ip.h"
+#include "icmp.h"
+#include "checksum.h"
+#include "usage.h"
+
+static unsigned char *src_addr = NULL, *dst_addr = NULL;
+static unsigned char ttl, service = 0, icmp_type, icmp_code;
+static int count = 1, verbose = 0;
+static char *iface = NULL;
+
+void set_icmp(char *buffer, unsigned char type, unsigned char code, unsigned short seq)
+{
+	struct icmp_hdr *icmph = (struct icmp_hdr *)
+		(buffer + sizeof(struct ip_hdr));
+
+	icmph->type = type;
+	icmph->code = code;
+	icmph->seq = seq;
+	icmph->id = htons(getpid());
+	icmph->check = 0;
+	icmph->check = checksum((unsigned short *)icmph, sizeof(struct icmp_hdr));
+}
+
+static void usage()
+{
+	general_usage();
+	ip_usage();
+	icmp_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+	int opt;
+
+	if (argc < 3) usage();
+
+	while ((opt = getopt(argc, argv, "i:c:vhS:D:T:o:t:C:")) != -1) {
+		switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+		case 'c':
+			count = atoi(optarg);
+			break;
+		case 'v':
+			verbose = 1;
+			break;
+		case 'h':
+			usage();
+		case 'S':
+			src_addr = (unsigned char *)optarg;
+			break;
+		case 'D':
+			dst_addr = (unsigned char *)optarg;
+			break;
+		case 'T':
+			ttl = atoi(optarg);
+			break;
+		case 'o':
+			service = atoi(optarg);
+			break;
+		case 't':
+			icmp_type = atoi(optarg);
+			break;
+		case 'C':
+			icmp_code = atoi(optarg);
+			break;
+		case '?':
+			break;
+		}
+	}
+}
+
+void inject_icmp(int argc, char *argv[])
+{
+	char buffer[BUFF_SIZE];
+	struct sockaddr_in sock_dst;
+	int sockfd, ind;
+
+	parser(argc, argv);
+	if (!dst_addr) err_exit("destination address not specified.");
+
+	memset(buffer, 0, BUFF_SIZE);
+	memset(&sock_dst, 0, sizeof(struct sockaddr_in));
+
+	if ((sockfd = init_socket()) == -1)
+		exit(EXIT_FAILURE);
+
+	if (iface) bind_iface(sockfd, iface);
+
+	sock_dst.sin_family = AF_INET;
+	inet_pton(AF_INET, (const char *)dst_addr, &sock_dst.sin_addr.s_addr);
+
+	set_ip(buffer, 0, src_addr, dst_addr, ttl, service, IPPROTO_ICMP);
+	set_icmp(buffer, icmp_type, icmp_code, 0);
+
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+	for (ind = 0; ind < count; ind += 1)
+		send_data(sockfd, buffer, iph->length, &sock_dst);
+
+	if (verbose) {
+		print_ip(buffer);
+		print_icmp(buffer);
+	}
+
+	close_sock(sockfd);
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/icmp.h`:
+
+```h
+#ifndef ICMP
+#define ICMP
+
+void set_icmp(char *buffer, unsigned char type, unsigned char code, unsigned short seq);
+void inject_icmp(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/ip.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "sockf.h"
+#include "send.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "ip.h"
+#include "get_addr.h"
+#include "checksum.h"
+#include "usage.h"
+
+static unsigned char *src_addr = NULL, *dst_addr = NULL;
+static unsigned char ttl, service = 0;
+static int count = 1, verbose = 0;
+static char *iface = NULL;
+
+void set_ip(char *buffer, size_t payload_size,
+		unsigned char src[4], unsigned char dst[4], unsigned char ttl,
+		unsigned char service, unsigned char protocol)
+{
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+
+	iph->length = sizeof(struct ip_hdr);
+	switch (protocol) {
+	case IPPROTO_ICMP:
+		iph->length += sizeof(struct icmp_hdr);
+		break;
+	case IPPROTO_TCP:
+		iph->length += sizeof(struct tcp_hdr);
+		break;
+	case IPPROTO_UDP:
+		iph->length += sizeof(struct tcp_hdr);
+		break;
+	}
+	iph->length += payload_size;
+
+	iph->ver_ihl = 0x45;
+	iph->service = service;
+	iph->ident = htons(getpid());
+	iph->frag = 0x00;
+	iph->ttl = (ttl) ? ttl : DEFAULT_TTL;
+	iph->protocol = protocol;
+	iph->check = 0;
+	if (!src) inet_pton(AF_INET, (const char *)get_address, &src);
+	inet_pton(AF_INET, (const char *)src, &iph->src);
+	inet_pton(AF_INET, (const char *)dst, &iph->dst);
+	iph->check = checksum((unsigned short *)iph, iph->length);
+}
+
+static void usage()
+{
+	general_usage();
+	ip_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+	int opt;
+
+	if (argc < 3) usage();
+
+	while ((opt = getopt(argc, argv, "i:c:vhS:D:T:o:")) != -1) {
+		switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+		case 'c':
+			count = atoi(optarg);
+			break;
+		case 'v':
+			verbose = 1;
+			break;
+		case 'h':
+			usage();
+		case 'S':
+			src_addr = (unsigned char *)optarg;
+			break;
+		case 'D':
+			dst_addr = (unsigned char *)optarg;
+			break;
+		case 'T':
+			ttl = atoi(optarg);
+			break;
+		case 'o':
+			service = atoi(optarg);
+			break;
+		case '?':
+			break;
+		}
+	}
+}
+
+void inject_ip(int argc, char *argv[])
+{
+	char buffer[BUFF_SIZE];
+	struct sockaddr_in sock_dst;
+	int sockfd, ind;
+
+	parser(argc, argv);
+	if (!dst_addr) err_exit("destination address not specified.");
+
+	memset(buffer, 0, BUFF_SIZE);
+	memset(&sock_dst, 0, sizeof(struct sockaddr_in));
+
+	if ((sockfd = init_socket()) == -1)
+		exit(EXIT_FAILURE);
+
+	if (iface) bind_iface(sockfd, iface);
+
+	sock_dst.sin_family = AF_INET;
+	inet_pton(AF_INET, (const char *)dst_addr, &sock_dst.sin_addr.s_addr);
+
+	set_ip(buffer, 0, src_addr, dst_addr, ttl, service, 0);
+
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+	for (ind = 0; ind < count; ind += 1)
+		send_data(sockfd, buffer, iph->length, &sock_dst);
+
+	if (verbose)
+		print_ip(buffer);
+
+	close_sock(sockfd);
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/ip.h`:
+
+```h
+#ifndef IP
+#define IP
+
+#include <sys/types.h>
+
+void set_ip(char *buffer, size_t payload_size,
+		unsigned char src[4], unsigned char dst[4], unsigned char ttl,
+		unsigned char service, unsigned char protocol);
+void inject_ip(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/listen.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <net/ethernet.h>
+#include <linux/if_ether.h>
+
+#include "sockf.h"
+#include "type.h"
+#include "listen.h"
+#include "output.h"
+#include "error_func.h"
+#include "usage.h"
+
+static int flag = 0;
+
+static void output_packet(char *buffer, int fl)
+{
+	struct eth_hdr *ethh = (struct eth_hdr *)buffer;
+	unsigned short protocol = ethh->protocol;
+
+	if ((fl & ETH_FLAG) == ETH_FLAG)
+		print_eth(buffer);
+
+	if ((protocol == htons(ETH_P_ARP)) && ((fl & ARP_FLAG) == ARP_FLAG))
+		print_arp(buffer);
+
+	if (protocol == htons(ETH_P_IP)) {
+		struct ip_hdr *iph = (struct ip_hdr *)(buffer + sizeof(struct eth_hdr));
+
+		if ((fl & IP_FLAG) == IP_FLAG)
+			print_ip(buffer);
+
+		switch (iph->protocol) {
+		case 1:
+			if ((fl & ICMP_FLAG) == ICMP_FLAG)
+				print_icmp(buffer);
+			break;
+		case 6:
+			if ((fl & TCP_FLAG) == TCP_FLAG)
+				print_tcp(buffer);
+			break;
+		case 17:
+			if ((fl & UDP_FLAG) == UDP_FLAG)
+				print_udp(buffer);
+			break;
+		}
+	}
+}
+
+static void usage()
+{
+	printf("\n general options :\n\n\
+\t-h : this help message\n");
+	sniff_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+	int opt;
+
+	while ((opt = getopt(argc, argv, "eaictuh")) != -1) {
+		switch (opt) {
+		case 'e':
+			flag |= ETH_FLAG;
+			break;
+		case 'a':
+			flag |= ARP_FLAG;
+			break;
+		case 'i':
+			flag |= IP_FLAG;
+			break;
+		case 'c':
+			flag |= ICMP_FLAG;
+			break;
+		case 't':
+			flag |= TCP_FLAG;
+			break;
+		case 'u':
+			flag |= UDP_FLAG;
+			break;
+		case 'h':
+			usage();
+		case '?':
+			break;
+		}
+	}
+
+	if (flag == 0) flag |= ALL;
+}
+
+void sniff_network(int argc, char *argv[])
+{
+	int sockfd, total;
+	char buffer[BUFF_SIZE];
+
+	parser(argc, argv);
+	sockfd = init_packet_socket();
+
+	while (1) {
+		memset(buffer, 0, BUFF_SIZE);
+		total = recvfrom(sockfd, buffer, BUFF_SIZE, 0, NULL, NULL);
+		if (total < 0 || total == 0 ) {
+			err_msg("listen.c", "sniff_network", __LINE__, errno);
+			break;
+		}
+		output_packet(buffer, flag);
+	}
+
+	close_sock(sockfd);
+	exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/listen.h`:
+
+```h
+#ifndef LISTEN
+#define LISTEN
+
+void sniff_network(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/main.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+
+#include "error_func.h"
+#include "eth.h"
+#include "arp.h"
+#include "ip.h"
+#include "icmp.h"
+#include "tcp.h"
+#include "udp.h"
+#include "get_addr.h"
+#include "listen.h"
+#include "usage.h"
+
+void parser(int argc, char *argv[])
+{
+	int opt;
+
+	if (argc < 2) {
+		main_usage();
+		exit(EXIT_FAILURE);
+	}
+
+	if (!strcmp(argv[1], "sniff")) sniff_network(argc, argv);
+	if (!strcmp(argv[1], "eth")) inject_eth(argc, argv);
+	if (!strcmp(argv[1], "arp")) inject_arp(argc, argv);
+	if (!strcmp(argv[1], "ip")) inject_ip(argc, argv);
+	if (!strcmp(argv[1], "icmp")) inject_icmp(argc, argv);
+	if (!strcmp(argv[1], "tcp")) inject_tcp(argc, argv);
+	if (!strcmp(argv[1], "udp")) inject_udp(argc, argv);
+
+	while ((opt = getopt(argc, argv, "gh")) != -1) {
+		switch (opt) {
+		case 'g':
+			list_interfaces();
+			break;
+		case 'h':
+			main_usage();
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+int main(int argc, char *argv[])
+{
+	if (getuid()) err_exit("permission denied.");
+	parser(argc, argv);
+
+	return 0;
+}
+
+```
+
+`src/output.c`:
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "output.h"
+#include "type.h"
+
+void print_eth(char *buffer)
+{
+	struct eth_hdr *eth = (struct eth_hdr *)buffer;
+	int ind;
+
+	printf("ethernet | ");
+
+	for (ind = 0; ind < 5; ind += 1)
+		printf("%.2x:", eth->src[ind]);
+	printf("%.2x", eth->src[5]);
+
+	printf(" --> ");
+
+        for (ind = 0; ind < 5; ind += 1)
+		printf("%.2x:", eth->dst[ind]);
+	printf("%.2x ", eth->dst[5]);
+
+	printf("%d\n", eth->protocol);
+
+}
+
+void print_arp(char *buffer)
+{
+	struct arp_hdr *arph = (struct arp_hdr * )(buffer + sizeof(struct eth_hdr));
+	int ind;
+
+	printf("arp      | ");
+	for (ind = 0; ind < 5; ind += 1)
+		printf("%.2x:", arph->src_mac[ind]);
+	printf("%.2x", arph->src_mac[5]);
+	printf(" --> ");
+	for (ind = 0; ind < 5; ind += 1)
+		printf("%.2x:", arph->dst_mac[ind]);
+	printf("%.2x ", arph->dst_mac[5]);
+
+	printf("%u.%u.%u.%u",
+		arph->src_ip[0], arph->src_ip[1], arph->src_ip[2], arph->src_ip[3]);
+	printf(" --> ");
+	printf("%u.%u.%u.%u",
+		arph->dst_ip[0] ,arph->dst_ip[1], arph->dst_ip[2], arph->dst_ip[3]);
+
+	if (arph->oper == htons(1)) printf(" request\n");
+	else if (arph->oper == htons(2)) printf(" reply\n");
+	else printf(" %d\n", arph->oper);
+}
+
+void print_ip(char *buffer)
+{
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+
+	printf("ip       | ");
+	printf("%u.%u.%u.%u",
+		iph->src[0], iph->src[1], iph->src[2], iph->src[3]);
+	printf(" --> ");
+	printf("%u.%u.%u.%u ",
+		iph->dst[0], iph->dst[1], iph->dst[2], iph->dst[3]);
+	printf("proto:%d ", iph->protocol);
+	printf("tos:%d ", iph->service);
+	printf("ttl:%d ", iph->ttl);
+	printf("id:%d ", iph->ident);
+	printf("check:%x ", iph->check);
+	printf("len:%d\n", iph->length);
+}
+
+void print_icmp(char *buffer)
+{
+	struct icmp_hdr *icmph = (struct icmp_hdr *)
+		(buffer + sizeof(struct ip_hdr));
+
+	printf("icmp     | ");
+	printf("type:%d (", icmph->type);
+	if (icmph->type == 0) printf("echo reply");
+	if (icmph->type == 3) printf("destination unreachable");
+	if (icmph->type == 4) printf("source quench");
+	if (icmph->type == 5) printf("redirect");
+	if (icmph->type == 8) printf("echo request");
+	if (icmph->type == 9) printf("router advertisement");
+	if (icmph->type == 10) printf("router selection");
+	if (icmph->type == 11) printf("time exceeded");
+	if (icmph->type == 12) printf("parameter problem");
+	if (icmph->type == 13) printf("timestamp");
+	if (icmph->type == 14) printf("timestamp reply");
+	if (icmph->type == 15) printf("information request");
+	if (icmph->type == 16) printf("information reply");
+	if (icmph->type == 17) printf("address mask request");
+	if (icmph->type == 18) printf("address mask reply");
+	if (icmph->type == 30) printf("traceroute");
+	printf(") ");
+	printf("code:%d ", icmph->code);
+	printf("id:%d ", icmph->id);
+	printf("seq:%d ", icmph->seq);
+	printf("check:%x\n", icmph->check);
+}
+
+void print_tcp(char *buffer)
+{
+	struct tcp_hdr *tcph = (struct tcp_hdr *)
+		(buffer + sizeof(struct ip_hdr));
+
+	printf("tcp      | ");
+	printf("%d --> %d ", htons(tcph->src), htons(tcph->dst));
+	printf("seq:%d ", tcph->seq);
+	printf("ack:%d ", tcph->ack);
+	printf("flag:");
+	if ((tcph->flag | 1) == tcph->flag) printf("fin,");
+	if ((tcph->flag | 2) == tcph->flag) printf("syn,");
+	if ((tcph->flag | 4) == tcph->flag) printf("rst,");
+	if ((tcph->flag | 8) == tcph->flag) printf("psh,");
+	if ((tcph->flag | 16) == tcph->flag) printf("ack,");
+	if ((tcph->flag | 32) == tcph->flag) printf("urg,");
+	printf(" check:%x\n", tcph->check);
+}
+
+void print_udp(char *buffer)
+{
+	struct udp_hdr *udph = (struct udp_hdr *)
+		(buffer + sizeof(struct ip_hdr));
+
+	printf("udp      | ");
+	printf("%d --> %d ", htons(udph->src), htons(udph->dst));
+	printf("check:%x\n", udph->check);
+}
+
+```
+
+`src/output.h`:
+
+```h
+#ifndef OUTPUT
+#define OUTPUT
+
+void print_eth(char *buffer);
+void print_arp(char *buffer);
+void print_ip(char *buffer);
+void print_icmp(char *buffer);
+void print_tcp(char *buffer);
+void print_udp(char *buffer);
+
+#endif
+
+```
+
+`src/random.c`:
+
+```c
+#include <stdlib.h>
+#include "random.h"
+
+unsigned int rand_addr()
+{
+	return rand();
+}
+
+unsigned short rand_port()
+{
+	return rand() % 65535;
+}
+
+```
+
+`src/random.h`:
+
+```h
+#ifndef RANDOM
+#define RANDOM
+
+unsigned int rand_addr();
+unsigned short rand_port();
+
+#endif
+
+```
+
+`src/send.c`:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <linux/if_packet.h>
+#include <net/ethernet.h>
+#include <netinet/in.h>
+
+#include "send.h"
+#include "error_func.h"
+
+int send_data(int sockfd, char *buffer, size_t len, struct sockaddr_in *dst)
+{
+	if (sendto(sockfd, buffer, len, 0, (struct sockaddr *)dst,
+		   sizeof(*dst)) < 0) {
+		err_msg("send.c", "send_data", __LINE__, errno);
+		return -1;
+	}
+
+	return 0;
+}
+
+int send_packet_data(int sockfd, char *buffer, size_t len, struct sockaddr_ll *device)
+{
+	if (sendto(sockfd, buffer, len , 0, (struct sockaddr *)device,
+			sizeof(*device)) < 0) {
+		err_msg("send.c", "send_data", __LINE__, errno);
+		return -1;
+	}
+
+	return 0;
+}
+
+```
+
+`src/send.h`:
+
+```h
+#ifndef SEND
+#define SEND
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <linux/if_packet.h>
+#include <net/ethernet.h>
+#include <netinet/in.h>
+
+int send_data(int sockfd, char *buffer, size_t len, struct sockaddr_in *dst);
+int send_packet_data(int sockfd, char *buffer, size_t len, struct sockaddr_ll *device);
+
+#endif
+
+```
+
+`src/sockf.c`:
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <errno.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <linux/if_ether.h>
+
+#include "sockf.h"
+#include "error_func.h"
+
+int init_socket()
+{
+	int sockfd, enable = 1;
+
+	if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
+		err_msg("sockf.c", "init_socket", __LINE__, errno);
+		return -1;
+	}
+	if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(int)) < 0) {
+		err_msg("sockf.c", "init_socket", __LINE__, errno);
+		return -1;
+	}
+
+	return sockfd;
+}
+
+int init_packet_socket()
+{
+	int sockfd;
+
+	if ((sockfd = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
+		err_msg("sockf.c", "init_raw_socket", __LINE__, errno);
+		return -1;
+	}
+
+	return sockfd;
+}
+
+int bind_iface(int sockfd, char *iface)
+{
+	int len = strlen(iface);
+
+	if (setsockopt(sockfd, SOL_SOCKET, SO_BINDTODEVICE, iface, len) == -1) {
+		err_msg("sockf.c", "bind_iface", __LINE__, errno);
+		return -1;
+	}
+
+	return 0;
+}
+
+void close_sock(int sockfd)
+{
+	if (close(sockfd) == -1)
+		err_msg("sockf.c", "close_sock", __LINE__, errno);
+}
+
+```
+
+`src/sockf.h`:
+
+```h
+#ifndef SOCKF
+#define SOCKF
+
+int init_socket();
+int init_packet_socket();
+int bind_iface(int sockfd, char *iface);
+void close_sock(int sockfd);
+
+#endif
+
+```
+
+`src/tcp.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "sockf.h"
+#include "send.h"
+#include "data.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "ip.h"
+#include "tcp.h"
+#include "random.h"
+#include "checksum.h"
+#include "usage.h"
+
+static unsigned char *src_addr = NULL, *dst_addr = NULL;
+static unsigned char ttl, service = 0, tcp_flag;
+static unsigned short src_port, dst_port;
+static int count = 1, verbose = 0;
+static char *file_name = NULL, *iface = NULL;
+
+static unsigned short tcp_check(struct ip_hdr *iph, struct tcp_hdr *tcph,
+				char *payload, size_t payload_size)
+{
+	struct psd_hdr psh;
+	char *psd;
+	size_t psd_size;
+	unsigned short check;
+
+	memcpy(psh.src, iph->src, 4);
+	memcpy(psh.dst, iph->dst, 4);
+
+	psh.placeholder = 0;
+	psh.protocol = IPPROTO_TCP;
+	psh.length = htons(sizeof(struct tcp_hdr) + payload_size);
+
+	psd_size = sizeof(struct psd_hdr) + sizeof(struct tcp_hdr) + payload_size;
+
+	psd = malloc(psd_size);
+	memset(psd, 0, psd_size);
+
+	memcpy(psd, (char *)&psh, sizeof(struct psd_hdr));
+	memcpy(psd + sizeof(struct psd_hdr), tcph, sizeof(struct tcp_hdr));
+	memcpy(psd + sizeof(struct psd_hdr) + sizeof(struct tcp_hdr),
+			payload, payload_size);
+
+	check = checksum((unsigned short *)psd, psd_size);
+	free(psd);
+
+	return check;
+}
+
+void set_tcp(char *buffer, char *payload, size_t payload_size,
+		unsigned short src, unsigned short dst,
+		unsigned char flag, unsigned int seq, unsigned int ack)
+{
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+	struct tcp_hdr *tcph = (struct tcp_hdr *)(buffer + sizeof(struct ip_hdr));
+	char *ptr = (buffer + sizeof(struct ip_hdr) + sizeof(struct tcp_hdr));
+
+	strncat(ptr, payload, payload_size);
+	tcph->src = (src) ? htons(src) : htons(rand_port());
+	tcph->dst = (dst) ? htons(dst) : htons(rand_port());
+	tcph->seq = seq;
+	tcph->ack = ack;
+	tcph->len_res = 0x50;
+	tcph->flag = flag;
+	tcph->win = 0x0fff;
+	tcph->check = 0;
+	tcph->urgp = 0x0;
+	tcph->check = tcp_check(iph, tcph, payload, payload_size);
+}
+
+static void usage()
+{
+	general_usage();
+	ip_usage();
+	tcp_usage();
+	printf("\n");
+
+	exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+        int opt;
+
+        if (argc < 3) usage();
+
+        while ((opt = getopt(argc, argv, "i:c:vhS:D:T:o:s:d:f:a:")) != -1) {
+                switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+                case 'c':
+                        count = atoi(optarg);
+                        break;
+                case 'v':
+                        verbose = 1;
+                        break;
+                case 'h':
+                        usage();
+                case 'S':
+                        src_addr = (unsigned char *)optarg;
+                        break;
+                case 'D':
+                        dst_addr = (unsigned char *)optarg;
+                        break;
+                case 'T':
+                        ttl = atoi(optarg);
+                        break;
+		case 'o':
+			service = atoi(optarg);
+			break;
+                case 's':
+                        src_port = atoi(optarg);
+                        break;
+                case 'd':
+                        dst_port = atoi(optarg);
+                        break;
+		case 'f':
+			if (!strcmp(optarg, "fin")) tcp_flag |= 1;
+			if (!strcmp(optarg, "syn")) tcp_flag |= 2;
+			if (!strcmp(optarg, "rst")) tcp_flag |= 4;
+			if (!strcmp(optarg, "psh")) tcp_flag |= 8;
+			if (!strcmp(optarg, "ack")) tcp_flag |= 16;
+			if (!strcmp(optarg, "urg")) tcp_flag |= 32;
+			break;
+		case 'a':
+			file_name = optarg;
+			break;
+                case '?':
+                        break;
+                }
+        }
+}
+
+void inject_tcp(int argc, char *argv[])
+{
+       char buffer[BUFF_SIZE], *payload = NULL;
+       struct sockaddr_in sock_dst;
+       int sockfd, ind;
+       size_t payload_size = 0;
+
+       parser(argc, argv);
+       if (!dst_addr) err_exit("destination address not specified.");
+
+       srand(time(NULL));
+       memset(buffer, 0, BUFF_SIZE);
+       memset(&sock_dst, 0, sizeof(struct sockaddr_in));
+
+       if ((sockfd = init_socket()) == -1)
+	       exit(EXIT_FAILURE);
+
+       if (iface) bind_iface(sockfd, iface);
+
+       sock_dst.sin_family = AF_INET;
+       inet_pton(AF_INET, (const char *)dst_addr, &sock_dst.sin_addr.s_addr);
+       sock_dst.sin_port = dst_port;
+
+       if (file_name) {
+	       if ((payload = read_file(file_name)) == NULL)
+		       exit(EXIT_FAILURE);
+	       payload_size = strlen(payload);
+       }
+
+       set_ip(buffer, payload_size, src_addr, dst_addr, ttl, service, IPPROTO_TCP);
+       set_tcp(buffer, payload, payload_size, src_port, dst_port, tcp_flag, 1, 1);
+
+       struct ip_hdr *iph = (struct ip_hdr *)buffer;
+       for (ind = 0; ind < count; ind += 1)
+               send_data(sockfd, buffer, iph->length, &sock_dst);
+
+       if (verbose) {
+	       print_ip(buffer);
+	       print_tcp(buffer);
+       }
+
+       if (file_name) free(payload);
+       close_sock(sockfd);
+
+       exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/tcp.h`:
+
+```h
+#ifndef TCP
+#define TCP
+
+void set_tcp(char *buffer, char *payload, size_t payload_size,
+		unsigned short src, unsigned short dst,
+		unsigned char flag, unsigned int seq, unsigned int ack);
+void inject_tcp(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/type.h`:
+
+```h
+#ifndef TYPE
+#define TYPE
+
+#define BUFF_SIZE 65535
+#define DEFAULT_TTL 248
+
+#define ETH_FLAG 1
+#define ARP_FLAG 2
+#define ICMP_FLAG 4
+#define IP_FLAG 8
+#define TCP_FLAG 16
+#define UDP_FLAG 32
+#define ALL 63
+
+struct eth_hdr {
+	unsigned char dst[6];
+	unsigned char src[6];
+	unsigned short protocol;
+};
+
+struct arp_hdr {
+	unsigned short htype;
+	unsigned short ptype;
+	unsigned char hlen;
+	unsigned char plen;
+	unsigned short oper;
+	unsigned char src_mac[6];
+	unsigned char src_ip[4];
+	unsigned char dst_mac[6];
+	unsigned char dst_ip[4];
+};
+
+struct ip_hdr {
+	unsigned char ver_ihl;
+	unsigned char service;
+	unsigned short length;
+	unsigned short ident;
+	unsigned short frag;
+	unsigned char ttl;
+	unsigned char protocol;
+	unsigned short check;
+	unsigned char src[4];
+	unsigned char dst[4];
+};
+
+struct icmp_hdr {
+	unsigned char type;
+	unsigned char code;
+	unsigned short check;
+	unsigned short id;
+	unsigned short seq;
+};
+
+struct tcp_hdr {
+	unsigned short src;
+	unsigned short dst;
+	unsigned int seq;
+	unsigned int ack;
+	unsigned char len_res;
+	unsigned char flag;
+	unsigned short win;
+	unsigned short check;
+	unsigned short urgp;
+};
+
+struct udp_hdr {
+	unsigned short src;
+	unsigned short dst;
+	unsigned short length;
+	unsigned short check;
+};
+
+struct psd_hdr {
+	unsigned char src[4];
+	unsigned char dst[4];
+	unsigned char placeholder;
+	unsigned char protocol;
+	unsigned short length;
+};
+
+#endif
+
+```
+
+`src/udp.c`:
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "sockf.h"
+#include "send.h"
+#include "data.h"
+#include "error_func.h"
+#include "output.h"
+#include "type.h"
+#include "ip.h"
+#include "udp.h"
+#include "random.h"
+#include "checksum.h"
+#include "usage.h"
+
+static unsigned char *src_addr = NULL, *dst_addr = NULL;
+static unsigned char ttl, service = 0;
+static unsigned short src_port, dst_port;
+static int count = 1, verbose = 0;
+static char *file_name = NULL, *iface = NULL;
+
+static unsigned short udp_check(struct ip_hdr *iph, struct udp_hdr *udph,
+				char *payload, size_t payload_size)
+{
+	struct psd_hdr psh;
+	char *psd;
+	size_t psd_size;
+	unsigned short check;
+
+	memcpy(psh.src, iph->src, 4);
+	memcpy(psh.dst, iph->dst, 4);
+
+	psh.placeholder = 0;
+	psh.protocol = IPPROTO_UDP;
+	psh.length = htons(sizeof(struct udp_hdr) + payload_size);
+
+	psd_size = sizeof(struct psd_hdr) + sizeof(struct udp_hdr) + payload_size;
+
+	psd = malloc(psd_size);
+	memset(psd, 0, psd_size);
+
+	memcpy(psd, (char *)&psh, sizeof(struct psd_hdr));
+	memcpy(psd + sizeof(struct psd_hdr), udph, sizeof(struct udp_hdr));
+	memcpy(psd + sizeof(struct psd_hdr) + sizeof(struct udp_hdr),
+			payload, payload_size);
+
+	check = checksum((unsigned short *)psd, psd_size);
+	free(psd);
+
+	return check;
+}
+
+void set_udp(char *buffer, char *payload, size_t payload_size,
+		unsigned short src, unsigned short dst)
+{
+	struct ip_hdr *iph = (struct ip_hdr *)buffer;
+	struct udp_hdr *udph = (struct udp_hdr *)(buffer + sizeof(struct ip_hdr));
+	char *ptr = (buffer + sizeof(struct ip_hdr) + sizeof(struct udp_hdr));
+
+	strncat(ptr, payload, payload_size);
+	udph->src = (src) ? htons(src) : htons(rand_port());
+	udph->dst = (dst) ? htons(dst) : htons(rand_port());
+	udph->length = htons(sizeof(struct udp_hdr) + payload_size);
+	udph->check = 0;
+	udph->check = udp_check(iph, udph, payload, payload_size);
+}
+
+static void usage()
+{
+	general_usage();
+	ip_usage();
+	udp_usage();
+	printf("\n");
+
+        exit(EXIT_FAILURE);
+}
+
+static void parser(int argc, char *argv[])
+{
+        int opt;
+
+        if (argc < 3) usage();
+
+        while ((opt = getopt(argc, argv, "i:c:vhS:D:T:o:s:d:a:")) != -1) {
+                switch (opt) {
+		case 'i':
+			iface = optarg;
+			break;
+                case 'c':
+                        count = atoi(optarg);
+                        break;
+                case 'v':
+                        verbose = 1;
+                        break;
+                case 'h':
+                        usage();
+                case 'S':
+                        src_addr = (unsigned char *)optarg;
+                        break;
+                case 'D':
+                        dst_addr = (unsigned char *)optarg;
+                        break;
+                case 'T':
+                        ttl = atoi(optarg);
+                        break;
+		case 'o':
+			service = atoi(optarg);
+			break;
+                case 's':
+                        src_port = atoi(optarg);
+                        break;
+                case 'd':
+                        dst_port = atoi(optarg);
+                        break;
+		case 'a':
+			file_name = optarg;
+			break;
+                case '?':
+                        break;
+                }
+        }
+}
+
+void inject_udp(int argc, char *argv[])
+{
+       char buffer[BUFF_SIZE], *payload;
+       struct sockaddr_in sock_dst;
+       int sockfd, ind;
+       size_t payload_size = 0;
+
+       parser(argc, argv);
+       if (!dst_addr) err_exit("destination address not specified.");
+
+       srand(time(NULL));
+       memset(buffer, 0, BUFF_SIZE);
+       memset(&sock_dst, 0, sizeof(struct sockaddr_in));
+
+       if ((sockfd = init_socket()) == -1)
+	       exit(EXIT_FAILURE);
+
+       if (iface) bind_iface(sockfd, iface);
+
+       sock_dst.sin_family = AF_INET;
+       inet_pton(AF_INET, (const char *)dst_addr, &sock_dst.sin_addr.s_addr);
+       sock_dst.sin_port = dst_port;
+
+       if (file_name) {
+	       if ((payload = read_file(file_name)) == NULL)
+		       exit(EXIT_FAILURE);
+	       payload_size = strlen(payload);
+       }
+
+       set_ip(buffer, payload_size, src_addr, dst_addr, ttl, service, IPPROTO_UDP);
+       set_udp(buffer, payload, payload_size, src_port, dst_port);
+
+       struct ip_hdr *iph = (struct ip_hdr *)buffer;
+       for (ind = 0; ind < count; ind += 1)
+               send_data(sockfd, buffer, iph->length, &sock_dst);
+
+       if (verbose) {
+	       print_ip(buffer);
+	       print_udp(buffer);
+       }
+
+       if (file_name) free(payload);
+       close_sock(sockfd);
+
+       exit(EXIT_SUCCESS);
+}
+
+```
+
+`src/udp.h`:
+
+```h
+#ifndef UDP
+#define UDP
+
+void set_udp(char *buffer, char *payload, size_t payload_size,
+		unsigned short src, unsigned short dst);
+void inject_udp(int argc, char *argv[]);
+
+#endif
+
+```
+
+`src/usage.c`:
+
+```c
+#include <stdio.h>
+
+void main_usage()
+{
+	printf("\n usage : ./depocilin [protocols/modes] [options]\n\n\
+ protocols :\n\
+\teth : eth packets\n\
+\tarp : arp packets\n\
+\tip : ip packets\n\
+\ticmp : icmp packets\n\
+\ttcp : tcp packets\n\
+\tudp : udp packets\n\n\
+ modes : \n\
+\tsniff : sniff network\n\n\
+ options :\n\
+\t-g : list avaliable interfaces\n\
+\t-h : this help message\n\n");
+}
+
+void general_usage()
+{
+	printf("\n general options :\n\n\
+\t-i [interface] : network interface\n\
+\t-c [count] : number of packets to send\n\
+\t-v : verbose\n\
+\t-h : this help message\n");
+}
+
+void sniff_usage()
+{
+	printf("\n sniff options :\n\n\
+\t-e : ethernet\n\
+\t-a : arp\n\
+\t-i : ip\n\
+\t-c : icmp\n\
+\t-t : tcp\n\
+\t-u : udp\n");
+}
+
+void eth_usage()
+{
+	printf("\n ETH options :\n\n\
+\t-M [mac address] : source mac address (in XX:XX:XX:XX:XX:XX format)\n\
+\t-K [mac address] : destination mac address (in XX:XX:XX:XX:XX:XX format)\n\
+\t-p [protocol] : protocol\n\
+\t-a [file name] : payload file\n");
+}
+
+void arp_usage()
+{
+	printf("\n ARP options :\n\n\
+\t-M [mac address] : source mac address (in XX:XX:XX:XX:XX:XX format)\n\
+\t-K [mac address] : destination mac address (in XX:XX:XX:XX:XX:XX format)\n\
+\t-S [ip address] : source ip address\n\
+\t-D [ip address] : destination ip address\n\
+\t-r [operation] : ARP operation\n");
+}
+
+void ip_usage()
+{
+	printf("\n IP options :\n\n\
+\t-S [address] : source address\n\
+\t-D [address] : destination address\n\
+\t-T [ttl] : ttl\n\
+\t-o [service] : type of service\n");
+}
+
+void icmp_usage()
+{
+	printf("\n ICMP options :\n\n\
+\t-t [type] : icmp type\n\
+\t-C [code] : icmp code\n");
+}
+
+void tcp_usage()
+{
+        printf("\n TCP options :\n\n\
+\t-s [port] : source port\n\
+\t-d [port] : destination port\n\
+\t-f [flag] : tcp flag (syn, ack, psh, fin, rst, urg)\n\
+\t-a [file] : payload file\n");
+}
+
+void udp_usage()
+{
+	printf("\n UDP options :\n\n\
+\t-s [port] : source port\n\
+\t-d [port] : destination port\n\
+\t-a [file] : payload file\n");
+}
+
+```
+
+`src/usage.h`:
+
+```h
+#ifndef USAGE
+#define USAGE
+
+void main_usage();
+void general_usage();
+void sniff_usage();
+void eth_usage();
+void arp_usage();
+void ip_usage();
+void icmp_usage();
+void tcp_usage();
+void udp_usage();
+
+#endif
+
+```
