@@ -1,0 +1,4956 @@
+Project Path: arc_gmh5225_VolatileDataCollector_yxnb7lrp
+
+Source Tree:
+
+```txt
+arc_gmh5225_VolatileDataCollector_yxnb7lrp
+├── ARPA.c
+├── CUSR.c
+├── DRV.c
+├── HND.c
+├── HNM.c
+├── ICOA.c
+├── ICOD.c
+├── KLS.c
+├── LICENSE
+├── NANO.c
+├── README.md
+├── SET.c
+├── TLM.c
+├── TLV.c
+├── Util.c
+├── VSTriage.c
+├── VSTriage.exe
+└── VSTriage.h
+
+```
+
+`ARPA.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszArpaBuf = NULL;
+size_t stArpaBufSize;
+
+
+BOOL ARPAMain(void)
+{
+	PMIB_IPNET_TABLE2 pipTable;
+	DWORD dwStatus;
+	dwStatus = GetIpNetTable2(AF_UNSPEC, &pipTable);
+	if (STATUS_SUCCESS != dwStatus)
+	{
+		wprintf(L"ERROR: GetIpNetTable2() returned 0x%08lx.\r\n", dwStatus);
+		return (int)dwStatus;
+	}
+
+	ULONG i;
+	unsigned int j;
+
+	for (i = 0; i < pipTable->NumEntries; i++)
+	{
+		if (!pipTable->Table[i].PhysicalAddressLength) 
+		{
+			continue;
+		}
+
+		WCHAR wszAddr[INET6_ADDRSTRLEN] = L"???";
+		WCHAR wszEntry[SIZE_1KB] = {0};
+		WCHAR wszTemp[SIZE_1KB] = {0};
+		StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"[0x%x]\t", pipTable->Table[i].InterfaceIndex);
+		StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+
+		for (j = 0; j < pipTable->Table[i].PhysicalAddressLength; j++)
+		{
+			if (j != pipTable->Table[i].PhysicalAddressLength - 1)
+			{
+				StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"%.2X-", (int)pipTable->Table[i].PhysicalAddress[j]);
+				StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+			}
+			else
+			{
+				StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"%.2X", (int)pipTable->Table[i].PhysicalAddress[j]);
+				StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+			}
+		}
+
+		PVOID pvAddrAddr;
+		switch (pipTable->Table[i].Address.si_family)
+		{
+		case AF_INET:
+			pvAddrAddr = &pipTable->Table[i].Address.Ipv4.sin_addr;
+			break;
+		case AF_INET6:
+			pvAddrAddr = &pipTable->Table[i].Address.Ipv6.sin6_addr;
+			break;
+		default:
+			pvAddrAddr = NULL;
+		}
+
+		if (NULL != pvAddrAddr)
+		{
+			InetNtopW(pipTable->Table[i].Address.si_family, pvAddrAddr, wszAddr, ARRAYSIZE(wszAddr)); 
+		}
+
+		StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\t%s", wszAddr);
+		StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+
+		switch (pipTable->Table[i].State)
+		{
+		case NlnsUnreachable:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsUnreachable");
+			break;
+		case NlnsIncomplete:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsIncomplete");
+			break;
+		case NlnsProbe:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsProbe");
+			break;
+		case NlnsDelay:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsDelay");
+			break;
+		case NlnsStale:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsStale");
+			break;
+		case NlnsReachable:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsReachable");
+			break;
+		case NlnsPermanent:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsPermanent");
+			break;
+		case NlnsMaximum:
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tNlnsUnknown");
+			break;
+		}
+		StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+
+		if (pipTable->Table[i].IsRouter)
+		{
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tIsRouter");
+			StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+		}
+		if (pipTable->Table[i].IsUnreachable)
+		{
+			StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\tIsUnreachable");
+			StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+		}
+
+		StringCchPrintfW(wszTemp, ARRAYSIZE(wszTemp), L"\r\n");
+		StringCchCatW(wszEntry, ARRAYSIZE(wszEntry), wszTemp);
+
+		StringCchCatW(pwszArpaBuf, stArpaBufSize / sizeof(WCHAR), wszEntry);
+	} //for
+
+	FreeMibTable(pipTable);
+	pipTable = NULL;
+	return TRUE;
+}
+
+
+PWSTR ARPA_Output(void)
+{
+	wprintf(L"Listing ARP Cache\r\n");
+	stArpaBufSize = SIZE_16MB;
+
+	ALLOCORCRASH(pwszArpaBuf, stArpaBufSize);
+
+	AddCheckHeader(pwszArpaBuf, stArpaBufSize, L"ARP Cache", TRUE);
+
+	ARPAMain();
+	ShrinkWcharBuffer(&pwszArpaBuf);
+	return pwszArpaBuf;
+}
+
+```
+
+`CUSR.c`:
+
+```c
+#include "VSTriage.h"
+
+
+PWSTR pwszCusrBuf = NULL;
+size_t stCusrBufSize;
+
+HCERTSTORE CUSROpenRootStore(DWORD dwStore)
+{
+	HCERTSTORE hCertStore;
+	hCertStore = CertOpenStore(
+		CERT_STORE_PROV_SYSTEM,
+		0,
+		(HCRYPTPROV_LEGACY)NULL,
+		dwStore | (DWORD)CERT_STORE_READONLY_FLAG,
+		L"Root"
+	);
+	return hCertStore;
+}
+
+
+BOOL CUSRGetCertThumbprint(PCCERT_CONTEXT pccertContext, PWSTR pwszThumbprint)
+{
+	if ((NULL == pccertContext) || (NULL == pwszThumbprint))
+	{
+		return FALSE;
+	}
+	BYTE certThumbPrintArr[CERT_SHA1_HASH_LENGTH] = {0};
+	DWORD certThumbPrintSize = ARRAYSIZE(certThumbPrintArr);
+	BOOL bRes;
+	WCHAR pwszT1[2 * CERT_SHA1_HASH_LENGTH + 1] = {0};
+	DWORD i;
+	bRes = CertGetCertificateContextProperty(
+		pccertContext,
+		CERT_SHA1_HASH_PROP_ID,
+		certThumbPrintArr,
+		&certThumbPrintSize);
+	if (!bRes)
+	{
+		StringCchCopy(pwszThumbprint, ARRAYSIZE(certThumbPrintArr), L"\0");
+		return FALSE;
+	}
+	for (i = 0; i < ARRAYSIZE(certThumbPrintArr); i++)
+	{
+		WCHAR wcT[4] = {0};
+		StringCchPrintfW(wcT, ARRAYSIZE(wcT), L"%02x", certThumbPrintArr[i]);
+		StringCchCatW(pwszT1, ARRAYSIZE(pwszT1), wcT);
+	}
+	StringCchCopyW(pwszThumbprint, (ARRAYSIZE(pwszT1) + 1) * sizeof(WCHAR), pwszT1);
+	return TRUE;
+}
+
+
+BOOL CUSRScan(DWORD dwStore)
+{
+	HCERTSTORE hCertStore;
+	PCCERT_CONTEXT pccContext = NULL;
+	DWORD dwTypePara = 0;
+	DWORD i = 0;
+
+	hCertStore = CUSROpenRootStore(dwStore);
+	if (!hCertStore)
+	{
+		return FALSE;
+	}
+	while (NULL != (pccContext = CertEnumCertificatesInStore(hCertStore, pccContext)))
+	{
+		WCHAR pwszNameString2[SIZE_1KB];
+		WCHAR pwszNameString[SIZE_1KB];
+		CUSRGetCertThumbprint(pccContext, pwszNameString);
+		StringCchPrintfW(pwszNameString2, ARRAYSIZE(pwszNameString2), L"\t%03d: %s\t", ++i, pwszNameString);
+		StringCchCatW(pwszCusrBuf, stCusrBufSize / sizeof(WCHAR), pwszNameString2);
+		CertGetNameStringW(pccContext, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, &dwTypePara, pwszNameString, SIZE_1KB);
+		StringCchPrintfW(pwszNameString2, ARRAYSIZE(pwszNameString2), L"%s\r\n", pwszNameString);
+		StringCchCatW(pwszCusrBuf, stCusrBufSize / sizeof(WCHAR), pwszNameString2);
+	}
+	CertCloseStore(hCertStore, CERT_CLOSE_STORE_FORCE_FLAG);
+	return TRUE;
+}
+
+
+BOOL CUSRMain(void)
+{
+	BOOL bRes1;
+	BOOL bRes2;
+	StringCchCatW(pwszCusrBuf, stCusrBufSize / sizeof(WCHAR), L"Machine Root\r\n");
+	bRes1 = CUSRScan(CERT_SYSTEM_STORE_LOCAL_MACHINE);
+	StringCchCatW(pwszCusrBuf, stCusrBufSize / sizeof(WCHAR), L"Current User Root\r\n");
+	bRes2 = CUSRScan(CERT_SYSTEM_STORE_CURRENT_USER);
+	return (bRes1 && bRes2);
+}
+
+
+PWSTR CUSR_Output(void)
+{
+	wprintf(L"Listing Root Certs\r\n");
+	stCusrBufSize = SIZE_16MB;
+
+	ALLOCORCRASH(pwszCusrBuf, stCusrBufSize);
+
+	AddCheckHeader(pwszCusrBuf, stCusrBufSize, L"Root Certs", FALSE);
+
+	CUSRMain();
+	ShrinkWcharBuffer(&pwszCusrBuf);
+	return pwszCusrBuf;
+}
+
+```
+
+`DRV.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszDrvBuf = NULL;
+size_t stDrvBufSize;
+
+BOOL DRVMain(void)
+{
+	LPVOID* pDriversTable;
+	DWORD dwDriversTableSize;
+	DWORD dwDriverCount;
+	DWORD dwLastError;
+	BOOL bRes;
+	BOOL bSuccess = TRUE;
+
+	pDriversTable = NULL;
+	dwDriversTableSize = sizeof(LPVOID); //init 1, 0 changes the result.
+
+	while (TRUE)
+	{
+		DWORD dwRequiredTableSize;
+		if (pDriversTable)
+		{
+			LocalFree(pDriversTable);
+		}
+		pDriversTable = LocalAlloc(LPTR, dwDriversTableSize);
+		CRASHIFNULLALLOC(pDriversTable);
+		bRes = EnumDeviceDrivers(pDriversTable, dwDriversTableSize, &dwRequiredTableSize);
+		if (bRes)
+		{
+			if (dwDriversTableSize == dwRequiredTableSize)
+			{
+				break; //done
+			}
+			else
+			{
+				dwDriversTableSize = dwRequiredTableSize;
+				continue;
+			}
+		}
+		else
+		{
+			dwLastError = GetLastError();
+			REPORTERROR(L"EnumDeviceDrivers() failed ", dwLastError);
+			bSuccess = FALSE;
+			break;
+		}
+	}
+
+	if (0 == dwDriversTableSize)
+	{
+		return FALSE;
+	}
+
+	dwDriverCount = dwDriversTableSize / sizeof(LPVOID);
+	for (DWORD i = 0; i < dwDriverCount; i++)
+	{
+		TCHAR szDriver[MAX_PATH];
+		LPVOID pCurrentDriver = pDriversTable[i];
+		if (GetDeviceDriverFileNameW(pCurrentDriver, szDriver, ARRAYSIZE(szDriver)))
+		{
+			WCHAR wszDrivers[MAX_PATH] = {0};
+			StringCchPrintfW(wszDrivers, ARRAYSIZE(wszDrivers), L"%s\r\n", szDriver);
+			StringCchCatW(pwszDrvBuf, stDrvBufSize / sizeof(WCHAR), wszDrivers);
+		}
+		else
+		{
+			bSuccess = FALSE;
+		}
+	}
+	LocalFree(pDriversTable);
+
+	if (!bSuccess)
+	{
+		StringCchCatW(
+			pwszDrvBuf,
+			stDrvBufSize / sizeof(WCHAR),
+			L"(Results may be incomplete due to failed API calls.)\r\n");
+	}
+
+	return TRUE;
+}
+
+
+PWSTR DRV_Output(void)
+{
+	wprintf(L"Listing Drivers\r\n");
+	stDrvBufSize = SIZE_16MB;
+
+	pwszDrvBuf = LocalAlloc(LPTR, stDrvBufSize);
+	CRASHIFNULLALLOC(pwszDrvBuf);
+
+	AddCheckHeader(pwszDrvBuf, stDrvBufSize, L"Drivers", TRUE);
+
+	DRVMain();
+	ShrinkWcharBuffer(&pwszDrvBuf);
+	return pwszDrvBuf;
+}
+
+```
+
+`HND.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszHndBuf = NULL;
+size_t stHndBufSize;
+
+typedef struct _NameInfo
+{
+	OBJECT_NAME_INFORMATION Header;
+	WCHAR Buffer[SIZE_1KB];
+} NameInfo, *PNameInfo;
+
+typedef struct _THS
+{
+	HANDLE HandleToQuery;
+	NTSTATUS Status;
+	NameInfo niNameInfo;
+} THS, *PTHS;
+
+DWORD WINAPI ThNtQueryObject(LPVOID lpParam)
+{
+	THS thsParam;
+	memcpy(&thsParam, lpParam, sizeof(THS));
+
+	((PTHS)lpParam)->Status = NtQueryObject(
+		((PTHS)lpParam)->HandleToQuery,
+		ObjectNameInformation,
+		&(((PTHS)lpParam)->niNameInfo),
+		sizeof(((PTHS)lpParam)->niNameInfo),
+		NULL);
+	return 0;
+}
+
+
+PSYSTEM_HANDLE_INFORMATION_EX HNDGetHandleInformation(void)
+{
+	NTSTATUS Status;
+	PSYSTEM_HANDLE_INFORMATION_EX pLocAllHandleInfo = NULL;
+	ULONG ulAllocatedHandleInfoSize = 0;
+	ULONG ulRealHandleInfoSize = 0;
+
+	do
+	{
+		Status = NtQuerySystemInformation(
+			SystemExtendedHandleInformation,
+			pLocAllHandleInfo,
+			ulAllocatedHandleInfoSize,
+			&ulRealHandleInfoSize);
+		if (STATUS_INFO_LENGTH_MISMATCH == Status)
+		{
+			if (pLocAllHandleInfo)
+			{
+				LocalFree(pLocAllHandleInfo);
+			}
+			ulAllocatedHandleInfoSize = ulRealHandleInfoSize + SIZE_1KB;
+			//use returned value plus some space just in case.
+			pLocAllHandleInfo = (PSYSTEM_HANDLE_INFORMATION_EX)LocalAlloc(LPTR, ulAllocatedHandleInfoSize);
+			CRASHIFNULLALLOC(pLocAllHandleInfo);
+		}
+	}
+	while (STATUS_INFO_LENGTH_MISMATCH == Status);
+	return pLocAllHandleInfo; //free by caller
+}
+
+
+BOOL HNDMain(void)
+{
+	PSYSTEM_HANDLE_INFORMATION_EX pAllHandleInfo;
+	pAllHandleInfo = HNDGetHandleInformation(); //never null
+
+	ULONG ulIndex;
+	ULONG_PTR ulLastPid = ULONG_MAX;
+	HANDLE hProcHandle = NULL;
+	BOOL bRes;
+	HANDLE hDuplicatedHandle;
+	WCHAR wszLastPath[SIZE_1KB] = {0};
+
+	PWSTR pwszTempBuf;
+	DWORD dwTempBufBytes;
+	dwTempBufBytes = SIZE_16MB;
+	pwszTempBuf = LocalAlloc(LPTR, dwTempBufBytes);
+	CRASHIFNULLALLOC(pwszTempBuf);
+
+	for (ulIndex = 0; ulIndex < pAllHandleInfo->NumberOfHandles; ulIndex++)
+	{
+		WCHAR wszNameString[SIZE_1KB] = L"\0";
+		SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX* HandleEntry;
+
+		HandleEntry = &(pAllHandleInfo->Handles[ulIndex]);
+
+		if (ulLastPid != HandleEntry->UniqueProcessId) //new pid
+		{
+			wprintf(
+				L"\r%*s\rListing Handles - PID: %llu        \b\b\b\b\b\b\b\b",
+				BLANKS_TO_WRITE,
+				L"\b",
+				HandleEntry->UniqueProcessId);
+
+			ResizeWcharBufIfNeeded(&pwszHndBuf, &stHndBufSize);
+
+			if (hProcHandle)
+			{
+				CloseHandle(hProcHandle);
+			}
+			hProcHandle = OpenProcess(
+				PROCESS_DUP_HANDLE | PROCESS_QUERY_LIMITED_INFORMATION,
+				FALSE,
+				(DWORD)HandleEntry->UniqueProcessId);
+			ulLastPid = HandleEntry->UniqueProcessId;
+
+			WCHAR wszExeName[MAX_PATH] = L"(Cannot open process)";
+			StringCchPrintfW(wszExeName, ARRAYSIZE(wszExeName), L"(ERROR: %i)", GetLastError());
+			DWORD dwExeNameSize;
+			if (hProcHandle)
+			{
+				dwExeNameSize = ARRAYSIZE(wszExeName);
+				QueryFullProcessImageNameW(hProcHandle, 0, wszExeName, &dwExeNameSize);
+			}
+
+			PWSTR pwszSorted = NULL;
+			SortUniqueMultilineWchar(pwszTempBuf, &pwszSorted);
+			StringCchCatW(pwszHndBuf, stHndBufSize / sizeof(WCHAR), pwszSorted);
+			LocalFree(pwszSorted);
+
+			pwszTempBuf[0] = L'\0';
+			StringCchPrintfW(wszNameString, SIZE_1KB, L"%d:\t%s\r\n", (DWORD)HandleEntry->UniqueProcessId, wszExeName);
+			StringCchCatW(pwszTempBuf, dwTempBufBytes / sizeof(WCHAR), wszNameString);
+		}
+		if (!hProcHandle)
+		{
+			continue;
+		}
+
+		bRes = DuplicateHandle(
+			hProcHandle,
+			(HANDLE)HandleEntry->HandleValue,
+			GetCurrentProcess(),
+			&hDuplicatedHandle,
+			0,
+			FALSE,
+			0);
+
+		if (!bRes)
+		{
+			continue;
+		}
+
+		PTHS thsParam;
+		thsParam = (PTHS)LocalAlloc(LPTR, sizeof(THS));
+		CRASHIFNULLALLOC(thsParam);
+
+		thsParam->HandleToQuery = hDuplicatedHandle;
+
+		HANDLE hThNtQueryObjectHandle;
+
+		hThNtQueryObjectHandle = CreateThread(
+			NULL,
+			0,
+			ThNtQueryObject,
+			thsParam,
+			0,
+			NULL
+		);
+
+		DWORD dwWso;
+		dwWso = WaitForSingleObject(hThNtQueryObjectHandle, THREAD_TIMEOUT_MS);
+		CloseHandle(hThNtQueryObjectHandle);
+
+		if (WAIT_OBJECT_0 == dwWso)
+		{
+			if (S_OK == thsParam->Status)
+			{
+				if (thsParam->niNameInfo.Header.Name.Length != 0)
+				{
+					if (wcsstr(thsParam->niNameInfo.Buffer, L"\\BaseNamedObjects\\{") != thsParam->niNameInfo.Buffer)
+					//useless noise
+					{
+						StringCchPrintfW(wszNameString, SIZE_1KB, L"\t%s\r\n", thsParam->niNameInfo.Buffer);
+						if (0 != wcscmp(wszNameString, wszLastPath)) //non-duplicate
+						{
+							StringCchCatW(pwszTempBuf, dwTempBufBytes / sizeof(WCHAR), wszNameString);
+							StringCchPrintfW(wszLastPath, SIZE_1KB, L"%s", wszNameString); // for detecting duplicates
+							//						wprintf(L"%s\r\n", thsParam->niNameInfo.Buffer);
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			//thread stuck
+			//TerminateThread(hThNtQueryObjectHandle, 0);
+			wprintf(L".");
+		}
+		CloseHandle(hDuplicatedHandle);
+		LocalFree(thsParam);
+	}
+
+	PWSTR pwszSorted = NULL;
+	SortUniqueMultilineWchar(pwszTempBuf, &pwszSorted);
+	StringCchCatW(pwszHndBuf, stHndBufSize / sizeof(WCHAR), pwszSorted);
+	LocalFree(pwszSorted);
+
+	LocalFree(pwszTempBuf);
+	LocalFree(pAllHandleInfo);
+	if (hProcHandle)
+	{
+		CloseHandle(hProcHandle);
+	}
+	wprintf(L"\rListing Handles%*s\r", BLANKS_TO_WRITE, L" ");
+	return TRUE;
+}
+
+
+PWSTR HND_Output(void)
+{
+	wprintf(L"Listing Handles");
+	stHndBufSize = SIZE_16MB;
+
+	pwszHndBuf = LocalAlloc(LPTR, stHndBufSize);
+	CRASHIFNULLALLOC(pwszHndBuf);
+
+	AddCheckHeader(pwszHndBuf, stHndBufSize, L"Open Handles", TRUE);
+
+	HNDMain();
+
+	ShrinkWcharBuffer(&pwszHndBuf);
+	wprintf(L"\r\n");
+
+	return pwszHndBuf;
+}
+
+```
+
+`HNM.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszHNMBuf = NULL;
+size_t stHNMBufSize;
+
+PWSTR pwszNameFormats[ComputerNameMax] = {
+	L"ComputerNameNetBIOS",
+	L"ComputerNameDnsHostname",
+	L"ComputerNameDnsDomain",
+	L"ComputerNameDnsFullyQualified",
+	L"ComputerNamePhysicalNetBIOS",
+	L"ComputerNamePhysicalDnsHostname",
+	L"ComputerNamePhysicalDnsDomain",
+	L"ComputerNamePhysicalDnsFullyQualified"
+};
+
+
+BOOL IsAdmin(void)
+{
+	BOOL IsMember;
+	SID_IDENTIFIER_AUTHORITY sia = SECURITY_NT_AUTHORITY;
+	PSID AdminSid;
+
+	if (!AllocateAndInitializeSid(
+		&sia,
+		2,
+		SECURITY_BUILTIN_DOMAIN_RID,
+		DOMAIN_ALIAS_RID_ADMINS,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		&AdminSid))
+	{
+		return FALSE;
+	}
+	if (!CheckTokenMembership(
+		NULL,
+		AdminSid,
+		&IsMember))
+	{
+		//fail. Taking this as FALSE.
+		FreeSid(AdminSid);
+		return FALSE;
+	}
+	FreeSid(AdminSid);
+	return IsMember;
+}
+
+
+BOOL HNMMain(void)
+{
+	PWSTR pwszTemp;
+	PWSTR pwszData;
+	size_t stTempWchars;
+	size_t stDataSize;
+	stTempWchars = SIZE_1MB;
+	stDataSize = SIZE_1MB;
+	BOOL bRes;
+	DWORD dwChars;
+
+	CRASHORALLOC(pwszTemp, stTempWchars * sizeof(WCHAR));
+	pwszData = LocalAlloc(LPTR, stDataSize);
+	CRASHIFNULLALLOC(pwszData);
+
+	//whoami
+	pwszData[0] = L'\0';
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), L"User:\r\n");
+	dwChars = (DWORD)stTempWchars;
+	bRes = GetUserNameExW(NameSamCompatible, pwszTemp, &dwChars);
+	if (!bRes)
+	{
+		StringCchPrintfW(pwszTemp, stTempWchars, L"(ERROR %i)\r\n", GetLastError());
+	}
+	StringCchPrintfW(pwszData, stDataSize / sizeof(WCHAR), L"\tName: %s\r\n", pwszTemp);
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), pwszData);
+
+	StringCchPrintfW(pwszData, stDataSize / sizeof(WCHAR), L"\tAdmin: ");
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), IsAdmin() ? L"Yes" : L"No");
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), L"\r\n");
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), pwszData);
+
+
+	//names
+	pwszData[0] = L'\0';
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), L"Hostname:\r\n");
+	for (DWORD i = 0; i < ComputerNameMax; i++)
+	{
+		dwChars = (DWORD)stTempWchars;
+
+		bRes = GetComputerNameExW((COMPUTER_NAME_FORMAT)i, pwszTemp, &dwChars);
+		if (!bRes)
+		{
+			StringCchPrintfW(pwszTemp, stTempWchars, L"(ERROR %i)\r\n", GetLastError());
+		}
+		if (0 != wcsnlen(pwszTemp, stTempWchars))
+		{
+			StringCchPrintfW(pwszData, stDataSize / sizeof(WCHAR), L"\t%s: ", pwszNameFormats[i]);
+			StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+			StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), L"\r\n");
+			StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), pwszData);
+		}
+	}
+
+	//osver
+	pwszData[0] = L'\0';
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), L"Version:\r\n");
+	RTL_OSVERSIONINFOEXW rosvInfo = {0};
+
+	rosvInfo.dwOSVersionInfoSize = sizeof(RTL_OSVERSIONINFOEXW);
+	RtlGetVersion((PRTL_OSVERSIONINFOW)&rosvInfo);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tMajorVersion: %lu\r\n", rosvInfo.dwMajorVersion);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tMinorVersion: %lu\r\n", rosvInfo.dwMinorVersion);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tBuildNumber: %lu\r\n", rosvInfo.dwBuildNumber);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	if (0 != wcsnlen(rosvInfo.szCSDVersion, ARRAYSIZE(rosvInfo.szCSDVersion)))
+	{
+		StringCchPrintfW(pwszTemp, stTempWchars, L"\tCSDVersion: %s\r\n", rosvInfo.szCSDVersion);
+		StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+	}
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tServicePackMajor: %lu\r\n", rosvInfo.wServicePackMajor);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tServicePackMinor: %lu\r\n", rosvInfo.wServicePackMinor);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tMajorVersion: 0x%08x\r\n", rosvInfo.wSuiteMask);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+
+	StringCchPrintfW(pwszTemp, stTempWchars, L"\tProductType: 0x%08x\r\n", rosvInfo.wProductType);
+	StringCchCatW(pwszData, stDataSize / sizeof(WCHAR), pwszTemp);
+	StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), pwszData);
+
+	//firmware
+	FIRMWARE_TYPE ftType = {0};
+#ifndef WINDOWS7BUILD
+	bRes = GetFirmwareType(&ftType);
+	if (bRes)
+	{
+		switch (ftType)
+		{
+		case FirmwareTypeBios:
+			{
+				StringCchPrintfW(pwszTemp, stTempWchars, L"\tType: BIOS\r\n");
+				break;
+			}
+		case FirmwareTypeUefi:
+			{
+				StringCchPrintfW(pwszTemp, stTempWchars, L"\tType: UEFI\r\n");
+				break;
+			}
+		default:
+			{
+				StringCchPrintfW(pwszTemp, stTempWchars, L"\tType: Unknown\r\n");
+			}
+		}
+		pwszData[0] = L'\0';
+		StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), L"Firmware:\r\n");
+		StringCchCatW(pwszHNMBuf, stHNMBufSize / sizeof(WCHAR), pwszTemp);
+	}
+#endif
+
+	LocalFree(pwszData);
+	LocalFree(pwszTemp);
+	return TRUE;
+}
+
+
+PWSTR HNM_Output(void)
+{
+	wprintf(L"Getting OS Data\r\n");
+	stHNMBufSize = SIZE_1MB;
+
+	pwszHNMBuf = LocalAlloc(LPTR, stHNMBufSize);
+	CRASHIFNULLALLOC(pwszHNMBuf);
+
+	AddCheckHeader(pwszHNMBuf, stHNMBufSize, L"OS Data", FALSE);
+
+	HNMMain();
+	ShrinkWcharBuffer(&pwszHNMBuf);
+	return pwszHNMBuf;
+}
+
+```
+
+`ICOA.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszICOABuf = NULL;
+size_t stICOABufSize;
+
+
+VOID
+ICOAGetInterfaceInfo(
+	PIP_ADAPTER_ADDRESSES pipInterface
+)
+{
+	WCHAR AddressBuffer[INET6_ADDRSTRLEN];
+	PWSTR pwszTempString;
+	const size_t stcTempStringCchLen = SIZE_16MB;
+	pwszTempString = LocalAlloc(LPTR, stcTempStringCchLen * sizeof(WCHAR)); //size in wchars
+	CRASHIFNULLALLOC(pwszTempString);
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"IfIndex [0x%x]\r\n", pipInterface->IfIndex);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tName: %hs\r\n", pipInterface->AdapterName);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tFriendly Name: %s\r\n", pipInterface->FriendlyName);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tDescription: %s\r\n", pipInterface->Description);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tOperStatus: ");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	switch (pipInterface->OperStatus)
+	{
+	case IfOperStatusUp:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"Up");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusDown:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"Down");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusTesting:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"Testing");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusUnknown:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"Unknown");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusDormant:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"Dormant");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusNotPresent:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"NotPresent");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	case IfOperStatusLowerLayerDown:
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"LayerDown");
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		break;
+	}
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	AddressBuffer[0] = L'\0';
+	if (pipInterface->PhysicalAddressLength > 0 && pipInterface->PhysicalAddressLength * 3 <= INET6_ADDRSTRLEN)
+	{
+		size_t i;
+		for (i = 0; i < pipInterface->PhysicalAddressLength; i++)
+		{
+			StringCchPrintfW(
+				&AddressBuffer[i * 3],
+				RTL_NUMBER_OF(AddressBuffer) - (sizeof(AddressBuffer[0]) * i * 3),
+				L"%02X-",
+				pipInterface->PhysicalAddress[i]);
+		}
+		AddressBuffer[i * 3 - 1] = L'\0';
+	}
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tPhysical Address: %s\r\n", AddressBuffer);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tMTU: %i\r\n", pipInterface->Mtu);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(
+		pwszTempString,
+		stcTempStringCchLen,
+		L"\tDHCPv4: %s\r\n",
+		(BOOL)(pipInterface->Dhcpv4Enabled) ? L"TRUE" : L"FALSE");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(
+		pwszTempString,
+		stcTempStringCchLen,
+		L"\tNetBios over TCP/IP: %s\r\n",
+		(BOOL)(pipInterface->NetbiosOverTcpipEnabled) ? L"TRUE" : L"FALSE");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(
+		pwszTempString,
+		stcTempStringCchLen,
+		L"\tRegisterAdapterSuffix: %s\r\n",
+		(BOOL)(pipInterface->RegisterAdapterSuffix) ? L"TRUE" : L"FALSE");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tIANA ifType: %i\r\n", pipInterface->IfType);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(
+		pwszTempString,
+		stcTempStringCchLen,
+		L"\tSpeed Tx/Rx [bps]: %lli/%lli\r\n",
+		pipInterface->TransmitLinkSpeed,
+		pipInterface->ReceiveLinkSpeed);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tDns Suffix: %s\r\n", pipInterface->DnsSuffix);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	PIP_ADAPTER_DNS_SUFFIX pipaDnsSuffix;
+	pipaDnsSuffix = pipInterface->FirstDnsSuffix;
+	while (NULL != pipaDnsSuffix)
+	{
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\t%ls\r\n", pipaDnsSuffix->String);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+		pipaDnsSuffix = pipaDnsSuffix->Next;
+	}
+
+	PSOCKADDR_IN psin;
+	PSOCKADDR_IN6 psin6;
+
+	psin = (PSOCKADDR_IN)pipInterface->Dhcpv4Server.lpSockaddr;
+	AddressBuffer[0] = L'\0';
+	if (psin)
+	{
+		InetNtopW(AF_INET, &psin->sin_addr, AddressBuffer, ARRAYSIZE(AddressBuffer));
+	}
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tDHCPv4 Server: %s\r\n", AddressBuffer);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	psin6 = (PSOCKADDR_IN6)pipInterface->Dhcpv6Server.lpSockaddr;
+	AddressBuffer[0] = L'\0';
+	if (psin6)
+	{
+		InetNtopW(AF_INET6, &psin6->sin6_addr, AddressBuffer, ARRAYSIZE(AddressBuffer));
+	}
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tDHCPv6 Server: %s\r\n", AddressBuffer);
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tUnicast:\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+	PIP_ADAPTER_UNICAST_ADDRESS pipauAddress;
+	pipauAddress = pipInterface->FirstUnicastAddress;
+	while (NULL != pipauAddress)
+	{
+		switch (pipauAddress->Address.lpSockaddr->sa_family)
+		{
+		case AF_INET:
+			psin = (PSOCKADDR_IN)pipauAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipauAddress->Address.lpSockaddr->sa_family,
+				&psin->sin_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		case AF_INET6:
+			psin6 = (PSOCKADDR_IN6)pipauAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipauAddress->Address.lpSockaddr->sa_family,
+				&psin6->sin6_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		default:
+			AddressBuffer[0] = L'\0';
+		}
+
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\tAddress: %s\r\n", AddressBuffer);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		StringCchPrintfW(
+			pwszTempString,
+			stcTempStringCchLen,
+			L"\t\t\tValidLifetime [s]: %i\r\n",
+			pipauAddress->ValidLifetime);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		StringCchPrintfW(
+			pwszTempString,
+			stcTempStringCchLen,
+			L"\t\t\tPreferredLifetime [s]: %i\r\n",
+			pipauAddress->PreferredLifetime);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		StringCchPrintfW(
+			pwszTempString,
+			stcTempStringCchLen,
+			L"\t\t\tLeaseLifetime [s]: %i\r\n",
+			pipauAddress->LeaseLifetime);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		StringCchPrintfW(
+			pwszTempString,
+			stcTempStringCchLen,
+			L"\t\t\tOnLinkPrefixLength: %i\r\n",
+			pipauAddress->OnLinkPrefixLength);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		pipauAddress = pipauAddress->Next;
+	}
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tGateway:\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	PIP_ADAPTER_GATEWAY_ADDRESS pipagAddress;
+	pipagAddress = pipInterface->FirstGatewayAddress;
+	while (NULL != pipagAddress)
+	{
+		switch (pipagAddress->Address.lpSockaddr->sa_family)
+		{
+		case AF_INET:
+			psin = (PSOCKADDR_IN)pipagAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipagAddress->Address.lpSockaddr->sa_family,
+				&psin->sin_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		case AF_INET6:
+			psin6 = (PSOCKADDR_IN6)pipagAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipagAddress->Address.lpSockaddr->sa_family,
+				&psin6->sin6_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		default:
+			AddressBuffer[0] = L'\0';
+		}
+
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\tAddress: %s\r\n", AddressBuffer);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		pipagAddress = pipagAddress->Next;
+	}
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tDNS Server:\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	PIP_ADAPTER_DNS_SERVER_ADDRESS pipaDnsServerAddress;
+	pipaDnsServerAddress = pipInterface->FirstDnsServerAddress;
+	while (NULL != pipaDnsServerAddress)
+	{
+		switch (pipaDnsServerAddress->Address.lpSockaddr->sa_family)
+		{
+		case AF_INET:
+			psin = (PSOCKADDR_IN)pipaDnsServerAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaDnsServerAddress->Address.lpSockaddr->sa_family,
+				&psin->sin_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		case AF_INET6:
+			psin6 = (PSOCKADDR_IN6)pipaDnsServerAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaDnsServerAddress->Address.lpSockaddr->sa_family,
+				&psin6->sin6_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		default:
+			AddressBuffer[0] = L'\0';
+		}
+
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\tAddress: %s\r\n", AddressBuffer);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		pipaDnsServerAddress = pipaDnsServerAddress->Next;
+	}
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tAnycast:\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	PIP_ADAPTER_ANYCAST_ADDRESS pipaAnycastAddress;
+	pipaAnycastAddress = pipInterface->FirstAnycastAddress;
+	while (NULL != pipaAnycastAddress)
+	{
+		switch (pipaAnycastAddress->Address.lpSockaddr->sa_family)
+		{
+		case AF_INET:
+			psin = (PSOCKADDR_IN)pipaAnycastAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaAnycastAddress->Address.lpSockaddr->sa_family,
+				&psin->sin_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		case AF_INET6:
+			psin6 = (PSOCKADDR_IN6)pipaAnycastAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaAnycastAddress->Address.lpSockaddr->sa_family,
+				&psin6->sin6_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		default:
+			AddressBuffer[0] = L'\0';
+		}
+
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\tAddress: %s\r\n", AddressBuffer);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		pipaAnycastAddress = pipaAnycastAddress->Next;
+	}
+
+	StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\tMulticast:\r\n");
+	StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+	PIP_ADAPTER_MULTICAST_ADDRESS pipaMulticastAddress;
+	pipaMulticastAddress = pipInterface->FirstMulticastAddress;
+	while (NULL != pipaMulticastAddress)
+	{
+		switch (pipaMulticastAddress->Address.lpSockaddr->sa_family)
+		{
+		case AF_INET:
+			psin = (PSOCKADDR_IN)pipaMulticastAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaMulticastAddress->Address.lpSockaddr->sa_family,
+				&psin->sin_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		case AF_INET6:
+			psin6 = (PSOCKADDR_IN6)pipaMulticastAddress->Address.lpSockaddr;
+			InetNtopW(
+				pipaMulticastAddress->Address.lpSockaddr->sa_family,
+				&psin6->sin6_addr,
+				AddressBuffer,
+				ARRAYSIZE(AddressBuffer));
+			break;
+		default:
+			AddressBuffer[0] = L'\0';
+		}
+
+		StringCchPrintfW(pwszTempString, stcTempStringCchLen, L"\t\tAddress: %s\r\n", AddressBuffer);
+		StringCchCatW(pwszICOABuf, stICOABufSize / sizeof(WCHAR), pwszTempString);
+
+		pipaMulticastAddress = pipaMulticastAddress->Next;
+	}
+	LocalFree(pwszTempString);
+}
+
+BOOL ICOAMain(void)
+{
+	ULONG ulBufferSize = 0;
+	ULONG ulStatus;
+	PIP_ADAPTER_ADDRESSES pBuf;
+	const ULONG ulFlags = GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_ALL_INTERFACES;
+
+	ulStatus =
+		GetAdaptersAddresses(
+			AF_UNSPEC,
+			ulFlags,
+			NULL,
+			NULL,
+			&ulBufferSize);
+	if (ERROR_BUFFER_OVERFLOW != ulStatus)
+	{
+		SetLastError(ulStatus);
+		return FALSE;
+	}
+
+	pBuf = LocalAlloc(LPTR, ulBufferSize);
+	if (!pBuf)
+	{
+		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+		return FALSE;
+	}
+
+	ulStatus =
+		GetAdaptersAddresses(
+			AF_UNSPEC,
+			ulFlags,
+			NULL,
+			pBuf,
+			&ulBufferSize);
+	if (ERROR_SUCCESS != ulStatus)
+	{
+		LocalFree(pBuf);
+		return FALSE;
+	}
+
+	PIP_ADAPTER_ADDRESSES pipCurrent;
+	pipCurrent = pBuf;
+	while (NULL != pipCurrent)
+	{
+		ICOAGetInterfaceInfo(pipCurrent);
+		pipCurrent = pipCurrent->Next;
+	}
+
+
+	LocalFree(pBuf);
+	return TRUE;
+}
+
+
+PWSTR ICOA_Output(void)
+{
+	wprintf(L"Listing IP Config\r\n");
+	stICOABufSize = SIZE_16MB;
+
+	ALLOCORCRASH(pwszICOABuf, stICOABufSize);
+
+	AddCheckHeader(pwszICOABuf, stICOABufSize, L"IP Config", FALSE);
+
+	ICOAMain();
+	ShrinkWcharBuffer(&pwszICOABuf);
+	return pwszICOABuf;
+}
+
+```
+
+`ICOD.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszICODBuf = NULL;
+size_t stICODBufSize;
+#define DNS_QUERY_CACHE_NO_FLAGS_MATCH      0x00008000
+
+#define DNS_LIMIT_VISTA 300
+#define DNS_LIMIT_7SP1 1500
+#define DNS_LIMIT_81 15000
+
+DWORD ICODGetMaxEntriesLimit(void)
+{
+	DWORD dwLimit = DNS_LIMIT_VISTA;
+	if (IsWindows7SP1OrGreater())
+	{
+		dwLimit = DNS_LIMIT_7SP1;
+		//REPORTERROR(L"All ok. 7", 7);
+	}
+	if (IsWindows8Point1OrGreater())
+	{
+		dwLimit = DNS_LIMIT_81;
+		//REPORTERROR(L"All ok. 8.1", 8);
+	}
+	if (IsWindows10OrGreater())
+	{
+		dwLimit = DNS_LIMIT_81;
+		//REPORTERROR(L"All ok. 10", 10);
+	}
+	return dwLimit;
+}
+
+
+BOOL ICODRecordData(PDNS_RECORD DnsRecord, PWSTR RecordDataString, DWORD DataChCount)
+{
+	WCHAR pwszIPAddress[IP6_ADDRESS_STRING_BUFFER_LENGTH];
+
+	switch (DnsRecord->wType)
+	{
+	case DNS_TYPE_A:
+		RtlIpv4AddressToStringW((PIN_ADDR)&DnsRecord->Data.A.IpAddress, pwszIPAddress);
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			pwszIPAddress);
+		break;
+
+	case DNS_TYPE_NS:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			DnsRecord->Data.NS.pNameHost);
+		break;
+
+	case DNS_TYPE_CNAME:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			DnsRecord->Data.CNAME.pNameHost);
+		break;
+
+	case DNS_TYPE_SOA:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"DefaultTtl: %i, Expire: %i, Refresh: %i, Retry: %i, SerialNo: %i, Administrator: %s, NamePrimaryServer: %s",
+			DnsRecord->Data.SOA.dwDefaultTtl,
+			DnsRecord->Data.SOA.dwExpire,
+			DnsRecord->Data.SOA.dwRefresh,
+			DnsRecord->Data.SOA.dwRetry,
+			DnsRecord->Data.SOA.dwSerialNo,
+			DnsRecord->Data.SOA.pNameAdministrator,
+			DnsRecord->Data.SOA.pNamePrimaryServer);
+		break;
+
+	case DNS_TYPE_PTR:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			DnsRecord->Data.PTR.pNameHost);
+		break;
+
+	case DNS_TYPE_MX:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"Preference: %i, NameExchange: %s",
+			DnsRecord->Data.MX.wPreference,
+			DnsRecord->Data.MX.pNameExchange);
+		break;
+
+	case DNS_TYPE_AAAA:
+		RtlIpv6AddressToStringW((PIN6_ADDR)&DnsRecord->Data.AAAA.Ip6Address, pwszIPAddress);
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			pwszIPAddress);
+		break;
+
+	case DNS_TYPE_SRV:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"Name: %s, Priority: %i, Weight: %i, Port: %i",
+			DnsRecord->Data.SRV.pNameTarget,
+			DnsRecord->Data.SRV.wPriority,
+			DnsRecord->Data.SRV.wWeight,
+			DnsRecord->Data.SRV.wPort);
+		break;
+
+	default:
+		StringCchPrintfW(
+			RecordDataString,
+			DataChCount,
+			L"%s",
+			L"???");
+	}
+
+	return TRUE;
+}
+
+
+BOOL
+GetDnsCachedData(
+	__in IN LPWSTR Name,
+	__in IN WORD Type
+)
+{
+	PDNS_RECORD DnsRecord = NULL;
+	DNS_STATUS DnsStatus;
+
+	DnsStatus = DnsQuery_W(
+		Name,
+		Type,
+		DNS_QUERY_CACHE_ONLY | DNS_QUERY_CACHE_NO_FLAGS_MATCH | DNS_QUERY_NO_HOSTS_FILE,
+		// | DNS_QUERY_NO_HOSTS_FILE, // nicer, but ipconfig does not use it.
+		NULL,
+		&DnsRecord,
+		NULL);
+
+	if (DnsStatus != NO_ERROR)
+	{
+		switch (DnsStatus)
+		{
+		case DNS_INFO_NO_RECORDS: //quite normal, return, no records anyway
+			return TRUE;
+		//break;
+		case DNS_ERROR_RCODE_SERVER_FAILURE:
+			wprintf(L"ERROR: Server failure. %s\r\n", Name);
+			break;
+		case DNS_ERROR_RCODE_NAME_ERROR:
+			wprintf(L"ERROR: Name Error. %s\r\n", Name);
+			break;
+		case ERROR_TIMEOUT:
+			wprintf(L"ERROR: Timeout. %s\r\n", Name);
+			break;
+		case DNS_ERROR_RECORD_DOES_NOT_EXIST:
+			//ignore
+			break;
+		default:
+			wprintf(L"ERROR: Unknown Error. %s\r\n", Name);
+		}
+		return FALSE;
+	}
+
+	PWSTR pwszAllRecordsWorkBuf;
+	DWORD dwAllRecordsWorkBufChCount;
+	dwAllRecordsWorkBufChCount = SIZE_1KB;
+	pwszAllRecordsWorkBuf = (PWSTR)LocalAlloc(LPTR, dwAllRecordsWorkBufChCount * sizeof(WCHAR));
+	CRASHIFNULLALLOC(pwszAllRecordsWorkBuf);
+
+	PWSTR pwszAllRecordsDataBuf;
+	DWORD dwAllRecordsDataBufChCount;
+	dwAllRecordsDataBufChCount = SIZE_1MB;
+	pwszAllRecordsDataBuf = (PWSTR)LocalAlloc(LPTR, dwAllRecordsDataBufChCount * sizeof(WCHAR));
+	CRASHIFNULLALLOC(pwszAllRecordsDataBuf);
+
+	StringCchPrintfW(pwszAllRecordsWorkBuf, dwAllRecordsWorkBufChCount, L"Name: %ls\r\n", Name);
+	StringCchCatW(pwszAllRecordsDataBuf, dwAllRecordsDataBufChCount, pwszAllRecordsWorkBuf);
+
+	while (NULL != DnsRecord)
+	{
+		PWSTR pwszDnsRecordTempBuf;
+		DWORD dwDnsRecordBufChCount = SIZE_1KB;
+		pwszDnsRecordTempBuf = (PWSTR)LocalAlloc(LPTR, dwDnsRecordBufChCount * sizeof(WCHAR));
+		CRASHIFNULLALLOC(pwszDnsRecordTempBuf);
+
+		switch (DnsRecord->wType)
+		{
+		case DNS_TYPE_A:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"A");
+			break;
+		case DNS_TYPE_NS:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"NS");
+			break;
+		case DNS_TYPE_CNAME:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"CNAME");
+			break;
+		case DNS_TYPE_SOA:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"SOA");
+			break;
+		case DNS_TYPE_PTR:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"PTR");
+			break;
+		case DNS_TYPE_MX:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"MX");
+			break;
+		case DNS_TYPE_AAAA:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"AAAA");
+			break;
+		case DNS_TYPE_SRV:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"SRV");
+			break;
+		default:
+			StringCchPrintfW(pwszDnsRecordTempBuf, dwDnsRecordBufChCount, L"%s", L"?");
+		}
+
+		StringCchPrintfW(
+			pwszAllRecordsWorkBuf,
+			dwAllRecordsWorkBufChCount,
+			L"\tType: %i (%s)\r\n",
+			DnsRecord->wType,
+			pwszDnsRecordTempBuf);
+		StringCchCatW(pwszAllRecordsDataBuf, dwAllRecordsDataBufChCount, pwszAllRecordsWorkBuf);
+
+		StringCchPrintfW(
+			pwszAllRecordsWorkBuf,
+			dwAllRecordsWorkBufChCount,
+			L"\t\tTTL: %i\r\n",
+			DnsRecord->dwTtl);
+		StringCchCatW(pwszAllRecordsDataBuf, dwAllRecordsDataBufChCount, pwszAllRecordsWorkBuf);
+
+
+		StringCchPrintfW(
+			pwszAllRecordsWorkBuf,
+			dwAllRecordsWorkBufChCount,
+			L"\t\tFlags: 0x%08x\r\n",
+			DnsRecord->Flags.DW);
+		StringCchCatW(pwszAllRecordsDataBuf, dwAllRecordsDataBufChCount, pwszAllRecordsWorkBuf);
+
+		ICODRecordData(DnsRecord, pwszDnsRecordTempBuf, dwDnsRecordBufChCount);
+
+		StringCchPrintfW(
+			pwszAllRecordsWorkBuf,
+			dwAllRecordsWorkBufChCount,
+			L"\t\tData: %s\r\n",
+			pwszDnsRecordTempBuf);
+		StringCchCatW(pwszAllRecordsDataBuf, dwAllRecordsDataBufChCount, pwszAllRecordsWorkBuf);
+
+		LocalFree(pwszDnsRecordTempBuf);
+		DnsRecord = DnsRecord->pNext;
+	}
+	DnsRecordListFree(DnsRecord, TRUE);
+
+	StringCchCatW(pwszICODBuf, stICODBufSize, pwszAllRecordsDataBuf);
+
+	LocalFree(pwszAllRecordsDataBuf);
+	LocalFree(pwszAllRecordsWorkBuf);
+	return TRUE;
+}
+
+
+BOOL ICODMain(void)
+{
+	PDNS_CACHE_TABLE pDNSCacheTable = NULL;
+	PDNS_CACHE_TABLE pTempDNSCacheTable;
+	DWORD dwRecordCount = 0;
+
+	if (!DnsGetCacheDataTable(&pDNSCacheTable)) //get error + display
+	{
+		//wprintf(L"\tListing DNS Cache failed.\r\n");
+		REPORTERROR(L"Listing DNS Cache failed", GetLastError());
+		return FALSE;
+	}
+
+
+	pTempDNSCacheTable = pDNSCacheTable;
+
+	while (pTempDNSCacheTable)
+	{
+		PDNS_CACHE_TABLE pNext = pTempDNSCacheTable->pNext;
+
+		if (pTempDNSCacheTable->Type1 != DNS_TYPE_ZERO)
+		{
+			GetDnsCachedData(
+				pTempDNSCacheTable->Name,
+				pTempDNSCacheTable->Type1);
+		}
+
+		if (pTempDNSCacheTable->Type2 != DNS_TYPE_ZERO)
+		{
+			GetDnsCachedData(
+				pTempDNSCacheTable->Name,
+				pTempDNSCacheTable->Type2);
+		}
+
+		if (pTempDNSCacheTable->Type3 != DNS_TYPE_ZERO)
+		{
+			GetDnsCachedData(
+				pTempDNSCacheTable->Name,
+				pTempDNSCacheTable->Type3);
+		}
+
+		DnsFree(pTempDNSCacheTable->Name, DnsFreeFlat);
+		DnsFree(pTempDNSCacheTable, DnsFreeFlat);
+
+		ResizeWcharBufIfNeeded(&pwszICODBuf, &stICODBufSize);
+
+		dwRecordCount++;
+
+		pTempDNSCacheTable = pNext;
+	}
+
+	//REPORTERROR(L" ---> MAX: ", ICODGetMaxEntriesLimit());
+	//REPORTERROR(L" ---> Current: ", dwRecordCount);
+
+	if (ICODGetMaxEntriesLimit() == dwRecordCount)
+	{
+		StringCchCatW(
+			pwszICODBuf,
+			stICODBufSize / sizeof(WCHAR),
+			L"(DNS Cache content may be incomplete due to API limits.)\r\n");
+		wprintf(L" (may be incomplete)");
+	}
+	return TRUE;
+}
+
+
+PWSTR ICOD_Output(void)
+{
+	wprintf(L"Listing DNS Cache");
+	stICODBufSize = SIZE_16MB;
+
+	ALLOCORCRASH(pwszICODBuf, stICODBufSize);
+
+	AddCheckHeader(pwszICODBuf, stICODBufSize, L"DNS Cache", TRUE);
+
+	ICODMain();
+	ShrinkWcharBuffer(&pwszICODBuf);
+	wprintf(L"\r\n");
+	return pwszICODBuf;
+}
+
+```
+
+`KLS.c`:
+
+```c
+#include "VSTriage.h"
+#include <ntlsa.h> //out??
+#include <sddl.h>
+
+PWSTR pwszKLSBuf = NULL;
+size_t stKLSBufSize;
+
+PWSTR pwszLogonTypes[14] = {
+	L"UndefinedLogonType",
+	L"???",
+	L"Interactive",
+	L"Network",
+	L"Batch",
+	L"Service",
+	L"Proxy",
+	L"Unlock",
+	L"NetworkCleartext",
+	L"NewCredentials",
+	L"RemoteInteractive",
+	L"CachedInteractive",
+	L"CachedRemoteInteractive",
+	L"CachedUnlock"
+};
+
+BOOL KLSMain(void)
+{
+	ULONG ulSessionCount;
+	PLUID plLUID;
+	BOOL bError = FALSE;
+	NTSTATUS status;
+	status = LsaEnumerateLogonSessions(&ulSessionCount, &plLUID);
+
+	for (ULONG i = 0; i < ulSessionCount; i++)
+	{
+		WCHAR wszLine[SIZE_1KB] = {0};
+		WCHAR wszPart[SIZE_1KB] = {0};
+		PSECURITY_LOGON_SESSION_DATA pslsaData = NULL;
+		status = LsaGetLogonSessionData(&plLUID[i], &pslsaData);
+		if (STATUS_SUCCESS != status)
+		{
+			if (STATUS_ACCESS_DENIED != status) //dont report accessdenied. it happens on regular user.
+			{
+				REPORTERROR(L"LsaGetLogonSessionData() failed with status ", status);
+			}
+			bError = TRUE;
+		}
+		if (NULL != pslsaData)
+		{
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"[0x%02x] ", i);
+			StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+
+			StringCchPrintfW(
+				wszPart,
+				ARRAYSIZE(wszPart),
+				L"\tLUID: %x:0x%x\r\n",
+				pslsaData->LogonId.HighPart,
+				pslsaData->LogonId.LowPart);
+			StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tSession: %i\r\n", pslsaData->Session);
+			StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+
+			PWSTR pwszSid = NULL;
+			ConvertSidToStringSidW(pslsaData->Sid, &pwszSid);
+			StringCchPrintfW(
+				wszPart,
+				ARRAYSIZE(wszPart),
+				L"\tUser: %wZ\\%wZ (%s)\r\n",
+				pslsaData->LogonDomain,
+				pslsaData->UserName,
+				pwszSid);
+			StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+			if (NULL != pwszSid)
+			{
+				LocalFree(pwszSid);
+			}
+
+
+			StringCchPrintfW(
+				wszPart,
+				ARRAYSIZE(wszPart),
+				L"\tAuthentication: %wZ:%s\r\n",
+				pslsaData->AuthenticationPackage,
+				pwszLogonTypes[pslsaData->LogonType]);
+			StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+
+			if (0 != pslsaData->LogonServer.Length)
+			{
+				StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tLogonServer: %wZ\r\n", pslsaData->LogonServer);
+				StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+			}
+
+
+			if (0 != pslsaData->DnsDomainName.Length)
+			{
+				StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tDnsDomainName: %wZ\r\n", pslsaData->DnsDomainName);
+				StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+			}
+
+
+			if (0 != pslsaData->Upn.Length)
+			{
+				if (0 != wcslen(pslsaData->Upn.Buffer)) //it may happen!
+				{
+					StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tUpn: %wZ\r\n", pslsaData->Upn);
+					StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+				}
+			}
+
+
+			if (0 != pslsaData->LogonTime.QuadPart)
+			{
+				PWSTR pwszTimestamp;
+				SYSTEMTIME stStamp;
+				FILETIME ftStamp;
+				ftStamp.dwLowDateTime = pslsaData->LogonTime.LowPart;
+				ftStamp.dwHighDateTime = pslsaData->LogonTime.HighPart;
+				FileTimeToSystemTime(&ftStamp, &stStamp);
+				pwszTimestamp = SystemTimeToISO8601(stStamp);
+				StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tLogonTime: %s\r\n", pwszTimestamp);
+				StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+				LocalFree(pwszTimestamp);
+			}
+
+
+			if (0 != pslsaData->PasswordLastSet.QuadPart)
+			{
+				PWSTR pwszTimestamp;
+				SYSTEMTIME stStamp;
+				FILETIME ftStamp;
+				ftStamp.dwLowDateTime = pslsaData->PasswordLastSet.LowPart;
+				ftStamp.dwHighDateTime = pslsaData->PasswordLastSet.HighPart;
+				FileTimeToSystemTime(&ftStamp, &stStamp);
+				pwszTimestamp = SystemTimeToISO8601(stStamp);
+				StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"\tPasswordLastSet: %s\r\n", pwszTimestamp);
+				StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+				LocalFree(pwszTimestamp);
+			}
+
+
+			LsaFreeReturnBuffer(pslsaData);
+		}
+		StringCchCatW(pwszKLSBuf, stKLSBufSize / sizeof(WCHAR), wszLine);
+	}
+
+	LsaFreeReturnBuffer(plLUID); //ignore result
+	if (bError)
+	{
+		StringCchCatW(
+			pwszKLSBuf,
+			stKLSBufSize / sizeof(WCHAR),
+			L"(Results may be incomplete. Probably due to lack of privileges.)\r\n");
+		wprintf(L" (some errors)");
+	}
+	return TRUE;
+}
+
+
+PWSTR KLS_Output(void)
+{
+	wprintf(L"Listing Logons");
+	stKLSBufSize = SIZE_1MB;
+
+	ALLOCORCRASH(pwszKLSBuf, stKLSBufSize);
+
+	AddCheckHeader(pwszKLSBuf, stKLSBufSize, L"Logons", FALSE);
+
+	KLSMain();
+	ShrinkWcharBuffer(&pwszKLSBuf);
+	wprintf(L"\r\n");
+	return pwszKLSBuf;
+}
+
+```
+
+`LICENSE`:
+
+```
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
+
+  When we speak of free software, we are referring to freedom, not
+price.  Our General Public Licenses are designed to make sure that you
+have the freedom to distribute copies of free software (and charge for
+them if you wish), that you receive source code or can get it if you
+want it, that you can change the software or use pieces of it in new
+free programs, and that you know you can do these things.
+
+  To protect your rights, we need to prevent others from denying you
+these rights or asking you to surrender the rights.  Therefore, you have
+certain responsibilities if you distribute copies of the software, or if
+you modify it: responsibilities to respect the freedom of others.
+
+  For example, if you distribute copies of such a program, whether
+gratis or for a fee, you must pass on to the recipients the same
+freedoms that you received.  You must make sure that they, too, receive
+or can get the source code.  And you must show them these terms so they
+know their rights.
+
+  Developers that use the GNU GPL protect your rights with two steps:
+(1) assert copyright on the software, and (2) offer you this License
+giving you legal permission to copy, distribute and/or modify it.
+
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
+
+  The precise terms and conditions for copying, distribution and
+modification follow.
+
+                       TERMS AND CONDITIONS
+
+  0. Definitions.
+
+  "This License" refers to version 3 of the GNU General Public License.
+
+  "Copyright" also means copyright-like laws that apply to other kinds of
+works, such as semiconductor masks.
+
+  "The Program" refers to any copyrightable work licensed under this
+License.  Each licensee is addressed as "you".  "Licensees" and
+"recipients" may be individuals or organizations.
+
+  To "modify" a work means to copy from or adapt all or part of the work
+in a fashion requiring copyright permission, other than the making of an
+exact copy.  The resulting work is called a "modified version" of the
+earlier work or a work "based on" the earlier work.
+
+  A "covered work" means either the unmodified Program or a work based
+on the Program.
+
+  To "propagate" a work means to do anything with it that, without
+permission, would make you directly or secondarily liable for
+infringement under applicable copyright law, except executing it on a
+computer or modifying a private copy.  Propagation includes copying,
+distribution (with or without modification), making available to the
+public, and in some countries other activities as well.
+
+  To "convey" a work means any kind of propagation that enables other
+parties to make or receive copies.  Mere interaction with a user through
+a computer network, with no transfer of a copy, is not conveying.
+
+  An interactive user interface displays "Appropriate Legal Notices"
+to the extent that it includes a convenient and prominently visible
+feature that (1) displays an appropriate copyright notice, and (2)
+tells the user that there is no warranty for the work (except to the
+extent that warranties are provided), that licensees may convey the
+work under this License, and how to view a copy of this License.  If
+the interface presents a list of user commands or options, such as a
+menu, a prominent item in the list meets this criterion.
+
+  1. Source Code.
+
+  The "source code" for a work means the preferred form of the work
+for making modifications to it.  "Object code" means any non-source
+form of a work.
+
+  A "Standard Interface" means an interface that either is an official
+standard defined by a recognized standards body, or, in the case of
+interfaces specified for a particular programming language, one that
+is widely used among developers working in that language.
+
+  The "System Libraries" of an executable work include anything, other
+than the work as a whole, that (a) is included in the normal form of
+packaging a Major Component, but which is not part of that Major
+Component, and (b) serves only to enable use of the work with that
+Major Component, or to implement a Standard Interface for which an
+implementation is available to the public in source code form.  A
+"Major Component", in this context, means a major essential component
+(kernel, window system, and so on) of the specific operating system
+(if any) on which the executable work runs, or a compiler used to
+produce the work, or an object code interpreter used to run it.
+
+  The "Corresponding Source" for a work in object code form means all
+the source code needed to generate, install, and (for an executable
+work) run the object code and to modify the work, including scripts to
+control those activities.  However, it does not include the work's
+System Libraries, or general-purpose tools or generally available free
+programs which are used unmodified in performing those activities but
+which are not part of the work.  For example, Corresponding Source
+includes interface definition files associated with source files for
+the work, and the source code for shared libraries and dynamically
+linked subprograms that the work is specifically designed to require,
+such as by intimate data communication or control flow between those
+subprograms and other parts of the work.
+
+  The Corresponding Source need not include anything that users
+can regenerate automatically from other parts of the Corresponding
+Source.
+
+  The Corresponding Source for a work in source code form is that
+same work.
+
+  2. Basic Permissions.
+
+  All rights granted under this License are granted for the term of
+copyright on the Program, and are irrevocable provided the stated
+conditions are met.  This License explicitly affirms your unlimited
+permission to run the unmodified Program.  The output from running a
+covered work is covered by this License only if the output, given its
+content, constitutes a covered work.  This License acknowledges your
+rights of fair use or other equivalent, as provided by copyright law.
+
+  You may make, run and propagate covered works that you do not
+convey, without conditions so long as your license otherwise remains
+in force.  You may convey covered works to others for the sole purpose
+of having them make modifications exclusively for you, or provide you
+with facilities for running those works, provided that you comply with
+the terms of this License in conveying all material for which you do
+not control copyright.  Those thus making or running the covered works
+for you must do so exclusively on your behalf, under your direction
+and control, on terms that prohibit them from making any copies of
+your copyrighted material outside their relationship with you.
+
+  Conveying under any other circumstances is permitted solely under
+the conditions stated below.  Sublicensing is not allowed; section 10
+makes it unnecessary.
+
+  3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+
+  No covered work shall be deemed part of an effective technological
+measure under any applicable law fulfilling obligations under article
+11 of the WIPO copyright treaty adopted on 20 December 1996, or
+similar laws prohibiting or restricting circumvention of such
+measures.
+
+  When you convey a covered work, you waive any legal power to forbid
+circumvention of technological measures to the extent such circumvention
+is effected by exercising rights under this License with respect to
+the covered work, and you disclaim any intention to limit operation or
+modification of the work as a means of enforcing, against the work's
+users, your or third parties' legal rights to forbid circumvention of
+technological measures.
+
+  4. Conveying Verbatim Copies.
+
+  You may convey verbatim copies of the Program's source code as you
+receive it, in any medium, provided that you conspicuously and
+appropriately publish on each copy an appropriate copyright notice;
+keep intact all notices stating that this License and any
+non-permissive terms added in accord with section 7 apply to the code;
+keep intact all notices of the absence of any warranty; and give all
+recipients a copy of this License along with the Program.
+
+  You may charge any price or no price for each copy that you convey,
+and you may offer support or warranty protection for a fee.
+
+  5. Conveying Modified Source Versions.
+
+  You may convey a work based on the Program, or the modifications to
+produce it from the Program, in the form of source code under the
+terms of section 4, provided that you also meet all of these conditions:
+
+    a) The work must carry prominent notices stating that you modified
+    it, and giving a relevant date.
+
+    b) The work must carry prominent notices stating that it is
+    released under this License and any conditions added under section
+    7.  This requirement modifies the requirement in section 4 to
+    "keep intact all notices".
+
+    c) You must license the entire work, as a whole, under this
+    License to anyone who comes into possession of a copy.  This
+    License will therefore apply, along with any applicable section 7
+    additional terms, to the whole of the work, and all its parts,
+    regardless of how they are packaged.  This License gives no
+    permission to license the work in any other way, but it does not
+    invalidate such permission if you have separately received it.
+
+    d) If the work has interactive user interfaces, each must display
+    Appropriate Legal Notices; however, if the Program has interactive
+    interfaces that do not display Appropriate Legal Notices, your
+    work need not make them do so.
+
+  A compilation of a covered work with other separate and independent
+works, which are not by their nature extensions of the covered work,
+and which are not combined with it such as to form a larger program,
+in or on a volume of a storage or distribution medium, is called an
+"aggregate" if the compilation and its resulting copyright are not
+used to limit the access or legal rights of the compilation's users
+beyond what the individual works permit.  Inclusion of a covered work
+in an aggregate does not cause this License to apply to the other
+parts of the aggregate.
+
+  6. Conveying Non-Source Forms.
+
+  You may convey a covered work in object code form under the terms
+of sections 4 and 5, provided that you also convey the
+machine-readable Corresponding Source under the terms of this License,
+in one of these ways:
+
+    a) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by the
+    Corresponding Source fixed on a durable physical medium
+    customarily used for software interchange.
+
+    b) Convey the object code in, or embodied in, a physical product
+    (including a physical distribution medium), accompanied by a
+    written offer, valid for at least three years and valid for as
+    long as you offer spare parts or customer support for that product
+    model, to give anyone who possesses the object code either (1) a
+    copy of the Corresponding Source for all the software in the
+    product that is covered by this License, on a durable physical
+    medium customarily used for software interchange, for a price no
+    more than your reasonable cost of physically performing this
+    conveying of source, or (2) access to copy the
+    Corresponding Source from a network server at no charge.
+
+    c) Convey individual copies of the object code with a copy of the
+    written offer to provide the Corresponding Source.  This
+    alternative is allowed only occasionally and noncommercially, and
+    only if you received the object code with such an offer, in accord
+    with subsection 6b.
+
+    d) Convey the object code by offering access from a designated
+    place (gratis or for a charge), and offer equivalent access to the
+    Corresponding Source in the same way through the same place at no
+    further charge.  You need not require recipients to copy the
+    Corresponding Source along with the object code.  If the place to
+    copy the object code is a network server, the Corresponding Source
+    may be on a different server (operated by you or a third party)
+    that supports equivalent copying facilities, provided you maintain
+    clear directions next to the object code saying where to find the
+    Corresponding Source.  Regardless of what server hosts the
+    Corresponding Source, you remain obligated to ensure that it is
+    available for as long as needed to satisfy these requirements.
+
+    e) Convey the object code using peer-to-peer transmission, provided
+    you inform other peers where the object code and Corresponding
+    Source of the work are being offered to the general public at no
+    charge under subsection 6d.
+
+  A separable portion of the object code, whose source code is excluded
+from the Corresponding Source as a System Library, need not be
+included in conveying the object code work.
+
+  A "User Product" is either (1) a "consumer product", which means any
+tangible personal property which is normally used for personal, family,
+or household purposes, or (2) anything designed or sold for incorporation
+into a dwelling.  In determining whether a product is a consumer product,
+doubtful cases shall be resolved in favor of coverage.  For a particular
+product received by a particular user, "normally used" refers to a
+typical or common use of that class of product, regardless of the status
+of the particular user or of the way in which the particular user
+actually uses, or expects or is expected to use, the product.  A product
+is a consumer product regardless of whether the product has substantial
+commercial, industrial or non-consumer uses, unless such uses represent
+the only significant mode of use of the product.
+
+  "Installation Information" for a User Product means any methods,
+procedures, authorization keys, or other information required to install
+and execute modified versions of a covered work in that User Product from
+a modified version of its Corresponding Source.  The information must
+suffice to ensure that the continued functioning of the modified object
+code is in no case prevented or interfered with solely because
+modification has been made.
+
+  If you convey an object code work under this section in, or with, or
+specifically for use in, a User Product, and the conveying occurs as
+part of a transaction in which the right of possession and use of the
+User Product is transferred to the recipient in perpetuity or for a
+fixed term (regardless of how the transaction is characterized), the
+Corresponding Source conveyed under this section must be accompanied
+by the Installation Information.  But this requirement does not apply
+if neither you nor any third party retains the ability to install
+modified object code on the User Product (for example, the work has
+been installed in ROM).
+
+  The requirement to provide Installation Information does not include a
+requirement to continue to provide support service, warranty, or updates
+for a work that has been modified or installed by the recipient, or for
+the User Product in which it has been modified or installed.  Access to a
+network may be denied when the modification itself materially and
+adversely affects the operation of the network or violates the rules and
+protocols for communication across the network.
+
+  Corresponding Source conveyed, and Installation Information provided,
+in accord with this section must be in a format that is publicly
+documented (and with an implementation available to the public in
+source code form), and must require no special password or key for
+unpacking, reading or copying.
+
+  7. Additional Terms.
+
+  "Additional permissions" are terms that supplement the terms of this
+License by making exceptions from one or more of its conditions.
+Additional permissions that are applicable to the entire Program shall
+be treated as though they were included in this License, to the extent
+that they are valid under applicable law.  If additional permissions
+apply only to part of the Program, that part may be used separately
+under those permissions, but the entire Program remains governed by
+this License without regard to the additional permissions.
+
+  When you convey a copy of a covered work, you may at your option
+remove any additional permissions from that copy, or from any part of
+it.  (Additional permissions may be written to require their own
+removal in certain cases when you modify the work.)  You may place
+additional permissions on material, added by you to a covered work,
+for which you have or can give appropriate copyright permission.
+
+  Notwithstanding any other provision of this License, for material you
+add to a covered work, you may (if authorized by the copyright holders of
+that material) supplement the terms of this License with terms:
+
+    a) Disclaiming warranty or limiting liability differently from the
+    terms of sections 15 and 16 of this License; or
+
+    b) Requiring preservation of specified reasonable legal notices or
+    author attributions in that material or in the Appropriate Legal
+    Notices displayed by works containing it; or
+
+    c) Prohibiting misrepresentation of the origin of that material, or
+    requiring that modified versions of such material be marked in
+    reasonable ways as different from the original version; or
+
+    d) Limiting the use for publicity purposes of names of licensors or
+    authors of the material; or
+
+    e) Declining to grant rights under trademark law for use of some
+    trade names, trademarks, or service marks; or
+
+    f) Requiring indemnification of licensors and authors of that
+    material by anyone who conveys the material (or modified versions of
+    it) with contractual assumptions of liability to the recipient, for
+    any liability that these contractual assumptions directly impose on
+    those licensors and authors.
+
+  All other non-permissive additional terms are considered "further
+restrictions" within the meaning of section 10.  If the Program as you
+received it, or any part of it, contains a notice stating that it is
+governed by this License along with a term that is a further
+restriction, you may remove that term.  If a license document contains
+a further restriction but permits relicensing or conveying under this
+License, you may add to a covered work material governed by the terms
+of that license document, provided that the further restriction does
+not survive such relicensing or conveying.
+
+  If you add terms to a covered work in accord with this section, you
+must place, in the relevant source files, a statement of the
+additional terms that apply to those files, or a notice indicating
+where to find the applicable terms.
+
+  Additional terms, permissive or non-permissive, may be stated in the
+form of a separately written license, or stated as exceptions;
+the above requirements apply either way.
+
+  8. Termination.
+
+  You may not propagate or modify a covered work except as expressly
+provided under this License.  Any attempt otherwise to propagate or
+modify it is void, and will automatically terminate your rights under
+this License (including any patent licenses granted under the third
+paragraph of section 11).
+
+  However, if you cease all violation of this License, then your
+license from a particular copyright holder is reinstated (a)
+provisionally, unless and until the copyright holder explicitly and
+finally terminates your license, and (b) permanently, if the copyright
+holder fails to notify you of the violation by some reasonable means
+prior to 60 days after the cessation.
+
+  Moreover, your license from a particular copyright holder is
+reinstated permanently if the copyright holder notifies you of the
+violation by some reasonable means, this is the first time you have
+received notice of violation of this License (for any work) from that
+copyright holder, and you cure the violation prior to 30 days after
+your receipt of the notice.
+
+  Termination of your rights under this section does not terminate the
+licenses of parties who have received copies or rights from you under
+this License.  If your rights have been terminated and not permanently
+reinstated, you do not qualify to receive new licenses for the same
+material under section 10.
+
+  9. Acceptance Not Required for Having Copies.
+
+  You are not required to accept this License in order to receive or
+run a copy of the Program.  Ancillary propagation of a covered work
+occurring solely as a consequence of using peer-to-peer transmission
+to receive a copy likewise does not require acceptance.  However,
+nothing other than this License grants you permission to propagate or
+modify any covered work.  These actions infringe copyright if you do
+not accept this License.  Therefore, by modifying or propagating a
+covered work, you indicate your acceptance of this License to do so.
+
+  10. Automatic Licensing of Downstream Recipients.
+
+  Each time you convey a covered work, the recipient automatically
+receives a license from the original licensors, to run, modify and
+propagate that work, subject to this License.  You are not responsible
+for enforcing compliance by third parties with this License.
+
+  An "entity transaction" is a transaction transferring control of an
+organization, or substantially all assets of one, or subdividing an
+organization, or merging organizations.  If propagation of a covered
+work results from an entity transaction, each party to that
+transaction who receives a copy of the work also receives whatever
+licenses to the work the party's predecessor in interest had or could
+give under the previous paragraph, plus a right to possession of the
+Corresponding Source of the work from the predecessor in interest, if
+the predecessor has it or can get it with reasonable efforts.
+
+  You may not impose any further restrictions on the exercise of the
+rights granted or affirmed under this License.  For example, you may
+not impose a license fee, royalty, or other charge for exercise of
+rights granted under this License, and you may not initiate litigation
+(including a cross-claim or counterclaim in a lawsuit) alleging that
+any patent claim is infringed by making, using, selling, offering for
+sale, or importing the Program or any portion of it.
+
+  11. Patents.
+
+  A "contributor" is a copyright holder who authorizes use under this
+License of the Program or a work on which the Program is based.  The
+work thus licensed is called the contributor's "contributor version".
+
+  A contributor's "essential patent claims" are all patent claims
+owned or controlled by the contributor, whether already acquired or
+hereafter acquired, that would be infringed by some manner, permitted
+by this License, of making, using, or selling its contributor version,
+but do not include claims that would be infringed only as a
+consequence of further modification of the contributor version.  For
+purposes of this definition, "control" includes the right to grant
+patent sublicenses in a manner consistent with the requirements of
+this License.
+
+  Each contributor grants you a non-exclusive, worldwide, royalty-free
+patent license under the contributor's essential patent claims, to
+make, use, sell, offer for sale, import and otherwise run, modify and
+propagate the contents of its contributor version.
+
+  In the following three paragraphs, a "patent license" is any express
+agreement or commitment, however denominated, not to enforce a patent
+(such as an express permission to practice a patent or covenant not to
+sue for patent infringement).  To "grant" such a patent license to a
+party means to make such an agreement or commitment not to enforce a
+patent against the party.
+
+  If you convey a covered work, knowingly relying on a patent license,
+and the Corresponding Source of the work is not available for anyone
+to copy, free of charge and under the terms of this License, through a
+publicly available network server or other readily accessible means,
+then you must either (1) cause the Corresponding Source to be so
+available, or (2) arrange to deprive yourself of the benefit of the
+patent license for this particular work, or (3) arrange, in a manner
+consistent with the requirements of this License, to extend the patent
+license to downstream recipients.  "Knowingly relying" means you have
+actual knowledge that, but for the patent license, your conveying the
+covered work in a country, or your recipient's use of the covered work
+in a country, would infringe one or more identifiable patents in that
+country that you have reason to believe are valid.
+
+  If, pursuant to or in connection with a single transaction or
+arrangement, you convey, or propagate by procuring conveyance of, a
+covered work, and grant a patent license to some of the parties
+receiving the covered work authorizing them to use, propagate, modify
+or convey a specific copy of the covered work, then the patent license
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
+
+  A patent license is "discriminatory" if it does not include within
+the scope of its coverage, prohibits the exercise of, or is
+conditioned on the non-exercise of one or more of the rights that are
+specifically granted under this License.  You may not convey a covered
+work if you are a party to an arrangement with a third party that is
+in the business of distributing software, under which you make payment
+to the third party based on the extent of your activity of conveying
+the work, and under which the third party grants, to any of the
+parties who would receive the covered work from you, a discriminatory
+patent license (a) in connection with copies of the covered work
+conveyed by you (or copies made from those copies), or (b) primarily
+for and in connection with specific products or compilations that
+contain the covered work, unless you entered into that arrangement,
+or that patent license was granted, prior to 28 March 2007.
+
+  Nothing in this License shall be construed as excluding or limiting
+any implied license or other defenses to infringement that may
+otherwise be available to you under applicable patent law.
+
+  12. No Surrender of Others' Freedom.
+
+  If conditions are imposed on you (whether by court order, agreement or
+otherwise) that contradict the conditions of this License, they do not
+excuse you from the conditions of this License.  If you cannot convey a
+covered work so as to satisfy simultaneously your obligations under this
+License and any other pertinent obligations, then as a consequence you may
+not convey it at all.  For example, if you agree to terms that obligate you
+to collect a royalty for further conveying from those to whom you convey
+the Program, the only way you could satisfy both those terms and this
+License would be to refrain entirely from conveying the Program.
+
+  13. Use with the GNU Affero General Public License.
+
+  Notwithstanding any other provision of this License, you have
+permission to link or combine any covered work with a work licensed
+under version 3 of the GNU Affero General Public License into a single
+combined work, and to convey the resulting work.  The terms of this
+License will continue to apply to the part which is the covered work,
+but the special requirements of the GNU Affero General Public License,
+section 13, concerning interaction through a network will apply to the
+combination as such.
+
+  14. Revised Versions of this License.
+
+  The Free Software Foundation may publish revised and/or new versions of
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
+
+  Each version is given a distinguishing version number.  If the
+Program specifies that a certain numbered version of the GNU General
+Public License "or any later version" applies to it, you have the
+option of following the terms and conditions either of that numbered
+version or of any later version published by the Free Software
+Foundation.  If the Program does not specify a version number of the
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
+
+  If the Program specifies that a proxy can decide which future
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
+
+  Later license versions may give you additional or different
+permissions.  However, no additional obligations are imposed on any
+author or copyright holder as a result of your choosing to follow a
+later version.
+
+  15. Disclaimer of Warranty.
+
+  THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+
+  16. Limitation of Liability.
+
+  IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGES.
+
+  17. Interpretation of Sections 15 and 16.
+
+  If the disclaimer of warranty and limitation of liability provided
+above cannot be given local legal effect according to their terms,
+reviewing courts shall apply local law that most closely approximates
+an absolute waiver of all civil liability in connection with the
+Program, unless a warranty or assumption of liability accompanies a
+copy of the Program in return for a fee.
+
+                     END OF TERMS AND CONDITIONS
+
+            How to Apply These Terms to Your New Programs
+
+  If you develop a new program, and you want it to be of the greatest
+possible use to the public, the best way to achieve this is to make it
+free software which everyone can redistribute and change under these terms.
+
+  To do so, attach the following notices to the program.  It is safest
+to attach them to the start of each source file to most effectively
+state the exclusion of warranty; and each file should have at least
+the "copyright" line and a pointer to where the full notice is found.
+
+    <one line to give the program's name and a brief idea of what it does.>
+    Copyright (C) <year>  <name of author>
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+Also add information on how to contact you by electronic and paper mail.
+
+  If the program does terminal interaction, make it output a short
+notice like this when it starts in an interactive mode:
+
+    <program>  Copyright (C) <year>  <name of author>
+    This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+    This is free software, and you are welcome to redistribute it
+    under certain conditions; type `show c' for details.
+
+The hypothetical commands `show w' and `show c' should show the appropriate
+parts of the General Public License.  Of course, your program's commands
+might be different; for a GUI interface, you would use an "about box".
+
+  You should also get your employer (if you work as a programmer) or school,
+if any, to sign a "copyright disclaimer" for the program, if necessary.
+For more information on this, and how to apply and follow the GNU GPL, see
+<https://www.gnu.org/licenses/>.
+
+  The GNU General Public License does not permit incorporating your program
+into proprietary programs.  If your program is a subroutine library, you
+may consider it more useful to permit linking proprietary applications with
+the library.  If this is what you want to do, use the GNU Lesser General
+Public License instead of this License.  But first, please read
+<https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+```
+
+`NANO.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszNANOBuf = NULL;
+size_t stNANOBufSize;
+
+PWSTR pwszStates[13] = {
+	L"??",
+	L"CLOSED",
+	L"LISTEN",
+	L"SYN-SENT",
+	L"SYN-RECEIVED",
+	L"ESTABLISHED",
+	L"FIN-WAIT-1",
+	L"FIN-WAIT-2",
+	L"CLOSE-WAIT",
+	L"CLOSING",
+	L"LAST-ACK",
+	L"LAST-ACK",
+	L"DELETE-TCB"
+};
+
+
+VOID DisplayTcpv4Table(void)
+{
+	DWORD dwStatus;
+	DWORD dwTableSize;
+	PMIB_TCPTABLE_OWNER_MODULE ptomTable;
+
+	// loop asking for size
+	dwTableSize = 0;
+	ptomTable = NULL;
+	dwStatus = ERROR_INSUFFICIENT_BUFFER;
+	while (ERROR_INSUFFICIENT_BUFFER == dwStatus)
+	{
+		if (ptomTable)
+		{
+			LocalFree(ptomTable);
+		}
+		ptomTable = (PMIB_TCPTABLE_OWNER_MODULE)LocalAlloc(LPTR, dwTableSize);
+		CRASHIFNULLALLOC(ptomTable);
+		dwStatus = GetExtendedTcpTable(ptomTable, &dwTableSize, TRUE, AF_INET, TCP_TABLE_OWNER_MODULE_ALL, 0);
+	}
+
+	if (NO_ERROR != dwStatus)
+	{
+		LocalFree(ptomTable);
+		REPORTERROR(L"", dwStatus);
+		return;
+	}
+
+	for (DWORD i = 0; i < ptomTable->dwNumEntries; i++)
+	{
+		WCHAR wszLine[SIZE_1KB] = {0};
+		WCHAR wszPart[SIZE_1KB] = {0};
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"TCP\t");
+
+		RtlIpv4AddressToStringW((PIN_ADDR)&ptomTable->table[i].dwLocalAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwLocalPort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		RtlIpv4AddressToStringW((PIN_ADDR)&ptomTable->table[i].dwRemoteAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwRemotePort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s\t", pwszStates[ptomTable->table[i].dwState]);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%i\t", ptomTable->table[i].dwOwningPid);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		if (0 != ptomTable->table[i].liCreateTimestamp.QuadPart)
+		{
+			PWSTR pwszTimestamp;
+			SYSTEMTIME stStamp;
+			FILETIME ftStamp;
+			ftStamp.dwLowDateTime = ptomTable->table[i].liCreateTimestamp.LowPart;
+			ftStamp.dwHighDateTime = ptomTable->table[i].liCreateTimestamp.HighPart;
+			FileTimeToSystemTime(&ftStamp, &stStamp);
+			pwszTimestamp = SystemTimeToISO8601(stStamp);
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", pwszTimestamp);
+			LocalFree(pwszTimestamp);
+		}
+		else
+		{
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", L"Unknown");
+		}
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), wszLine);
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), L"\r\n");
+	}
+	LocalFree(ptomTable);
+}
+
+VOID DisplayTcpv6Table(void)
+{
+	DWORD dwStatus;
+	DWORD dwTableSize;
+	PMIB_TCP6TABLE_OWNER_MODULE ptomTable;
+
+	// loop asking for size
+	dwTableSize = 0;
+	ptomTable = NULL;
+	dwStatus = ERROR_INSUFFICIENT_BUFFER;
+	while (ERROR_INSUFFICIENT_BUFFER == dwStatus)
+	{
+		if (ptomTable)
+		{
+			LocalFree(ptomTable);
+		}
+		ptomTable = (PMIB_TCP6TABLE_OWNER_MODULE)LocalAlloc(LPTR, dwTableSize);
+		CRASHIFNULLALLOC(ptomTable);
+
+		dwStatus = GetExtendedTcpTable(ptomTable, &dwTableSize, TRUE, AF_INET6, TCP_TABLE_OWNER_MODULE_ALL, 0);
+	}
+
+	if (NO_ERROR != dwStatus)
+	{
+		LocalFree(ptomTable);
+		REPORTERROR(L"", dwStatus);
+		return;
+	}
+	for (DWORD i = 0; i < ptomTable->dwNumEntries; i++)
+	{
+		WCHAR wszLine[SIZE_1KB] = {0};
+		WCHAR wszPart[SIZE_1KB] = {0};
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"TCP\t");
+
+		RtlIpv6AddressToStringW((PIN6_ADDR)&ptomTable->table[i].ucLocalAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"[");
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"]");
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwLocalPort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		RtlIpv6AddressToStringW((PIN6_ADDR)&ptomTable->table[i].ucRemoteAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"[");
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"]");
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwRemotePort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s\t", pwszStates[ptomTable->table[i].dwState]);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%i\t", ptomTable->table[i].dwOwningPid);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		if (0 != ptomTable->table[i].liCreateTimestamp.QuadPart)
+		{
+			PWSTR pwszTimestamp;
+			SYSTEMTIME stStamp;
+			FILETIME ftStamp;
+			ftStamp.dwLowDateTime = ptomTable->table[i].liCreateTimestamp.LowPart;
+			ftStamp.dwHighDateTime = ptomTable->table[i].liCreateTimestamp.HighPart;
+			FileTimeToSystemTime(&ftStamp, &stStamp);
+			pwszTimestamp = SystemTimeToISO8601(stStamp);
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", pwszTimestamp);
+			LocalFree(pwszTimestamp);
+		}
+		else
+		{
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", L"Unknown");
+		}
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), wszLine);
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), L"\r\n");
+	}
+	LocalFree(ptomTable);
+}
+
+VOID DisplayUdpv4Table(void)
+{
+	DWORD dwStatus;
+	DWORD dwTableSize;
+	PMIB_UDPTABLE_OWNER_MODULE ptomTable;
+
+	// loop asking for size
+	dwTableSize = 0;
+	ptomTable = NULL;
+	dwStatus = ERROR_INSUFFICIENT_BUFFER;
+	while (ERROR_INSUFFICIENT_BUFFER == dwStatus)
+	{
+		if (ptomTable)
+		{
+			LocalFree(ptomTable);
+		}
+		ptomTable = (PMIB_UDPTABLE_OWNER_MODULE)LocalAlloc(LPTR, dwTableSize);
+		CRASHIFNULLALLOC(ptomTable);
+
+		dwStatus = GetExtendedUdpTable(ptomTable, &dwTableSize, TRUE, AF_INET, UDP_TABLE_OWNER_MODULE, 0);
+	}
+
+	if (NO_ERROR != dwStatus)
+	{
+		LocalFree(ptomTable);
+		REPORTERROR(L"", dwStatus);
+		return;
+	}
+
+	for (DWORD i = 0; i < ptomTable->dwNumEntries; i++)
+	{
+		WCHAR wszLine[SIZE_1KB] = {0};
+		WCHAR wszPart[SIZE_1KB] = {0};
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"UDP\t");
+
+		RtlIpv4AddressToStringW((PIN_ADDR)&ptomTable->table[i].dwLocalAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwLocalPort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"*.*\t");
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%i\t", ptomTable->table[i].dwOwningPid);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		if (0 != ptomTable->table[i].liCreateTimestamp.QuadPart)
+		{
+			PWSTR pwszTimestamp;
+			SYSTEMTIME stStamp;
+			FILETIME ftStamp;
+			ftStamp.dwLowDateTime = ptomTable->table[i].liCreateTimestamp.LowPart;
+			ftStamp.dwHighDateTime = ptomTable->table[i].liCreateTimestamp.HighPart;
+			FileTimeToSystemTime(&ftStamp, &stStamp);
+			pwszTimestamp = SystemTimeToISO8601(stStamp);
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", pwszTimestamp);
+			LocalFree(pwszTimestamp);
+		}
+		else
+		{
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", L"Unknown");
+		}
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), wszLine);
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), L"\r\n");
+	}
+	LocalFree(ptomTable);
+}
+
+VOID DisplayUdpv6Table(void)
+{
+	DWORD dwStatus;
+	DWORD dwTableSize;
+	PMIB_UDP6TABLE_OWNER_MODULE ptomTable;
+
+	// loop asking for size
+	dwTableSize = 0;
+	ptomTable = NULL;
+	dwStatus = ERROR_INSUFFICIENT_BUFFER;
+	while (ERROR_INSUFFICIENT_BUFFER == dwStatus)
+	{
+		if (ptomTable)
+		{
+			LocalFree(ptomTable);
+		}
+		ptomTable = (PMIB_UDP6TABLE_OWNER_MODULE)LocalAlloc(LPTR, dwTableSize);
+		CRASHIFNULLALLOC(ptomTable);
+
+		dwStatus = GetExtendedUdpTable(ptomTable, &dwTableSize, TRUE, AF_INET6, UDP_TABLE_OWNER_MODULE, 0);
+	}
+
+	if (NO_ERROR != dwStatus)
+	{
+		LocalFree(ptomTable);
+		REPORTERROR(L"", dwStatus);
+		return;
+	}
+
+	for (DWORD i = 0; i < ptomTable->dwNumEntries; i++)
+	{
+		WCHAR wszLine[SIZE_1KB] = {0};
+		WCHAR wszPart[SIZE_1KB] = {0};
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"UDP\t");
+
+		RtlIpv6AddressToStringW((PIN6_ADDR)&ptomTable->table[i].ucLocalAddr, wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"[");
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"]");
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L":%i\t", ntohs((u_short)ptomTable->table[i].dwLocalPort));
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), L"*.*\t");
+
+		StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%i\t", ptomTable->table[i].dwOwningPid);
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+
+		if (0 != ptomTable->table[i].liCreateTimestamp.QuadPart)
+		{
+			PWSTR pwszTimestamp;
+			SYSTEMTIME stStamp;
+			FILETIME ftStamp;
+			ftStamp.dwLowDateTime = ptomTable->table[i].liCreateTimestamp.LowPart;
+			ftStamp.dwHighDateTime = ptomTable->table[i].liCreateTimestamp.HighPart;
+			FileTimeToSystemTime(&ftStamp, &stStamp);
+			pwszTimestamp = SystemTimeToISO8601(stStamp);
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", pwszTimestamp);
+			LocalFree(pwszTimestamp);
+		}
+		else
+		{
+			StringCchPrintfW(wszPart, ARRAYSIZE(wszPart), L"%s", L"Unknown");
+		}
+
+		StringCchCatW(wszLine, ARRAYSIZE(wszLine), wszPart);
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), wszLine);
+		StringCchCatW(pwszNANOBuf, stNANOBufSize / sizeof(WCHAR), L"\r\n");
+	}
+	LocalFree(ptomTable);
+}
+
+
+BOOL NANOMain(void)
+{
+	DisplayTcpv4Table();
+	ResizeWcharBufIfNeeded(&pwszNANOBuf, &stNANOBufSize);
+	DisplayTcpv6Table();
+	ResizeWcharBufIfNeeded(&pwszNANOBuf, &stNANOBufSize);
+	DisplayUdpv4Table();
+	ResizeWcharBufIfNeeded(&pwszNANOBuf, &stNANOBufSize);
+	DisplayUdpv6Table();
+	return TRUE; 
+}
+
+
+PWSTR NANO_Output(void)
+{
+	wprintf(L"Listing TCP/IP Connections\r\n");
+	stNANOBufSize = SIZE_1MB;
+
+	pwszNANOBuf = LocalAlloc(LPTR, stNANOBufSize);
+	CRASHIFNULLALLOC(pwszNANOBuf);
+
+	AddCheckHeader(pwszNANOBuf, stNANOBufSize, L"TCP/IP Connections", TRUE);
+
+	NANOMain();
+
+	ShrinkWcharBuffer(&pwszNANOBuf);
+	return pwszNANOBuf;
+}
+
+```
+
+`README.md`:
+
+```md
+During my Incident Response engagements, I have realized that dumping volatile data is always done bad (or at least in a way different than the best one). 
+Additionally, the data is never in the same format, which makes the analysis harder (if not impossible) to automate. 
+
+And it is why I have created my own tool for it.
+
+It dumps:
+- OS details (user name, machine name, version)
+- Process details (PID, name, PPID, path, cmdline, Thread count, iocount, times)
+- Loaded DLLs
+- Drivers
+- Environment
+- Root certs (thumbnail and name, for user and machine)
+- Open handles (open files, open registry entries etc.)
+- ARP cache
+- IP configuration
+- DNS cache
+- Active TCP/IP connections (addresses, ports, PID, time of establishing)
+- Active logons
+- Kernel memory
+
+
+It creates one text file with report, and another one for dump. Dump is optional and happens only if `-memdump` parameter is present. It is possible to specify paths for a report and dump. If no paths are specified, the same location as exe is used.
+
+Of course, every single action is made with volatile data in mind. The tool collects it, not destroys. It is as minimalistic, as my knowledge allows, when it comes to loaded DLLs, open registry keys, etc.
+
+The tool works better with admin permissions (can reach for all processes etc.) but it is not technically required. I am trying my best to clearly mark all cases where the information could not be obtained.
+
+The tool works well. EXE requires Windows 10, but the source code may be easily (#define) compiled for Windows 7. Windows 7 version doesn’t create Kernel Dumps and doesn’t provide some less important hardware information, but it works nicely.
+
+The source code requires polishing, especially when it comes to some uniformity, and error checking for string operations. I am trying to stay on the safe side, but nothing replaces real error checking.
+
+The tool name is VSTriage, but it may be changed sooner or later, as it no longer reflects the real purpose. I simply have started to like it.
+
+In the era of multi-GB strange-framework-based apps, I feel especially satisfied with the exe size. But it may be only me.
+
+I hope you will never have to use it :)
+
+```
+
+`SET.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR SET_Output(void)
+{
+	PWSTR buf;
+	size_t stBufSize;
+	HRESULT hResult;
+	PWSTR pwszFullEnvOrg;
+	PWSTR pwszFullEnv;
+	wprintf(L"Listing Environment\r\n");
+
+
+	pwszFullEnvOrg = GetEnvironmentStringsW();
+	pwszFullEnv = pwszFullEnvOrg;
+
+	stBufSize = SIZE_16MB;
+	buf = LocalAlloc(LPTR, stBufSize);
+	CRASHIFNULLALLOC(buf);
+
+	AddCheckHeader(buf, stBufSize, L"Environment Variables", TRUE);
+
+	while (*pwszFullEnv)
+	{
+		hResult = StringCchCatW(buf, stBufSize / sizeof(WCHAR), pwszFullEnv);
+		CHECKSTRINGHR(hResult);
+
+		hResult = StringCchCatW(buf, stBufSize / sizeof(WCHAR), L"\r\n");
+		CHECKSTRINGHR(hResult);
+
+		pwszFullEnv += wcslen(pwszFullEnv) + 1; // include NULL
+	}
+
+	ShrinkWcharBuffer(&buf);
+	return buf;
+}
+
+```
+
+`TLM.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszTlmBuf = NULL;
+size_t stTlmBufSize;
+
+//todo: IsWow64Process2 for non-win7build
+
+BOOL IsProcesWoW(HANDLE hProcess)
+{
+	BOOL bIsWow64 = FALSE;
+	IsWow64Process(hProcess, &bIsWow64);
+	return bIsWow64;
+}
+
+PWSTR TLMGetProcessModules(HANDLE hProcess)
+{
+	DWORD cbAllocated;
+	DWORD cbNeeded = 0;
+	size_t dwProcDataBytes = SIZE_1MB;
+	size_t dwProcDataTempBytes = SIZE_1MB;
+	BOOL bRes;
+	HMODULE* hModArr = NULL;
+	PWSTR pwszProcData;
+	PWSTR pwszProcDataTemp;
+	ALLOCORCRASH(pwszProcData, dwProcDataBytes);
+	ALLOCORCRASH(pwszProcDataTemp, dwProcDataTempBytes);
+
+	do
+	{
+		cbAllocated = cbNeeded;
+		cbNeeded = 0;
+		LocalFree(hModArr);
+		ALLOCORCRASH(hModArr, cbAllocated);
+		bRes = EnumProcessModulesEx(
+			hProcess,
+			hModArr,
+			cbAllocated,
+			&cbNeeded,
+			LIST_MODULES_ALL
+		);
+		if (!bRes)
+		{
+			break;
+		}
+	}
+	while (cbNeeded != cbAllocated);
+
+	//copy the buffer
+	HMODULE* hModArrCopy;
+	ALLOCORCRASH(hModArrCopy, LocalSize(hModArr));
+	memcpy_s(hModArrCopy, LocalSize(hModArr), hModArr, LocalSize(hModArr));
+	LocalFree(hModArr);
+
+	if (bRes)
+	{
+		WCHAR wszProcessName[SIZE_1KB];
+
+		GetModuleBaseNameW(
+			hProcess,
+			hModArrCopy[0],
+			wszProcessName,
+			ARRAYSIZE(wszProcessName));
+
+		StringCchPrintfW(
+			pwszProcDataTemp,
+			dwProcDataTempBytes / sizeof(WCHAR),
+			L"%i:\t%s",
+			GetProcessId(hProcess),
+			wszProcessName);
+		StringCchCatW(pwszProcData, dwProcDataBytes / sizeof(WCHAR), pwszProcDataTemp);
+
+		if (IsProcesWoW(hProcess))
+		{
+			StringCchCatW(pwszProcData, dwProcDataBytes / sizeof(WCHAR), L"\t(WOW)");
+		}
+		StringCchCatW(pwszProcData, dwProcDataBytes / sizeof(WCHAR), L"\r\n");
+
+		for (DWORD i = 0; i < cbNeeded / sizeof(HMODULE); i++)
+		{
+			WCHAR wszModName[SIZE_1KB] = {0};
+			WCHAR wszMapName[SIZE_1KB] = {0};
+			GetModuleFileNameExW(hProcess, hModArrCopy[i], wszModName, ARRAYSIZE(wszModName));
+			GetMappedFileNameW(hProcess, hModArrCopy[i], wszMapName, ARRAYSIZE(wszMapName));
+
+			// Print the module name and handle value.
+			StringCchPrintfW(
+				pwszProcDataTemp,
+				dwProcDataTempBytes / sizeof(WCHAR),
+				L"\t%s\t%s\t(0x%p)\r\n",
+				wszModName,
+				wszMapName,
+				hModArrCopy[i]);
+			StringCchCatW(
+				pwszProcData,
+				dwProcDataBytes / sizeof(WCHAR),
+				pwszProcDataTemp);
+			ResizeWcharBufIfNeeded(&pwszProcData, &dwProcDataBytes);
+		}
+	}
+	else
+	{
+		StringCchPrintfW(
+			pwszProcDataTemp,
+			dwProcDataTempBytes / sizeof(WCHAR),
+			L"%i:\t(cannot get details)",
+			GetProcessId(hProcess));
+		StringCchCatW(pwszProcData, dwProcDataBytes / sizeof(WCHAR), pwszProcDataTemp);
+	}
+	LocalFree(hModArrCopy);
+	LocalFree(pwszProcDataTemp);
+	return pwszProcData;
+}
+
+
+BOOL TLMMain(void)
+{
+	DWORD cbNeeded;
+	DWORD cProcesses;
+	DWORD i;
+	DWORD dwProcArrSize;
+	PDWORD pdwProcArr;
+	HANDLE hProcess;
+	DWORD dwLastError;
+
+	// Get the list of process identifiers.
+
+	dwProcArrSize = INITIAL_PROCESS_COUNT * sizeof(DWORD);
+	pdwProcArr = LocalAlloc(LPTR, dwProcArrSize);
+	CRASHIFNULLALLOC(pdwProcArr);
+
+	EnumProcesses(pdwProcArr, dwProcArrSize, &cbNeeded);
+	while (dwProcArrSize == cbNeeded)
+	{
+		LocalFree(pdwProcArr);
+		dwProcArrSize *= 2;
+		pdwProcArr = LocalAlloc(LPTR, dwProcArrSize);
+		CRASHIFNULLALLOC(pdwProcArr);
+		EnumProcesses(pdwProcArr, dwProcArrSize, &cbNeeded);
+	}
+	cProcesses = cbNeeded / sizeof(DWORD);
+
+	for (i = 0; i < cProcesses; i++)
+	{
+		hProcess = OpenProcess(
+			PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
+			FALSE,
+			pdwProcArr[i]);
+		dwLastError = GetLastError();
+		if (NULL != hProcess)
+		{
+			PWSTR pwszModules;
+			pwszModules = TLMGetProcessModules(hProcess);
+			StringCchCatW(pwszTlmBuf, stTlmBufSize, pwszModules);
+			LocalFree(pwszModules);
+			CloseHandle(hProcess);
+		}
+		else
+		{
+			PWSTR pwszError;
+			ALLOCORCRASH(pwszError, SIZE_1KB);
+			StringCchPrintfW(
+				pwszError,
+				LocalSize(pwszError) / sizeof(WCHAR),
+				L"%i:\t(ERROR %i)\r\n",
+				pdwProcArr[i],
+				dwLastError);
+			StringCchCatW(pwszTlmBuf, stTlmBufSize, pwszError);
+			LocalFree(pwszError);
+		}
+		ResizeWcharBufIfNeeded(&pwszTlmBuf, &stTlmBufSize);
+	}
+	LocalFree(pdwProcArr);
+	return TRUE;
+}
+
+
+PWSTR TLM_Output(void)
+{
+	wprintf(L"Listing DLLs\r\n");
+	stTlmBufSize = SIZE_16MB;
+
+	ALLOCORCRASH(pwszTlmBuf, stTlmBufSize);
+	AddCheckHeader(pwszTlmBuf, stTlmBufSize, L"Loaded Modules", TRUE);
+
+	TLMMain();
+
+	ShrinkWcharBuffer(&pwszTlmBuf);
+	return pwszTlmBuf;
+}
+
+```
+
+`TLV.c`:
+
+```c
+#include "VSTriage.h"
+
+PWSTR pwszTlvBuf = NULL;
+size_t stTlvBufSize;
+
+HANDLE TLVGetProcessBestHandle(DWORD dwPid)
+{
+	HANDLE hProcess;
+	hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, dwPid);
+	if (!hProcess)
+	{
+		hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, dwPid);
+		if (!hProcess)
+		{
+			hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, dwPid);
+		}
+	}
+	return hProcess;
+}
+
+DWORD TLVGetProcessExe(HANDLE hProcess, PWSTR pwszExe, size_t dwSize)
+{
+	DWORD dwP1;
+	dwP1 = (DWORD)dwSize;
+	if (QueryFullProcessImageNameW(hProcess, 0, pwszExe, &dwP1))
+	{
+		return 0;
+	}
+	if (QueryFullProcessImageNameW(hProcess, PROCESS_NAME_NATIVE, pwszExe, &dwP1))
+	{
+		return 0;
+	}
+	StringCchPrintfW(pwszExe, dwSize, L"(ERROR %i)", GetLastError());
+	return GetLastError();
+}
+
+DWORD TLVGetProcessCmdLine(HANDLE hProcess, PWSTR pwszCmdLine, size_t dwSize)
+{
+	NTSTATUS status;
+	PROCESS_BASIC_INFORMATION procInfo = {0};
+	ULONG cbNeeded2 = 0;
+	PEB peb;
+	RTL_USER_PROCESS_PARAMETERS upp;
+
+	status = NtQueryInformationProcess(hProcess, ProcessBasicInformation, &procInfo, sizeof(procInfo), &cbNeeded2);
+	if (0 == status)
+	{
+		if (0 != procInfo.PebBaseAddress)
+		{
+			if (ReadProcessMemory(hProcess, procInfo.PebBaseAddress, &peb, sizeof(peb), NULL))
+			{
+				if (ReadProcessMemory(hProcess, peb.ProcessParameters, &upp, sizeof(upp), NULL))
+				{
+					WCHAR* commandLineContents = (WCHAR*)LocalAlloc(LPTR, ((size_t)upp.CommandLine.Length + 2));
+
+					if (ReadProcessMemory(
+						hProcess,
+						upp.CommandLine.Buffer,
+						commandLineContents,
+						upp.CommandLine.Length,
+						0))
+					{
+						StringCchPrintfW(pwszCmdLine, dwSize, L"%s", commandLineContents);
+						LocalFree(commandLineContents);
+						return 0;
+					}
+					StringCchPrintfW(pwszCmdLine, dwSize, L"(ERROR %i)", GetLastError());
+					LocalFree(commandLineContents);
+					return GetLastError();
+				}
+				StringCchPrintfW(pwszCmdLine, dwSize, L"(ERROR %i)", GetLastError());
+				return GetLastError();
+			}
+			StringCchPrintfW(pwszCmdLine, dwSize, L"(ERROR %i)", GetLastError());
+			return GetLastError();
+		}
+	}
+	StringCchPrintfW(pwszCmdLine, dwSize, L"????");
+	return status;
+}
+
+DWORD TLVGetProcessUser(HANDLE hProcess, PWSTR pwszUserName, size_t stSize)
+{
+	BOOL bRes;
+	DWORD dwRes;
+	HANDLE hToken;
+	DWORD dwTokenLength;
+	PTOKEN_USER ptuTokenInformation;
+	DWORD dwUserNameLen = USERNAME_LENGTH;
+	DWORD dwDomainNameLen = DOMAINNAME_LENGTH;
+	TCHAR szUserName[USERNAME_LENGTH];
+	TCHAR szDomainName[DOMAINNAME_LENGTH];
+	SID_NAME_USE snuSidUse;
+
+	bRes = OpenProcessToken(hProcess, TOKEN_QUERY, &hToken);
+	if (!bRes)
+	{
+		StringCchPrintfW(pwszUserName, stSize, L"????");
+		return GetLastError();
+	}
+
+	GetTokenInformation(hToken, TokenUser, NULL, 0, &dwTokenLength);
+	ptuTokenInformation = (PTOKEN_USER)LocalAlloc(LPTR, dwTokenLength);
+	if (NULL == ptuTokenInformation)
+	{
+		CloseHandle(hToken);
+		StringCchPrintfW(pwszUserName, stSize, L"????");
+		return ERROR_NOT_ENOUGH_MEMORY;
+	}
+
+	bRes = GetTokenInformation(hToken, TokenUser, ptuTokenInformation, dwTokenLength, &dwTokenLength);
+	if (!bRes)
+	{
+		dwRes = GetLastError();
+		CloseHandle(hToken);
+		LocalFree(ptuTokenInformation);
+		StringCchPrintfW(pwszUserName, stSize, L"????");
+		return dwRes;
+	}
+
+	if (!LookupAccountSid(
+		NULL,
+		ptuTokenInformation->User.Sid,
+		szUserName,
+		&dwUserNameLen,
+		szDomainName,
+		&dwDomainNameLen,
+		&snuSidUse))
+	{
+		dwRes = GetLastError();
+		CloseHandle(hToken);
+		LocalFree(ptuTokenInformation);
+		StringCchPrintfW(pwszUserName, stSize, L"????");
+		return dwRes;
+	}
+
+	CloseHandle(hToken);
+	LocalFree(ptuTokenInformation);
+
+	StringCchPrintfW(pwszUserName, stSize, L"%s\\%s", szDomainName, szUserName);
+	return 0;
+}
+
+
+DWORD TLVGetProcessSessionId(HANDLE hProcess, PWSTR pwszSessionId, size_t stSize)
+{
+	BOOL bRes;
+	HANDLE hToken;
+	DWORD dwTokenLength;
+	DWORD dwSessionId;
+
+	bRes = OpenProcessToken(hProcess, TOKEN_QUERY, &hToken);
+	if (!bRes)
+	{
+		StringCchPrintfW(pwszSessionId, stSize, L"?");
+		return GetLastError();
+	}
+
+	bRes = GetTokenInformation(hToken, TokenSessionId, &dwSessionId, sizeof(DWORD), &dwTokenLength);
+	if (!bRes)
+	{
+		DWORD dwRes;
+		dwRes = GetLastError();
+		CloseHandle(hToken);
+		StringCchPrintfW(pwszSessionId, stSize, L"?");
+		return dwRes;
+	}
+
+	CloseHandle(hToken);
+
+	StringCchPrintfW(pwszSessionId, stSize, L"%i", dwSessionId);
+	return 0;
+}
+
+
+DWORD TLVGetProcessTimesStr(HANDLE hProcess, PWSTR pwszTimes, size_t stSize)
+{
+	BOOL bRes;
+	FILETIME ftCreationTime;
+	FILETIME ftExitTime;
+	FILETIME ftKernelTime;
+	FILETIME ftUserTime;
+	SYSTEMTIME stCreationTime;
+	SYSTEMTIME stKernelTime;
+	SYSTEMTIME stUserTime;
+
+	bRes = GetProcessTimes(
+		hProcess,
+		&ftCreationTime,
+		&ftExitTime,
+		&ftKernelTime,
+		&ftUserTime
+	);
+	if (!bRes)
+	{
+		StringCchPrintfW(pwszTimes, stSize, L"??:??");
+		return GetLastError();
+	}
+
+	FileTimeToSystemTime(&ftCreationTime, &stCreationTime);
+	FileTimeToSystemTime(&ftKernelTime, &stKernelTime);
+	FileTimeToSystemTime(&ftUserTime, &stUserTime);
+
+	INT64 i1;
+	i1 = (INT64)MAXDWORD * ftKernelTime.dwHighDateTime + ftKernelTime.dwLowDateTime;
+	i1 = i1 / TICKS_IN_MS;
+
+	INT64 i2;
+	i2 = (INT64)MAXDWORD * ftUserTime.dwHighDateTime + ftUserTime.dwLowDateTime;
+	i2 = i2 / TICKS_IN_MS;
+
+	StringCchPrintfW(
+		pwszTimes,
+		stSize,
+		L"\r\n\t\tStart: %04i-%02i-%02iT%02i:%02i:%02iZ\r\n\t\tKernel: %llums\r\n\t\tUser: %llums",
+		stCreationTime.wYear,
+		stCreationTime.wMonth,
+		stCreationTime.wDay,
+		stCreationTime.wHour,
+		stCreationTime.wMinute,
+		stCreationTime.wSecond,
+		i1,
+		i2);
+	return 0;
+}
+
+
+DWORD TLVGetProcessIOPerf(HANDLE hProcess, PWSTR pwszSessionId, DWORD dwSize)
+{
+	BOOL bRes;
+	HANDLE hToken;
+	DWORD dwTokenLength;
+	DWORD dwSessionId;
+
+	bRes = OpenProcessToken(hProcess, TOKEN_QUERY, &hToken);
+	if (!bRes)
+	{
+		StringCchPrintfW(pwszSessionId, dwSize, L"?");
+		return GetLastError();
+	}
+
+	bRes = GetTokenInformation(hToken, TokenSessionId, &dwSessionId, sizeof(DWORD), &dwTokenLength);
+	if (!bRes)
+	{
+		DWORD dwRes;
+		dwRes = GetLastError();
+		CloseHandle(hToken);
+		StringCchPrintfW(pwszSessionId, dwSize, L"?");
+		return dwRes;
+	}
+
+	CloseHandle(hToken);
+
+	StringCchPrintfW(pwszSessionId, dwSize, L"%i", dwSessionId);
+	return 0;
+}
+
+PWSTR TLVGetProcessDetails(HANDLE hProcess)
+{
+	if (!hProcess)
+	{
+		return NULL;
+	}
+
+	PWCHAR pwszPathData;
+	PWCHAR pwszProcDataTemp;
+	PWCHAR pwszProcData;
+	size_t stPathDataSize;
+	size_t stProcDataTempSize;
+	size_t stProcDataSize;
+
+	DWORD dwResult;
+
+	stPathDataSize = SIZE_1MB;
+	stProcDataSize = SIZE_1MB;
+	stProcDataTempSize = SIZE_1MB;
+
+	pwszPathData = LocalAlloc(LPTR, stPathDataSize);
+	CRASHIFNULLALLOC(pwszPathData);
+	pwszProcData = LocalAlloc(LPTR, stProcDataSize);
+	CRASHIFNULLALLOC(pwszProcData);
+	pwszProcDataTemp = LocalAlloc(LPTR, stProcDataTempSize);
+	CRASHIFNULLALLOC(pwszProcDataTemp);
+
+
+	//full path
+	dwResult = TLVGetProcessExe(hProcess, pwszPathData, stPathDataSize / sizeof(WCHAR));
+	if (!dwResult)
+	{
+		StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tPath: %s\r\n", pwszPathData);
+		StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+	}
+
+
+	//cmdline
+	dwResult = TLVGetProcessCmdLine(hProcess, pwszPathData, stPathDataSize / sizeof(WCHAR));
+	if (!dwResult)
+	{
+		StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tCmdline: %s\r\n", pwszPathData);
+		StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+	}
+
+
+	//user
+	dwResult = TLVGetProcessUser(hProcess, pwszPathData, stPathDataSize / sizeof(WCHAR));
+	if (!dwResult)
+	{
+		StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tUser: %s\r\n", pwszPathData);
+		StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+	}
+
+
+	//session
+	dwResult = TLVGetProcessSessionId(hProcess, pwszPathData, stPathDataSize / sizeof(WCHAR));
+	if (!dwResult)
+	{
+		StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tSession: %s\r\n", pwszPathData);
+		StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+	}
+
+
+	//times
+	dwResult = TLVGetProcessTimesStr(hProcess, pwszPathData, stPathDataSize / sizeof(WCHAR));
+	if (!dwResult)
+	{
+		StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tTimes: %s\n", pwszPathData);
+		StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+	}
+
+	LocalFree(pwszProcDataTemp);
+	LocalFree(pwszPathData);
+	return pwszProcData;
+}
+
+
+PSYSTEM_PROCESS_INFORMATION TLVFindProcessInformation(ULONG ulPid, PSYSTEM_PROCESS_INFORMATION psPiHead)
+{
+	PSYSTEM_PROCESS_INFORMATION psIt1;
+	psIt1 = psPiHead;
+	while (psIt1 != NULL)
+	{
+		if (0 == psIt1->NextEntryOffset)
+		{
+			return NULL;
+		}
+		if (ulPid == HandleToULong(psIt1->UniqueProcessId))
+		{
+			break;
+		}
+		psIt1 = Add2Ptr(psIt1, psIt1->NextEntryOffset);
+	}
+	return psIt1;
+}
+
+
+BOOL TLVMain(void)
+{
+	HANDLE hSnapshot;
+	ULONG ulBufferSize;
+	PSYSTEM_PROCESS_INFORMATION psPIArray;
+	NTSTATUS status;
+
+	psPIArray = NULL;
+	ulBufferSize = 0;
+	status = STATUS_INFO_LENGTH_MISMATCH;
+
+	while (STATUS_INFO_LENGTH_MISMATCH == status)
+	{
+		if (psPIArray)
+		{
+			LocalFree(psPIArray);
+		}
+		psPIArray = (PSYSTEM_PROCESS_INFORMATION)LocalAlloc(LPTR, ulBufferSize);
+		CRASHIFNULLALLOC(psPIArray);
+		status = NtQuerySystemInformation(SystemProcessInformation, psPIArray, ulBufferSize, &ulBufferSize);
+	}
+	if (STATUS_SUCCESS != status)
+	{
+		LocalFree(psPIArray);
+		return FALSE;
+	}
+
+	hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPALL, 0);
+	if (INVALID_HANDLE_VALUE == hSnapshot)
+	{
+		LocalFree(psPIArray);
+		return FALSE;
+	}
+
+	// size_t stTemp;
+	PROCESSENTRY32W pe32;
+	pe32.dwSize = sizeof(pe32);
+
+
+	if (Process32FirstW(hSnapshot, &pe32))
+	{
+		PSYSTEM_PROCESS_INFORMATION psPI;
+		//		HRESULT hResult;
+		HANDLE hProcess;
+		do
+		{
+			PWSTR pwszProcData;
+			size_t stProcDataSize;
+			PWSTR pwszProcDataTemp;
+			size_t stProcDataTempSize;
+
+			stProcDataSize = SIZE_1MB;
+			stProcDataTempSize = SIZE_1KB;
+
+			pwszProcData = LocalAlloc(LPTR, stProcDataSize);
+			CRASHIFNULLALLOC(pwszProcData);
+
+			pwszProcDataTemp = LocalAlloc(LPTR, stProcDataTempSize);
+			CRASHIFNULLALLOC(pwszProcDataTemp);
+
+			StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"PID: %i\r\n", pe32.th32ProcessID);
+			StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+
+			StringCchPrintfW(pwszProcDataTemp, stProcDataTempSize / sizeof(WCHAR), L"\tName: %s\r\n", pe32.szExeFile);
+			StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+
+			StringCchPrintfW(
+				pwszProcDataTemp,
+				stProcDataTempSize / sizeof(WCHAR),
+				L"\tPPID: %i\r\n",
+				pe32.th32ParentProcessID);
+			StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+
+			StringCchPrintfW(
+				pwszProcDataTemp,
+				stProcDataTempSize / sizeof(WCHAR),
+				L"\tThreads: %i\r\n",
+				pe32.cntThreads);
+			StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+
+
+			hProcess = TLVGetProcessBestHandle(pe32.th32ProcessID);
+
+			if (NULL != hProcess)
+			{
+				PWSTR pwszDetails;
+				pwszDetails = TLVGetProcessDetails(hProcess);
+				StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszDetails);
+				CloseHandle(hProcess);
+				LocalFree(pwszDetails);
+			}
+
+
+			psPI = TLVFindProcessInformation(pe32.th32ProcessID, psPIArray);
+			if (NULL != psPI)
+			{
+				StringCchPrintfW(
+					pwszProcDataTemp,
+					stProcDataTempSize / sizeof(WCHAR),
+					L"\tIOCount: \r\n\t\tRead: %llu\r\n\t\tWrite: %llu\r\n\t\tOther: %llu\r\n",
+					psPI->ReadOperationCount.QuadPart,
+					psPI->WriteOperationCount.QuadPart,
+					psPI->OtherOperationCount.QuadPart);
+				StringCchCatW(pwszProcData, stProcDataSize / sizeof(WCHAR), pwszProcDataTemp);
+			}
+
+			StringCchCatW(pwszTlvBuf, stTlvBufSize / sizeof(WCHAR), pwszProcData);
+
+			//TLVBufResize();
+			ResizeWcharBufIfNeeded(&pwszTlvBuf, &stTlvBufSize);
+
+			LocalFree(pwszProcDataTemp);
+			LocalFree(pwszProcData);
+		}
+		while (Process32NextW(hSnapshot, &pe32));
+	}
+	else
+	{
+		wprintf(L"Process32First failed. Error: %lu\r\n", GetLastError());
+		LocalFree(psPIArray);
+		return FALSE;
+	}
+	CloseHandle(hSnapshot);
+	LocalFree(psPIArray);
+	return TRUE;
+}
+
+PWSTR TLV_Output(void)
+{
+	wprintf(L"Listing Processes\r\n");
+	stTlvBufSize = SIZE_1MB;
+
+	pwszTlvBuf = LocalAlloc(LPTR, stTlvBufSize);
+	if (!pwszTlvBuf)
+	{
+		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+		return NULL;
+	}
+
+	AddCheckHeader(pwszTlvBuf, stTlvBufSize, L"Process Details", TRUE);
+
+	if (!TLVMain())
+	{
+		wprintf(L"\tSome errors...\r\n");
+	}
+
+	ShrinkWcharBuffer(&pwszTlvBuf);
+	return pwszTlvBuf;
+}
+
+```
+
+`Util.c`:
+
+```c
+#include "VSTriage.h"
+
+extern PNODE pnReportHead; // global variable - pointer to head node.
+
+int cmp(const void* a, const void* b)
+{
+	const wchar_t** ia = (const wchar_t**)a;
+	const wchar_t** ib = (const wchar_t**)b;
+	if ((wcslen(*ia) > 0) && (wcslen(*ib) > 0))
+	{
+		if ((*ia[0] == L'\t') && (*ib[0] != L'\t'))
+		{
+			return 1;
+		}
+		if ((*ia[0] != L'\t') && (*ib[0] == L'\t'))
+		{
+			return -1;
+		}
+	}
+	return _wcsicmp(*ia, *ib);
+}
+
+VOID SortUniqueMultilineWchar(PWSTR pwszStringToSort, PWSTR* pwszSortedString)
+{
+	PWSTR* ppwstrLines;
+	DWORD dwCurrentLineNumber = 0;
+	wchar_t* wcToken;
+	wchar_t* next_token = NULL;
+	wchar_t seps[] = L"\r\n";
+	PWSTR pwszNewString;
+	size_t stStringSizeBytes;
+	DWORD dwMaxLines = SIZE_1KB;
+
+	stStringSizeBytes = LocalSize(pwszStringToSort);
+
+	CRASHORALLOC(ppwstrLines, sizeof(PWSTR) * dwMaxLines);
+	CRASHORALLOC(pwszNewString, stStringSizeBytes);
+
+	wcToken = wcstok_s(pwszStringToSort, seps, &next_token);
+
+	while (NULL != wcToken)
+	{
+		ppwstrLines[dwCurrentLineNumber++] = wcToken;
+		wcToken = wcstok_s(NULL, seps, &next_token);
+		if (dwCurrentLineNumber == dwMaxLines)
+		{
+			//too many lines. reallocate
+			PWSTR* ppwstrNewLines;
+			dwMaxLines = 2 * dwMaxLines;
+			ALLOCORCRASH(ppwstrNewLines, sizeof(PWSTR) * dwMaxLines);
+			memcpy_s(ppwstrNewLines, LocalSize(ppwstrNewLines), ppwstrLines, LocalSize(ppwstrLines));
+			LocalFree(ppwstrLines);
+			ppwstrLines = ppwstrNewLines;
+		}
+	}
+
+	if (dwCurrentLineNumber < 2) //no touch
+	{
+		LocalFree(ppwstrLines);
+		wmemcpy_s(pwszNewString, stStringSizeBytes / sizeof(WCHAR), pwszStringToSort, wcslen(pwszStringToSort));
+		if (1 == dwCurrentLineNumber)
+		{
+			StringCchCatW(pwszNewString, stStringSizeBytes / sizeof(WCHAR), L"\r\n");
+		}
+		*pwszSortedString = pwszNewString;
+		return;
+	}
+
+	qsort(ppwstrLines, dwCurrentLineNumber, sizeof(PWSTR), cmp);
+
+	// add line 0
+	StringCchCatW(pwszNewString, stStringSizeBytes / sizeof(WCHAR), ppwstrLines[0]);
+	StringCchCatW(pwszNewString, stStringSizeBytes / sizeof(WCHAR), L"\r\n");
+
+	// add lines from 1, if != previous.
+	for (DWORD i = 1; i < dwCurrentLineNumber; i++)
+	{
+		if (0 != _wcsicmp(ppwstrLines[i - 1], ppwstrLines[i]))
+		{
+			StringCchCatW(pwszNewString, stStringSizeBytes / sizeof(WCHAR), ppwstrLines[i]);
+			StringCchCatW(pwszNewString, stStringSizeBytes / sizeof(WCHAR), L"\r\n");
+		}
+	}
+
+	*pwszSortedString = pwszNewString;
+	LocalFree(ppwstrLines);
+}
+
+
+VOID ResizeWcharBufIfNeeded(PWSTR* pwszBuffer, size_t* pstBufferSizeBytes)
+{
+	//check if we have 50% of buffer. If yes - double the buffer.
+	if (wcslen(*pwszBuffer) > *pstBufferSizeBytes / (2 * sizeof(WCHAR)))
+	{
+		PWSTR buf2;
+		*pstBufferSizeBytes *= 2;
+		buf2 = LocalAlloc(LPTR, *pstBufferSizeBytes);
+		CRASHIFNULLALLOC(buf2);
+		wmemcpy_s(buf2, wcslen(*pwszBuffer), *pwszBuffer, wcslen(*pwszBuffer));
+		LocalFree(*pwszBuffer);
+		*pwszBuffer = buf2;
+	}
+}
+
+VOID ShrinkWcharBuffer(PWSTR* pwszBuffer)
+{
+	if (NULL == pwszBuffer)
+	{
+		return; //nothing to do
+	}
+
+	PWSTR buf1;
+	size_t stLenWchars;
+	size_t stMaxLenBytes;
+
+	stMaxLenBytes = LocalSize(*pwszBuffer);
+	stLenWchars = wcsnlen(*pwszBuffer, stMaxLenBytes / sizeof(WCHAR));
+
+	buf1 = LocalAlloc(LPTR, stLenWchars * sizeof(WCHAR) + 2);
+	CRASHIFNULLALLOC(buf1);
+
+	if (stLenWchars > 0)
+	{
+		errno_t iRet;
+		iRet = wmemcpy_s(buf1, stLenWchars + 1, *pwszBuffer, stLenWchars);
+		if (iRet)
+		//cannot copy for some reason. the best thing is to return original buffer. It wastes the memory but works.
+		{
+			LocalFree(buf1);
+			return;
+		}
+	}
+	LocalFree(*pwszBuffer);
+	*pwszBuffer = buf1;
+}
+
+VOID AddCheckHeader(PWSTR pwszBuffer, size_t stBufferSizeBytes, PWSTR pwszHeaderContent, BOOL bStartWithCRLF)
+{
+	PWSTR pwszTimeStr;
+	HRESULT hrStr;
+	pwszTimeStr = GetCurrentTimeZ();
+	if (bStartWithCRLF)
+	{
+		hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), L"\r\n\r\n");
+		CHECKSTRINGHR(hrStr);
+	}
+	hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), L"====");
+	CHECKSTRINGHR(hrStr);
+	hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), pwszHeaderContent);
+	CHECKSTRINGHR(hrStr);
+	hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), L"==== ");
+	CHECKSTRINGHR(hrStr);
+	hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), pwszTimeStr);
+	CHECKSTRINGHR(hrStr);
+	hrStr = StringCchCatW(pwszBuffer, stBufferSizeBytes / sizeof(WCHAR), L"\r\n");
+	CHECKSTRINGHR(hrStr);
+	LocalFree(pwszTimeStr);
+}
+
+//Creates a new Node and returns pointer to it.
+PNODE GetNewNode(PWSTR x)
+{
+	PNODE newNode;
+	newNode = (PNODE)LocalAlloc(LPTR, sizeof(NODE));
+	CRASHIFNULLALLOC(newNode);
+	newNode->data = x;
+	newNode->prev = NULL;
+	newNode->next = NULL;
+	return newNode;
+}
+
+//Inserts a Node at head of doubly linked list
+VOID InsertAtHead(PWSTR x)
+{
+	PNODE newNode = GetNewNode(x);
+	if (pnReportHead == NULL)
+	{
+		pnReportHead = newNode;
+		return;
+	}
+	pnReportHead->prev = newNode;
+	newNode->next = pnReportHead;
+	pnReportHead = newNode;
+}
+
+//Inserts a Node at tail of Doubly linked list
+VOID InsertAtOutputTail(PWSTR x)
+{
+	PNODE temp = pnReportHead;
+	PNODE newNode = GetNewNode(x);
+	if (pnReportHead == NULL)
+	{
+		pnReportHead = newNode;
+		return;
+	}
+	while (temp->next != NULL)
+	{
+		temp = temp->next; // Go To last Node
+	}
+	temp->next = newNode;
+	newNode->prev = temp;
+}
+
+//Prints all the elements in linked list in forward traversal order
+VOID PrintOutput(void)
+{
+	PNODE temp = pnReportHead;
+	wprintf(L"Forward: ");
+	while (temp != NULL)
+	{
+		wprintf(L"%s ", temp->data);
+		temp = temp->next;
+	}
+	wprintf(L"\r\n");
+}
+
+//Prints all elements in linked list in reverse traversal order.
+VOID ReversePrint(void)
+{
+	PNODE temp = pnReportHead;
+	if (temp == NULL)
+	{
+		return; // empty list, exit
+	}
+	// Going to last Node
+	while (temp->next != NULL)
+	{
+		temp = temp->next;
+	}
+	// Traversing backward using prev pointer
+	wprintf(L"Reverse: ");
+	while (temp != NULL)
+	{
+		wprintf(L"%s ", temp->data);
+		temp = temp->prev;
+	}
+	wprintf(L"\r\n");
+}
+
+//Enables all privileges present in the token, one by one.
+VOID EnableAllPrivileges(void) //or at least try...
+{
+	HANDLE hToken;
+	BOOL bStatus;
+	DWORD dwLastError;
+	DWORD dwTokenPrivilegeBytes;
+	PTOKEN_PRIVILEGES pPrivs;
+	DWORD i;
+	WCHAR wszPrivilegeName[MAX_PRIVILEGE_NAME_LEN];
+	DWORD dwLen;
+	TOKEN_PRIVILEGES tp;
+
+
+	bStatus = OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken);
+	if (!bStatus)
+	{
+		dwLastError = GetLastError();
+		wprintf(L"ERROR: OpenProcessToken() returned %u\r\n", dwLastError);
+		return;
+	}
+
+
+	//get the token information size, check if not zero
+	GetTokenInformation(hToken, TokenPrivileges, NULL, 0, &dwTokenPrivilegeBytes);
+	if (0 == dwTokenPrivilegeBytes)
+	{
+		dwLastError = GetLastError();
+		wprintf(L"ERROR: GetTokenInformation() can't obtain token size. Error %u\r\n", dwLastError);
+		CloseHandle(hToken);
+		return;
+	}
+
+	//allocate buffer for storing token information
+	pPrivs = LocalAlloc(LPTR, dwTokenPrivilegeBytes);
+	if (NULL == pPrivs)
+	{
+		wprintf(L"ERROR: Cannot allocate buffer.\r\n");
+		CloseHandle(hToken);
+		return;
+	}
+
+	//put the token data to the buffer
+	bStatus = GetTokenInformation(hToken, TokenPrivileges, pPrivs, dwTokenPrivilegeBytes, &dwTokenPrivilegeBytes);
+	if (!bStatus)
+	{
+		dwLastError = GetLastError();
+		wprintf(L"ERROR: GetTokenInformation() returned %u\r\n", dwLastError);
+		CloseHandle(hToken);
+		LocalFree(pPrivs);
+		return;
+	}
+
+	//iterate through privileges
+	//I can do it with one AdjustTokenPrivileges() call but iterating through an array allows me to display names and catch failed attempts.
+	//the all-at-once  approach is nicely demonstrated at https://docs.microsoft.com/en-us/windows/win32/wmisdk/executing-privileged-operations-using-c- 
+	for (i = 0; i < pPrivs->PrivilegeCount; i++)
+	{
+		//wprintf(L"Enabling privilege 0x%02x ", pPrivs->Privileges[i].Luid.LowPart);
+		dwLen = MAX_PRIVILEGE_NAME_LEN;
+		LookupPrivilegeNameW(NULL, &(pPrivs->Privileges[i].Luid), wszPrivilegeName, &dwLen);
+		tp.PrivilegeCount = 1;
+		tp.Privileges[0].Luid = pPrivs->Privileges[i].Luid;
+		tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+
+		AdjustTokenPrivileges(hToken, FALSE, &tp, sizeof(tp), NULL, NULL);
+	}
+
+	CloseHandle(hToken);
+	LocalFree(pPrivs);
+}
+
+//LocalFree required
+PWSTR SystemTimeToISO8601(SYSTEMTIME stTime)
+{
+	PWSTR pwszISOTimeZ;
+	//2022-05-02T07:34:56Z
+	//	GetSystemTime(&stTime);
+	pwszISOTimeZ = LocalAlloc(LPTR, (ISO_TIME_LEN + 3) * sizeof(WCHAR));
+	if (pwszISOTimeZ)
+	{
+		StringCchPrintfW(
+			pwszISOTimeZ,
+			ISO_TIME_LEN + 3,
+			ISO_TIME_FORMAT_W,
+			stTime.wYear,
+			stTime.wMonth,
+			stTime.wDay,
+			stTime.wHour,
+			stTime.wMinute,
+			stTime.wSecond);
+	}
+	return pwszISOTimeZ;
+}
+
+//LocalFree required
+PWSTR GetCurrentTimeZ(void)
+{
+	SYSTEMTIME stTime;
+	GetSystemTime(&stTime);
+	return (SystemTimeToISO8601(stTime));
+}
+
+BOOL KernelDump(PWSTR pwszDumpName)
+{
+	HANDLE hFile;
+	NTSTATUS status;
+	ULONG ulReturnLength;
+
+	hFile = CreateFile(
+		pwszDumpName,
+		GENERIC_WRITE,
+		0,
+		NULL,
+		CREATE_ALWAYS,
+		0,
+		NULL
+	);
+
+	if (NULL == hFile)
+	{
+		wprintf(L"Error creating dump file: %i\r\n", GetLastError());
+		return FALSE;
+	}
+
+	SYSDBG_LIVEDUMP_CONTROL slcDumpControl = {0};
+	slcDumpControl.Version = 1;
+	slcDumpControl.BugCheckCode = LIVE_SYSTEM_DUMP;
+	slcDumpControl.DumpFileHandle = hFile;
+
+	status = NtSystemDebugControl(SysDbgGetLiveKernelDump, &slcDumpControl, sizeof(slcDumpControl), NULL, 0, &ulReturnLength);
+	if (STATUS_SUCCESS != status)
+	{
+		wprintf(L"Error writing dump: 0x%08x\r\n", status);
+		CloseHandle(hFile);
+		return FALSE;
+	}
+
+	CloseHandle(hFile);
+	return TRUE;
+}
+
+```
+
+`VSTriage.c`:
+
+```c
+#include "VSTriage.h"
+//#define WINDOWS7BUILD TRUE
+
+PNODE pnReportHead; // global variable - pointer to report head node.
+
+BOOL SaveReport(PWCHAR wszFileName, PNODE pHead)
+{
+	HANDLE hFile;
+	DWORD dwBytesWritten;
+
+	hFile = CreateFile(
+		wszFileName,
+		GENERIC_WRITE,
+		0,
+		NULL,
+		CREATE_ALWAYS,
+		0,
+		NULL
+	);
+
+	if (INVALID_HANDLE_VALUE == hFile)
+	{
+		return FALSE;
+	}
+
+	WriteFile(
+		hFile,
+		&BOM,
+		2,
+		&dwBytesWritten,
+		NULL
+	);
+
+	PNODE temp;
+
+	temp = pHead;
+	while (temp != NULL)
+	{
+		WriteFile(
+			hFile,
+			temp->data,
+			(DWORD)(wcslen(temp->data) * sizeof(WCHAR)),
+			&dwBytesWritten,
+			NULL
+		);
+		temp = temp->next;
+	}
+	CloseHandle(hFile);
+	return TRUE;
+}
+
+
+PWSTR MyComputerName(void)
+{
+	PWSTR pwszData;
+	DWORD dwChars = MAX_PATH; //overkill but works
+	CRASHORALLOC(pwszData, dwChars * sizeof(WCHAR));
+	GetComputerNameExW(ComputerNamePhysicalNetBIOS, pwszData, &dwChars);
+	return pwszData;
+}
+
+
+WCHAR wszOutputFileName[MAX_PATH] = L"\0";
+WCHAR wszDumpFileName[MAX_PATH] = L"\0";
+BOOL bMemDump = FALSE;
+
+int wmain(int argc, WCHAR** argv, WCHAR** envp)
+{
+	UNREFERENCED_PARAMETER(envp);
+
+#ifdef WINDOWS7BUILD
+#pragma message("********** WINDOWS 7 BUILD **********")
+	wprintf(L"\r\n********** WINDOWS 7 BUILD **********\r\n\r\n");
+#endif
+
+	BOOL bRes;
+	pnReportHead = NULL;
+
+	int i = 0;
+	while (i < argc)
+	{
+		PWSTR pwszCurrentParam = argv[i];
+		if (!_wcsicmp(L"-f", pwszCurrentParam))
+		{
+			i++;
+			if (NULL != argv[i])
+			{
+				if (wcslen(argv[i]) > 0)
+				{
+					if (argv[i][0] == L'-')
+					{
+						continue; //next param name
+					}
+
+					errno_t err = wcsncpy_s(wszOutputFileName, ARRAYSIZE(wszOutputFileName), argv[i], _TRUNCATE);
+					if (STRUNCATE == err)
+					{
+						wszOutputFileName[0] = L'\0';
+					}
+				}
+			}
+		}
+
+		if (!_wcsicmp(L"-memdump", pwszCurrentParam))
+		{
+			bMemDump = TRUE;
+			i++;
+			if (NULL != argv[i])
+			{
+				if (wcslen(argv[i]) > 0)
+				{
+					if (argv[i][0] == L'-')
+					{
+						continue; //next param name
+					}
+
+					errno_t err = wcsncpy_s(wszDumpFileName, ARRAYSIZE(wszDumpFileName), argv[i], _TRUNCATE);
+					if (STRUNCATE == err)
+					{
+						wszDumpFileName[0] = L'\0';
+					}
+				}
+			}
+		}
+		i++;
+	}
+
+	PWSTR pwsz1 = MyComputerName();
+	PWSTR pwsz2 = GetCurrentTimeZ();
+
+	//default report name
+	if (0 == wcslen(wszOutputFileName))
+	{
+		StringCchPrintfW(
+			wszOutputFileName,
+			ARRAYSIZE(wszOutputFileName),
+			L"%s.%s.%s.txt",
+			argv[0],
+			pwsz1,
+			pwsz2);
+		for (int j = 3; j < (int)wcslen(wszOutputFileName); j++)
+		{
+			if (L':' == wszOutputFileName[j])
+			{
+				wszOutputFileName[j] = L'-';
+			}
+		}
+	}
+
+	//default dump name
+	if (0 == wcslen(wszDumpFileName))
+	{
+		StringCchPrintfW(
+			wszDumpFileName,
+			ARRAYSIZE(wszDumpFileName),
+			L"%s.%s.%s.dmp",
+			argv[0],
+			pwsz1,
+			pwsz2);
+		for (int j = 3; j < (int)wcslen(wszDumpFileName); j++)
+		{
+			if (L':' == wszDumpFileName[j])
+			{
+				wszDumpFileName[j] = L'-';
+			}
+		}
+	}
+
+	LocalFree(pwsz1);
+	LocalFree(pwsz2);
+
+	wprintf(L"\r\n");
+	wprintf(L"Params:\r\n");
+	wprintf(L"\tOutput file (-f): %s\r\n", wszOutputFileName);
+#ifndef WINDOWS7BUILD
+	wprintf(L"\tMemory dump (-memdump): %s\r\n", (bMemDump ? wszDumpFileName : L"(none)"));
+#endif
+	wprintf(L"\r\n");
+
+	EnableAllPrivileges();
+
+#ifndef WINDOWS7BUILD
+	if (bMemDump)
+	{
+		wprintf(L"Dumping Memory\r\n");
+		KernelDump(wszDumpFileName);
+	}
+#endif
+
+	InsertAtOutputTail(HNM_Output());
+	InsertAtOutputTail(TLV_Output());
+	InsertAtOutputTail(TLM_Output());
+	InsertAtOutputTail(DRV_Output());
+	InsertAtOutputTail(SET_Output());
+	InsertAtOutputTail(CUSR_Output());
+	InsertAtOutputTail(HND_Output());
+	InsertAtOutputTail(ARPA_Output());
+	InsertAtOutputTail(ICOA_Output());
+	InsertAtOutputTail(ICOD_Output()); 
+	InsertAtOutputTail(NANO_Output());
+	InsertAtOutputTail(KLS_Output()); 
+
+	bRes = SaveReport(wszOutputFileName, pnReportHead);
+	if (!bRes)
+	{
+		DWORD dwError;
+		dwError = GetLastError();
+		wprintf(L"ERROR %i\r\n", dwError);
+		return (int)dwError;
+	}
+
+	wprintf(L"Done.\r\n");
+}
+
+```
+
+`VSTriage.h`:
+
+```h
+#pragma once
+#include <WinSock2.h>
+#include <IPTypes.h>
+#include <strsafe.h>
+#include <Windows.h>
+#include <wchar.h>
+#include <Psapi.h>
+#include <TlHelp32.h>
+#include <WinDNS.h>
+#include <ip2string.h>
+#include <VersionHelpers.h>
+
+#pragma comment(lib, "ntdll.lib")
+#pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Crypt32.lib")
+#pragma comment(lib, "dnsapi.lib")
+#pragma comment(lib, "Secur32.lib")
+
+
+#define CRASHIFNULLALLOC(x) if (NULL == (x)) {wprintf(L"FATAL ERROR. Cannot allocate memory in %hs\r\n", __func__); _exit(ERROR_NOT_ENOUGH_MEMORY);} __noop
+#define CRASHORALLOC(p,bytes) (p) = LocalAlloc(LPTR,(bytes)); CRASHIFNULLALLOC(p); __noop
+#define ALLOCORCRASH CRASHORALLOC
+
+#define DBGTRACE wprintf(L"> # %i             \r\n", __LINE__); __noop
+
+#define REPORTERROR(s,x) wprintf(L"\r\nERROR. %s %i (%hs#%i)\r\n", s, x, __FILE__, __LINE__)
+
+#define CHECKSTRINGHR(x) if (S_OK != (x)) {wprintf(L"FATAL ERROR. String operation failed in %hs\r\n", __func__); _exit(RPC_S_STRING_TOO_LONG);} __noop
+#define Add2Ptr(Ptr,Inc) ((PVOID)((PUCHAR)(Ptr) + (Inc)))
+
+typedef enum _PROCESSINFOCLASS
+{
+	ProcessBasicInformation = 0,
+	ProcessDebugPort = 7,
+	ProcessWow64Information = 26,
+	ProcessImageFileName = 27,
+	ProcessBreakOnTermination = 29,
+	ProcessSubsystemInformation = 75
+} PROCESSINFOCLASS;
+
+typedef struct _PEB_FREE_BLOCK
+{
+	struct _PEB_FREE_BLOCK* Next;
+	ULONG Size;
+} PEB_FREE_BLOCK, *PPEB_FREE_BLOCK;
+
+typedef struct _UNICODE_STRING
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	PWSTR Buffer;
+} UNICODE_STRING;
+
+typedef struct _PEB_LDR_DATA
+{
+	ULONG Length;
+	BOOLEAN Initialized;
+	HANDLE SsHandle;
+	LIST_ENTRY InLoadOrderModuleList;
+	LIST_ENTRY InMemoryOrderModuleList;
+	LIST_ENTRY InInitializationOrderModuleList;
+	PVOID EntryInProgress;
+} PEB_LDR_DATA, *PPEB_LDR_DATA;
+
+typedef PVOID* PPVOID;
+
+typedef struct _STRING
+{
+	USHORT Length;
+	USHORT MaximumLength;
+	PCHAR Buffer;
+} STRING;
+
+typedef struct _RTL_DRIVE_LETTER_CURDIR
+{
+	USHORT Flags;
+	USHORT Length;
+	ULONG TimeStamp;
+	STRING DosPath;
+} RTL_DRIVE_LETTER_CURDIR, *PRTL_DRIVE_LETTER_CURDIR;
+
+typedef struct _CURDIR
+{
+	UNICODE_STRING DosPath;
+	HANDLE Handle;
+} CURDIR, *PCURDIR;
+
+//struct below taken from the "dt nt!_RTL_USER_PROCESS_PARAMETERS"
+typedef struct _RTL_USER_PROCESS_PARAMETERS
+{
+	ULONG MaximumLength;
+	ULONG Length;
+	ULONG Flags;
+	ULONG DebugFlags;
+	HANDLE ConsoleHandle;
+	ULONG ConsoleFlags;
+	HANDLE StandardInput;
+	HANDLE StandardOutput;
+	HANDLE StandardError;
+	CURDIR CurrentDirectory;
+	UNICODE_STRING DllPath;
+	UNICODE_STRING ImagePathName;
+	UNICODE_STRING CommandLine;
+	PVOID Environment;
+	ULONG StartingX;
+	ULONG StartingY;
+	ULONG CountX;
+	ULONG CountY;
+	ULONG CountCharsX;
+	ULONG CountCharsY;
+	ULONG FillAttribute;
+	ULONG WindowFlags;
+	ULONG ShowWindowFlags;
+	UNICODE_STRING WindowTitle;
+	UNICODE_STRING DesktopInfo;
+	UNICODE_STRING ShellInfo;
+	UNICODE_STRING RuntimeData;
+	RTL_DRIVE_LETTER_CURDIR CurrentDirectores[32];
+	ULONGLONG EnvironmentSize;
+	ULONGLONG EnvironmentVersion;
+	PVOID PackageDependencyData;
+	ULONG ProcessGroupId;
+	ULONG LoaderThreads;
+	UNICODE_STRING RedirectionDllName;
+	UNICODE_STRING HeapPartitionName;
+	PULONGLONG DefaultThreadpoolCpuSetMasks;
+	ULONG DefaultThreadpoolCpuSetMaskCount;
+	ULONG DefaultThreadpoolThreadMaximum;
+} RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+
+//dt nt!_PEB plus some digging through internet. Not so important for members after ProcessParameters.
+typedef struct _PEB
+{
+	BOOLEAN InheritedAddressSpace;
+	BOOLEAN ReadImageFileExecOptions;
+	BOOLEAN BeingDebugged;
+	BOOLEAN SpareBool;
+	HANDLE Mutant;
+	PVOID ImageBaseAddress;
+	PPEB_LDR_DATA Ldr;
+	PRTL_USER_PROCESS_PARAMETERS ProcessParameters;
+	PVOID SubSystemData;
+	PVOID ProcessHeap;
+	PRTL_CRITICAL_SECTION FastPebLock;
+	PVOID FastPebLockRoutine;
+	PVOID FastPebUnlockRoutine;
+	ULONG EnvironmentUpdateCount;
+	PVOID KernelCallbackTable;
+	ULONG SystemReserved[1];
+
+	struct foo
+	{
+		ULONG ExecuteOptions : 2;
+		ULONG SpareBits : 30;
+	};
+
+	PPEB_FREE_BLOCK FreeList;
+	ULONG TlsExpansionCounter;
+	PVOID TlsBitmap;
+	ULONG TlsBitmapBits[2];
+	PVOID ReadOnlySharedMemoryBase;
+	PVOID ReadOnlySharedMemoryHeap;
+	PPVOID ReadOnlyStaticServerData;
+	PVOID AnsiCodePageData;
+	PVOID OemCodePageData;
+	PVOID UnicodeCaseTableData;
+	ULONG NumberOfProcessors;
+	ULONG NtGlobalFlag;
+	LARGE_INTEGER CriticalSectionTimeout;
+	SIZE_T HeapSegmentReserve;
+	SIZE_T HeapSegmentCommit;
+	SIZE_T HeapDeCommitTotalFreeThreshold;
+	SIZE_T HeapDeCommitFreeBlockThreshold;
+	ULONG NumberOfHeaps;
+	ULONG MaximumNumberOfHeaps;
+	PPVOID ProcessHeaps;
+	PVOID GdiSharedHandleTable;
+	PVOID ProcessStarterHelper;
+	ULONG GdiDCAttributeList;
+	PVOID LoaderLock;
+	ULONG OSMajorVersion;
+	ULONG OSMinorVersion;
+	USHORT OSBuildNumber;
+	USHORT OSCSDVersion;
+	ULONG OSPlatformId;
+	ULONG ImageSubsystem;
+	ULONG ImageSubsystemMajorVersion;
+	ULONG ImageSubsystemMinorVersion;
+	ULONG_PTR ImageProcessAffinityMask;
+	ULONG GdiHandleBuffer[60];
+	PVOID PostProcessInitRoutine;
+	PVOID TlsExpansionBitmap;
+	ULONG TlsExpansionBitmapBits[32];
+	ULONG SessionId;
+	ULARGE_INTEGER AppCompatFlags;
+	ULARGE_INTEGER AppCompatFlagsUser;
+	PVOID pShimData;
+	PVOID AppCompatInfo;
+	UNICODE_STRING CSDVersion;
+	PVOID ActivationContextData;
+	PVOID ProcessAssemblyStorageMap;
+	PVOID SystemDefaultActivationContextData;
+	PVOID SystemAssemblyStorageMap;
+	SIZE_T MinimumStackCommit;
+} PEB, *PPEB;
+
+typedef struct _PROCESS_BASIC_INFORMATION
+{
+	PVOID Reserved1;
+	PPEB PebBaseAddress;
+	PVOID Reserved2[2];
+	ULONG_PTR UniqueProcessId;
+	PVOID Reserved3;
+} PROCESS_BASIC_INFORMATION;
+
+typedef enum _SYSTEM_INFORMATION_CLASS
+{
+	SystemProcessInformation = 5,
+	SystemHandleInformation = 16,
+	SystemExtendedHandleInformation = 0x40,
+} SYSTEM_INFORMATION_CLASS;
+
+typedef LONG KPRIORITY;
+
+typedef struct _SYSTEM_PROCESS_INFORMATION
+{
+	ULONG NextEntryOffset;
+	ULONG NumberOfThreads;
+	LARGE_INTEGER WorkingSetPrivateSize;
+	ULONG HardFaultCount;
+	ULONG NumberOfThreadsHighWatermark;
+	ULONGLONG CycleTime;
+	LARGE_INTEGER CreateTime;
+	LARGE_INTEGER UserTime;
+	LARGE_INTEGER KernelTime;
+	UNICODE_STRING ImageName;
+	KPRIORITY BasePriority;
+	HANDLE UniqueProcessId;
+	HANDLE InheritedFromUniqueProcessId;
+	ULONG HandleCount;
+	ULONG SessionId;
+	ULONG_PTR UniqueProcessKey;
+	SIZE_T PeakVirtualSize;
+	SIZE_T VirtualSize;
+	ULONG PageFaultCount;
+	SIZE_T PeakWorkingSetSize;
+	SIZE_T WorkingSetSize;
+	SIZE_T QuotaPeakPagedPoolUsage;
+	SIZE_T QuotaPagedPoolUsage;
+	SIZE_T QuotaPeakNonPagedPoolUsage;
+	SIZE_T QuotaNonPagedPoolUsage;
+	SIZE_T PagefileUsage;
+	SIZE_T PeakPagefileUsage;
+	SIZE_T PrivatePageCount;
+	LARGE_INTEGER ReadOperationCount;
+	LARGE_INTEGER WriteOperationCount;
+	LARGE_INTEGER OtherOperationCount;
+	LARGE_INTEGER ReadTransferCount;
+	LARGE_INTEGER WriteTransferCount;
+	LARGE_INTEGER OtherTransferCount;
+} SYSTEM_PROCESS_INFORMATION, *PSYSTEM_PROCESS_INFORMATION;
+
+typedef struct _node
+{
+	PWSTR data;
+	struct _node* next;
+	struct _node* prev;
+} NODE, *PNODE;
+
+typedef struct _SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX
+{
+	PVOID Object;
+	ULONG_PTR UniqueProcessId;
+	ULONG_PTR HandleValue;
+	ULONG GrantedAccess;
+	USHORT CreatorBackTraceIndex;
+	USHORT ObjectTypeIndex;
+	ULONG HandleAttributes;
+	ULONG Reserved;
+} SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX, *PSYSTEM_HANDLE_TABLE_ENTRY_INFO_EX;
+
+typedef struct _SYSTEM_HANDLE_INFORMATION_EX
+{
+	ULONG_PTR NumberOfHandles;
+	ULONG_PTR Reserved;
+	SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX Handles[1];
+} SYSTEM_HANDLE_INFORMATION_EX, *PSYSTEM_HANDLE_INFORMATION_EX;
+
+typedef enum _OBJECT_INFORMATION_CLASS
+{
+	ObjectBasicInformation,
+	ObjectNameInformation,
+	ObjectTypeInformation,
+	ObjectTypesInformation,
+	ObjectHandleFlagInformation,
+	ObjectSessionInformation,
+	MaxObjectInfoClass
+} OBJECT_INFORMATION_CLASS;
+
+typedef UNICODE_STRING* PUNICODE_STRING;
+
+typedef struct _OBJECT_NAME_INFORMATION
+{
+	UNICODE_STRING Name;
+} OBJECT_NAME_INFORMATION, *POBJECT_NAME_INFORMATION;
+
+#define NETIOAPI_API WINAPI
+#define NETIO_STATUS DWORD
+#define ANY_SIZE 1
+
+typedef struct in6_addr
+{
+	union
+	{
+		UCHAR Byte[16];
+		USHORT Word[8];
+	} u;
+} IN6_ADDR, *PIN6_ADDR, FAR*LPIN6_ADDR;
+
+typedef struct sockaddr_in6
+{
+	ADDRESS_FAMILY sin6_family; 
+	USHORT sin6_port; 
+	ULONG sin6_flowinfo;
+	IN6_ADDR sin6_addr; 
+	union
+	{
+		ULONG sin6_scope_id;
+		SCOPE_ID sin6_scope_struct;
+	};
+} SOCKADDR_IN6_LH, *PSOCKADDR_IN6_LH, FAR*LPSOCKADDR_IN6_LH;
+
+typedef SOCKADDR_IN6_LH SOCKADDR_IN6;
+typedef SOCKADDR_IN6_LH* PSOCKADDR_IN6;
+
+typedef union _SOCKADDR_INET
+{
+	SOCKADDR_IN Ipv4;
+	SOCKADDR_IN6 Ipv6;
+	ADDRESS_FAMILY si_family;
+} SOCKADDR_INET, *PSOCKADDR_INET;
+
+#define IF_MAX_PHYS_ADDRESS_LENGTH 32
+
+typedef struct _MIB_IPNET_ROW2
+{
+	SOCKADDR_INET Address;
+	NET_IFINDEX InterfaceIndex;
+	NET_LUID InterfaceLuid;
+	UCHAR PhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
+	ULONG PhysicalAddressLength;
+	NL_NEIGHBOR_STATE State;
+
+	union
+	{
+		struct
+		{
+			BOOLEAN IsRouter : 1;
+			BOOLEAN IsUnreachable : 1;
+		};
+
+		UCHAR Flags;
+	};
+
+	union
+	{
+		ULONG LastReachable;
+		ULONG LastUnreachable;
+	} ReachabilityTime;
+} MIB_IPNET_ROW2, *PMIB_IPNET_ROW2;
+
+typedef struct _MIB_IPNET_TABLE2
+{
+	ULONG NumEntries;
+	MIB_IPNET_ROW2 Table[ANY_SIZE];
+} MIB_IPNET_TABLE2, *PMIB_IPNET_TABLE2;
+
+
+typedef struct _DNS_CACHE_TABLE_
+{
+	struct _DNS_CACHE_TABLE_* pNext;
+	PWSTR Name;
+	WORD Type1;
+	WORD Type2;
+	WORD Type3;
+} DNS_CACHE_TABLE, *PDNS_CACHE_TABLE;
+
+typedef enum _TCP_TABLE_CLASS
+{
+	TCP_TABLE_BASIC_LISTENER,
+	TCP_TABLE_BASIC_CONNECTIONS,
+	TCP_TABLE_BASIC_ALL,
+	TCP_TABLE_OWNER_PID_LISTENER,
+	TCP_TABLE_OWNER_PID_CONNECTIONS,
+	TCP_TABLE_OWNER_PID_ALL,
+	TCP_TABLE_OWNER_MODULE_LISTENER,
+	TCP_TABLE_OWNER_MODULE_CONNECTIONS,
+	TCP_TABLE_OWNER_MODULE_ALL
+} TCP_TABLE_CLASS, *PTCP_TABLE_CLASS;
+
+typedef enum _UDP_TABLE_CLASS
+{
+	UDP_TABLE_BASIC,
+	UDP_TABLE_OWNER_PID,
+	UDP_TABLE_OWNER_MODULE
+} UDP_TABLE_CLASS, *PUDP_TABLE_CLASS;
+
+
+#define TCPIP_OWNING_MODULE_SIZE 16
+
+
+typedef struct _MIB_TCPROW_OWNER_MODULE
+{
+	DWORD dwState;
+	DWORD dwLocalAddr;
+	DWORD dwLocalPort;
+	DWORD dwRemoteAddr;
+	DWORD dwRemotePort;
+	DWORD dwOwningPid;
+	LARGE_INTEGER liCreateTimestamp;
+	ULONGLONG OwningModuleInfo[TCPIP_OWNING_MODULE_SIZE];
+} MIB_TCPROW_OWNER_MODULE, *PMIB_TCPROW_OWNER_MODULE;
+
+typedef struct _MIB_TCPTABLE_OWNER_MODULE
+{
+	DWORD dwNumEntries;
+	MIB_TCPROW_OWNER_MODULE table[ANY_SIZE];
+} MIB_TCPTABLE_OWNER_MODULE, *PMIB_TCPTABLE_OWNER_MODULE;
+
+typedef struct _MIB_TCP6ROW_OWNER_MODULE
+{
+	UCHAR ucLocalAddr[16];
+	DWORD dwLocalScopeId;
+	DWORD dwLocalPort;
+	UCHAR ucRemoteAddr[16];
+	DWORD dwRemoteScopeId;
+	DWORD dwRemotePort;
+	DWORD dwState;
+	DWORD dwOwningPid;
+	LARGE_INTEGER liCreateTimestamp;
+	ULONGLONG OwningModuleInfo[TCPIP_OWNING_MODULE_SIZE];
+} MIB_TCP6ROW_OWNER_MODULE, *PMIB_TCP6ROW_OWNER_MODULE;
+
+typedef struct _MIB_TCP6TABLE_OWNER_MODULE
+{
+	DWORD dwNumEntries;
+	MIB_TCP6ROW_OWNER_MODULE table[ANY_SIZE];
+} MIB_TCP6TABLE_OWNER_MODULE, *PMIB_TCP6TABLE_OWNER_MODULE;
+
+typedef struct _MIB_UDPROW_OWNER_MODULE
+{
+	DWORD dwLocalAddr;
+	DWORD dwLocalPort;
+	DWORD dwOwningPid;
+	LARGE_INTEGER liCreateTimestamp;
+
+	union
+	{
+		struct
+		{
+			int SpecificPortBind : 1;
+		};
+
+		int dwFlags;
+	};
+
+	ULONGLONG OwningModuleInfo[TCPIP_OWNING_MODULE_SIZE];
+} MIB_UDPROW_OWNER_MODULE, *PMIB_UDPROW_OWNER_MODULE;
+
+typedef struct _MIB_UDPTABLE_OWNER_MODULE
+{
+	DWORD dwNumEntries;
+	MIB_UDPROW_OWNER_MODULE table[ANY_SIZE];
+} MIB_UDPTABLE_OWNER_MODULE, *PMIB_UDPTABLE_OWNER_MODULE;
+
+typedef struct _MIB_UDP6ROW_OWNER_MODULE
+{
+	UCHAR ucLocalAddr[16];
+	DWORD dwLocalScopeId;
+	DWORD dwLocalPort;
+	DWORD dwOwningPid;
+	LARGE_INTEGER liCreateTimestamp;
+
+	union
+	{
+		struct
+		{
+			int SpecificPortBind : 1;
+		};
+
+		int dwFlags;
+	};
+
+	ULONGLONG OwningModuleInfo[TCPIP_OWNING_MODULE_SIZE];
+} MIB_UDP6ROW_OWNER_MODULE, *PMIB_UDP6ROW_OWNER_MODULE;
+
+typedef struct _MIB_UDP6TABLE_OWNER_MODULE
+{
+	DWORD dwNumEntries;
+	MIB_UDP6ROW_OWNER_MODULE table[ANY_SIZE];
+} MIB_UDP6TABLE_OWNER_MODULE, *PMIB_UDP6TABLE_OWNER_MODULE;
+
+typedef enum
+{
+	NameUnknown = 0,
+	NameFullyQualifiedDN = 1,
+	NameSamCompatible = 2,
+	NameDisplay = 3,
+	NameUniqueId = 6,
+	NameCanonical = 7,
+	NameUserPrincipal = 8,
+	NameCanonicalEx = 9,
+	NameServicePrincipal = 10,
+	NameDnsDomain = 12,
+	NameGivenName = 13,
+	NameSurname = 14
+} EXTENDED_NAME_FORMAT, *PEXTENDED_NAME_FORMAT;
+
+
+#define LIVE_SYSTEM_DUMP 0x161
+
+typedef union _SYSDBG_LIVEDUMP_CONTROL_FLAGS
+{
+	struct
+	{
+		ULONG UseDumpStorageStack : 1;
+		ULONG CompressMemoryPagesData : 1;
+		ULONG IncludeUserSpaceMemoryPages : 1;
+		ULONG Reserved : 29;
+	};
+
+	ULONG AsUlong;
+} SYSDBG_LIVEDUMP_CONTROL_FLAGS;
+
+typedef union _SYSDBG_LIVEDUMP_CONTROL_ADDPAGES
+{
+	struct
+	{
+		ULONG HypervisorPages : 1;
+		ULONG Reserved : 31;
+	};
+
+	ULONG AsUlong;
+} SYSDBG_LIVEDUMP_CONTROL_ADDPAGES;
+
+typedef struct _SYSDBG_LIVEDUMP_CONTROL
+{
+	ULONG Version;
+	ULONG BugCheckCode;
+	ULONG_PTR BugCheckParam1;
+	ULONG_PTR BugCheckParam2;
+	ULONG_PTR BugCheckParam3;
+	ULONG_PTR BugCheckParam4;
+	HANDLE DumpFileHandle;
+	HANDLE CancelEventHandle;
+	SYSDBG_LIVEDUMP_CONTROL_FLAGS Flags;
+	SYSDBG_LIVEDUMP_CONTROL_ADDPAGES AddPagesControl;
+} SYSDBG_LIVEDUMP_CONTROL, *PSYSDBG_LIVEDUMP_CONTROL;
+
+
+typedef enum _SYSDBG_COMMAND
+{
+	SysDbgGetLiveKernelDump = 37
+} SYSDBG_COMMAND, *PSYSDBG_COMMAND;
+
+
+NTSTATUS
+NTAPI
+RtlGetVersion(
+	PRTL_OSVERSIONINFOW lpVersionInformation
+);
+
+BOOLEAN
+GetUserNameExW(
+	EXTENDED_NAME_FORMAT NameFormat,
+	LPWSTR lpNameBuffer,
+	PULONG nSize
+);
+
+__kernel_entry
+NTSTATUS
+NTAPI
+NtQueryInformationProcess(
+	HANDLE ProcessHandle,
+	PROCESSINFOCLASS ProcessInformationClass,
+	PVOID ProcessInformation,
+	ULONG ProcessInformationLength,
+	PULONG ReturnLength OPTIONAL
+);
+
+__kernel_entry
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtQuerySystemInformation(
+	SYSTEM_INFORMATION_CLASS SystemInformationClass,
+	PVOID SystemInformation,
+	ULONG SystemInformationLength,
+	PULONG ReturnLength
+);
+
+NTSTATUS
+NTAPI
+NtQueryObject(
+	HANDLE Handle,
+	OBJECT_INFORMATION_CLASS ObjectInformationClass,
+	PVOID ObjectInformation,
+	ULONG ObjectInformationLength,
+	PULONG ReturnLength
+);
+
+NETIO_STATUS
+NETIOAPI_API
+GetIpNetTable2(
+	ADDRESS_FAMILY Family,
+	PMIB_IPNET_TABLE2* Table
+);
+
+PCWSTR
+WSAAPI
+InetNtopW(
+	INT Family,
+	const VOID* pAddr,
+	PWSTR pStringBuf,
+	StringBufSize
+);
+
+
+VOID
+NETIOAPI_API
+FreeMibTable(
+	PVOID Memory
+);
+
+ULONG
+WINAPI
+GetAdaptersAddresses(
+	ULONG Family,
+	ULONG Flags,
+	PVOID Reserved,
+	PIP_ADAPTER_ADDRESSES AdapterAddresses,
+	PULONG SizePointer
+);
+
+DWORD
+WINAPI
+DnsGetCacheDataTableEx(
+	ULONG64 Flags,
+	DNS_CACHE_TABLE** ppTable
+);
+
+BOOL
+WINAPI
+DnsGetCacheDataTable(
+	DNS_CACHE_TABLE** ppTable
+);
+
+DWORD
+WINAPI
+GetExtendedTcpTable(
+	PVOID pTcpTable,
+	PDWORD pdwSize,
+	BOOL bOrder,
+	ULONG ulAf,
+	TCP_TABLE_CLASS TableClass,
+	ULONG Reserved
+);
+
+DWORD
+WINAPI
+GetExtendedUdpTable(
+	PVOID pUdpTable,
+	PDWORD pdwSize,
+	BOOL bOrder,
+	ULONG ulAf,
+	UDP_TABLE_CLASS TableClass,
+	ULONG Reserved
+);
+
+
+__kernel_entry
+NTSYSCALLAPI
+NTSTATUS
+NTAPI
+NtSystemDebugControl(
+	SYSDBG_COMMAND Command,
+	PVOID InputBuffer,
+	ULONG InputBufferLength,
+	PVOID OutputBuffer,
+	ULONG OutputBufferLength,
+	PULONG ReturnLength
+);
+
+
+VOID SortUniqueMultilineWchar(PWSTR pwszStringToSort, PWSTR* pwszSortedString);
+VOID ResizeWcharBufIfNeeded(PWSTR* pwszBuffer, size_t* pstBufferSizeBytes);
+VOID ShrinkWcharBuffer(PWSTR* pwszBuffer);
+VOID AddCheckHeader(PWSTR pwszBuffer, size_t stBufferSizeBytes, PWSTR pwszHeaderContent, BOOL bStartWithCRLF);
+VOID InsertAtOutputTail(PWSTR x);
+VOID EnableAllPrivileges(void);
+PWSTR GetCurrentTimeZ(void);
+PWSTR SystemTimeToISO8601(SYSTEMTIME stTime);
+BOOL KernelDump(PWSTR pwszDumpName);
+PWSTR HNM_Output(void);
+PWSTR TLV_Output(void);
+PWSTR SET_Output(void);
+PWSTR TLM_Output(void);
+PWSTR DRV_Output(void);
+PWSTR CUSR_Output(void);
+PWSTR HND_Output(void);
+PWSTR ARPA_Output(void);
+PWSTR ICOA_Output(void);
+PWSTR ICOD_Output(void);
+PWSTR NANO_Output(void);
+PWSTR KLS_Output(void);
+
+
+static const WCHAR BOM = 0xfeff;
+
+#define SIZE_16MB (16*1024*1024)
+#define SIZE_1MB (1024*1024)
+#define SIZE_1KB 1024
+#define MAX_PRIVILEGE_NAME_LEN 64
+#define USERNAME_LENGTH 512
+#define DOMAINNAME_LENGTH 512
+#define TICKS_IN_MS 10000
+#define INITIAL_PROCESS_COUNT 1024
+#define ISO_TIME_LEN 22
+#define ISO_TIME_FORMAT_W L"%04i-%02i-%02iT%02i:%02i:%02iZ"
+#define CERT_SHA1_HASH_LENGTH 20
+#define THREAD_TIMEOUT_MS 1000
+#define INET6_ADDRSTRLEN 65
+#define DNS_GET_ALL_CACHE_ENTRIES 0x1
+#define DNS_TYPE_ZERO 0x0000
+#define BLANKS_TO_WRITE 40
+
+#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)    // ntsubauth
+#define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L)
+#define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022L)
+
+```
