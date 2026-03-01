@@ -1,0 +1,497 @@
+Project Path: arc_gmh5225_umium_joyebdyb
+
+Source Tree:
+
+```txt
+arc_gmh5225_umium_joyebdyb
+├── LICENSE
+├── README.md
+├── docs
+│   └── bg.png
+├── main.cpp
+├── umium.cpp
+└── umium.h
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2021 hotline1337
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+<p align="center">
+  <img width="256" heigth="256" src="docs\bg.png">
+<h1 align="center">Umium</h1>
+<p align="center">
+  <strong>Umium</strong> is a class containing Anti-RE, Anti-Debug and Anti-Hook methods. Easy to use and easy to implement.</strong> It is made to work precisely on <a href="https://docs.microsoft.com/en-us/cpp/dotnet/dotnet-programming-with-cpp-cli-visual-cpp">C++/CLI</a> runtime.
+</p>
+</p>
+<p align="center">
+  <img src="https://forthebadge.com/images/badges/built-with-love.svg" alt="appveyor-ci" />
+  <img src="https://forthebadge.com/images/badges/made-with-c-plus-plus.svg" alt="appveyor-ci" />
+</p>
+</p>
+
+</br></br>
+
+## Disclaimer
+
+This code has been made and optimized for a [C++/CLI](https://docs.microsoft.com/en-us/cpp/dotnet/dotnet-programming-with-cpp-cli-visual-cpp) runtime.
+
+## Usage
+
+![](https://i.imgur.com/U7jl0PF.png)
+
+## Contributing
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+Please make sure to update tests as appropriate.
+
+## License
+[MIT](https://choosealicens.com/licenses/mit/)
+
+## 💵 Want to buy me a Coffee?
+     - Donate BTC at `bc1q07aq4n66mz3f3z56lm72sug6rvfm6qp3cydcs7`
+     - Donate ETH at `0x4c9e8710b931f580B5d776c7989CE6e323ed1b34`
+     - Donate LTC at `LgtxE9ybYhtm7NTrMBjUNQYoJs9tGGrEyC`
+
+```
+
+`main.cpp`:
+
+```cpp
+#include <iostream>
+#include <Windows.h>
+#include <stdlib.h>
+#include <string>
+#include <fstream>
+#include <thread>
+#include <functional>
+#include <chrono>
+#include <atomic>
+#include <tchar.h>
+#include <WinInet.h>
+#include <conio.h>
+#include <stdio.h>
+#include <future>
+#include <msclr/marshal_cppstd.h>
+
+// Hashing
+#include "../h/xorstr.h"
+
+// Security
+#include "../import.hpp"
+#include "../h/umium.h"
+
+#pragma warning(disable : 4996)
+#pragma warning(disable : 4573)
+
+using namespace System;
+using namespace Threading;
+using namespace Diagnostics;
+using namespace Net;
+using namespace Runtime::InteropServices;
+using namespace Linq;
+using namespace msclr::interop;
+
+#define gmh(s) LI_FN(GetModuleHandleA).get()(xorstr_(s))
+#define x_string(parameter) context.marshal_as<String^>(static_cast<std::string>(_XorStr(parameter)))
+#define base64_hash(arr_x) base64_encode(reinterpret_cast<const unsigned char*>(arr_x.c_str()), arr_x.length())
+
+const auto perform_checks = [&]() /* lambda */
+{
+	umium::security::find_window();
+	umium::security::is_debugger_present();
+	umium::security::anti_attach();
+	if (umium::security::check_sandboxie() != 0 || umium::security::check_remote_session() != 0) // Cpu & remote check
+	{
+		umium::security::ProtectionThread();
+	}
+	if (umium::security::check_kernel_drivers() != 0 || umium::security::check_titan_hide() != 0)
+	{
+		umium::security::ProtectionThread();
+	}
+	if (gmh("vehdebug-x86_64.dll") || gmh("winhook-x86_64.dll") || gmh("luaclient-x86_64.dll") || gmh("allochook-x86_64.dll")
+			|| gmh("exp_64.dll") || gmh("HookLibraryx64.dll")) // Blacklisted handles check
+	{
+		umium::security::ProtectionThread();
+	}
+};
+
+std::function<void(void)> reference = [&]()
+{
+	// proper middleman
+	const auto call = [&]()
+	{
+		std::future<void> security_thread = std::async(std::launch::async, []{
+			perform_checks();
+			std::this_thread::sleep_for(std::chrono::milliseconds(200)); // we dont want our cpu to explode O_O
+		});
+	};
+
+	if (LI_FN(time).get()(nullptr) == LI_FN(time).get()(nullptr))
+	{
+		call();
+	}
+
+	return _XorStr("junk");
+};
+
+auto main(void) -> int
+{
+	// entrypoint
+	// includes some junk like GetTickCount64 check so the code will appear more "obfuscated"
+	// same for return statement
+	const auto call = [&]()
+	{
+		reference();
+	};
+
+	if (LI_FN(GetTickCount64).get()() == LI_FN(GetTickCount64).get()())
+	{
+		call();
+	}
+
+	return (INT_MAX / 2) & (1 << 0);
+}
+
+```
+
+`umium.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <string>
+#include <sstream>
+#include <versionhelpers.h>
+#include <intrin.h>
+#include <wininet.h>
+#include <strsafe.h>
+#include <iostream>
+#include <msclr/marshal_cppstd.h>
+
+#pragma comment(lib,"Wininet.lib")
+
+#include "../import.hpp"
+#include "../h/umium.h"
+#include "../h/xorstr.h"
+
+#pragma warning(disable : 4838)
+#pragma warning(disable : 4309)
+#pragma warning(disable : 4312)
+#pragma warning(disable : 4311)
+#pragma warning(disable : 4302)
+#pragma warning(disable : 4715)
+
+typedef DWORD(WINAPI* PFZWSETINFORMATIONTHREAD) (
+	HANDLE		ThreadHandle,
+	DWORD		ThreadInformationClass,		// Original : _THREAD_INFORMATION_CLASS
+	PVOID		ThreadInformation,
+	ULONG		ThreadInformationLength
+	);
+typedef DWORD(WINAPI* PFZWQUERYINFORMATIONPROCESS) (
+	HANDLE		ProcessHandle,
+	DWORD		ProcessInformationClass,	// Origianl : _PROCESS_INFORMATION_CLASS
+	PVOID		ProcessInformation,
+	ULONG		ProcessInformationLength,
+	PULONG		ReturnLength
+	);
+
+namespace umium::security
+{	
+	std::function<void(void)> ProtectionThread = []()
+	{
+		while (true) 
+		{
+			BYTE* overflow = reinterpret_cast<BYTE*>((xorstr_("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")));
+			LI_FN(PostQuitMessage)(0);
+			LI_FN(TerminateProcess).get()(LI_FN(GetCurrentProcess).get()(), 0);
+			LI_FN(PostQuitMessage)(0);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), main, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), FindWindowA, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), memcpy, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), OpenProcess, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), GetProcAddress, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), WriteProcessMemory, overflow, 1024, nullptr);
+			LI_FN(WriteProcessMemory).get()(LI_FN(GetCurrentProcess).get()(), GetAsyncKeyState, overflow, 1024, nullptr);
+		}
+	};
+	
+	std::function<void(void)> find_window = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		if (LI_FN(FindWindowA)(nullptr, xorstr_("IDA v7.0.170914")) || LI_FN(FindWindowA)(nullptr, xorstr_("x64dbg")) || LI_FN(FindWindowA)(nullptr, xorstr_("Scylla x64 v0.9.8")) || LI_FN(FindWindowA)(nullptr, xorstr_("IAT Autosearch")))
+		{
+			ProtectionThread();
+		}
+	};
+
+	std::function<void(void)> is_debugger_present = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		auto is_dbg_present = FALSE;
+		if (LI_FN(IsDebuggerPresent).get()())
+		{
+			ProtectionThread();
+		}
+		if (LI_FN(CheckRemoteDebuggerPresent).get()(LI_FN(GetCurrentProcess).get()(), &is_dbg_present))
+		{
+			if (is_dbg_present)
+			{
+				ProtectionThread();
+			}
+		}
+	};
+
+	std::function<void(void)> anti_attach = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		HMODULE h_ntdll = LI_FN(GetModuleHandleA).get()(xorstr_("ntdll.dll"));
+		if (!h_ntdll)
+			return;
+
+		FARPROC p_dbg_break_point = LI_FN(GetProcAddress).get()(h_ntdll, xorstr_("DbgBreakPoint"));
+		if (!p_dbg_break_point)
+			return;
+
+		DWORD dw_old_protect;
+		if (!LI_FN(VirtualProtect).get()(p_dbg_break_point, 1, PAGE_EXECUTE_READWRITE, &dw_old_protect))
+			return;
+
+		*reinterpret_cast<PBYTE>(p_dbg_break_point) = static_cast<BYTE>(0xC3); // 0xC3 == RET
+	};
+	
+	std::function<void(void)> is_memory_traversed = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		const auto m = LI_FN(VirtualAlloc).get()(nullptr, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+		PSAPI_WORKING_SET_EX_INFORMATION set;
+		set.VirtualAddress = m;
+
+		while (true)
+		{
+			if (LI_FN(K32QueryWorkingSetEx).get()(LI_FN(GetCurrentProcess).get()(), &set, sizeof(set)) && (set.VirtualAttributes.Valid & 0x1))
+			{
+				ProtectionThread();
+			}
+		}
+	};
+
+	std::function<int(void)> check_remote_session = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		const auto session_metrics = LI_FN(GetSystemMetrics).get()(SM_REMOTESESSION);
+		return session_metrics != 0;
+	};
+
+	std::function<int(void)> check_window_name = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		if (LI_FN(FindWindowA)(xorstr_("Qt5QWindowIcon"), nullptr) || LI_FN(FindWindowA)(xorstr_("x64dbg"), nullptr) || LI_FN(FindWindowA)(xorstr_("SunAwtFrame"), nullptr) || LI_FN(FindWindowA)(xorstr_("ID"), nullptr))
+		{
+			return 0x1005;
+		}
+		return 0;
+	};
+
+	std::function<int(void)> check_sandboxie = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		if (LI_FN(GetModuleHandleA).get()(xorstr_("SbieDll.dll")))
+		{
+			return 0x600;
+		}
+		return 0;
+	};
+	
+	std::function<int(void)> check_kernel_drivers = []()
+	{
+		LPVOID drivers[1024];
+		DWORD cb_needed;
+
+		if (LI_FN(K32EnumDeviceDrivers).get()(drivers, sizeof(drivers), &cb_needed) && cb_needed < sizeof(drivers))
+		{
+			wchar_t szDriver[1024];
+			const wchar_t* bl_driver_list[] = { L"kprocesshacker.sys", L"SbieSvc.sys", L"HttpDebuggerSdk.sys", L"dbk64.sys",
+			L"dbk32.sys", L"SharpOD_Drv.sys" }; /* unicode anyways */
+
+			const int c_drivers = cb_needed / sizeof(drivers[0]);
+
+			for (auto i = 0; i < c_drivers; i++)
+			{
+				if (LI_FN(K32GetDeviceDriverBaseNameW).get()(drivers[i], szDriver, sizeof(szDriver) / sizeof(szDriver[0])))
+				{
+					for (const auto* driver_name : bl_driver_list)
+					{
+						if (wcscmp(szDriver, driver_name) == 0) 
+						{
+							std::wstring ws(driver_name);
+							std::string str(ws.begin(), ws.end());
+							std::string output = xorstr_("Detected blacklisted driver loaded (") + str + xorstr_("). Please unload it from memory.");
+
+							LI_FN(MessageBoxA)(nullptr, output.c_str(), xorstr_("umium"), MB_ICONERROR | MB_OK);
+							return 0x4171;
+						}
+					}
+				}
+			}
+		}
+		return 0;
+	};
+
+	std::function<int(void)> check_titan_hide = []()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		const auto module = LI_FN(GetModuleHandleA).get()(xorstr_("ntdll.dll"));
+
+		const auto information = reinterpret_cast<typedefs::NtQuerySystemInformationTypedef>(LI_FN(GetProcAddress).get()(
+			module, xorstr_("NtQuerySystemInformation")));
+
+		typedefs::SYSTEM_CODEINTEGRITY_INFORMATION sci;
+
+		sci.Length = sizeof sci;
+
+		information(typedefs::SystemCodeIntegrityInformation, &sci, sizeof sci, nullptr);
+
+		const auto ret = sci.CodeIntegrityOptions & CODEINTEGRITY_OPTION_TESTSIGN || sci.CodeIntegrityOptions &
+			CODEINTEGRITY_OPTION_DEBUGMODE_ENABLED;
+
+		if (ret != 0)
+			return 1;
+
+		return 0;
+	};
+
+	int __stdcall check_dbg_print()
+	{
+		const auto xor_buffer = xorstr_("xor-buffer");
+		__try
+		{
+			LI_FN(RaiseException).get()(DBG_PRINTEXCEPTION_C, 0, 0, nullptr);
+		}
+		__except (_exception_code() == DBG_PRINTEXCEPTION_C)
+		{
+			return 1;
+		}
+
+		return 0;
+	}
+
+	__forceinline std::void_t<> check_guard_hook()
+	{
+		MEMORY_BASIC_INFORMATION memory_info;
+		PEB* peb = (PEB*)__readgsqword(0x60);
+
+		LIST_ENTRY head = peb->Ldr->InMemoryOrderModuleList;
+		LIST_ENTRY curr = head;
+		for (auto curr = head; curr.Flink != &peb->Ldr->InMemoryOrderModuleList; curr = *curr.Flink)
+		{
+			LDR_DATA_TABLE_ENTRY* mod = (LDR_DATA_TABLE_ENTRY*)CONTAINING_RECORD(curr.Flink, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+			if (mod->FullDllName.Buffer)
+			{
+				auto* headers = reinterpret_cast<PIMAGE_NT_HEADERS>(static_cast<char*>(mod->DllBase) + static_cast<PIMAGE_DOS_HEADER>(mod->DllBase)->e_lfanew);
+				auto* sections = IMAGE_FIRST_SECTION(headers);
+
+				for (auto i = 0; i <= headers->FileHeader.NumberOfSections; i++)
+				{
+					auto* section = &sections[i];
+
+					auto virtualAddress = static_cast<PBYTE>(mod->DllBase) + section->VirtualAddress;
+
+					if (LI_FN(VirtualQuery).get()(virtualAddress, &memory_info, sizeof(MEMORY_BASIC_INFORMATION)))
+					{
+						if (memory_info.State == MEM_COMMIT && (memory_info.Protect & PAGE_GUARD))
+							ProtectionThread();
+					}
+				}
+			}
+		}
+	}
+}
+
+```
+
+`umium.h`:
+
+```h
+#pragma once
+#include <functional>
+#include <Windows.h>
+
+typedef NTSTATUS(__stdcall* _NtQueryInformationProcess)(_In_ HANDLE, _In_  unsigned int, _Out_ PVOID, _In_ ULONG, _Out_ PULONG);
+typedef NTSTATUS(__stdcall* _NtSetInformationThread)(_In_ HANDLE, _In_ THREAD_INFORMATION_CLASS, _In_ PVOID, _In_ ULONG);
+
+namespace typedefs
+{
+	using NtQuerySystemInformationTypedef = NTSTATUS(*)(ULONG, PVOID, ULONG, PULONG);
+
+	typedef struct _SYSTEM_CODEINTEGRITY_INFORMATION
+	{
+		ULONG   Length;
+		ULONG   CodeIntegrityOptions;
+	} SYSTEM_CODEINTEGRITY_INFORMATION, * PSYSTEM_CODEINTEGRITY_INFORMATION;
+
+	typedef enum _SYSTEM_INFORMATION_CLASS
+	{
+		SystemBasicInformation = 0,
+		SystemPerformanceInformation = 2,
+		SystemTimeOfDayInformation = 3,
+		SystemProcessInformation = 5,
+		SystemProcessorPerformanceInformation = 8,
+		SystemInterruptInformation = 23,
+		SystemExceptionInformation = 33,
+		SystemRegistryQuotaInformation = 37,
+		SystemLookasideInformation = 45,
+		SystemCodeIntegrityInformation = 103,
+		SystemPolicyInformation = 134,
+	} SYSTEM_INFORMATION_CLASS;
+}
+
+namespace umium::security
+{
+	extern auto block_api(const char* libName, const char* apiName)->DWORD;
+	
+	extern std::function<void(void)> ProtectionThread;
+	extern std::function<void(void)> find_window;
+	extern std::function<void(void)> anti_attach;
+	extern std::function<void(void)> is_memory_traversed;
+	extern std::function<void(void)> is_debugger_present;
+
+	extern std::function<int(void)> check_remote_session;
+	extern std::function<int(void)> close_handle_exception;
+	extern std::function<int(void)> check_window_name;
+	extern std::function<int(void)> check_sandboxie;
+	extern std::function<int(void)> check_titan_hide;
+	extern std::function<int(void)> check_kernel_drivers;
+	
+	extern int __stdcall check_dbg_print();
+	extern std::void_t<> check_guard_hook();
+}
+
+```
