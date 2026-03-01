@@ -1,0 +1,4168 @@
+Project Path: arc_gmh5225_frida-il2cpp-bridge_dsukrpl1
+
+Source Tree:
+
+```txt
+arc_gmh5225_frida-il2cpp-bridge_dsukrpl1
+├── LICENSE.md
+├── README.md
+├── package.json
+├── src
+│   ├── il2cpp
+│   │   ├── api.ts
+│   │   ├── application.ts
+│   │   ├── cmodules
+│   │   │   └── memory-snapshot.c
+│   │   ├── dump.ts
+│   │   ├── exception-listener.ts
+│   │   ├── filters.ts
+│   │   ├── gc.ts
+│   │   ├── memory.ts
+│   │   ├── module.ts
+│   │   ├── perform.ts
+│   │   ├── structs
+│   │   │   ├── array.ts
+│   │   │   ├── assembly.ts
+│   │   │   ├── class.ts
+│   │   │   ├── delegate.ts
+│   │   │   ├── domain.ts
+│   │   │   ├── field.ts
+│   │   │   ├── gc-handle.ts
+│   │   │   ├── image.ts
+│   │   │   ├── memory-snapshot.ts
+│   │   │   ├── method.ts
+│   │   │   ├── object.ts
+│   │   │   ├── parameter.ts
+│   │   │   ├── pointer.ts
+│   │   │   ├── reference.ts
+│   │   │   ├── string.ts
+│   │   │   ├── thread.ts
+│   │   │   ├── type.ts
+│   │   │   └── value-type.ts
+│   │   └── tracer.ts
+│   ├── index.ts
+│   └── utils
+│       ├── console.ts
+│       ├── decorate.ts
+│       ├── getter.ts
+│       ├── lazy.ts
+│       ├── native-struct.ts
+│       ├── native-wait.ts
+│       ├── offset-of.ts
+│       ├── read-native-iterator.ts
+│       ├── read-native-list.ts
+│       ├── recycle.ts
+│       └── unity-version.ts
+└── tsconfig.json
+
+```
+
+`LICENSE.md`:
+
+```md
+Copyright (c) 2021 vfsfitvnm
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+```
+
+`README.md`:
+
+```md
+# frida-il2cpp-bridge
+
+[![Frida](https://img.shields.io/badge/-frida-ef6456?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyAgIHZlcnNpb249IjEuMSIgICBpZD0iTGF5ZXJfMSIgICB4PSIwcHgiICAgeT0iMHB4IiAgIHZpZXdCb3g9IjAgMCA5LjcyOTk3OTkgMTAuOTM1NzEyIiAgIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDIwNC40IDM5IiAgIHhtbDpzcGFjZT0icHJlc2VydmUiICAgc29kaXBvZGk6ZG9jbmFtZT0ibG9nby5zdmciICAgd2lkdGg9IjkuNzI5OTc5NSIgICBoZWlnaHQ9IjEwLjkzNTcxMiIgICBpbmtzY2FwZTp2ZXJzaW9uPSIxLjEgKGNlNjY2M2IzYjcsIDIwMjEtMDUtMjUpIiAgIHhtbG5zOmlua3NjYXBlPSJodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy9uYW1lc3BhY2VzL2lua3NjYXBlIiAgIHhtbG5zOnNvZGlwb2RpPSJodHRwOi8vc29kaXBvZGkuc291cmNlZm9yZ2UubmV0L0RURC9zb2RpcG9kaS0wLmR0ZCIgICB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciICAgeG1sbnM6c3ZnPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnMgICBpZD0iZGVmczkiIC8+PHNvZGlwb2RpOm5hbWVkdmlldyAgIGlkPSJuYW1lZHZpZXc3IiAgIHBhZ2Vjb2xvcj0iI2ZmZmZmZiIgICBib3JkZXJjb2xvcj0iIzY2NjY2NiIgICBib3JkZXJvcGFjaXR5PSIxLjAiICAgaW5rc2NhcGU6cGFnZXNoYWRvdz0iMiIgICBpbmtzY2FwZTpwYWdlb3BhY2l0eT0iMC4wIiAgIGlua3NjYXBlOnBhZ2VjaGVja2VyYm9hcmQ9IjAiICAgc2hvd2dyaWQ9ImZhbHNlIiAgIGZpdC1tYXJnaW4tdG9wPSIwIiAgIGZpdC1tYXJnaW4tbGVmdD0iMCIgICBmaXQtbWFyZ2luLXJpZ2h0PSIwIiAgIGZpdC1tYXJnaW4tYm90dG9tPSIwIiAgIGlua3NjYXBlOnpvb209IjYuOTE3ODA4NCIgICBpbmtzY2FwZTpjeD0iLTAuMTQ0NTU0NDUiICAgaW5rc2NhcGU6Y3k9Ii04LjYwMDk4OTkiICAgaW5rc2NhcGU6d2luZG93LXdpZHRoPSIxOTIwIiAgIGlua3NjYXBlOndpbmRvdy1oZWlnaHQ9IjEwMDgiICAgaW5rc2NhcGU6d2luZG93LXg9IjAiICAgaW5rc2NhcGU6d2luZG93LXk9IjAiICAgaW5rc2NhcGU6d2luZG93LW1heGltaXplZD0iMSIgICBpbmtzY2FwZTpjdXJyZW50LWxheWVyPSJMYXllcl8xIiAvPjxnICAgaWQ9Imc0IiAgIHN0eWxlPSJkaXNwbGF5OmlubGluZTtmaWxsOiNmZmZmZmYiICAgdHJhbnNmb3JtPSJtYXRyaXgoMC4yODA0MDI4NiwwLDAsMC4yODA0MDI4NiwtMTEuNTgwNjM4LDApIj48cGF0aCAgIGZpbGw9IiNmZmZmZmYiICAgZD0iTSA1MS40LDM5IEggNDEuMyBMIDQ5LjcsMjYuMSBDIDQ0LjksMjMuOCA0Mi4zLDE5LjYgNDIuMywxMy41IDQyLjMsNC44IDQ4LjIsMCA1OC41LDAgSCA3NiBWIDM5IEggNjcgViAyOCBIIDU4LjUgNTcuNyBaIE0gNjcsMjAgViA3IGggLTguNSBjIC00LjksMCAtNy43LDIgLTcuNyw2LjQgMCw0LjUgMi44LDYuNiA3LjcsNi42IHoiICAgaWQ9InBhdGgyIiAgIHN0eWxlPSJmaWxsOiNmZmZmZmYiIC8+PC9nPjwvc3ZnPg==)](https://frida.re)
+[![NPM](https://img.shields.io/npm/v/frida-il2cpp-bridge?label=&logo=npm&style=for-the-badge)](https://npmjs.org/package/frida-il2cpp-bridge)
+
+A Frida module to dump, trace or hijack any Il2Cpp application at runtime, without needing the `global-metadata.dat` file.
+
+![code](https://github.com/vfsfitvnm/frida-il2cpp-bridge/assets/46219656/d8e81811-b98c-4d67-9cea-be8cab8947ef)
+
+## Features
+
+-   Dump classes, methods, fields and so on
+-   Trace, intercept and replace method calls
+-   Mess around with the C# runtime
+-   Il2Cpp structs and global metadata (almost) free
+
+## Compatibility
+
+#### Unity version
+
+It should work for any Unity version in the range **5.3.0** - **2022.1.x**.
+
+#### Platforms
+
+**Android**, **Linux**, **Windows**, **iOS**, **macOS** are supported.
+However, only Android and Linux are "tested": expect breakage if you are using another platform.
+
+## Acknowledgements
+
+Thanks to [meme](https://github.com/meme) and [knobse](https://github.com/knobse) for helping and getting me into this,
+and to [djkaty](https://github.com/djkaty) and [nneonneo](https://github.com/nneonneo) for providing the Il2Cpp
+API.
+
+## Problems?
+
+Discussions and Wiki are both active. Use them!
+
+```
+
+`package.json`:
+
+```json
+{
+  "name": "frida-il2cpp-bridge",
+  "version": "0.8.3",
+  "description": "A Frida module to dump, trace or hijack any Il2Cpp application at runtime, without needing the global-metadata.dat file.",
+  "keywords": [
+    "frida",
+    "il2cpp",
+    "dump",
+    "trace",
+    "global-metadata"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vfsfitvnm/frida-il2cpp-bridge.git"
+  },
+  "license": "MIT",
+  "author": "vfsfitvnm",
+  "exports": "./dist/index.js",
+  "module": "dist/index.js",
+  "main": "dist/index.js",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepare": "tspc"
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "bracketSpacing": true,
+    "printWidth": 160,
+    "tabWidth": 4,
+    "trailingComma": "none"
+  },
+  "devDependencies": {
+    "@types/frida-gum": "^18.3.1",
+    "ts-patch": "^3.0.0-beta3",
+    "ts-transformer-inline-file": "^0.2.0"
+  },
+  "overrides": {
+    "ts-transformer-inline-file": {
+      "typescript": "^5.0.0"
+    }
+  }
+}
+
+```
+
+`src/il2cpp/api.ts`:
+
+```ts
+namespace Il2Cpp {
+    export const api = {
+        get alloc() {
+            return r("il2cpp_alloc", "pointer", ["size_t"]);
+        },
+
+        get arrayGetLength() {
+            return r("il2cpp_array_length", "uint32", ["pointer"]);
+        },
+
+        get arrayNew() {
+            return r("il2cpp_array_new", "pointer", ["pointer", "uint32"]);
+        },
+
+        get assemblyGetImage() {
+            return r("il2cpp_assembly_get_image", "pointer", ["pointer"]);
+        },
+
+        get classForEach() {
+            return r("il2cpp_class_for_each", "void", ["pointer", "pointer"]);
+        },
+
+        get classFromName() {
+            return r("il2cpp_class_from_name", "pointer", ["pointer", "pointer", "pointer"]);
+        },
+
+        get classFromObject() {
+            return r("il2cpp_class_from_system_type", "pointer", ["pointer"]);
+        },
+
+        get classGetArrayClass() {
+            return r("il2cpp_array_class_get", "pointer", ["pointer", "uint32"]);
+        },
+
+        get classGetArrayElementSize() {
+            return r("il2cpp_class_array_element_size", "int", ["pointer"]);
+        },
+
+        get classGetAssemblyName() {
+            return r("il2cpp_class_get_assemblyname", "pointer", ["pointer"]);
+        },
+
+        get classGetBaseType() {
+            return r("il2cpp_class_enum_basetype", "pointer", ["pointer"]);
+        },
+
+        get classGetDeclaringType() {
+            return r("il2cpp_class_get_declaring_type", "pointer", ["pointer"]);
+        },
+
+        get classGetElementClass() {
+            return r("il2cpp_class_get_element_class", "pointer", ["pointer"]);
+        },
+
+        get classGetFieldFromName() {
+            return r("il2cpp_class_get_field_from_name", "pointer", ["pointer", "pointer"]);
+        },
+
+        get classGetFields() {
+            return r("il2cpp_class_get_fields", "pointer", ["pointer", "pointer"]);
+        },
+
+        get classGetFlags() {
+            return r("il2cpp_class_get_flags", "int", ["pointer"]);
+        },
+
+        get classGetImage() {
+            return r("il2cpp_class_get_image", "pointer", ["pointer"]);
+        },
+
+        get classGetInstanceSize() {
+            return r("il2cpp_class_instance_size", "int32", ["pointer"]);
+        },
+
+        get classGetInterfaces() {
+            return r("il2cpp_class_get_interfaces", "pointer", ["pointer", "pointer"]);
+        },
+
+        get classGetMethodFromName() {
+            return r("il2cpp_class_get_method_from_name", "pointer", ["pointer", "pointer", "int"]);
+        },
+
+        get classGetMethods() {
+            return r("il2cpp_class_get_methods", "pointer", ["pointer", "pointer"]);
+        },
+
+        get classGetName() {
+            return r("il2cpp_class_get_name", "pointer", ["pointer"]);
+        },
+
+        get classGetNamespace() {
+            return r("il2cpp_class_get_namespace", "pointer", ["pointer"]);
+        },
+
+        get classGetNestedClasses() {
+            return r("il2cpp_class_get_nested_types", "pointer", ["pointer", "pointer"]);
+        },
+
+        get classGetParent() {
+            return r("il2cpp_class_get_parent", "pointer", ["pointer"]);
+        },
+
+        get classGetStaticFieldData() {
+            return r("il2cpp_class_get_static_field_data", "pointer", ["pointer"]);
+        },
+
+        get classGetValueTypeSize() {
+            return r("il2cpp_class_value_size", "int32", ["pointer", "pointer"]);
+        },
+
+        get classGetType() {
+            return r("il2cpp_class_get_type", "pointer", ["pointer"]);
+        },
+
+        get classHasReferences() {
+            return r("il2cpp_class_has_references", "bool", ["pointer"]);
+        },
+
+        get classInitialize() {
+            return r("il2cpp_runtime_class_init", "void", ["pointer"]);
+        },
+
+        get classIsAbstract() {
+            return r("il2cpp_class_is_abstract", "bool", ["pointer"]);
+        },
+
+        get classIsAssignableFrom() {
+            return r("il2cpp_class_is_assignable_from", "bool", ["pointer", "pointer"]);
+        },
+
+        get classIsBlittable() {
+            return r("il2cpp_class_is_blittable", "bool", ["pointer"]);
+        },
+
+        get classIsEnum() {
+            return r("il2cpp_class_is_enum", "bool", ["pointer"]);
+        },
+
+        get classIsGeneric() {
+            return r("il2cpp_class_is_generic", "bool", ["pointer"]);
+        },
+
+        get classIsInflated() {
+            return r("il2cpp_class_is_inflated", "bool", ["pointer"]);
+        },
+
+        get classIsInterface() {
+            return r("il2cpp_class_is_interface", "bool", ["pointer"]);
+        },
+
+        get classIsSubclassOf() {
+            return r("il2cpp_class_is_subclass_of", "bool", ["pointer", "pointer", "bool"]);
+        },
+
+        get classIsValueType() {
+            return r("il2cpp_class_is_valuetype", "bool", ["pointer"]);
+        },
+
+        get domainGetAssemblyFromName() {
+            return r("il2cpp_domain_assembly_open", "pointer", ["pointer", "pointer"]);
+        },
+
+        get domainGet() {
+            return r("il2cpp_domain_get", "pointer", []);
+        },
+
+        get domainGetAssemblies() {
+            return r("il2cpp_domain_get_assemblies", "pointer", ["pointer", "pointer"]);
+        },
+
+        get fieldGetClass() {
+            return r("il2cpp_field_get_parent", "pointer", ["pointer"]);
+        },
+
+        get fieldGetFlags() {
+            return r("il2cpp_field_get_flags", "int", ["pointer"]);
+        },
+
+        get fieldGetName() {
+            return r("il2cpp_field_get_name", "pointer", ["pointer"]);
+        },
+
+        get fieldGetOffset() {
+            return r("il2cpp_field_get_offset", "int32", ["pointer"]);
+        },
+
+        get fieldGetStaticValue() {
+            return r("il2cpp_field_static_get_value", "void", ["pointer", "pointer"]);
+        },
+
+        get fieldGetType() {
+            return r("il2cpp_field_get_type", "pointer", ["pointer"]);
+        },
+
+        get fieldSetStaticValue() {
+            return r("il2cpp_field_static_set_value", "void", ["pointer", "pointer"]);
+        },
+
+        get free() {
+            return r("il2cpp_free", "void", ["pointer"]);
+        },
+
+        get gcCollect() {
+            return r("il2cpp_gc_collect", "void", ["int"]);
+        },
+
+        get gcCollectALittle() {
+            return r("il2cpp_gc_collect_a_little", "void", []);
+        },
+
+        get gcDisable() {
+            return r("il2cpp_gc_disable", "void", []);
+        },
+
+        get gcEnable() {
+            return r("il2cpp_gc_enable", "void", []);
+        },
+
+        get gcGetHeapSize() {
+            return r("il2cpp_gc_get_heap_size", "int64", []);
+        },
+
+        get gcGetMaxTimeSlice() {
+            return r("il2cpp_gc_get_max_time_slice_ns", "int64", []);
+        },
+
+        get gcGetUsedSize() {
+            return r("il2cpp_gc_get_used_size", "int64", []);
+        },
+
+        get gcHandleGetTarget() {
+            return r("il2cpp_gchandle_get_target", "pointer", ["uint32"]);
+        },
+
+        get gcHandleFree() {
+            return r("il2cpp_gchandle_free", "void", ["uint32"]);
+        },
+
+        get gcHandleNew() {
+            return r("il2cpp_gchandle_new", "uint32", ["pointer", "bool"]);
+        },
+
+        get gcHandleNewWeakRef() {
+            return r("il2cpp_gchandle_new_weakref", "uint32", ["pointer", "bool"]);
+        },
+
+        get gcIsDisabled() {
+            return r("il2cpp_gc_is_disabled", "bool", []);
+        },
+
+        get gcIsIncremental() {
+            return r("il2cpp_gc_is_incremental", "bool", []);
+        },
+
+        get gcSetMaxTimeSlice() {
+            return r("il2cpp_gc_set_max_time_slice_ns", "void", ["int64"]);
+        },
+
+        get gcStartIncrementalCollection() {
+            return r("il2cpp_gc_start_incremental_collection", "void", []);
+        },
+
+        get gcStartWorld() {
+            return r("il2cpp_start_gc_world", "void", []);
+        },
+
+        get gcStopWorld() {
+            return r("il2cpp_stop_gc_world", "void", []);
+        },
+
+        get getCorlib() {
+            return r("il2cpp_get_corlib", "pointer", []);
+        },
+
+        get imageGetAssembly() {
+            return r("il2cpp_image_get_assembly", "pointer", ["pointer"]);
+        },
+
+        get imageGetClass() {
+            return r("il2cpp_image_get_class", "pointer", ["pointer", "uint"]);
+        },
+
+        get imageGetClassCount() {
+            return r("il2cpp_image_get_class_count", "uint32", ["pointer"]);
+        },
+
+        get imageGetName() {
+            return r("il2cpp_image_get_name", "pointer", ["pointer"]);
+        },
+
+        get initialize() {
+            return r("il2cpp_init", "void", ["pointer"]);
+        },
+
+        get livenessAllocateStruct() {
+            return r("il2cpp_unity_liveness_allocate_struct", "pointer", ["pointer", "int", "pointer", "pointer", "pointer"]);
+        },
+
+        get livenessCalculationBegin() {
+            return r("il2cpp_unity_liveness_calculation_begin", "pointer", ["pointer", "int", "pointer", "pointer", "pointer", "pointer"]);
+        },
+
+        get livenessCalculationEnd() {
+            return r("il2cpp_unity_liveness_calculation_end", "void", ["pointer"]);
+        },
+
+        get livenessCalculationFromStatics() {
+            return r("il2cpp_unity_liveness_calculation_from_statics", "void", ["pointer"]);
+        },
+
+        get livenessFinalize() {
+            return r("il2cpp_unity_liveness_finalize", "void", ["pointer"]);
+        },
+
+        get livenessFreeStruct() {
+            return r("il2cpp_unity_liveness_free_struct", "void", ["pointer"]);
+        },
+
+        get memorySnapshotCapture() {
+            return r("il2cpp_capture_memory_snapshot", "pointer", []);
+        },
+
+        get memorySnapshotFree() {
+            return r("il2cpp_free_captured_memory_snapshot", "void", ["pointer"]);
+        },
+
+        get memorySnapshotGetClasses() {
+            return r("il2cpp_memory_snapshot_get_classes", "pointer", ["pointer", "pointer"]);
+        },
+
+        get memorySnapshotGetObjects() {
+            return r("il2cpp_memory_snapshot_get_objects", "pointer", ["pointer", "pointer"]);
+        },
+
+        get methodGetClass() {
+            return r("il2cpp_method_get_class", "pointer", ["pointer"]);
+        },
+
+        get methodGetFlags() {
+            return r("il2cpp_method_get_flags", "uint32", ["pointer", "pointer"]);
+        },
+
+        get methodGetName() {
+            return r("il2cpp_method_get_name", "pointer", ["pointer"]);
+        },
+
+        get methodGetObject() {
+            return r("il2cpp_method_get_object", "pointer", ["pointer", "pointer"]);
+        },
+
+        get methodGetParameterCount() {
+            return r("il2cpp_method_get_param_count", "uint8", ["pointer"]);
+        },
+
+        get methodGetParameterName() {
+            return r("il2cpp_method_get_param_name", "pointer", ["pointer", "uint32"]);
+        },
+
+        get methodGetParameters() {
+            return r("il2cpp_method_get_parameters", "pointer", ["pointer", "pointer"]);
+        },
+
+        get methodGetParameterType() {
+            return r("il2cpp_method_get_param", "pointer", ["pointer", "uint32"]);
+        },
+
+        get methodGetReturnType() {
+            return r("il2cpp_method_get_return_type", "pointer", ["pointer"]);
+        },
+
+        get methodIsGeneric() {
+            return r("il2cpp_method_is_generic", "bool", ["pointer"]);
+        },
+
+        get methodIsInflated() {
+            return r("il2cpp_method_is_inflated", "bool", ["pointer"]);
+        },
+
+        get methodIsInstance() {
+            return r("il2cpp_method_is_instance", "bool", ["pointer"]);
+        },
+
+        get monitorEnter() {
+            return r("il2cpp_monitor_enter", "void", ["pointer"]);
+        },
+
+        get monitorExit() {
+            return r("il2cpp_monitor_exit", "void", ["pointer"]);
+        },
+
+        get monitorPulse() {
+            return r("il2cpp_monitor_pulse", "void", ["pointer"]);
+        },
+
+        get monitorPulseAll() {
+            return r("il2cpp_monitor_pulse_all", "void", ["pointer"]);
+        },
+
+        get monitorTryEnter() {
+            return r("il2cpp_monitor_try_enter", "bool", ["pointer", "uint32"]);
+        },
+
+        get monitorTryWait() {
+            return r("il2cpp_monitor_try_wait", "bool", ["pointer", "uint32"]);
+        },
+
+        get monitorWait() {
+            return r("il2cpp_monitor_wait", "void", ["pointer"]);
+        },
+
+        get objectGetClass() {
+            return r("il2cpp_object_get_class", "pointer", ["pointer"]);
+        },
+
+        get objectGetVirtualMethod() {
+            return r("il2cpp_object_get_virtual_method", "pointer", ["pointer", "pointer"]);
+        },
+
+        get objectInitialize() {
+            return r("il2cpp_runtime_object_init_exception", "void", ["pointer", "pointer"]);
+        },
+
+        get objectNew() {
+            return r("il2cpp_object_new", "pointer", ["pointer"]);
+        },
+
+        get objectGetSize() {
+            return r("il2cpp_object_get_size", "uint32", ["pointer"]);
+        },
+
+        get objectUnbox() {
+            return r("il2cpp_object_unbox", "pointer", ["pointer"]);
+        },
+
+        get resolveInternalCall() {
+            return r("il2cpp_resolve_icall", "pointer", ["pointer"]);
+        },
+
+        get stringGetChars() {
+            return r("il2cpp_string_chars", "pointer", ["pointer"]);
+        },
+
+        get stringGetLength() {
+            return r("il2cpp_string_length", "int32", ["pointer"]);
+        },
+
+        get stringNew() {
+            return r("il2cpp_string_new", "pointer", ["pointer"]);
+        },
+
+        get valueTypeBox() {
+            return r("il2cpp_value_box", "pointer", ["pointer", "pointer"]);
+        },
+
+        get threadAttach() {
+            return r("il2cpp_thread_attach", "pointer", ["pointer"]);
+        },
+
+        get threadDetach() {
+            return r("il2cpp_thread_detach", "void", ["pointer"]);
+        },
+
+        get threadGetAttachedThreads() {
+            return r("il2cpp_thread_get_all_attached_threads", "pointer", ["pointer"]);
+        },
+
+        get threadGetCurrent() {
+            return r("il2cpp_thread_current", "pointer", []);
+        },
+
+        get threadIsVm() {
+            return r("il2cpp_is_vm_thread", "bool", ["pointer"]);
+        },
+
+        get typeGetClass() {
+            return r("il2cpp_class_from_type", "pointer", ["pointer"]);
+        },
+
+        get typeGetName() {
+            return r("il2cpp_type_get_name", "pointer", ["pointer"]);
+        },
+
+        get typeGetObject() {
+            return r("il2cpp_type_get_object", "pointer", ["pointer"]);
+        },
+
+        get typeGetTypeEnum() {
+            return r("il2cpp_type_get_type", "int", ["pointer"]);
+        }
+    };
+
+    decorate(api, lazy);
+
+    /** @internal */
+    export declare const memorySnapshotApi: CModule;
+    getter(Il2Cpp, "memorySnapshotApi", () => new CModule($inline_file("cmodules/memory-snapshot.c")), lazy);
+
+    function r<R extends NativeFunctionReturnType, A extends NativeFunctionArgumentType[] | []>(exportName: string, retType: R, argTypes: A) {
+        const handle = Il2Cpp.module.findExportByName(exportName) ?? memorySnapshotApi[exportName];
+
+        return new NativeFunction(handle ?? raise(`couldn't resolve export ${exportName}`), retType, argTypes);
+    }
+
+    declare const $inline_file: typeof import("ts-transformer-inline-file").$INLINE_FILE;
+}
+
+```
+
+`src/il2cpp/application.ts`:
+
+```ts
+namespace Il2Cpp {
+    export const application = {
+        /** */
+        get dataPath(): string | null {
+            return unityEngineCall("get_persistentDataPath");
+        },
+
+        /** */
+        get identifier(): string | null {
+            return unityEngineCall("get_identifier") ?? unityEngineCall("get_bundleIdentifier");
+        },
+
+        /** Gets the version of the application */
+        get version(): string | null {
+            return unityEngineCall("get_version");
+        }
+    };
+
+    /** Gets the Unity version of the current application. */
+    export declare const unityVersion: string;
+    // prettier-ignore
+    getter(Il2Cpp, "unityVersion", () => {
+        const unityVersion = unityEngineCall("get_unityVersion");
+
+        if (unityVersion != null) {
+            return unityVersion;
+        }
+
+        const searchPattern = "45 64 69 74 6f 72 ?? 44 61 74 61 ?? 69 6c 32 63 70 70";
+
+        for (const range of module.enumerateRanges("r--").concat(Process.getRangeByAddress(module.base))) {
+            for (let { address } of Memory.scanSync(range.base, range.size, searchPattern)) {
+                while (address.readU8() != 0) {
+                    address = address.sub(1);
+                }
+                const match = UnityVersion.find(address.add(1).readCString());
+
+                if (match != undefined) {
+                    return match;
+                }
+            }
+        }
+
+        raise("couldn't determine the Unity version, please specify it manually");
+    }, lazy);
+
+    /** @internal */
+    export declare const unityVersionIsBelow201830: boolean;
+    // prettier-ignore
+    getter(Il2Cpp, "unityVersionIsBelow201830", () => {
+        return UnityVersion.lt(unityVersion, "2018.3.0");
+    }, lazy);
+
+    function unityEngineCall(method: string): string | null {
+        const handle = Il2Cpp.api.resolveInternalCall(Memory.allocUtf8String("UnityEngine.Application::" + method));
+        const nativeFunction = new NativeFunction(handle, "pointer", []);
+
+        return nativeFunction.isNull() ? null : new Il2Cpp.String(nativeFunction()).asNullable()?.content ?? null;
+    }
+}
+
+```
+
+`src/il2cpp/cmodules/memory-snapshot.c`:
+
+```c
+#include <stdint.h>
+#include <string.h>
+
+typedef struct Il2CppManagedMemorySnapshot Il2CppManagedMemorySnapshot;
+typedef struct Il2CppMetadataType Il2CppMetadataType;
+
+struct Il2CppManagedMemorySnapshot
+{
+  struct Il2CppManagedHeap
+  {
+    uint32_t section_count;
+    void * sections;
+  } heap;
+  struct Il2CppStacks
+  {
+    uint32_t stack_count;
+    void * stacks;
+  } stacks;
+  struct Il2CppMetadataSnapshot
+  {
+    uint32_t type_count;
+    Il2CppMetadataType * types;
+  } metadata_snapshot;
+  struct Il2CppGCHandles
+  {
+    uint32_t tracked_object_count;
+    void ** pointers_to_objects;
+  } gc_handles;
+  struct Il2CppRuntimeInformation
+  {
+    uint32_t pointer_size;
+    uint32_t object_header_size;
+    uint32_t array_header_size;
+    uint32_t array_bounds_offset_in_header;
+    uint32_t array_size_offset_in_header;
+    uint32_t allocation_granularity;
+  } runtime_information;
+  void * additional_user_information;
+};
+
+struct Il2CppMetadataType
+{
+  uint32_t flags;
+  void * fields;
+  uint32_t field_count;
+  uint32_t statics_size;
+  uint8_t * statics;
+  uint32_t base_or_element_type_index;
+  char * name;
+  const char * assembly_name;
+  uint64_t type_info_address;
+  uint32_t size;
+};
+
+uintptr_t
+il2cpp_memory_snapshot_get_classes (
+    const Il2CppManagedMemorySnapshot * snapshot, Il2CppMetadataType ** iter)
+{
+  const int zero = 0;
+  const void * null = 0;
+
+  if (iter != NULL && snapshot->metadata_snapshot.type_count > zero)
+  {
+    if (*iter == null)
+    {
+      *iter = snapshot->metadata_snapshot.types;
+      return (uintptr_t) (*iter)->type_info_address;
+    }
+    else
+    {
+      Il2CppMetadataType * metadata_type = *iter + 1;
+
+      if (metadata_type < snapshot->metadata_snapshot.types +
+                              snapshot->metadata_snapshot.type_count)
+      {
+        *iter = metadata_type;
+        return (uintptr_t) (*iter)->type_info_address;
+      }
+    }
+  }
+  return 0;
+}
+
+void **
+il2cpp_memory_snapshot_get_objects (
+    const Il2CppManagedMemorySnapshot * snapshot, uint32_t * size)
+{
+  *size = snapshot->gc_handles.tracked_object_count;
+  return snapshot->gc_handles.pointers_to_objects;
+}
+
+```
+
+`src/il2cpp/dump.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** Dumps the application. */
+    export function dump(fileName?: string, path?: string): void {
+        fileName = fileName ?? `${Il2Cpp.application.identifier ?? "unknown"}_${Il2Cpp.application.version ?? "unknown"}.cs`;
+
+        const destination = `${path ?? Il2Cpp.application.dataPath}/${fileName}`;
+        const file = new File(destination, "w");
+
+        for (const assembly of Il2Cpp.domain.assemblies) {
+            inform(`dumping ${assembly.name}...`);
+
+            for (const klass of assembly.image.classes) {
+                file.write(`${klass}\n\n`);
+            }
+        }
+
+        file.flush();
+        file.close();
+        ok(`dump saved to ${destination}`);
+    }
+}
+
+```
+
+`src/il2cpp/exception-listener.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** */
+    export function installExceptionListener(targetThread: "current" | "all" = "current"): InvocationListener {
+        const currentThread = Il2Cpp.api.threadGetCurrent();
+
+        return Interceptor.attach(Il2Cpp.module.getExportByName("__cxa_throw"), function (args) {
+            if (targetThread == "current" && !Il2Cpp.api.threadGetCurrent().equals(currentThread)) {
+                return;
+            }
+
+            inform(new Il2Cpp.Object(args[0].readPointer()));
+        });
+    }
+}
+
+```
+
+`src/il2cpp/filters.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** Creates a filter which includes `element`s whose type can be assigned to `klass` variables. */
+    export function is<T extends Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.Type>(klass: Il2Cpp.Class): (element: T) => boolean {
+        return (element: T): boolean => {
+            if (element instanceof Il2Cpp.Class) {
+                return klass.isAssignableFrom(element);
+            } else {
+                return klass.isAssignableFrom(element.class);
+            }
+        };
+    }
+
+    /** Creates a filter which includes `element`s whose type corresponds to `klass` type. */
+    export function isExactly<T extends Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.Type>(klass: Il2Cpp.Class): (element: T) => boolean {
+        return (element: T): boolean => {
+            if (element instanceof Il2Cpp.Class) {
+                return element.equals(klass);
+            } else {
+                return element.class.equals(klass);
+            }
+        };
+    }
+}
+
+```
+
+`src/il2cpp/gc.ts`:
+
+```ts
+namespace Il2Cpp {
+    export const gc = {
+        /** Gets the heap size in bytes. */
+        get heapSize(): Int64 {
+            return Il2Cpp.api.gcGetHeapSize();
+        },
+
+        /** Determines whether the garbage collector is disabled. */
+        get isEnabled(): boolean {
+            return !Il2Cpp.api.gcIsDisabled();
+        },
+
+        /** Determines whether the garbage collector is incremental. */
+        get isIncremental(): boolean {
+            return !!Il2Cpp.api.gcIsIncremental();
+        },
+
+        /** Gets the number of nanoseconds the garbage collector can spend in a collection step. */
+        get maxTimeSlice(): Int64 {
+            return Il2Cpp.api.gcGetMaxTimeSlice();
+        },
+
+        /** Gets the used heap size in bytes. */
+        get usedHeapSize(): Int64 {
+            return Il2Cpp.api.gcGetUsedSize();
+        },
+
+        /** Enables or disables the garbage collector. */
+        set isEnabled(value: boolean) {
+            value ? Il2Cpp.api.gcEnable() : Il2Cpp.api.gcDisable();
+        },
+
+        /** Sets the number of nanoseconds the garbage collector can spend in a collection step. */
+        set maxTimeSlice(nanoseconds: number | Int64) {
+            Il2Cpp.api.gcSetMaxTimeSlice(nanoseconds);
+        },
+
+        /** Returns the heap allocated objects of the specified class. This variant reads GC descriptors. */
+        choose(klass: Il2Cpp.Class): Il2Cpp.Object[] {
+            const matches: Il2Cpp.Object[] = [];
+
+            const callback = (objects: NativePointer, size: number) => {
+                for (let i = 0; i < size; i++) {
+                    matches.push(new Il2Cpp.Object(objects.add(i * Process.pointerSize).readPointer()));
+                }
+            };
+
+            const chooseCallback = new NativeCallback(callback, "void", ["pointer", "int", "pointer"]);
+
+            if (UnityVersion.gte(Il2Cpp.unityVersion, "2021.2.0")) {
+                const realloc = (handle: NativePointer, size: UInt64) => {
+                    if (!handle.isNull() && size.compare(0) == 0) {
+                        Il2Cpp.free(handle);
+                        return NULL;
+                    } else {
+                        return Il2Cpp.alloc(size);
+                    }
+                };
+
+                const reallocCallback = new NativeCallback(realloc, "pointer", ["pointer", "size_t", "pointer"]);
+
+                this.stopWorld();
+
+                const state = Il2Cpp.api.livenessAllocateStruct(klass, 0, chooseCallback, NULL, reallocCallback);
+                Il2Cpp.api.livenessCalculationFromStatics(state);
+                Il2Cpp.api.livenessFinalize(state);
+
+                this.startWorld();
+
+                Il2Cpp.api.livenessFreeStruct(state);
+            } else {
+                const onWorld = new NativeCallback(() => {}, "void", []);
+                const state = Il2Cpp.api.livenessCalculationBegin(klass, 0, chooseCallback, NULL, onWorld, onWorld);
+
+                Il2Cpp.api.livenessCalculationFromStatics(state);
+                Il2Cpp.api.livenessCalculationEnd(state);
+            }
+
+            return matches;
+        },
+
+        /** Forces a garbage collection of the specified generation. */
+        collect(generation: 0 | 1 | 2): void {
+            Il2Cpp.api.gcCollect(generation < 0 ? 0 : generation > 2 ? 2 : generation);
+        },
+
+        /** Forces a garbage collection. */
+        collectALittle(): void {
+            Il2Cpp.api.gcCollectALittle();
+        },
+
+        /** Resumes all the previously stopped threads. */
+        startWorld(): void {
+            return Il2Cpp.api.gcStartWorld();
+        },
+
+        /** Performs an incremental garbage collection. */
+        startIncrementalCollection(): void {
+            return Il2Cpp.api.gcStartIncrementalCollection();
+        },
+
+        /** Stops all threads which may access the garbage collected heap, other than the caller. */
+        stopWorld(): void {
+            return Il2Cpp.api.gcStopWorld();
+        }
+    };
+}
+
+```
+
+`src/il2cpp/memory.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** Allocates the given amount of bytes. */
+    export function alloc(size: number | UInt64 = Process.pointerSize): NativePointer {
+        return Il2Cpp.api.alloc(size);
+    }
+
+    /** Frees memory. */
+    export function free(pointer: NativePointerValue): void {
+        return Il2Cpp.api.free(pointer);
+    }
+
+    /** @internal */
+    export function read(pointer: NativePointer, type: Il2Cpp.Type): Il2Cpp.Field.Type {
+        switch (type.typeEnum) {
+            case Il2Cpp.Type.enum.boolean:
+                return !!pointer.readS8();
+            case Il2Cpp.Type.enum.byte:
+                return pointer.readS8();
+            case Il2Cpp.Type.enum.unsignedByte:
+                return pointer.readU8();
+            case Il2Cpp.Type.enum.short:
+                return pointer.readS16();
+            case Il2Cpp.Type.enum.unsignedShort:
+                return pointer.readU16();
+            case Il2Cpp.Type.enum.int:
+                return pointer.readS32();
+            case Il2Cpp.Type.enum.unsignedInt:
+                return pointer.readU32();
+            case Il2Cpp.Type.enum.char:
+                return pointer.readU16();
+            case Il2Cpp.Type.enum.long:
+                return pointer.readS64();
+            case Il2Cpp.Type.enum.unsignedLong:
+                return pointer.readU64();
+            case Il2Cpp.Type.enum.float:
+                return pointer.readFloat();
+            case Il2Cpp.Type.enum.double:
+                return pointer.readDouble();
+            case Il2Cpp.Type.enum.nativePointer:
+            case Il2Cpp.Type.enum.unsignedNativePointer:
+                return pointer.readPointer();
+            case Il2Cpp.Type.enum.pointer:
+                return new Il2Cpp.Pointer(pointer.readPointer(), type.class.baseType!);
+            case Il2Cpp.Type.enum.valueType:
+                return new Il2Cpp.ValueType(pointer, type);
+            case Il2Cpp.Type.enum.object:
+            case Il2Cpp.Type.enum.class:
+                return new Il2Cpp.Object(pointer.readPointer());
+            case Il2Cpp.Type.enum.genericInstance:
+                return type.class.isValueType ? new Il2Cpp.ValueType(pointer, type) : new Il2Cpp.Object(pointer.readPointer());
+            case Il2Cpp.Type.enum.string:
+                return new Il2Cpp.String(pointer.readPointer());
+            case Il2Cpp.Type.enum.array:
+            case Il2Cpp.Type.enum.multidimensionalArray:
+                return new Il2Cpp.Array(pointer.readPointer());
+        }
+
+        raise(`couldn't read the value from ${pointer} using an unhandled or unknown type ${type.name} (${type.typeEnum}), please file an issue`);
+    }
+
+    /** @internal */
+    export function write(pointer: NativePointer, value: any, type: Il2Cpp.Type): NativePointer {
+        switch (type.typeEnum) {
+            case Il2Cpp.Type.enum.boolean:
+                return pointer.writeS8(+value);
+            case Il2Cpp.Type.enum.byte:
+                return pointer.writeS8(value);
+            case Il2Cpp.Type.enum.unsignedByte:
+                return pointer.writeU8(value);
+            case Il2Cpp.Type.enum.short:
+                return pointer.writeS16(value);
+            case Il2Cpp.Type.enum.unsignedShort:
+                return pointer.writeU16(value);
+            case Il2Cpp.Type.enum.int:
+                return pointer.writeS32(value);
+            case Il2Cpp.Type.enum.unsignedInt:
+                return pointer.writeU32(value);
+            case Il2Cpp.Type.enum.char:
+                return pointer.writeU16(value);
+            case Il2Cpp.Type.enum.long:
+                return pointer.writeS64(value);
+            case Il2Cpp.Type.enum.unsignedLong:
+                return pointer.writeU64(value);
+            case Il2Cpp.Type.enum.float:
+                return pointer.writeFloat(value);
+            case Il2Cpp.Type.enum.double:
+                return pointer.writeDouble(value);
+            case Il2Cpp.Type.enum.nativePointer:
+            case Il2Cpp.Type.enum.unsignedNativePointer:
+            case Il2Cpp.Type.enum.pointer:
+            case Il2Cpp.Type.enum.valueType:
+            case Il2Cpp.Type.enum.string:
+            case Il2Cpp.Type.enum.object:
+            case Il2Cpp.Type.enum.class:
+            case Il2Cpp.Type.enum.array:
+            case Il2Cpp.Type.enum.multidimensionalArray:
+            case Il2Cpp.Type.enum.genericInstance:
+                if (value instanceof Il2Cpp.ValueType) {
+                    Memory.copy(pointer, value, type.class.valueTypeSize);
+                    return pointer;
+                }
+
+                return pointer.writePointer(value);
+        }
+
+        raise(`couldn't write value ${value} to ${pointer} using an unhandled or unknown type ${type.name} (${type.typeEnum}), please file an issue`);
+    }
+
+    /** @internal */
+    export function fromFridaValue(value: NativeFunctionReturnValue, type: Il2Cpp.Type): Il2Cpp.Parameter.Type | Il2Cpp.Method.ReturnType {
+        if (globalThis.Array.isArray(value)) {
+            return arrayToValueType(type, value);
+        } else if (value instanceof NativePointer) {
+            if (type.isByReference) {
+                return new Il2Cpp.Reference(value, type);
+            }
+
+            switch (type.typeEnum) {
+                case Il2Cpp.Type.enum.pointer:
+                    return new Il2Cpp.Pointer(value, type.class.baseType!);
+                case Il2Cpp.Type.enum.string:
+                    return new Il2Cpp.String(value);
+                case Il2Cpp.Type.enum.class:
+                case Il2Cpp.Type.enum.genericInstance:
+                case Il2Cpp.Type.enum.object:
+                    return new Il2Cpp.Object(value);
+                case Il2Cpp.Type.enum.array:
+                case Il2Cpp.Type.enum.multidimensionalArray:
+                    return new Il2Cpp.Array(value);
+                default:
+                    return value;
+            }
+        } else if (type.typeEnum == Il2Cpp.Type.enum.boolean) {
+            return !!(value as number);
+        } else {
+            return value;
+        }
+    }
+
+    /** @internal */
+    export function toFridaValue(value: Il2Cpp.Parameter.Type): NativeFunctionArgumentValue {
+        if (typeof value == "boolean") {
+            return +value;
+        } else if (value instanceof Il2Cpp.ValueType) {
+            return valueTypeToArray(value);
+        } else {
+            return value;
+        }
+    }
+
+    /** @internal */
+    function valueTypeToArray(value: Il2Cpp.ValueType): NativeFunctionArgumentValue[] {
+        const instanceFields = value.type.class.fields.filter(_ => !_.isStatic);
+
+        return instanceFields.length == 0
+            ? [value.handle.readU8()]
+            : instanceFields
+                  .map(_ => _.withHolder(value).value)
+                  .map(value =>
+                      value instanceof Il2Cpp.ValueType
+                          ? valueTypeToArray(value)
+                          : value instanceof NativeStruct
+                          ? value.handle
+                          : typeof value == "boolean"
+                          ? +value
+                          : value
+                  );
+    }
+
+    /** @internal */
+    function arrayToValueType(type: Il2Cpp.Type, nativeValues: any[]): Il2Cpp.ValueType {
+        function iter(type: Il2Cpp.Type, startOffset: number = 0): [number, number][] {
+            const arr: [number, number][] = [];
+
+            for (const field of type.class.fields) {
+                if (!field.isStatic) {
+                    const offset = startOffset + field.offset - Il2Cpp.Object.headerSize;
+                    if (
+                        field.type.typeEnum == Il2Cpp.Type.enum.valueType ||
+                        (field.type.typeEnum == Il2Cpp.Type.enum.genericInstance && field.type.class.isValueType)
+                    ) {
+                        arr.push(...iter(field.type, offset));
+                    } else {
+                        arr.push([field.type.typeEnum, offset]);
+                    }
+                }
+            }
+
+            if (arr.length == 0) {
+                arr.push([Il2Cpp.Type.enum.unsignedByte, 0]);
+            }
+
+            return arr;
+        }
+
+        const valueType = Memory.alloc(type.class.valueTypeSize);
+
+        nativeValues = nativeValues.flat(Infinity);
+        const typesAndOffsets = iter(type);
+
+        for (let i = 0; i < nativeValues.length; i++) {
+            const value = nativeValues[i];
+            const [typeEnum, offset] = typesAndOffsets[i];
+            const pointer = valueType.add(offset);
+
+            switch (typeEnum) {
+                case Il2Cpp.Type.enum.boolean:
+                    pointer.writeS8(value);
+                    break;
+                case Il2Cpp.Type.enum.byte:
+                    pointer.writeS8(value);
+                    break;
+                case Il2Cpp.Type.enum.unsignedByte:
+                    pointer.writeU8(value);
+                    break;
+                case Il2Cpp.Type.enum.short:
+                    pointer.writeS16(value);
+                    break;
+                case Il2Cpp.Type.enum.unsignedShort:
+                    pointer.writeU16(value);
+                    break;
+                case Il2Cpp.Type.enum.int:
+                    pointer.writeS32(value);
+                    break;
+                case Il2Cpp.Type.enum.unsignedInt:
+                    pointer.writeU32(value);
+                    break;
+                case Il2Cpp.Type.enum.char:
+                    pointer.writeU16(value);
+                    break;
+                case Il2Cpp.Type.enum.long:
+                    pointer.writeS64(value);
+                    break;
+                case Il2Cpp.Type.enum.unsignedLong:
+                    pointer.writeU64(value);
+                    break;
+                case Il2Cpp.Type.enum.float:
+                    pointer.writeFloat(value);
+                    break;
+                case Il2Cpp.Type.enum.double:
+                    pointer.writeDouble(value);
+                    break;
+                case Il2Cpp.Type.enum.nativePointer:
+                case Il2Cpp.Type.enum.unsignedNativePointer:
+                case Il2Cpp.Type.enum.pointer:
+                case Il2Cpp.Type.enum.array:
+                case Il2Cpp.Type.enum.multidimensionalArray:
+                case Il2Cpp.Type.enum.string:
+                case Il2Cpp.Type.enum.object:
+                case Il2Cpp.Type.enum.class:
+                case Il2Cpp.Type.enum.genericInstance:
+                    pointer.writePointer(value);
+                    break;
+                default:
+                    warn(`arrayToValueType: defaulting ${typeEnum} to pointer`);
+                    pointer.writePointer(value);
+                    break;
+            }
+        }
+
+        return new Il2Cpp.ValueType(valueType, type);
+    }
+}
+
+```
+
+`src/il2cpp/module.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** @internal Gets the Il2Cpp module name. */
+    export declare const moduleName: string;
+    getter(Il2Cpp, "moduleName", () => {
+        switch (Process.platform) {
+            case "linux":
+                try {
+                    const _ = Java.androidVersion;
+                    return "libil2cpp.so";
+                } catch (e) {
+                    return "GameAssembly.so";
+                }
+            case "windows":
+                return "GameAssembly.dll";
+            case "darwin":
+                try {
+                    return "UnityFramework";
+                } catch (e) {
+                    return "GameAssembly.dylib";
+                }
+        }
+
+        raise(`${Process.platform} is not supported yet`);
+    });
+
+    /** Gets the Il2Cpp module as a Frida module. */
+    export declare const module: Module;
+    // prettier-ignore
+    getter(Il2Cpp, "module", () => {
+        return Process.getModuleByName(moduleName);
+    }, lazy);
+
+    /** @internal Waits for Unity and Il2Cpp native libraries to be loaded and initialized. */
+    export async function initialize(blocking = false): Promise<boolean> {
+        if (Process.platform == "darwin") {
+            Reflect.defineProperty(Il2Cpp, "moduleName", {
+                value: DebugSymbol.fromName("il2cpp_init").moduleName ?? (await forModule("UnityFramework", "GameAssembly.dylib"))
+            });
+        } else {
+            await forModule(Il2Cpp.moduleName);
+        }
+
+        if (Il2Cpp.api.getCorlib().isNull()) {
+            return await new Promise<boolean>(resolve => {
+                const interceptor = Interceptor.attach(Il2Cpp.api.initialize, {
+                    onLeave() {
+                        interceptor.detach();
+                        blocking ? resolve(true) : setImmediate(() => resolve(false));
+                    }
+                });
+            });
+        }
+
+        return false;
+    }
+}
+
+```
+
+`src/il2cpp/perform.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** Attaches the caller thread to Il2Cpp domain and executes the given block.  */
+    export async function perform<T>(block: () => T | Promise<T>, flag: "free" | "bind" | "leak" | "main" = "bind"): Promise<T> {
+        try {
+            const isInMainThread = await initialize(flag == "main");
+
+            if (flag == "main" && !isInMainThread) {
+                return perform(() => Il2Cpp.mainThread.schedule(block), "free");
+            }
+
+            let thread = Il2Cpp.currentThread;
+            const isForeignThread = thread == null;
+            thread ??= Il2Cpp.domain.attach();
+
+            const result = block();
+
+            if (isForeignThread) {
+                if (flag == "free") {
+                    thread.detach();
+                } else if (flag == "bind") {
+                    Script.bindWeak(globalThis, () => thread!.detach());
+                }
+            }
+
+            return result instanceof Promise ? await result : result;
+        } catch (error: any) {
+            Script.nextTick(_ => { throw _; }, error); // prettier-ignore
+            return Promise.reject<T>(error);
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/array.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Array<T extends Il2Cpp.Field.Type = Il2Cpp.Field.Type> extends NativeStruct implements Iterable<T> {
+        /** Gets the Il2CppArray struct size, possibly equal to `Process.pointerSize * 4`. */
+        @lazy
+        static get headerSize(): number {
+            return Il2Cpp.corlib.class("System.Array").instanceSize;
+        }
+
+        /** @internal Gets a pointer to the first element of the current array. */
+        get elements(): Il2Cpp.Pointer<T> {
+            const string = Il2Cpp.string("vfsfitvnm");
+            const array = string.object.method<Il2Cpp.Object>("Split", 1).invoke(NULL);
+
+            // prettier-ignore
+            const offset = array.handle.offsetOf(_ => _.readPointer().equals(string.handle)) 
+                ?? raise("couldn't find the elements offset in the native array struct");
+
+            // prettier-ignore
+            getter(Il2Cpp.Array.prototype, "elements", function (this: Il2Cpp.Array) {
+                return new Il2Cpp.Pointer(this.handle.add(offset), this.elementType);
+            }, lazy);
+
+            return this.elements;
+        }
+
+        /** Gets the size of the object encompassed by the current array. */
+        @lazy
+        get elementSize(): number {
+            return this.elementType.class.arrayElementSize;
+        }
+
+        /** Gets the type of the object encompassed by the current array. */
+        @lazy
+        get elementType(): Il2Cpp.Type {
+            return this.object.class.type.class.baseType!;
+        }
+
+        /** Gets the total number of elements in all the dimensions of the current array. */
+        @lazy
+        get length(): number {
+            return Il2Cpp.api.arrayGetLength(this);
+        }
+
+        /** Gets the encompassing object of the current array. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            return new Il2Cpp.Object(this);
+        }
+
+        /** Gets the element at the specified index of the current array. */
+        get(index: number): T {
+            if (index < 0 || index >= this.length) {
+                raise(`cannot get element at index ${index} as the array length is ${this.length}`);
+            }
+
+            return this.elements.get(index);
+        }
+
+        /** Sets the element at the specified index of the current array. */
+        set(index: number, value: T) {
+            if (index < 0 || index >= this.length) {
+                raise(`cannot set element at index ${index} as the array length is ${this.length}`);
+            }
+
+            this.elements.set(index, value);
+        }
+
+        /** */
+        toString(): string {
+            return this.isNull() ? "null" : `[${this.elements.read(this.length, 0)}]`;
+        }
+
+        /** Iterable. */
+        *[Symbol.iterator](): IterableIterator<T> {
+            for (let i = 0; i < this.length; i++) {
+                yield this.elements.get(i);
+            }
+        }
+    }
+
+    /** Creates a new empty array of the given length. */
+    export function array<T extends Il2Cpp.Field.Type>(klass: Il2Cpp.Class, length: number): Il2Cpp.Array<T>;
+
+    /** Creates a new array with the given elements. */
+    export function array<T extends Il2Cpp.Field.Type>(klass: Il2Cpp.Class, elements: T[]): Il2Cpp.Array<T>;
+
+    /** @internal */
+    export function array<T extends Il2Cpp.Field.Type>(klass: Il2Cpp.Class, lengthOrElements: number | T[]): Il2Cpp.Array<T> {
+        const length = typeof lengthOrElements == "number" ? lengthOrElements : lengthOrElements.length;
+        const array = new Il2Cpp.Array<T>(Il2Cpp.api.arrayNew(klass, length));
+
+        if (globalThis.Array.isArray(lengthOrElements)) {
+            array.elements.write(lengthOrElements);
+        }
+
+        return array;
+    }
+}
+
+```
+
+`src/il2cpp/structs/assembly.ts`:
+
+```ts
+namespace Il2Cpp {
+    @recycle
+    export class Assembly extends NativeStruct {
+        /** Gets the image of this assembly. */
+        get image(): Il2Cpp.Image {
+            let get = function (this: Il2Cpp.Assembly) {
+                return new Il2Cpp.Image(Il2Cpp.api.assemblyGetImage(this));
+            };
+
+            try {
+                Il2Cpp.api.assemblyGetImage;
+            } catch (_) {
+                get = function (this: Il2Cpp.Assembly) {
+                    // We need to get the System.Reflection.Module of the current assembly;
+                    // System.Reflection.Assembly::GetModulesInternal, for some reason,
+                    // throws a NullReferenceExceptionin Unity 5.3.8f1, so we must rely on
+                    // System.Type::get_Module instead.
+                    // Now we need to get any System.Type of this assembly.
+                    // We cannot use System.Reflection.Assembly::GetTypes because it may
+                    // return an empty array; hence we use System.Reflection.Assembly::GetType
+                    // to retrieve <Module>, a class/type that seems to be always present
+                    // (despite being excluded from System.Reflection.Assembly::GetTypes).
+                    return new Il2Cpp.Image(
+                        this.object
+                            .method<Il2Cpp.Object>("GetType", 1)
+                            .invoke(Il2Cpp.string("<Module>"))
+                            .method<Il2Cpp.Object>("get_Module")
+                            .invoke()
+                            .field<NativePointer>("_impl").value
+                    );
+                };
+            }
+
+            getter(Il2Cpp.Assembly.prototype, "image", get, lazy);
+
+            return this.image;
+        }
+
+        /** Gets the name of this assembly. */
+        @lazy
+        get name(): string {
+            return this.image.name.replace(".dll", "");
+        }
+
+        /** Gets the encompassing object of the current assembly. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            for (const _ of Il2Cpp.domain.object.method<Il2Cpp.Array<Il2Cpp.Object>>("GetAssemblies", 1).invoke(false)) {
+                if (_.field<NativePointer>("_mono_assembly").value.equals(this)) {
+                    return _;
+                }
+            }
+
+            raise("couldn't find the object of the native assembly struct");
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/class.ts`:
+
+```ts
+namespace Il2Cpp {
+    @recycle
+    export class Class extends NativeStruct {
+        /** Gets the actual size of the instance of the current class. */
+        get actualInstanceSize(): number {
+            const SystemString = Il2Cpp.corlib.class("System.String");
+
+            // prettier-ignore
+            const offset = SystemString.handle.offsetOf(_ => _.readInt() == SystemString.instanceSize - 2) 
+                ?? raise("couldn't find the actual instance size offset in the native class struct");
+
+            // prettier-ignore
+            getter(Il2Cpp.Class.prototype, "actualInstanceSize", function (this: Il2Cpp.Class) {
+                return this.handle.add(offset).readS32();
+            }, lazy);
+
+            return this.actualInstanceSize;
+        }
+
+        /** Gets the array class which encompass the current class. */
+        @lazy
+        get arrayClass(): Il2Cpp.Class {
+            return new Il2Cpp.Class(Il2Cpp.api.classGetArrayClass(this, 1));
+        }
+
+        /** Gets the size of the object encompassed by the current array class. */
+        @lazy
+        get arrayElementSize(): number {
+            return Il2Cpp.api.classGetArrayElementSize(this);
+        }
+
+        /** Gets the name of the assembly in which the current class is defined. */
+        @lazy
+        get assemblyName(): string {
+            return Il2Cpp.api.classGetAssemblyName(this).readUtf8String()!;
+        }
+
+        /** Gets the class that declares the current nested class. */
+        @lazy
+        get declaringClass(): Il2Cpp.Class | null {
+            return new Il2Cpp.Class(Il2Cpp.api.classGetDeclaringType(this)).asNullable();
+        }
+
+        /** Gets the encompassed type of this array, reference, pointer or enum type. */
+        @lazy
+        get baseType(): Il2Cpp.Type | null {
+            return new Il2Cpp.Type(Il2Cpp.api.classGetBaseType(this)).asNullable();
+        }
+
+        /** Gets the class of the object encompassed or referred to by the current array, pointer or reference class. */
+        @lazy
+        get elementClass(): Il2Cpp.Class | null {
+            return new Il2Cpp.Class(Il2Cpp.api.classGetElementClass(this)).asNullable();
+        }
+
+        /** Gets the fields of the current class. */
+        @lazy
+        get fields(): Il2Cpp.Field[] {
+            return readNativeIterator(_ => Il2Cpp.api.classGetFields(this, _)).map(_ => new Il2Cpp.Field(_));
+        }
+
+        /** Gets the flags of the current class. */
+        @lazy
+        get flags(): number {
+            return Il2Cpp.api.classGetFlags(this);
+        }
+
+        /** Gets the full name (namespace + name) of the current class. */
+        @lazy
+        get fullName(): string {
+            return this.namespace ? `${this.namespace}.${this.name}` : this.name;
+        }
+
+        /** Gets the generics parameters of this generic class. */
+        @lazy
+        get generics(): Il2Cpp.Class[] {
+            if (!this.isGeneric && !this.isInflated) {
+                return [];
+            }
+
+            const types = this.type.object.method<Il2Cpp.Array<Il2Cpp.Object>>("GetGenericArguments").invoke();
+            return globalThis.Array.from(types).map(_ => new Il2Cpp.Class(Il2Cpp.api.classFromObject(_)));
+        }
+
+        /** Determines whether the GC has tracking references to the current class instances. */
+        @lazy
+        get hasReferences(): boolean {
+            return !!Il2Cpp.api.classHasReferences(this);
+        }
+
+        /** Determines whether ther current class has a valid static constructor. */
+        @lazy
+        get hasStaticConstructor(): boolean {
+            const staticConstructor = this.tryMethod(".cctor");
+            return staticConstructor != null && !staticConstructor.virtualAddress.isNull();
+        }
+
+        /** Gets the image in which the current class is defined. */
+        @lazy
+        get image(): Il2Cpp.Image {
+            return new Il2Cpp.Image(Il2Cpp.api.classGetImage(this));
+        }
+
+        /** Gets the size of the instance of the current class. */
+        @lazy
+        get instanceSize(): number {
+            return Il2Cpp.api.classGetInstanceSize(this);
+        }
+
+        /** Determines whether the current class is abstract. */
+        @lazy
+        get isAbstract(): boolean {
+            return !!Il2Cpp.api.classIsAbstract(this);
+        }
+
+        /** Determines whether the current class is blittable. */
+        @lazy
+        get isBlittable(): boolean {
+            return !!Il2Cpp.api.classIsBlittable(this);
+        }
+
+        /** Determines whether the current class is an enumeration. */
+        @lazy
+        get isEnum(): boolean {
+            return !!Il2Cpp.api.classIsEnum(this);
+        }
+
+        /** Determines whether the current class is a generic one. */
+        @lazy
+        get isGeneric(): boolean {
+            return !!Il2Cpp.api.classIsGeneric(this);
+        }
+
+        /** Determines whether the current class is inflated. */
+        @lazy
+        get isInflated(): boolean {
+            return !!Il2Cpp.api.classIsInflated(this);
+        }
+
+        /** Determines whether the current class is an interface. */
+        @lazy
+        get isInterface(): boolean {
+            return !!Il2Cpp.api.classIsInterface(this);
+        }
+
+        /** Determines whether the current class is a value type. */
+        @lazy
+        get isValueType(): boolean {
+            return !!Il2Cpp.api.classIsValueType(this);
+        }
+
+        /** Gets the interfaces implemented or inherited by the current class. */
+        @lazy
+        get interfaces(): Il2Cpp.Class[] {
+            return readNativeIterator(_ => Il2Cpp.api.classGetInterfaces(this, _)).map(_ => new Il2Cpp.Class(_));
+        }
+
+        /** Gets the methods implemented by the current class. */
+        @lazy
+        get methods(): Il2Cpp.Method[] {
+            return readNativeIterator(_ => Il2Cpp.api.classGetMethods(this, _)).map(_ => new Il2Cpp.Method(_));
+        }
+
+        /** Gets the name of the current class. */
+        @lazy
+        get name(): string {
+            return Il2Cpp.api.classGetName(this).readUtf8String()!;
+        }
+
+        /** Gets the namespace of the current class. */
+        @lazy
+        get namespace(): string {
+            return Il2Cpp.api.classGetNamespace(this).readUtf8String()!;
+        }
+
+        /** Gets the classes nested inside the current class. */
+        @lazy
+        get nestedClasses(): Il2Cpp.Class[] {
+            return readNativeIterator(_ => Il2Cpp.api.classGetNestedClasses(this, _)).map(_ => new Il2Cpp.Class(_));
+        }
+
+        /** Gets the class from which the current class directly inherits. */
+        @lazy
+        get parent(): Il2Cpp.Class | null {
+            return new Il2Cpp.Class(Il2Cpp.api.classGetParent(this)).asNullable();
+        }
+
+        /** Gets the rank (number of dimensions) of the current array class. */
+        @lazy
+        get rank(): number {
+            let rank = 0;
+            const name = this.name;
+
+            for (let i = this.name.length - 1; i > 0; i--) {
+                const c = name[i];
+
+                if (c == "]") rank++;
+                else if (c == "[" || rank == 0) break;
+                else if (c == ",") rank++;
+                else break;
+            }
+
+            return rank;
+        }
+
+        /** Gets a pointer to the static fields of the current class. */
+        @lazy
+        get staticFieldsData(): NativePointer {
+            return Il2Cpp.api.classGetStaticFieldData(this);
+        }
+
+        /** Gets the size of the instance - as a value type - of the current class. */
+        @lazy
+        get valueTypeSize(): number {
+            return Il2Cpp.api.classGetValueTypeSize(this, NULL);
+        }
+
+        /** Gets the type of the current class. */
+        @lazy
+        get type(): Il2Cpp.Type {
+            return new Il2Cpp.Type(Il2Cpp.api.classGetType(this));
+        }
+
+        /** Allocates a new object of the current class. */
+        alloc(): Il2Cpp.Object {
+            return new Il2Cpp.Object(Il2Cpp.api.objectNew(this));
+        }
+
+        /** Gets the field identified by the given name. */
+        field<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> {
+            return this.tryField<T>(name) ?? raise(`couldn't find field ${name} in class ${this.type.name}`);
+        }
+
+        /** Builds a generic instance of the current generic class. */
+        inflate(...classes: Il2Cpp.Class[]): Il2Cpp.Class {
+            if (!this.isGeneric) {
+                raise(`cannot inflate class ${this.type.name} as it has no generic parameters`);
+            }
+
+            if (this.generics.length != classes.length) {
+                raise(`cannot inflate class ${this.type.name} as it needs ${this.generics.length} generic parameter(s), not ${classes.length}`);
+            }
+
+            const types = classes.map(_ => _.type.object);
+            const typeArray = Il2Cpp.array(Il2Cpp.corlib.class("System.Type"), types);
+
+            const inflatedType = this.type.object.method<Il2Cpp.Object>("MakeGenericType", 1).invoke(typeArray);
+            return new Il2Cpp.Class(Il2Cpp.api.classFromObject(inflatedType));
+        }
+
+        /** Calls the static constructor of the current class. */
+        initialize(): Il2Cpp.Class {
+            Il2Cpp.api.classInitialize(this);
+            return this;
+        }
+
+        /** Determines whether an instance of `other` class can be assigned to a variable of the current type. */
+        isAssignableFrom(other: Il2Cpp.Class): boolean {
+            return !!Il2Cpp.api.classIsAssignableFrom(this, other);
+        }
+
+        /** Determines whether the current class derives from `other` class. */
+        isSubclassOf(other: Il2Cpp.Class, checkInterfaces: boolean): boolean {
+            return !!Il2Cpp.api.classIsSubclassOf(this, other, +checkInterfaces);
+        }
+
+        /** Gets the method identified by the given name and parameter count. */
+        method<T extends Il2Cpp.Method.ReturnType>(name: string, parameterCount: number = -1): Il2Cpp.Method<T> {
+            return this.tryMethod<T>(name, parameterCount) ?? raise(`couldn't find method ${name} in class ${this.type.name}`);
+        }
+
+        /** Gets the nested class with the given name. */
+        nested(name: string): Il2Cpp.Class {
+            return this.tryNested(name) ?? raise(`couldn't find nested class ${name} in class ${this.type.name}`);
+        }
+
+        /** Allocates a new object of the current class and calls its default constructor. */
+        new(): Il2Cpp.Object {
+            const object = this.alloc();
+
+            const exceptionArray = Memory.alloc(Process.pointerSize);
+
+            Il2Cpp.api.objectInitialize(object, exceptionArray);
+
+            const exception = exceptionArray.readPointer();
+
+            if (!exception.isNull()) {
+                raise(new Il2Cpp.Object(exception).toString());
+            }
+
+            return object;
+        }
+
+        /** Gets the field with the given name. */
+        tryField<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> | null {
+            return new Il2Cpp.Field<T>(Il2Cpp.api.classGetFieldFromName(this, Memory.allocUtf8String(name))).asNullable();
+        }
+
+        /** Gets the method with the given name and parameter count. */
+        tryMethod<T extends Il2Cpp.Method.ReturnType>(name: string, parameterCount: number = -1): Il2Cpp.Method<T> | null {
+            return new Il2Cpp.Method<T>(Il2Cpp.api.classGetMethodFromName(this, Memory.allocUtf8String(name), parameterCount)).asNullable();
+        }
+
+        /** Gets the nested class with the given name. */
+        tryNested(name: string): Il2Cpp.Class | undefined {
+            return this.nestedClasses.find(_ => _.name == name);
+        }
+
+        /** */
+        toString(): string {
+            const inherited = [this.parent].concat(this.interfaces);
+
+            return `\
+// ${this.assemblyName}
+${this.isEnum ? `enum` : this.isValueType ? `struct` : this.isInterface ? `interface` : `class`} \
+${this.type.name}\
+${inherited ? ` : ${inherited.map(_ => _?.type.name).join(`, `)}` : ``}
+{
+    ${this.fields.join(`\n    `)}
+    ${this.methods.join(`\n    `)}
+}`;
+        }
+
+        /** Executes a callback for every defined class. */
+        static enumerate(block: (klass: Il2Cpp.Class) => void): void {
+            const callback = new NativeCallback(_ => block(new Il2Cpp.Class(_)), "void", ["pointer", "pointer"]);
+            return Il2Cpp.api.classForEach(callback, NULL);
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/delegate.ts`:
+
+```ts
+namespace Il2Cpp {
+    /** Creates a delegate object of the given delegate class. */
+    export function delegate<P extends Il2Cpp.Parameter.Type[], R extends Il2Cpp.Method.ReturnType>(
+        klass: Il2Cpp.Class,
+        block: (...args: P) => R
+    ): Il2Cpp.Object {
+        const SystemDelegate = Il2Cpp.corlib.class("System.Delegate");
+        const SystemMulticastDelegate = Il2Cpp.corlib.class("System.MulticastDelegate");
+
+        if (!SystemDelegate.isAssignableFrom(klass)) {
+            raise(`cannot create a delegate for ${klass.type.name} as it's a non-delegate class`);
+        }
+
+        if (klass.equals(SystemDelegate) || klass.equals(SystemMulticastDelegate)) {
+            raise(`cannot create a delegate for neither ${SystemDelegate.type.name} nor ${SystemMulticastDelegate.type.name}, use a subclass instead`);
+        }
+
+        const delegate = klass.alloc();
+        const key = delegate.handle.toString();
+
+        const Invoke = delegate.tryMethod("Invoke") ?? raise(`cannot create a delegate for ${klass.type.name}, there is no Invoke method`);
+        delegate.method(".ctor").invoke(delegate, Invoke.handle);
+
+        const callback = Invoke.wrap(block as any);
+
+        delegate.field("method_ptr").value = callback;
+        delegate.field("invoke_impl").value = callback;
+        _callbacksToKeepAlive[key] = callback;
+
+        return delegate;
+    }
+
+    /** @internal Used to prevent eager garbage collection against NativeCallbacks. */
+    export const _callbacksToKeepAlive: Record<string, NativeCallback<"void", []> | undefined> = {};
+}
+
+```
+
+`src/il2cpp/structs/domain.ts`:
+
+```ts
+namespace Il2Cpp {
+    @recycle
+    export class Domain extends NativeStruct {
+        /** Gets the assemblies that have been loaded into the execution context of the application domain. */
+        @lazy
+        get assemblies(): Il2Cpp.Assembly[] {
+            let handles = readNativeList(_ => Il2Cpp.api.domainGetAssemblies(this, _));
+
+            if (handles.length == 0) {
+                const assemblyObjects = this.object.method<Il2Cpp.Array<Il2Cpp.Object>>("GetAssemblies").overload().invoke();
+                handles = globalThis.Array.from(assemblyObjects).map(_ => _.field<NativePointer>("_mono_assembly").value);
+            }
+
+            return handles.map(_ => new Il2Cpp.Assembly(_));
+        }
+
+        /** Gets the encompassing object of the application domain. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            return Il2Cpp.corlib.class("System.AppDomain").method<Il2Cpp.Object>("get_CurrentDomain").invoke();
+        }
+
+        /** Opens and loads the assembly with the given name. */
+        assembly(name: string): Il2Cpp.Assembly {
+            return this.tryAssembly(name) ?? raise(`couldn't find assembly ${name}`);
+        }
+
+        /** Attached a new thread to the application domain. */
+        attach(): Il2Cpp.Thread {
+            return new Il2Cpp.Thread(Il2Cpp.api.threadAttach(this));
+        }
+
+        /** Opens and loads the assembly with the given name. */
+        tryAssembly(name: string): Il2Cpp.Assembly | null {
+            return new Il2Cpp.Assembly(Il2Cpp.api.domainGetAssemblyFromName(this, Memory.allocUtf8String(name))).asNullable();
+        }
+    }
+
+    /** Gets the application domain. */
+    export declare const domain: Il2Cpp.Domain;
+    // prettier-ignore
+    getter(Il2Cpp, "domain", () => {
+        return new Il2Cpp.Domain(Il2Cpp.api.domainGet());
+    }, lazy);
+}
+
+```
+
+`src/il2cpp/structs/field.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Field<T extends Il2Cpp.Field.Type = Il2Cpp.Field.Type> extends NativeStruct {
+        /** Gets the class in which this field is defined. */
+        @lazy
+        get class(): Il2Cpp.Class {
+            return new Il2Cpp.Class(Il2Cpp.api.fieldGetClass(this));
+        }
+
+        /** Gets the flags of the current field. */
+        @lazy
+        get flags(): number {
+            return Il2Cpp.api.fieldGetFlags(this);
+        }
+
+        /** Determines whether this field value is known at compile time. */
+        @lazy
+        get isLiteral(): boolean {
+            return (this.flags & Il2Cpp.Field.Attributes.Literal) != 0;
+        }
+
+        /** Determines whether this field is static. */
+        @lazy
+        get isStatic(): boolean {
+            return (this.flags & Il2Cpp.Field.Attributes.Static) != 0;
+        }
+
+        /** Determines whether this field is thread static. */
+        @lazy
+        get isThreadStatic(): boolean {
+            const offset = Il2Cpp.corlib.class("System.AppDomain").field("type_resolve_in_progress").offset;
+
+            // prettier-ignore
+            getter(Il2Cpp.Field.prototype, "isThreadStatic", function (this: Il2Cpp.Field) {
+                return this.offset == offset;
+            }, lazy);
+
+            return this.isThreadStatic;
+        }
+
+        /** Gets the access modifier of this field. */
+        @lazy
+        get modifier(): string | undefined {
+            switch (this.flags & Il2Cpp.Field.Attributes.FieldAccessMask) {
+                case Il2Cpp.Field.Attributes.Private:
+                    return "private";
+                case Il2Cpp.Field.Attributes.FamilyAndAssembly:
+                    return "private protected";
+                case Il2Cpp.Field.Attributes.Assembly:
+                    return "internal";
+                case Il2Cpp.Field.Attributes.Family:
+                    return "protected";
+                case Il2Cpp.Field.Attributes.FamilyOrAssembly:
+                    return "protected internal";
+                case Il2Cpp.Field.Attributes.Public:
+                    return "public";
+            }
+        }
+
+        /** Gets the name of this field. */
+        @lazy
+        get name(): string {
+            return Il2Cpp.api.fieldGetName(this).readUtf8String()!;
+        }
+
+        /** Gets the offset of this field, calculated as the difference with its owner virtual address. */
+        @lazy
+        get offset(): number {
+            return Il2Cpp.api.fieldGetOffset(this);
+        }
+
+        /** Gets the type of this field. */
+        @lazy
+        get type(): Il2Cpp.Type {
+            return new Il2Cpp.Type(Il2Cpp.api.fieldGetType(this));
+        }
+
+        /** Gets the value of this field. */
+        get value(): T {
+            if (!this.isStatic) {
+                raise(`cannot access instance field ${this.class.type.name}::${this.name} from a class, use an object instead`);
+            }
+
+            const handle = Memory.alloc(Process.pointerSize);
+            Il2Cpp.api.fieldGetStaticValue(this.handle, handle);
+
+            return read(handle, this.type) as T;
+        }
+
+        /** Sets the value of this field. Thread static or literal values cannot be altered yet. */
+        set value(value: T) {
+            if (!this.isStatic) {
+                raise(`cannot access instance field ${this.class.type.name}::${this.name} from a class, use an object instead`);
+            }
+
+            if (this.isThreadStatic || this.isLiteral) {
+                raise(`cannot write the value of field ${this.name} as it's thread static or literal`);
+            }
+
+            const handle = Memory.alloc(Process.pointerSize);
+            write(handle, value, this.type);
+
+            Il2Cpp.api.fieldSetStaticValue(this.handle, handle);
+        }
+
+        /** */
+        toString(): string {
+            return `\
+${this.isThreadStatic ? `[ThreadStatic] ` : ``}\
+${this.isStatic ? `static ` : ``}\
+${this.type.name} \
+${this.name}\
+${this.isLiteral ? ` = ${this.type.class.isEnum ? read((this.value as Il2Cpp.ValueType).handle, this.type.class.baseType!) : this.value}` : ``};\
+${this.isThreadStatic || this.isLiteral ? `` : ` // 0x${this.offset.toString(16)}`}`;
+        }
+
+        /** @internal */
+        withHolder(instance: Il2Cpp.Object | Il2Cpp.ValueType): Il2Cpp.Field<T> {
+            if (this.isStatic) {
+                raise(`cannot access static field ${this.class.type.name}::${this.name} from an object, use a class instead`);
+            }
+
+            let valueHandle = instance.handle.add(this.offset);
+            if (instance instanceof Il2Cpp.ValueType) {
+                valueHandle = valueHandle.sub(Il2Cpp.Object.headerSize);
+            }
+
+            return new Proxy(this, {
+                get(target: Il2Cpp.Field<T>, property: keyof Il2Cpp.Field): any {
+                    if (property == "value") {
+                        return read(valueHandle, target.type);
+                    }
+                    return Reflect.get(target, property);
+                },
+
+                set(target: Il2Cpp.Field<T>, property: keyof Il2Cpp.Field, value: any): boolean {
+                    if (property == "value") {
+                        write(valueHandle, value, target.type);
+                        return true;
+                    }
+
+                    return Reflect.set(target, property, value);
+                }
+            });
+        }
+    }
+
+    export namespace Field {
+        export type Type = boolean | number | Int64 | UInt64 | NativePointer | Il2Cpp.Pointer | Il2Cpp.ValueType | Il2Cpp.Object | Il2Cpp.String | Il2Cpp.Array;
+
+        export const enum Attributes {
+            FieldAccessMask = 0x0007,
+            PrivateScope = 0x0000,
+            Private = 0x0001,
+            FamilyAndAssembly = 0x0002,
+            Assembly = 0x0003,
+            Family = 0x0004,
+            FamilyOrAssembly = 0x0005,
+            Public = 0x0006,
+            Static = 0x0010,
+            InitOnly = 0x0020,
+            Literal = 0x0040,
+            NotSerialized = 0x0080,
+            SpecialName = 0x0200,
+            PinvokeImpl = 0x2000,
+            ReservedMask = 0x9500,
+            RTSpecialName = 0x0400,
+            HasFieldMarshal = 0x1000,
+            HasDefault = 0x8000,
+            HasFieldRVA = 0x0100
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/gc-handle.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class GCHandle {
+        /** @internal */
+        constructor(readonly handle: number) {}
+
+        /** Gets the object associated to this handle. */
+        get target(): Il2Cpp.Object | null {
+            return new Il2Cpp.Object(Il2Cpp.api.gcHandleGetTarget(this.handle)).asNullable();
+        }
+
+        /** Frees this handle. */
+        free(): void {
+            return Il2Cpp.api.gcHandleFree(this.handle);
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/image.ts`:
+
+```ts
+namespace Il2Cpp {
+    @recycle
+    export class Image extends NativeStruct {
+        /** Gets the assembly in which the current image is defined. */
+        @lazy
+        get assembly(): Il2Cpp.Assembly {
+            return new Il2Cpp.Assembly(Il2Cpp.api.imageGetAssembly(this));
+        }
+
+        /** Gets the amount of classes defined in this image. */
+        @lazy
+        get classCount(): number {
+            return Il2Cpp.api.imageGetClassCount(this);
+        }
+
+        /** Gets the classes defined in this image. */
+        @lazy
+        get classes(): Il2Cpp.Class[] {
+            if (Il2Cpp.unityVersionIsBelow201830) {
+                const types = this.assembly.object.method<Il2Cpp.Array<Il2Cpp.Object>>("GetTypes").invoke(false);
+                // In Unity 5.3.8f1, getting System.Reflection.Emit.OpCodes type name
+                // without iterating all the classes first somehow blows things up at
+                // app startup, hence the `Array.from`.
+                return globalThis.Array.from(types).map(_ => new Il2Cpp.Class(Il2Cpp.api.classFromObject(_)));
+            } else {
+                return globalThis.Array.from(globalThis.Array(this.classCount), (_, i) => new Il2Cpp.Class(Il2Cpp.api.imageGetClass(this, i)));
+            }
+        }
+
+        /** Gets the name of this image. */
+        @lazy
+        get name(): string {
+            return Il2Cpp.api.imageGetName(this).readUtf8String()!;
+        }
+
+        /** Gets the class with the specified name defined in this image. */
+        class(name: string): Il2Cpp.Class {
+            return this.tryClass(name) ?? raise(`couldn't find class ${name} in assembly ${this.name}`);
+        }
+
+        /** Gets the class with the specified name defined in this image. */
+        tryClass(name: string): Il2Cpp.Class | null {
+            const dotIndex = name.lastIndexOf(".");
+            const classNamespace = Memory.allocUtf8String(dotIndex == -1 ? "" : name.slice(0, dotIndex));
+            const className = Memory.allocUtf8String(name.slice(dotIndex + 1));
+
+            return new Il2Cpp.Class(Il2Cpp.api.classFromName(this, classNamespace, className)).asNullable();
+        }
+    }
+
+    /** Gets the COR library. */
+    export declare const corlib: Il2Cpp.Image;
+    // prettier-ignore
+    getter(Il2Cpp, "corlib", () => {
+        return new Il2Cpp.Image(Il2Cpp.api.getCorlib());
+    }, lazy);
+}
+
+```
+
+`src/il2cpp/structs/memory-snapshot.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class MemorySnapshot extends NativeStruct {
+        /** Captures a memory snapshot. */
+        static capture(): Il2Cpp.MemorySnapshot {
+            return new Il2Cpp.MemorySnapshot();
+        }
+
+        /** Creates a memory snapshot with the given handle. */
+        constructor(handle: NativePointer = Il2Cpp.api.memorySnapshotCapture()) {
+            super(handle);
+        }
+
+        /** Gets any initialized class. */
+        @lazy
+        get classes(): Il2Cpp.Class[] {
+            return readNativeIterator(_ => Il2Cpp.api.memorySnapshotGetClasses(this, _)).map(_ => new Il2Cpp.Class(_));
+        }
+
+        /** Gets the objects tracked by this memory snapshot. */
+        @lazy
+        get objects(): Il2Cpp.Object[] {
+            // prettier-ignore
+            return readNativeList(_ => Il2Cpp.api.memorySnapshotGetObjects(this, _)).filter(_ => !_.isNull()).map(_ => new Il2Cpp.Object(_));
+        }
+
+        /** Frees this memory snapshot. */
+        free(): void {
+            Il2Cpp.api.memorySnapshotFree(this);
+        }
+    }
+
+    /** */
+    export function memorySnapshot<T>(block: (memorySnapshot: Omit<Il2Cpp.MemorySnapshot, "free">) => T): T {
+        const memorySnapshot = Il2Cpp.MemorySnapshot.capture();
+        const result = block(memorySnapshot);
+        memorySnapshot.free();
+        return result;
+    }
+}
+
+```
+
+`src/il2cpp/structs/method.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Method<T extends Il2Cpp.Method.ReturnType = Il2Cpp.Method.ReturnType> extends NativeStruct {
+        /** Gets the class in which this method is defined. */
+        @lazy
+        get class(): Il2Cpp.Class {
+            return new Il2Cpp.Class(Il2Cpp.api.methodGetClass(this));
+        }
+
+        /** Gets the flags of the current method. */
+        @lazy
+        get flags(): number {
+            return Il2Cpp.api.methodGetFlags(this, NULL);
+        }
+
+        /** Gets the implementation flags of the current method. */
+        @lazy
+        get implementationFlags(): number {
+            const implementationFlagsPointer = Memory.alloc(Process.pointerSize);
+            Il2Cpp.api.methodGetFlags(this, implementationFlagsPointer);
+
+            return implementationFlagsPointer.readU32();
+        }
+
+        /** */
+        @lazy
+        get fridaSignature(): NativeCallbackArgumentType[] {
+            const types: NativeCallbackArgumentType[] = [];
+
+            for (const parameter of this.parameters) {
+                types.push(parameter.type.fridaAlias);
+            }
+
+            if (!this.isStatic || Il2Cpp.unityVersionIsBelow201830) {
+                types.unshift("pointer");
+            }
+
+            if (this.isInflated) {
+                types.push("pointer");
+            }
+
+            return types;
+        }
+
+        /** Gets the generic parameters of this generic method. */
+        @lazy
+        get generics(): Il2Cpp.Class[] {
+            if (!this.isGeneric && !this.isInflated) {
+                return [];
+            }
+
+            const types = this.object.method<Il2Cpp.Array<Il2Cpp.Object>>("GetGenericArguments").invoke();
+            return globalThis.Array.from(types).map(_ => new Il2Cpp.Class(Il2Cpp.api.classFromObject(_)));
+        }
+
+        /** Determines whether this method is external. */
+        @lazy
+        get isExternal(): boolean {
+            return (this.implementationFlags & Il2Cpp.Method.ImplementationAttribute.InternalCall) != 0;
+        }
+
+        /** Determines whether this method is generic. */
+        @lazy
+        get isGeneric(): boolean {
+            return !!Il2Cpp.api.methodIsGeneric(this);
+        }
+
+        /** Determines whether this method is inflated (generic with a concrete type parameter). */
+        @lazy
+        get isInflated(): boolean {
+            return !!Il2Cpp.api.methodIsInflated(this);
+        }
+
+        /** Determines whether this method is static. */
+        @lazy
+        get isStatic(): boolean {
+            return !Il2Cpp.api.methodIsInstance(this);
+        }
+
+        /** Determines whether this method is synchronized. */
+        @lazy
+        get isSynchronized(): boolean {
+            return (this.implementationFlags & Il2Cpp.Method.ImplementationAttribute.Synchronized) != 0;
+        }
+
+        /** Gets the access modifier of this method. */
+        @lazy
+        get modifier(): string | undefined {
+            switch (this.flags & Il2Cpp.Method.Attributes.MemberAccessMask) {
+                case Il2Cpp.Method.Attributes.Private:
+                    return "private";
+                case Il2Cpp.Method.Attributes.FamilyAndAssembly:
+                    return "private protected";
+                case Il2Cpp.Method.Attributes.Assembly:
+                    return "internal";
+                case Il2Cpp.Method.Attributes.Family:
+                    return "protected";
+                case Il2Cpp.Method.Attributes.FamilyOrAssembly:
+                    return "protected internal";
+                case Il2Cpp.Method.Attributes.Public:
+                    return "public";
+            }
+        }
+
+        /** Gets the name of this method. */
+        @lazy
+        get name(): string {
+            return Il2Cpp.api.methodGetName(this).readUtf8String()!;
+        }
+
+        /** @internal */
+        @lazy
+        get nativeFunction(): NativeFunction<any, any> {
+            return new NativeFunction(this.virtualAddress, this.returnType.fridaAlias, this.fridaSignature as NativeFunctionArgumentType[]);
+        }
+
+        /** Gets the encompassing object of the current method. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            return new Il2Cpp.Object(Il2Cpp.api.methodGetObject(this, NULL));
+        }
+
+        /** Gets the amount of parameters of this method. */
+        @lazy
+        get parameterCount(): number {
+            return Il2Cpp.api.methodGetParameterCount(this);
+        }
+
+        /** Gets the parameters of this method. */
+        @lazy
+        get parameters(): Il2Cpp.Parameter[] {
+            return globalThis.Array.from(globalThis.Array(this.parameterCount), (_, i) => {
+                const parameterName = Il2Cpp.api.methodGetParameterName(this, i).readUtf8String()!;
+                const parameterType = Il2Cpp.api.methodGetParameterType(this, i);
+                return new Il2Cpp.Parameter(parameterName, i, new Il2Cpp.Type(parameterType));
+            });
+        }
+
+        /** Gets the relative virtual address (RVA) of this method. */
+        @lazy
+        get relativeVirtualAddress(): NativePointer {
+            return this.virtualAddress.sub(Il2Cpp.module.base);
+        }
+
+        /** Gets the return type of this method. */
+        @lazy
+        get returnType(): Il2Cpp.Type {
+            return new Il2Cpp.Type(Il2Cpp.api.methodGetReturnType(this));
+        }
+
+        /** Gets the virtual address (VA) to this method. */
+        get virtualAddress(): NativePointer {
+            const FilterTypeName = Il2Cpp.corlib.class("System.Reflection.Module").initialize().field<Il2Cpp.Object>("FilterTypeName").value;
+            const FilterTypeNameMethodPointer = FilterTypeName.field<NativePointer>("method_ptr").value;
+            const FilterTypeNameMethod = FilterTypeName.field<NativePointer>("method").value;
+
+            // prettier-ignore
+            const offset = FilterTypeNameMethod.offsetOf(_ => _.readPointer().equals(FilterTypeNameMethodPointer)) 
+                ?? raise("couldn't find the virtual address offset in the native method struct");
+
+            // prettier-ignore
+            getter(Il2Cpp.Method.prototype, "virtualAddress", function (this: Il2Cpp.Method) {
+                return this.handle.add(offset).readPointer();
+            }, lazy);
+
+            // In Unity 2017.4.40f1 (don't know about others), Il2Cpp.Class::initialize
+            // somehow triggers a nasty bug during early instrumentation, so that we aren't
+            // able to obtain the offset to get the virtual address of a method when the script
+            // is reloaded.
+            // A workaround consists in manually re-invoking the static constructor.
+            Il2Cpp.corlib.class("System.Reflection.Module").method(".cctor").invoke();
+
+            return this.virtualAddress;
+        }
+
+        /** Replaces the body of this method. */
+        set implementation(block: (this: Il2Cpp.Class | Il2Cpp.Object, ...parameters: any[]) => T) {
+            try {
+                Interceptor.replace(this.virtualAddress, this.wrap(block));
+            } catch (e: any) {
+                switch (e.message) {
+                    case "access violation accessing 0x0":
+                        raise(`couldn't set implementation for method ${this.name} as it has a NULL virtual address`);
+                    case /unable to intercept function at \w+; please file a bug/.exec(e.message)?.input:
+                        warn(`couldn't set implementation for method ${this.name} as it may be a thunk`);
+                        break;
+                    case "already replaced this function":
+                        warn(`couldn't set implementation for method ${this.name} as it has already been replaced by a thunk`);
+                        break;
+                    default:
+                        throw e;
+                }
+            }
+        }
+
+        /** Creates a generic instance of the current generic method. */
+        inflate<R extends Il2Cpp.Method.ReturnType = T>(...classes: Il2Cpp.Class[]): Il2Cpp.Method<R> {
+            if (!this.isGeneric) {
+                raise(`cannot inflate method ${this.name} as it has no generic parameters`);
+            }
+
+            if (this.generics.length != classes.length) {
+                raise(`cannot inflate method ${this.name} as it needs ${this.generics.length} generic parameter(s), not ${classes.length}`);
+            }
+
+            const types = classes.map(_ => _.type.object);
+            const typeArray = Il2Cpp.array(Il2Cpp.corlib.class("System.Type"), types);
+
+            const inflatedMethodObject = this.object.method<Il2Cpp.Object>("MakeGenericMethod", 1).invoke(typeArray);
+            return new Il2Cpp.Method(inflatedMethodObject.field<NativePointer>("mhandle").value);
+        }
+
+        /** Invokes this method. */
+        invoke(...parameters: Il2Cpp.Parameter.Type[]): T {
+            if (!this.isStatic) {
+                raise(`cannot invoke non-static method ${this.name} as it must be invoked throught a Il2Cpp.Object, not a Il2Cpp.Class`);
+            }
+            return this.invokeRaw(NULL, ...parameters);
+        }
+
+        /** @internal */
+        invokeRaw(instance: NativePointerValue, ...parameters: Il2Cpp.Parameter.Type[]): T {
+            const allocatedParameters = parameters.map(toFridaValue);
+
+            if (!this.isStatic || Il2Cpp.unityVersionIsBelow201830) {
+                allocatedParameters.unshift(instance);
+            }
+
+            if (this.isInflated) {
+                allocatedParameters.push(this.handle);
+            }
+
+            try {
+                const returnValue = this.nativeFunction(...allocatedParameters);
+                return fromFridaValue(returnValue, this.returnType) as T;
+            } catch (e: any) {
+                if (e == null) {
+                    raise("an unexpected native invocation exception occurred, this is due to parameter types mismatch");
+                }
+
+                switch (e.message) {
+                    case "bad argument count":
+                        raise(`couldn't invoke method ${this.name} as it needs ${this.parameterCount} parameter(s), not ${parameters.length}`);
+                    case "expected a pointer":
+                    case "expected number":
+                    case "expected array with fields":
+                        raise(`couldn't invoke method ${this.name} using incorrect parameter types`);
+                }
+
+                throw e;
+            }
+        }
+
+        /** Gets the overloaded method with the given parameter types. */
+        overload(...parameterTypes: string[]): Il2Cpp.Method<T> {
+            const result = this.tryOverload<T>(...parameterTypes);
+
+            if (result != undefined) return result;
+
+            raise(`couldn't find overloaded method ${this.name}(${parameterTypes})`);
+        }
+
+        /** Gets the parameter with the given name. */
+        parameter(name: string): Il2Cpp.Parameter {
+            return this.tryParameter(name) ?? raise(`couldn't find parameter ${name} in method ${this.name}`);
+        }
+
+        /** Restore the original method implementation. */
+        revert(): void {
+            Interceptor.revert(this.virtualAddress);
+            Interceptor.flush();
+        }
+
+        /** Gets the overloaded method with the given parameter types. */
+        tryOverload<U extends Il2Cpp.Method.ReturnType = T>(...parameterTypes: string[]): Il2Cpp.Method<U> | undefined {
+            return this.class.methods.find(method => {
+                return (
+                    method.name == this.name &&
+                    method.parameterCount == parameterTypes.length &&
+                    method.parameters.every((e, i) => e.type.name == parameterTypes[i])
+                );
+            }) as Il2Cpp.Method<U> | undefined;
+        }
+
+        /** Gets the parameter with the given name. */
+        tryParameter(name: string): Il2Cpp.Parameter | undefined {
+            return this.parameters.find(_ => _.name == name);
+        }
+
+        /** */
+        toString(): string {
+            return `\
+${this.isStatic ? `static ` : ``}\
+${this.returnType.name} \
+${this.name}\
+(${this.parameters.join(`, `)});\
+${this.virtualAddress.isNull() ? `` : ` // 0x${this.relativeVirtualAddress.toString(16).padStart(8, `0`)}`}`;
+        }
+
+        /** @internal */
+        withHolder(instance: Il2Cpp.Object): Il2Cpp.Method<T> {
+            if (this.isStatic) {
+                raise(`cannot access static method ${this.class.type.name}::${this.name} from an object, use a class instead`);
+            }
+
+            return new Proxy(this, {
+                get(target: Il2Cpp.Method<T>, property: keyof Il2Cpp.Method<T>): any {
+                    switch (property) {
+                        case "invoke":
+                            return target.invokeRaw.bind(target, instance.handle);
+                        case "inflate":
+                        case "overload":
+                        case "tryOverload":
+                            return function (...args: any[]) {
+                                return target[property](...args)?.withHolder(instance);
+                            };
+                    }
+
+                    return Reflect.get(target, property);
+                }
+            });
+        }
+
+        /** @internal */
+        wrap(block: (this: Il2Cpp.Class | Il2Cpp.Object, ...parameters: any[]) => T): NativeCallback<any, any> {
+            const startIndex = +!this.isStatic | +Il2Cpp.unityVersionIsBelow201830;
+            // prettier-ignore
+            return new NativeCallback((...args: any[]): any => {
+                const thisObject = this.isStatic ? this.class : new Il2Cpp.Object(args[0]);
+                const parameters = this.parameters.map((e, i) => fromFridaValue(args[i + startIndex], e.type));
+                const result = block.call(thisObject, ...parameters) as any;
+                return toFridaValue(result);
+            }, this.returnType.fridaAlias, this.fridaSignature);
+        }
+    }
+
+    export namespace Method {
+        export type ReturnType = void | Il2Cpp.Field.Type;
+
+        export const enum Attributes {
+            MemberAccessMask = 0x0007,
+            PrivateScope = 0x0000,
+            Private = 0x0001,
+            FamilyAndAssembly = 0x0002,
+            Assembly = 0x0003,
+            Family = 0x0004,
+            FamilyOrAssembly = 0x0005,
+            Public = 0x0006,
+            Static = 0x0010,
+            Final = 0x0020,
+            Virtual = 0x0040,
+            HideBySig = 0x0080,
+            CheckAccessOnOverride = 0x0200,
+            VtableLayoutMask = 0x0100,
+            ReuseSlot = 0x0000,
+            NewSlot = 0x0100,
+            Abstract = 0x0400,
+            SpecialName = 0x0800,
+            PinvokeImpl = 0x2000,
+            UnmanagedExport = 0x0008,
+            RTSpecialName = 0x1000,
+            ReservedMask = 0xd000,
+            HasSecurity = 0x4000,
+            RequireSecObject = 0x8000
+        }
+
+        export const enum ImplementationAttribute {
+            CodeTypeMask = 0x0003,
+            IntermediateLanguage = 0x0000,
+            Native = 0x0001,
+            OptimizedIntermediateLanguage = 0x0002,
+            Runtime = 0x0003,
+            ManagedMask = 0x0004,
+            Unmanaged = 0x0004,
+            Managed = 0x0000,
+            ForwardRef = 0x0010,
+            PreserveSig = 0x0080,
+            InternalCall = 0x1000,
+            Synchronized = 0x0020,
+            NoInlining = 0x0008,
+            AggressiveInlining = 0x0100,
+            NoOptimization = 0x0040,
+            SecurityMitigations = 0x0400,
+            MaxMethodImplVal = 0xffff
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/object.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Object extends NativeStruct {
+        /** Gets the Il2CppObject struct size, possibly equal to `Process.pointerSize * 2`. */
+        @lazy
+        static get headerSize(): number {
+            return Il2Cpp.corlib.class("System.Object").instanceSize;
+        }
+
+        /** Gets the class of this object. */
+        @lazy
+        get class(): Il2Cpp.Class {
+            return new Il2Cpp.Class(Il2Cpp.api.objectGetClass(this));
+        }
+
+        /** Gets the size of the current object. */
+        @lazy
+        get size(): number {
+            return Il2Cpp.api.objectGetSize(this);
+        }
+
+        /** Acquires an exclusive lock on the current object. */
+        enter(): void {
+            return Il2Cpp.api.monitorEnter(this);
+        }
+
+        /** Release an exclusive lock on the current object. */
+        exit(): void {
+            return Il2Cpp.api.monitorExit(this);
+        }
+
+        /** Gets the field with the given name. */
+        field<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> {
+            return this.class.field<T>(name).withHolder(this);
+        }
+
+        /** Gets the method with the given name. */
+        method<T extends Il2Cpp.Method.ReturnType>(name: string, parameterCount: number = -1): Il2Cpp.Method<T> {
+            return this.class.method<T>(name, parameterCount).withHolder(this);
+        }
+
+        /** Notifies a thread in the waiting queue of a change in the locked object's state. */
+        pulse(): void {
+            return Il2Cpp.api.monitorPulse(this);
+        }
+
+        /** Notifies all waiting threads of a change in the object's state. */
+        pulseAll(): void {
+            return Il2Cpp.api.monitorPulseAll(this);
+        }
+
+        /** Creates a reference to this object. */
+        ref(pin: boolean): Il2Cpp.GCHandle {
+            return new Il2Cpp.GCHandle(Il2Cpp.api.gcHandleNew(this, +pin));
+        }
+
+        /** Gets the correct virtual method from the given virtual method. */
+        virtualMethod<T extends Il2Cpp.Method.ReturnType>(method: Il2Cpp.Method): Il2Cpp.Method<T> {
+            return new Il2Cpp.Method<T>(Il2Cpp.api.objectGetVirtualMethod(this, method)).withHolder(this);
+        }
+
+        /** Attempts to acquire an exclusive lock on the current object. */
+        tryEnter(timeout: number): boolean {
+            return !!Il2Cpp.api.monitorTryEnter(this, timeout);
+        }
+
+        /** Gets the field with the given name. */
+        tryField<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> | undefined {
+            return this.class.tryField<T>(name)?.withHolder(this);
+        }
+
+        /** Gets the field with the given name. */
+        tryMethod<T extends Il2Cpp.Method.ReturnType>(name: string, parameterCount: number = -1): Il2Cpp.Method<T> | undefined {
+            return this.class.tryMethod<T>(name, parameterCount)?.withHolder(this);
+        }
+
+        /** Releases the lock on an object and attempts to block the current thread until it reacquires the lock. */
+        tryWait(timeout: number): boolean {
+            return !!Il2Cpp.api.monitorTryWait(this, timeout);
+        }
+
+        /** */
+        toString(): string {
+            return this.isNull() ? "null" : this.method<Il2Cpp.String>("ToString").invoke().content ?? "null";
+        }
+
+        /** Unboxes the value type out of this object. */
+        unbox(): Il2Cpp.ValueType {
+            return new Il2Cpp.ValueType(Il2Cpp.api.objectUnbox(this), this.class.type);
+        }
+
+        /** Releases the lock on an object and blocks the current thread until it reacquires the lock. */
+        wait(): void {
+            return Il2Cpp.api.monitorWait(this);
+        }
+
+        /** Creates a weak reference to this object. */
+        weakRef(trackResurrection: boolean): Il2Cpp.GCHandle {
+            return new Il2Cpp.GCHandle(Il2Cpp.api.gcHandleNewWeakRef(this, +trackResurrection));
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/parameter.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Parameter {
+        /** Name of this parameter. */
+        readonly name: string;
+
+        /** Position of this parameter. */
+        readonly position: number;
+
+        /** Type of this parameter. */
+        readonly type: Il2Cpp.Type;
+
+        constructor(name: string, position: number, type: Il2Cpp.Type) {
+            this.name = name;
+            this.position = position;
+            this.type = type;
+        }
+
+        /** */
+        toString(): string {
+            return `${this.type.name} ${this.name}`;
+        }
+    }
+
+    export namespace Parameter {
+        export type Type = Il2Cpp.Field.Type | Il2Cpp.Reference;
+    }
+}
+
+```
+
+`src/il2cpp/structs/pointer.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Pointer<T extends Il2Cpp.Field.Type = Il2Cpp.Field.Type> extends NativeStruct {
+        constructor(handle: NativePointer, readonly type: Il2Cpp.Type) {
+            super(handle);
+        }
+
+        /** Gets the element at the given index. */
+        get(index: number): T {
+            return read(this.handle.add(index * this.type.class.arrayElementSize), this.type) as T;
+        }
+
+        /** Reads the given amount of elements starting at the given offset. */
+        read(length: number, offset: number = 0): T[] {
+            const values = new globalThis.Array<T>(length);
+
+            for (let i = 0; i < length; i++) {
+                values[i] = this.get(i + offset);
+            }
+
+            return values;
+        }
+
+        /** Sets the given element at the given index */
+        set(index: number, value: T): void {
+            write(this.handle.add(index * this.type.class.arrayElementSize), value, this.type);
+        }
+
+        /** */
+        toString(): string {
+            return this.handle.toString();
+        }
+
+        /** Writes the given elements starting at the given index. */
+        write(values: T[], offset: number = 0): void {
+            for (let i = 0; i < values.length; i++) {
+                this.set(i + offset, values[i]);
+            }
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/reference.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Reference<T extends Il2Cpp.Field.Type = Il2Cpp.Field.Type> extends NativeStruct {
+        constructor(handle: NativePointer, readonly type: Il2Cpp.Type) {
+            super(handle);
+        }
+
+        /** Gets the element referenced by the current reference. */
+        get value(): T {
+            return read(this.handle, this.type) as T;
+        }
+
+        /** Sets the element referenced by the current reference. */
+        set value(value: T) {
+            write(this.handle, value, this.type);
+        }
+
+        /** */
+        toString(): string {
+            return this.isNull() ? "null" : `->${this.value}`;
+        }
+    }
+
+    export function reference<T extends number | NativePointer>(value: T, type: Il2Cpp.Type): Il2Cpp.Reference<T>;
+
+    export function reference<T extends Exclude<Il2Cpp.Field.Type, number | NativePointer>>(value: T): Il2Cpp.Reference<T>;
+
+    /** Creates a reference to the specified value. */
+    export function reference<T extends Il2Cpp.Field.Type>(value: T, type?: Il2Cpp.Type): Il2Cpp.Reference<T> {
+        const handle = Memory.alloc(Process.pointerSize);
+
+        switch (typeof value) {
+            case "boolean":
+                return new Il2Cpp.Reference(handle.writeS8(+value), Il2Cpp.corlib.class("System.Boolean").type);
+            case "number":
+                switch (type?.typeEnum) {
+                    case Il2Cpp.Type.enum.unsignedByte:
+                        return new Il2Cpp.Reference<T>(handle.writeU8(value), type);
+                    case Il2Cpp.Type.enum.byte:
+                        return new Il2Cpp.Reference<T>(handle.writeS8(value), type);
+                    case Il2Cpp.Type.enum.char:
+                    case Il2Cpp.Type.enum.unsignedShort:
+                        return new Il2Cpp.Reference<T>(handle.writeU16(value), type);
+                    case Il2Cpp.Type.enum.short:
+                        return new Il2Cpp.Reference<T>(handle.writeS16(value), type);
+                    case Il2Cpp.Type.enum.unsignedInt:
+                        return new Il2Cpp.Reference<T>(handle.writeU32(value), type);
+                    case Il2Cpp.Type.enum.int:
+                        return new Il2Cpp.Reference<T>(handle.writeS32(value), type);
+                    case Il2Cpp.Type.enum.unsignedLong:
+                        return new Il2Cpp.Reference<T>(handle.writeU64(value), type);
+                    case Il2Cpp.Type.enum.long:
+                        return new Il2Cpp.Reference<T>(handle.writeS64(value), type);
+                    case Il2Cpp.Type.enum.float:
+                        return new Il2Cpp.Reference<T>(handle.writeFloat(value), type);
+                    case Il2Cpp.Type.enum.double:
+                        return new Il2Cpp.Reference<T>(handle.writeDouble(value), type);
+                }
+            case "object":
+                if (value instanceof Il2Cpp.ValueType || value instanceof Il2Cpp.Pointer) {
+                    return new Il2Cpp.Reference<T>(handle.writePointer(value), value.type);
+                } else if (value instanceof Il2Cpp.Object) {
+                    return new Il2Cpp.Reference<T>(handle.writePointer(value), value.class.type);
+                } else if (value instanceof Il2Cpp.String || value instanceof Il2Cpp.Array) {
+                    return new Il2Cpp.Reference<T>(handle.writePointer(value), value.object.class.type);
+                } else if (value instanceof NativePointer) {
+                    switch (type?.typeEnum) {
+                        case Il2Cpp.Type.enum.unsignedNativePointer:
+                        case Il2Cpp.Type.enum.nativePointer:
+                            return new Il2Cpp.Reference<T>(handle.writePointer(value), type);
+                    }
+                } else if (value instanceof Int64) {
+                    return new Il2Cpp.Reference<T>(handle.writeS64(value), Il2Cpp.corlib.class("System.Int64").type);
+                } else if (value instanceof UInt64) {
+                    return new Il2Cpp.Reference<T>(handle.writeU64(value), Il2Cpp.corlib.class("System.UInt64").type);
+                }
+            default:
+                raise(`couldn't create a reference to ${value} using an unhandled type ${type?.name}`);
+        }
+    }
+}
+
+```
+
+`src/il2cpp/structs/string.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class String extends NativeStruct {
+        /** Gets the content of this string. */
+        get content(): string | null {
+            return Il2Cpp.api.stringGetChars(this).readUtf16String(this.length);
+        }
+
+        /** Sets the content of this string. */
+        set content(value: string | null) {
+            // prettier-ignore
+            const offset = Il2Cpp.string("vfsfitvnm").handle.offsetOf(_ => _.readInt() == 32) 
+                ?? raise("couldn't find the length offset in the native string struct");
+
+            globalThis.Object.defineProperty(Il2Cpp.String.prototype, "content", {
+                set(this: Il2Cpp.String, value: string | null) {
+                    Il2Cpp.api.stringGetChars(this).writeUtf16String(value ?? "");
+                    this.handle.add(offset).writeS32(value?.length ?? 0);
+                }
+            });
+
+            this.content = value;
+        }
+
+        /** Gets the length of this string. */
+        get length(): number {
+            return Il2Cpp.api.stringGetLength(this);
+        }
+
+        /** Gets the encompassing object of the current string. */
+        get object(): Il2Cpp.Object {
+            return new Il2Cpp.Object(this);
+        }
+
+        /** */
+        toString(): string {
+            return this.isNull() ? "null" : `"${this.content}"`;
+        }
+    }
+
+    /** Creates a new string with the specified content. */
+    export function string(content: string | null): Il2Cpp.String {
+        return new Il2Cpp.String(Il2Cpp.api.stringNew(Memory.allocUtf8String(content ?? "")));
+    }
+}
+
+```
+
+`src/il2cpp/structs/thread.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Thread extends NativeStruct {
+        /** Gets the native id of the current thread. */
+        get id(): number {
+            let get = function (this: Il2Cpp.Thread) {
+                return this.internal.field<UInt64>("thread_id").value.toNumber();
+            };
+
+            // https://github.com/mono/linux-packaging-mono/blob/d586f84dfea30217f34b076a616a098518aa72cd/mono/utils/mono-threads.h#L642
+            if (Process.platform != "windows") {
+                const currentThreadId = Process.getCurrentThreadId();
+                const currentPosixThread = ptr(get.apply(Il2Cpp.currentThread!));
+
+                // prettier-ignore
+                const offset = currentPosixThread.offsetOf(_ => _.readS32() == currentThreadId, 1024) ??
+                    raise(`couldn't find the offset for determining the kernel id of a posix thread`);
+
+                const _get = get;
+                get = function (this: Il2Cpp.Thread) {
+                    return ptr(_get.apply(this)).add(offset).readS32();
+                };
+            }
+
+            getter(Il2Cpp.Thread.prototype, "id", get, lazy);
+
+            return this.id;
+        }
+
+        /** Gets the encompassing internal object (System.Threding.InternalThreead) of the current thread. */
+        @lazy
+        get internal(): Il2Cpp.Object {
+            return this.object.tryField<Il2Cpp.Object>("internal_thread")?.value ?? this.object;
+        }
+
+        /** Determines whether the current thread is the garbage collector finalizer one. */
+        @lazy
+        get isFinalizer(): boolean {
+            return !Il2Cpp.api.threadIsVm(this);
+        }
+
+        /** Gets the managed id of the current thread. */
+        @lazy
+        get managedId(): number {
+            return this.object.method<number>("get_ManagedThreadId").invoke();
+        }
+
+        /** Gets the encompassing object of the current thread. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            return new Il2Cpp.Object(this);
+        }
+
+        /** @internal */
+        @lazy
+        private get staticData(): NativePointer {
+            return this.internal.field<NativePointer>("static_data").value;
+        }
+
+        /** @internal */
+        @lazy
+        private get synchronizationContext(): Il2Cpp.Object {
+            const get_ExecutionContext = this.object.tryMethod<Il2Cpp.Object>("GetMutableExecutionContext") ?? this.object.method("get_ExecutionContext");
+            const executionContext = get_ExecutionContext.invoke();
+
+            let synchronizationContext =
+                executionContext.tryField<Il2Cpp.Object>("_syncContext")?.value ??
+                executionContext.tryMethod<Il2Cpp.Object>("get_SynchronizationContext")?.invoke() ??
+                this.tryLocalValue(Il2Cpp.corlib.class("System.Threading.SynchronizationContext"));
+
+            if (synchronizationContext == null || synchronizationContext.isNull()) {
+                if (this.handle.equals(Il2Cpp.mainThread.handle)) {
+                    raise(`couldn't find the synchronization context of the main thread, perhaps this is early instrumentation?`);
+                } else {
+                    raise(`couldn't find the synchronization context of thread #${this.managedId}, only the main thread is expected to have one`);
+                }
+            }
+
+            return synchronizationContext;
+        }
+
+        /** Detaches the thread from the application domain. */
+        detach(): void {
+            return Il2Cpp.api.threadDetach(this);
+        }
+
+        /** Schedules a callback on the current thread. */
+        schedule<T>(block: () => T | Promise<T>): Promise<T> {
+            const Post = this.synchronizationContext.method("Post");
+
+            return new Promise(resolve => {
+                const delegate = Il2Cpp.delegate(Il2Cpp.corlib.class("System.Threading.SendOrPostCallback"), () => {
+                    const result = block();
+                    setImmediate(() => resolve(result));
+                });
+
+                // This is to replace pending scheduled callbacks when the script is about to get unlaoded.
+                // If we skip this cleanup, Frida's native callbacks will point to invalid memory, making
+                // the application crash as soon as the IL2CPP runtime tries to execute such callbacks.
+                // For instance, without the following code, this is how you can trigger a crash:
+                // 1) unfocus the application;
+                // 2) schedule a callback;
+                // 3) reload the script;
+                // 4) focus application.
+                //
+                // The "proper" solution consists in removing our delegates from the Unity synchroniztion
+                // context, but the interface is not consisent across Unity versions - e.g. 2017.4.40f1 uses
+                // a queue instead of a list, whereas newer versions do not allow null work requests.
+                // The following solution, which basically redirects the invocation to a native function that
+                // survives the script reloading, is much simpler, honestly.
+                Script.bindWeak(globalThis, () => {
+                    delegate.field("method_ptr").value = delegate.field("invoke_impl").value = Il2Cpp.api.domainGet;
+                });
+
+                Post.invoke(delegate, NULL);
+            });
+        }
+
+        /** @internal */
+        tryLocalValue(klass: Il2Cpp.Class): Il2Cpp.Object | undefined {
+            for (let i = 0; i < 16; i++) {
+                const base = this.staticData.add(i * Process.pointerSize).readPointer();
+                if (!base.isNull()) {
+                    const object = new Il2Cpp.Object(base.readPointer()).asNullable();
+                    if (object?.class?.isSubclassOf(klass, false)) {
+                        return object;
+                    }
+                }
+            }
+        }
+    }
+
+    /** Gets the attached threads. */
+    export declare const attachedThreads: Il2Cpp.Thread[];
+    getter(Il2Cpp, "attachedThreads", () => {
+        return readNativeList(Il2Cpp.api.threadGetAttachedThreads).map(_ => new Il2Cpp.Thread(_));
+    });
+
+    /** Gets the current attached thread, if any. */
+    export declare const currentThread: Il2Cpp.Thread | null;
+    getter(Il2Cpp, "currentThread", () => {
+        return new Il2Cpp.Thread(Il2Cpp.api.threadGetCurrent()).asNullable();
+    });
+
+    /** Gets the current attached thread, if any. */
+    export declare const mainThread: Il2Cpp.Thread;
+    getter(Il2Cpp, "mainThread", () => {
+        // I'm not sure if this is always the case. Typically, the main
+        // thread managed id is 1, but this isn't always true: spawning
+        // an Android application with Unity 5.3.8f1 will cause the Frida
+        // thread to have the managed id equal to 1, whereas the main thread
+        // managed id is 2.
+        return attachedThreads[0];
+    });
+}
+
+```
+
+`src/il2cpp/structs/type.ts`:
+
+```ts
+namespace Il2Cpp {
+    @recycle
+    export class Type extends NativeStruct {
+        /** */
+        @lazy
+        static get enum() {
+            const _ = (_: string, block = (_: Il2Cpp.Class): { type: Il2Cpp.Type } => _) => block(Il2Cpp.corlib.class(_)).type.typeEnum;
+
+            return {
+                void: _("System.Void"),
+                boolean: _("System.Boolean"),
+                char: _("System.Char"),
+                byte: _("System.SByte"),
+                unsignedByte: _("System.Byte"),
+                short: _("System.Int16"),
+                unsignedShort: _("System.UInt16"),
+                int: _("System.Int32"),
+                unsignedInt: _("System.UInt32"),
+                long: _("System.Int64"),
+                unsignedLong: _("System.UInt64"),
+                nativePointer: _("System.IntPtr"),
+                unsignedNativePointer: _("System.UIntPtr"),
+                float: _("System.Single"),
+                double: _("System.Double"),
+                pointer: _("System.IntPtr", _ => _.field("m_value")),
+                valueType: _("System.Decimal"),
+                object: _("System.Object"),
+                string: _("System.String"),
+                class: _("System.Array"),
+                array: _("System.Void", _ => _.arrayClass),
+                multidimensionalArray: _("System.Void", _ => new Il2Cpp.Class(Il2Cpp.api.classGetArrayClass(_, 2))),
+                genericInstance: _("System.Int32", _ => _.interfaces.find(_ => _.name.endsWith("`1"))!)
+            };
+        }
+
+        /** Gets the class of this type. */
+        @lazy
+        get class(): Il2Cpp.Class {
+            return new Il2Cpp.Class(Il2Cpp.api.typeGetClass(this));
+        }
+
+        /** */
+        @lazy
+        get fridaAlias(): NativeCallbackArgumentType {
+            if (this.isByReference) {
+                return "pointer";
+            }
+
+            switch (this.typeEnum) {
+                case Il2Cpp.Type.enum.void:
+                    return "void";
+                case Il2Cpp.Type.enum.boolean:
+                    return "bool";
+                case Il2Cpp.Type.enum.char:
+                    return "uchar";
+                case Il2Cpp.Type.enum.byte:
+                    return "int8";
+                case Il2Cpp.Type.enum.unsignedByte:
+                    return "uint8";
+                case Il2Cpp.Type.enum.short:
+                    return "int16";
+                case Il2Cpp.Type.enum.unsignedShort:
+                    return "uint16";
+                case Il2Cpp.Type.enum.int:
+                    return "int32";
+                case Il2Cpp.Type.enum.unsignedInt:
+                    return "uint32";
+                case Il2Cpp.Type.enum.long:
+                    return "int64";
+                case Il2Cpp.Type.enum.unsignedLong:
+                    return "uint64";
+                case Il2Cpp.Type.enum.float:
+                    return "float";
+                case Il2Cpp.Type.enum.double:
+                    return "double";
+                case Il2Cpp.Type.enum.valueType:
+                    return getValueTypeFields(this);
+                case Il2Cpp.Type.enum.nativePointer:
+                case Il2Cpp.Type.enum.unsignedNativePointer:
+                case Il2Cpp.Type.enum.pointer:
+                case Il2Cpp.Type.enum.string:
+                case Il2Cpp.Type.enum.array:
+                case Il2Cpp.Type.enum.multidimensionalArray:
+                    return "pointer";
+                case Il2Cpp.Type.enum.class:
+                case Il2Cpp.Type.enum.object:
+                case Il2Cpp.Type.enum.genericInstance:
+                    return this.class.isValueType ? getValueTypeFields(this) : "pointer";
+                default:
+                    return "pointer";
+            }
+        }
+
+        /** Determines whether this type is passed by reference. */
+        @lazy
+        get isByReference(): boolean {
+            return this.name.endsWith("&");
+        }
+
+        /** Determines whether this type is primitive. */
+        @lazy
+        get isPrimitive(): boolean {
+            return (
+                (this.typeEnum >= Il2Cpp.Type.enum.boolean && this.typeEnum <= Il2Cpp.Type.enum.double) ||
+                this.typeEnum == Il2Cpp.Type.enum.nativePointer ||
+                this.typeEnum == Il2Cpp.Type.enum.unsignedNativePointer
+            );
+        }
+
+        /** Gets the name of this type. */
+        @lazy
+        get name(): string {
+            const handle = Il2Cpp.api.typeGetName(this);
+
+            try {
+                return handle.readUtf8String()!;
+            } finally {
+                Il2Cpp.free(handle);
+            }
+        }
+
+        /** Gets the encompassing object of the current type. */
+        @lazy
+        get object(): Il2Cpp.Object {
+            return new Il2Cpp.Object(Il2Cpp.api.typeGetObject(this));
+        }
+
+        /** Gets the type enum of the current type. */
+        @lazy
+        get typeEnum(): number {
+            return Il2Cpp.api.typeGetTypeEnum(this);
+        }
+
+        /** */
+        toString(): string {
+            return this.name;
+        }
+    }
+
+    function getValueTypeFields(type: Il2Cpp.Type): NativeCallbackArgumentType {
+        const instanceFields = type.class.fields.filter(_ => !_.isStatic);
+        return instanceFields.length == 0 ? ["char"] : instanceFields.map(_ => _.type.fridaAlias);
+    }
+}
+
+```
+
+`src/il2cpp/structs/value-type.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class ValueType extends NativeStruct {
+        constructor(handle: NativePointer, readonly type: Il2Cpp.Type) {
+            super(handle);
+        }
+
+        /** Boxes the current value type in a object. */
+        box(): Il2Cpp.Object {
+            return new Il2Cpp.Object(Il2Cpp.api.valueTypeBox(this.type.class, this));
+        }
+
+        /** Gets the field with the given name. */
+        field<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> {
+            return this.type.class.field<T>(name).withHolder(this);
+        }
+
+        /** Gets the field with the given name. */
+        tryField<T extends Il2Cpp.Field.Type>(name: string): Il2Cpp.Field<T> | undefined {
+            return this.type.class.tryField<T>(name)?.withHolder(this);
+        }
+
+        /** */
+        toString(): string {
+            return this.isNull() ? "null" : this.box().toString();
+        }
+    }
+}
+
+```
+
+`src/il2cpp/tracer.ts`:
+
+```ts
+namespace Il2Cpp {
+    export class Tracer {
+        /** @internal */
+        #state: Il2Cpp.Tracer.State = {
+            depth: 0,
+            buffer: [],
+            history: new Set(),
+            flush: () => {
+                if (this.#state.depth == 0) {
+                    const message = `\n${this.#state.buffer.join("\n")}\n`;
+
+                    if (this.#verbose) {
+                        inform(message);
+                    } else {
+                        const hash = cyrb53(message);
+                        if (!this.#state.history.has(hash)) {
+                            this.#state.history.add(hash);
+                            inform(message);
+                        }
+                    }
+
+                    this.#state.buffer.length = 0;
+                }
+            }
+        };
+
+        /** @internal */
+        #threadId: number = Il2Cpp.mainThread.id;
+
+        /** @internal */
+        #verbose: boolean = false;
+
+        /** @internal */
+        #applier: Il2Cpp.Tracer.Apply;
+
+        /** @internal */
+        #targets: Il2Cpp.Method[] = [];
+
+        /** @internal */
+        #domain?: Il2Cpp.Domain;
+
+        /** @internal */
+        #assemblies?: Il2Cpp.Assembly[];
+
+        /** @internal */
+        #classes?: Il2Cpp.Class[];
+
+        /** @internal */
+        #methods?: Il2Cpp.Method[];
+
+        /** @internal */
+        #assemblyFilter?: (assembly: Il2Cpp.Assembly) => boolean;
+
+        /** @internal */
+        #classFilter?: (klass: Il2Cpp.Class) => boolean;
+
+        /** @internal */
+        #methodFilter?: (method: Il2Cpp.Method) => boolean;
+
+        /** @internal */
+        #parameterFilter?: (parameter: Il2Cpp.Parameter) => boolean;
+
+        constructor(applier: Il2Cpp.Tracer.Apply) {
+            this.#applier = applier;
+        }
+
+        /** */
+        thread(thread: Il2Cpp.Thread): Pick<Il2Cpp.Tracer, "verbose"> & Il2Cpp.Tracer.ChooseTargets {
+            this.#threadId = thread.id;
+            return this;
+        }
+
+        /** Determines whether print duplicate logs. */
+        verbose(value: boolean): Il2Cpp.Tracer.ChooseTargets {
+            this.#verbose = value;
+            return this;
+        }
+
+        /** Sets the application domain as the place where to find the target methods. */
+        domain(): Il2Cpp.Tracer.FilterAssemblies {
+            this.#domain = Il2Cpp.domain;
+            return this;
+        }
+
+        /** Sets the passed `assemblies` as the place where to find the target methods. */
+        assemblies(...assemblies: Il2Cpp.Assembly[]): Il2Cpp.Tracer.FilterClasses {
+            this.#assemblies = assemblies;
+            return this;
+        }
+
+        /** Sets the passed `classes` as the place where to find the target methods. */
+        classes(...classes: Il2Cpp.Class[]): Il2Cpp.Tracer.FilterMethods {
+            this.#classes = classes;
+            return this;
+        }
+
+        /** Sets the passed `methods` as the target methods. */
+        methods(...methods: Il2Cpp.Method[]): Il2Cpp.Tracer.FilterParameters {
+            this.#methods = methods;
+            return this;
+        }
+
+        /** Filters the assemblies where to find the target methods. */
+        filterAssemblies(filter: (assembly: Il2Cpp.Assembly) => boolean): Il2Cpp.Tracer.FilterClasses {
+            this.#assemblyFilter = filter;
+            return this;
+        }
+
+        /** Filters the classes where to find the target methods. */
+        filterClasses(filter: (klass: Il2Cpp.Class) => boolean): Il2Cpp.Tracer.FilterMethods {
+            this.#classFilter = filter;
+            return this;
+        }
+
+        /** Filters the target methods. */
+        filterMethods(filter: (method: Il2Cpp.Method) => boolean): Il2Cpp.Tracer.FilterParameters {
+            this.#methodFilter = filter;
+            return this;
+        }
+
+        /** Filters the target methods. */
+        filterParameters(filter: (parameter: Il2Cpp.Parameter) => boolean): Pick<Il2Cpp.Tracer, "and"> {
+            this.#parameterFilter = filter;
+            return this;
+        }
+
+        /** Commits the current changes by finding the target methods. */
+        and(): Il2Cpp.Tracer.ChooseTargets & Pick<Il2Cpp.Tracer, "attach"> {
+            const filterMethod = (method: Il2Cpp.Method): void => {
+                if (this.#parameterFilter == undefined) {
+                    this.#targets.push(method);
+                    return;
+                }
+
+                for (const parameter of method.parameters) {
+                    if (this.#parameterFilter(parameter)) {
+                        this.#targets.push(method);
+                        break;
+                    }
+                }
+            };
+
+            const filterMethods = (values: Iterable<Il2Cpp.Method>): void => {
+                for (const method of values) {
+                    filterMethod(method);
+                }
+            };
+
+            const filterClass = (klass: Il2Cpp.Class): void => {
+                if (this.#methodFilter == undefined) {
+                    filterMethods(klass.methods);
+                    return;
+                }
+
+                for (const method of klass.methods) {
+                    if (this.#methodFilter(method)) {
+                        filterMethod(method);
+                    }
+                }
+            };
+
+            const filterClasses = (values: Iterable<Il2Cpp.Class>): void => {
+                for (const klass of values) {
+                    filterClass(klass);
+                }
+            };
+
+            const filterAssembly = (assembly: Il2Cpp.Assembly): void => {
+                if (this.#classFilter == undefined) {
+                    filterClasses(assembly.image.classes);
+                    return;
+                }
+
+                for (const klass of assembly.image.classes) {
+                    if (this.#classFilter(klass)) {
+                        filterClass(klass);
+                    }
+                }
+            };
+
+            const filterAssemblies = (assemblies: Iterable<Il2Cpp.Assembly>): void => {
+                for (const assembly of assemblies) {
+                    filterAssembly(assembly);
+                }
+            };
+
+            const filterDomain = (domain: Il2Cpp.Domain): void => {
+                if (this.#assemblyFilter == undefined) {
+                    filterAssemblies(domain.assemblies);
+                    return;
+                }
+
+                for (const assembly of domain.assemblies) {
+                    if (this.#assemblyFilter(assembly)) {
+                        filterAssembly(assembly);
+                    }
+                }
+            };
+
+            this.#methods
+                ? filterMethods(this.#methods)
+                : this.#classes
+                ? filterClasses(this.#classes)
+                : this.#assemblies
+                ? filterAssemblies(this.#assemblies)
+                : this.#domain
+                ? filterDomain(this.#domain)
+                : undefined;
+
+            this.#assemblies = undefined;
+            this.#classes = undefined;
+            this.#methods = undefined;
+            this.#assemblyFilter = undefined;
+            this.#classFilter = undefined;
+            this.#methodFilter = undefined;
+            this.#parameterFilter = undefined;
+
+            return this;
+        }
+
+        /** Starts tracing. */
+        attach(): void {
+            for (const target of this.#targets) {
+                if (!target.virtualAddress.isNull()) {
+                    try {
+                        this.#applier(target, this.#state, this.#threadId);
+                    } catch (e: any) {
+                        switch (e.message) {
+                            case /unable to intercept function at \w+; please file a bug/.exec(e.message)?.input:
+                            case "already replaced this function":
+                                break;
+                            default:
+                                throw e;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    export declare namespace Tracer {
+        export type Configure = Pick<Il2Cpp.Tracer, "thread" | "verbose"> & Il2Cpp.Tracer.ChooseTargets;
+
+        export type ChooseTargets = Pick<Il2Cpp.Tracer, "domain" | "assemblies" | "classes" | "methods">;
+
+        export type FilterAssemblies = FilterClasses & Pick<Il2Cpp.Tracer, "filterAssemblies">;
+
+        export type FilterClasses = FilterMethods & Pick<Il2Cpp.Tracer, "filterClasses">;
+
+        export type FilterMethods = FilterParameters & Pick<Il2Cpp.Tracer, "filterMethods">;
+
+        export type FilterParameters = Pick<Il2Cpp.Tracer, "and"> & Pick<Il2Cpp.Tracer, "filterParameters">;
+
+        export interface State {
+            depth: number;
+            buffer: string[];
+            history: Set<number>;
+            flush: () => void;
+        }
+
+        export type Apply = (method: Il2Cpp.Method, state: Il2Cpp.Tracer.State, threadId: number) => void;
+    }
+
+    /** */
+    export function trace(parameters: boolean = false): Il2Cpp.Tracer.Configure {
+        const applier = (): Il2Cpp.Tracer.Apply => (method, state, threadId) => {
+            const paddedVirtualAddress = method.relativeVirtualAddress.toString(16).padStart(8, "0");
+
+            Interceptor.attach(method.virtualAddress, {
+                onEnter() {
+                    if (this.threadId == threadId) {
+                        // prettier-ignore
+                        state.buffer.push(`\x1b[2m0x${paddedVirtualAddress}\x1b[0m ${`│ `.repeat(state.depth++)}┌─\x1b[35m${method.class.type.name}::\x1b[1m${method.name}\x1b[0m\x1b[0m`);
+                    }
+                },
+                onLeave() {
+                    if (this.threadId == threadId) {
+                        // prettier-ignore
+                        state.buffer.push(`\x1b[2m0x${paddedVirtualAddress}\x1b[0m ${`│ `.repeat(--state.depth)}└─\x1b[33m${method.class.type.name}::\x1b[1m${method.name}\x1b[0m\x1b[0m`);
+                        state.flush();
+                    }
+                }
+            });
+        };
+
+        const applierWithParameters = (): Il2Cpp.Tracer.Apply => (method, state, threadId) => {
+            const paddedVirtualAddress = method.relativeVirtualAddress.toString(16).padStart(8, "0");
+
+            const startIndex = +!method.isStatic | +Il2Cpp.unityVersionIsBelow201830;
+
+            const callback = function (this: CallbackContext | InvocationContext, ...args: any[]) {
+                if ((this as InvocationContext).threadId == threadId) {
+                    const thisParameter = method.isStatic ? undefined : new Il2Cpp.Parameter("this", -1, method.class.type);
+                    const parameters = thisParameter ? [thisParameter].concat(method.parameters) : method.parameters;
+
+                    // prettier-ignore
+                    state.buffer.push(`\x1b[2m0x${paddedVirtualAddress}\x1b[0m ${`│ `.repeat(state.depth++)}┌─\x1b[35m${method.class.type.name}::\x1b[1m${method.name}\x1b[0m\x1b[0m(${parameters.map(e => `\x1b[32m${e.name}\x1b[0m = \x1b[31m${fromFridaValue(args[e.position + startIndex], e.type)}\x1b[0m`).join(", ")})`);
+                }
+
+                const returnValue = method.nativeFunction(...args);
+
+                if ((this as InvocationContext).threadId == threadId) {
+                    // prettier-ignore
+                    state.buffer.push(`\x1b[2m0x${paddedVirtualAddress}\x1b[0m ${`│ `.repeat(--state.depth)}└─\x1b[33m${method.class.type.name}::\x1b[1m${method.name}\x1b[0m\x1b[0m${returnValue == undefined ? "" : ` = \x1b[36m${fromFridaValue(returnValue, method.returnType)}`}\x1b[0m`);
+                    state.flush();
+                }
+
+                return returnValue;
+            };
+
+            method.revert();
+            const nativeCallback = new NativeCallback(callback, method.returnType.fridaAlias, method.fridaSignature);
+            Interceptor.replace(method.virtualAddress, nativeCallback);
+        };
+
+        return new Il2Cpp.Tracer(parameters ? applierWithParameters() : applier());
+    }
+
+    /** */
+    export function backtrace(mode?: Backtracer): Il2Cpp.Tracer.Configure {
+        const methods = Il2Cpp.domain.assemblies
+            .flatMap(_ => _.image.classes.flatMap(_ => _.methods.filter(_ => !_.virtualAddress.isNull())))
+            .sort((_, __) => _.virtualAddress.compare(__.virtualAddress));
+
+        const searchInsert = (target: NativePointer): Il2Cpp.Method => {
+            let left = 0;
+            let right = methods.length - 1;
+
+            while (left <= right) {
+                const pivot = Math.floor((left + right) / 2);
+                const comparison = methods[pivot].virtualAddress.compare(target);
+
+                if (comparison == 0) {
+                    return methods[pivot];
+                } else if (comparison > 0) {
+                    right = pivot - 1;
+                } else {
+                    left = pivot + 1;
+                }
+            }
+            return methods[right];
+        };
+
+        const applier = (): Il2Cpp.Tracer.Apply => (method, state, threadId) => {
+            Interceptor.attach(method.virtualAddress, function () {
+                if (this.threadId == threadId) {
+                    const handles = globalThis.Thread.backtrace(this.context, mode);
+                    handles.unshift(method.virtualAddress);
+
+                    for (const handle of handles) {
+                        if (handle.compare(Il2Cpp.module.base) > 0 && handle.compare(Il2Cpp.module.base.add(Il2Cpp.module.size)) < 0) {
+                            const method = searchInsert(handle);
+
+                            if (method) {
+                                const offset = handle.sub(method.virtualAddress);
+
+                                if (offset.compare(0xfff) < 0) {
+                                    // prettier-ignore
+                                    state.buffer.push(`\x1b[2m0x${method.relativeVirtualAddress.toString(16).padStart(8, "0")}\x1b[0m\x1b[2m+0x${offset.toString(16).padStart(3, `0`)}\x1b[0m ${method.class.type.name}::\x1b[1m${method.name}\x1b[0m`);
+                                }
+                            }
+                        }
+                    }
+
+                    state.flush();
+                }
+            });
+        };
+
+        return new Il2Cpp.Tracer(applier());
+    }
+
+    /** https://stackoverflow.com/a/52171480/16885569 */
+    function cyrb53(str: string): number {
+        let h1 = 0xdeadbeef;
+        let h2 = 0x41c6ce57;
+
+        for (let i = 0, ch; i < str.length; i++) {
+            ch = str.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+        h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+        h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+
+        return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+    }
+}
+
+```
+
+`src/index.ts`:
+
+```ts
+/// <reference path="./utils/console.ts">/>
+/// <reference path="./utils/getter.ts">/>
+/// <reference path="./utils/lazy.ts">/>
+/// <reference path="./utils/native-struct.ts">/>
+/// <reference path="./utils/native-wait.ts">/>
+/// <reference path="./utils/offset-of.ts">/>
+/// <reference path="./utils/read-native-iterator.ts">/>
+/// <reference path="./utils/read-native-list.ts">/>
+/// <reference path="./utils/recycle.ts">/>
+/// <reference path="./utils/unity-version.ts">/>
+
+/// <reference path="./il2cpp/api.ts">/>
+/// <reference path="./il2cpp/application.ts">/>
+/// <reference path="./il2cpp/dump.ts">/>
+/// <reference path="./il2cpp/exception-listener.ts">/>
+/// <reference path="./il2cpp/filters.ts">/>
+/// <reference path="./il2cpp/gc.ts">/>
+/// <reference path="./il2cpp/memory.ts">/>
+/// <reference path="./il2cpp/module.ts">/>
+/// <reference path="./il2cpp/perform.ts">/>
+/// <reference path="./il2cpp/tracer.ts">/>
+
+/// <reference path="./il2cpp/structs/array.ts">/>
+/// <reference path="./il2cpp/structs/assembly.ts">/>
+/// <reference path="./il2cpp/structs/class.ts">/>
+/// <reference path="./il2cpp/structs/delegate.ts">/>
+/// <reference path="./il2cpp/structs/domain.ts">/>
+/// <reference path="./il2cpp/structs/field.ts">/>
+/// <reference path="./il2cpp/structs/gc-handle.ts">/>
+/// <reference path="./il2cpp/structs/image.ts">/>
+/// <reference path="./il2cpp/structs/memory-snapshot.ts">/>
+/// <reference path="./il2cpp/structs/method.ts">/>
+/// <reference path="./il2cpp/structs/object.ts">/>
+/// <reference path="./il2cpp/structs/parameter.ts">/>
+/// <reference path="./il2cpp/structs/pointer.ts">/>
+/// <reference path="./il2cpp/structs/reference.ts">/>
+/// <reference path="./il2cpp/structs/string.ts">/>
+/// <reference path="./il2cpp/structs/thread.ts">/>
+/// <reference path="./il2cpp/structs/type.ts">/>
+/// <reference path="./il2cpp/structs/value-type.ts">/>
+
+globalThis.Il2Cpp = Il2Cpp;
+
+```
+
+`src/utils/console.ts`:
+
+```ts
+/** @internal */
+function raise(message: any): never {
+    const error = new Error(`\x1B[0m${message}`);
+    error.name = `\x1B[0m\x1B[38;5;9mil2cpp\x1B[0m`;
+    error.stack = error.stack
+        ?.replace("Error", error.name)
+        ?.replace(/\n    at (.+) \((.+):(.+)\)/, "\x1b[3m\x1b[2m")
+        ?.concat("\x1B[0m");
+
+    throw error;
+}
+
+/** @internal */
+function warn(message: any): void {
+    (globalThis as any).console.log(`\x1B[38;5;11mil2cpp\x1B[0m: ${message}`);
+}
+
+/** @internal */
+function ok(message: any): void {
+    (globalThis as any).console.log(`\x1B[38;5;10mil2cpp\x1B[0m: ${message}`);
+}
+
+/** @internal */
+function inform(message: any): void {
+    (globalThis as any).console.log(`\x1B[38;5;12mil2cpp\x1B[0m: ${message}`);
+}
+
+```
+
+`src/utils/decorate.ts`:
+
+```ts
+/** @internal */
+function decorate<T extends object>(
+    target: T,
+    decorator: (target: T, key: string, descriptor: PropertyDescriptor) => PropertyDescriptor,
+    descriptors = Object.getOwnPropertyDescriptors(target as any)
+): T {
+    for (const key in descriptors) {
+        descriptors[key] = decorator(target, key, descriptors[key]);
+    }
+
+    Object.defineProperties(target, descriptors);
+
+    return target;
+}
+
+```
+
+`src/utils/getter.ts`:
+
+```ts
+/** @internal */
+function getter<T, K extends keyof T>(
+    target: T,
+    key: K,
+    get: () => T[K],
+    decorator?: (target: T, key: K, descriptor: PropertyDescriptor) => PropertyDescriptor
+) {
+    globalThis.Object.defineProperty(target, key, decorator?.(target, key, { get, configurable: true }) ?? { get });
+}
+
+```
+
+`src/utils/lazy.ts`:
+
+```ts
+/** @internal */
+function lazy(_: any, propertyKey: PropertyKey, descriptor: PropertyDescriptor) {
+    const getter = descriptor.get;
+
+    if (!getter) {
+        throw new Error("@lazy can only be applied to getter accessors");
+    }
+
+    descriptor.get = function () {
+        const value = getter.call(this);
+        Object.defineProperty(this, propertyKey, {
+            value,
+            configurable: descriptor.configurable,
+            enumerable: descriptor.enumerable,
+            writable: false
+        });
+        return value;
+    };
+    return descriptor;
+}
+
+```
+
+`src/utils/native-struct.ts`:
+
+```ts
+/** Scaffold class. */
+class NativeStruct implements ObjectWrapper {
+    readonly handle: NativePointer;
+
+    constructor(handleOrWrapper: NativePointerValue) {
+        if (handleOrWrapper instanceof NativePointer) {
+            this.handle = handleOrWrapper;
+        } else {
+            this.handle = handleOrWrapper.handle;
+        }
+    }
+
+    equals(other: NativeStruct) {
+        return this.handle.equals(other.handle);
+    }
+
+    isNull(): boolean {
+        return this.handle.isNull();
+    }
+
+    asNullable(): this | null {
+        return this.isNull() ? null : this;
+    }
+}
+
+```
+
+`src/utils/native-wait.ts`:
+
+```ts
+/** @internal */
+type StringEncoding = "utf8" | "utf16" | "ansi";
+
+/** @internal */
+class Target {
+    readonly address: NativePointer;
+
+    private constructor(responsible: string | null, name: string, readonly stringEncoding: StringEncoding) {
+        this.address = Module.findExportByName(responsible, name) ?? NULL;
+    }
+
+    static get targets(): Target[] {
+        function info(): [string | null, ...[string, StringEncoding][]] | undefined {
+            switch (Process.platform) {
+                case "linux":
+                    try {
+                        if (UnityVersion.gte(Java.androidVersion, "12")) {
+                            return [null, ["__loader_dlopen", "utf8"]];
+                        } else {
+                            return ["libdl.so", ["dlopen", "utf8"], ["android_dlopen_ext", "utf8"]];
+                        }
+                    } catch (e) {
+                        return [null, ["dlopen", "utf8"]];
+                    }
+                case "darwin":
+                    return ["libdyld.dylib", ["dlopen", "utf8"]];
+                case "windows":
+                    const ll = "LoadLibrary";
+                    return ["kernel32.dll", [`${ll}W`, "utf16"], [`${ll}ExW`, "utf16"], [`${ll}A`, "ansi"], [`${ll}ExA`, "ansi"]];
+            }
+        }
+
+        const [responsible, ...targets] = info()!;
+        return targets.map(([name, encoding]) => new Target(responsible, name, encoding)).filter(_ => !_.address.isNull());
+    }
+
+    readString(pointer: NativePointer): string | null {
+        switch (this.stringEncoding) {
+            case "utf8":
+                return pointer.readUtf8String();
+            case "utf16":
+                return pointer.readUtf16String();
+            case "ansi":
+                return pointer.readAnsiString();
+        }
+    }
+}
+
+/** @internal */
+function forModule(...moduleNames: string[]): Promise<string> {
+    return new Promise<string>(resolve => {
+        for (const moduleName of moduleNames) {
+            const module = Process.findModuleByName(moduleName);
+            if (module != null) {
+                resolve(moduleName);
+                return;
+            }
+        }
+
+        const interceptors = Target.targets.map(target =>
+            Interceptor.attach(target.address, {
+                onEnter(args: InvocationArguments) {
+                    this.modulePath = target.readString(args[0]) ?? "";
+                },
+                onLeave(returnValue: InvocationReturnValue) {
+                    if (returnValue.isNull()) return;
+
+                    for (const moduleName of moduleNames) {
+                        if (!this.modulePath.endsWith(moduleName)) continue;
+
+                        setImmediate(() => interceptors.forEach(_ => _.detach()));
+                        resolve(moduleName);
+                    }
+                }
+            })
+        );
+    });
+}
+
+```
+
+`src/utils/offset-of.ts`:
+
+```ts
+/** @internal */
+interface NativePointer {
+    offsetOf(condition: (handle: NativePointer) => boolean, depth?: number): number | null;
+}
+
+NativePointer.prototype.offsetOf = function (condition, depth) {
+    depth ??= 512;
+
+    for (let i = 0; i < depth; i++) {
+        if (condition(this.add(i))) {
+            return i;
+        }
+    }
+
+    return null;
+};
+
+```
+
+`src/utils/read-native-iterator.ts`:
+
+```ts
+/** @internal */
+function readNativeIterator(block: (iteratorPointer: NativePointer) => NativePointer): NativePointer[] {
+    const array = [];
+    const iterator = Memory.alloc(Process.pointerSize);
+
+    let handle = block(iterator);
+
+    while (!handle.isNull()) {
+        array.push(handle);
+        handle = block(iterator);
+    }
+
+    return array;
+}
+
+```
+
+`src/utils/read-native-list.ts`:
+
+```ts
+/** @internal */
+function readNativeList(block: (lengthPointer: NativePointer) => NativePointer): NativePointer[] {
+    const lengthPointer = Memory.alloc(Process.pointerSize);
+    const startPointer = block(lengthPointer);
+
+    if (startPointer.isNull()) {
+        return [];
+    }
+
+    const array = new Array(lengthPointer.readInt());
+
+    for (let i = 0; i < array.length; i++) {
+        array[i] = startPointer.add(i * Process.pointerSize).readPointer();
+    }
+
+    return array;
+}
+
+```
+
+`src/utils/recycle.ts`:
+
+```ts
+/** @internal */
+function recycle<T extends ObjectWrapper, U extends new (handle: NativePointer) => T>(Class: U) {
+    return new Proxy(Class, {
+        cache: new Map(),
+        construct(Target: U, argArray: [NativePointer]): T {
+            const handle = argArray[0].toUInt32();
+
+            if (!this.cache.has(handle)) {
+                this.cache.set(handle, new Target(argArray[0]));
+            }
+            return this.cache.get(handle)!;
+        }
+    } as ProxyHandler<U> & { cache: Map<number, T> });
+}
+
+```
+
+`src/utils/unity-version.ts`:
+
+```ts
+/** @internal */
+namespace UnityVersion {
+    const pattern = /(20\d{2}|\d)\.(\d)\.(\d{1,2})(?:[abcfp]|rc){0,2}\d?/;
+
+    export function find(string: string | null): string | undefined {
+        return string?.match(pattern)?.[0];
+    }
+
+    export function gte(a: string, b: string): boolean {
+        return compare(a, b) >= 0;
+    }
+
+    export function lt(a: string, b: string): boolean {
+        return compare(a, b) < 0;
+    }
+
+    function compare(a: string, b: string): -1 | 0 | 1 {
+        const aMatches = a.match(pattern);
+        const bMatches = b.match(pattern);
+
+        for (let i = 1; i <= 3; i++) {
+            const a = Number(aMatches?.[i] ?? -1);
+            const b = Number(bMatches?.[i] ?? -1);
+
+            if (a > b) return 1;
+            else if (a < b) return -1;
+        }
+
+        return 0;
+    }
+}
+
+```
+
+`tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": [ "es2020" ],
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "outFile": "dist/index.js",
+    "sourceRoot": ".",
+    "declaration": true,
+    "experimentalDecorators": true,
+    "sourceMap": true,
+    "strict": true,
+    "stripInternal": true,
+    "plugins": [ 
+      { "transform": "ts-transformer-inline-file/transformer" }
+    ],
+  }
+}
+
+```
