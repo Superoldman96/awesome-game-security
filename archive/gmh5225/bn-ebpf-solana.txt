@@ -1,0 +1,830 @@
+Project Path: arc_gmh5225_bn-ebpf-solana_11bbr132
+
+Source Tree:
+
+```txt
+arc_gmh5225_bn-ebpf-solana_11bbr132
+├── LICENSE
+├── README.md
+├── __init__.py
+├── assets
+│   ├── lift.png
+│   └── struct.png
+├── ebpf.py
+├── instr.py
+├── plugin.json
+├── solana.py
+├── solanaview.py
+└── types.c
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2022 OtterSec LLC.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`README.md`:
+
+```md
+
+# bn-ebpf-solana
+
+A pure-python Binary Ninja plugin for Solana EBPF.
+
+See our [introductory blog post](https://osec.io/blog/tutorials/2022-08-27-reverse-engineering-solana/).
+
+**Instruction lifting!**
+![](/assets/lift.png)
+
+**Solana SDK Structures!**
+![](/assets/struct.png)
+
+## Installation
+
+Requirements:
+```
+pip install lief
+```
+
+Copy this directory into your Binary Ninja plugins folder and restart.
+
+## Features
+
+- **Instruction Lifting**: All EBPF instructions are lifted to LLIL
+- **Accurate Memory Maps**: We implement Solana-specific memory maps (0x{1/2/3/4}00000000 addresses for data/stack/heap/input)
+- **Solana ELF Relocations**: Solana-specific ELF relocations
+- **Syscall Function Signatures**: Full signatures for all of the Solana syscalls
+- **(partial) Solana SDK Types**: Type definitions for all Solana SDK objects. (fully complete for C, in-progress for Rust)
+
+_TODO:_
+
+- **Solana SDK Signature Matching**: Automatically match common Solana SDK functions.
+
+
+```
+
+`__init__.py`:
+
+```py
+from binaryninja import CallingConvention, Architecture, Platform
+from binaryninja.typelibrary import TypeLibrary
+from binaryninja.types import Type, TypeBuilder
+
+from .ebpf import EBPF
+EBPF().register()
+
+class DefaultCallingConvention(CallingConvention):
+    name = 'Default'
+    int_arg_regs = [f'r{i}' for i in range(1,10)]
+    int_return_reg = 'r0'
+
+from .solana import Solana
+solana = Solana(Architecture['ebpf'])
+solana.default_calling_convention = DefaultCallingConvention(Architecture['ebpf'], 'default')
+solana.register('Solana')
+
+from .solanaview import SolanaView
+SolanaView.register()
+
+```
+
+`ebpf.py`:
+
+```py
+from binaryninja.architecture import Architecture
+from binaryninja.platform import Platform
+from binaryninja.function import RegisterInfo, InstructionInfo
+
+from .instr import decode, tT
+
+REGS = [f'r{i}' for i in range(16)]
+
+class EBPF(Architecture):
+    name = 'ebpf'
+    address_size = 8
+    max_instr_length = 16
+
+    regs = { r:RegisterInfo(r, 8) for r in REGS }
+    stack_pointer = 'r10'
+
+    def get_instruction_info(self, data, addr):
+        instr = decode(data, addr)
+
+        if instr is None:
+            return InstructionInfo(length=8)
+
+        return instr.info
+
+    def get_instruction_text(self, data, addr):
+        instr = decode(data, addr)
+
+        if instr is None:
+            return [tT('unk')], 8
+
+        return instr.text, instr.info.length
+
+    def get_instruction_low_level_il(self, data, addr, il):
+        instr = decode(data, addr)
+
+        if instr is None:
+            return 8
+
+        instr.llil(il)
+        return instr.info.length
+
+```
+
+`instr.py`:
+
+```py
+
+from typing import Callable, Dict, Tuple, List
+from dataclasses import dataclass
+from binaryninja.function import RegisterInfo, InstructionInfo, InstructionTextToken
+from binaryninja.enums import InstructionTextTokenType, BranchType, LowLevelILOperation
+from binaryninja.architecture import Architecture
+from binaryninja.lowlevelil import LowLevelILLabel, LowLevelILFunction
+
+# binary ninja text helpers
+def tI(x): return InstructionTextToken(InstructionTextTokenType.InstructionToken, x)
+def tR(x): return InstructionTextToken(InstructionTextTokenType.RegisterToken, x)
+def tS(x): return InstructionTextToken(InstructionTextTokenType.OperandSeparatorToken, x)
+def tM(x): return InstructionTextToken(InstructionTextTokenType.BeginMemoryOperandToken, x)
+def tE(x): return InstructionTextToken(InstructionTextTokenType.EndMemoryOperandToken, x)
+def tA(x,d): return InstructionTextToken(InstructionTextTokenType.PossibleAddressToken, x, d)
+def tT(x): return InstructionTextToken(InstructionTextTokenType.TextToken, x)
+def tN(x,d): return InstructionTextToken(InstructionTextTokenType.IntegerToken, x, d)
+
+
+def il_jump(il: LowLevelILFunction, target):
+    label = il.get_label_for_address(il.arch, target)
+    if label is None:
+        il.append(il.jump(il.const(8, target)))
+    else:
+        il.append(il.goto(label))
+
+
+def il_cond_branch(il: LowLevelILFunction, cond, tdest, fdest):
+    t_target = il.get_label_for_address(il.arch, tdest)
+    f_target = il.get_label_for_address(il.arch, fdest)
+
+    needs_t = False
+    needs_f = False
+
+    if t_target is None:
+        needs_t = True
+        t_target = LowLevelILLabel()
+
+    if f_target is None:
+        needs_f = True
+        f_target = LowLevelILLabel()
+    
+    il.append(il.if_expr(cond, t_target, f_target))
+
+    if needs_t:
+        il.mark_label(t_target)
+        il.append(il.jump(tdest))
+    
+    if needs_f:
+        il.mark_label(f_target)
+
+
+@dataclass
+class Instruction(object):
+    text: List[InstructionTextToken]
+    info: InstructionInfo
+    llil: Callable[[LowLevelILFunction], None]
+
+
+SZ_MAP = {
+    0: 4,
+    1: 2,
+    2: 1,
+    3: 8
+}
+
+SZ_NAME = {
+    0: 'w',
+    1: 'h',
+    2: 'b',
+    3: 'dw'
+}
+
+
+def lddw(dst, imm):
+    return Instruction(
+        text=[
+            tI(f'lddw'), tT(' '), tR(f'r{dst}'), tT(', '), tN(hex(signed(64, imm)), signed(64, imm))
+        ],
+        info=InstructionInfo(length=16),
+        llil=lambda il: il.append(
+            il.set_reg(8, f'r{dst}', 
+                il.const(8, imm)
+            )
+        )
+    )
+
+
+def ld(ldop, dst, src, imm):
+    pass
+
+
+def ldx(dst, src, off, sz):
+    soff = signed(16, off)
+
+    inner = lambda il: il.load(SZ_MAP[sz], 
+        il.add(8, 
+            il.reg(8, f'r{src}'), 
+            il.sign_extend(8, il.const(2, off))
+        )
+    )
+
+    ext = lambda il: il.zero_extend(8, inner(il)) if SZ_MAP[sz] != 8 else inner(il)
+
+    return Instruction(
+        text=[
+            tI(f'ldx{SZ_NAME[sz]}'), tT(' '), tR(f'r{dst}'), tT(', '), 
+            tM('['), tR(f'r{src}'), (tS('+') if soff > 0 else tS('-')), tN(str(abs(soff)), abs(soff)), tE(']')
+        ],
+        info=InstructionInfo(length=8),
+        llil=lambda il: il.append(
+            il.set_reg(8, f'r{dst}', ext(il))
+        )
+    )
+
+
+def st(dst, off, imm, sz):
+    tr_imm = imm & ((1 << (SZ_MAP[sz])) - 1)
+    soff = signed(16, off)
+    return Instruction(
+        text=[
+            tI(f'st{SZ_NAME[sz]}'), tT(' '),
+            tM('['), tR(f'r{dst}'), (tS('+') if soff > 0 else tS('-')), tN(str(abs(soff)), abs(soff)), tE(']'),
+            tT(', '), tN(hex(imm), imm)
+        ],
+        info=InstructionInfo(length=8),
+        llil=lambda il: il.append(
+            il.store(
+                SZ_MAP[sz],
+                il.add(8, 
+                    il.reg(8, f'r{dst}'), 
+                    il.sign_extend(8, il.const(2, off))
+                ),
+                il.const(SZ_MAP[sz], tr_imm)
+            )
+        )
+    )
+
+
+def stx(dst, src, off, sz):
+    soff = signed(16, off)
+    r = lambda il: il.reg(8, f'r{src}')
+    v = lambda il: il.low_part(SZ_MAP[sz], r(il)) if SZ_MAP[sz] != 8 else r(il)
+    return Instruction(
+        text=[
+            tI(f'stx{SZ_NAME[sz]}'), tT(' '),
+            tM('['), tR(f'r{dst}'), (tS('+') if soff > 0 else tS('-')), tN(str(abs(soff)), abs(soff)), tE(']'),
+            tT(', '), tR(f'r{src}')
+        ],
+        info=InstructionInfo(length=8),
+        llil=lambda il: il.append(
+            il.store(
+                SZ_MAP[sz],
+                il.add(8, 
+                    il.reg(8, f'r{dst}'), 
+                    il.sign_extend(8, il.const(2, off))
+                ),
+                v(il)
+            )
+        )
+    )
+
+
+ALU_OPS = {
+    0: ['add', lambda il,a,b,z: il.add(z,a,b)],
+    1: ['sub', lambda il,a,b,z: il.sub(z,a,b)],
+    2: ['mul', lambda il,a,b,z: il.mult(z,a,b)],
+    3: ['div', lambda il,a,b,z: il.div_unsigned(z,a,b)],
+    4: ['or', lambda il,a,b,z: il.or_expr(z,a,b)],
+    5: ['and', lambda il,a,b,z: il.and_expr(z,a,b)],
+    6: ['lsh', lambda il,a,b,z: il.shift_left(z,a,b)],
+    7: ['rsh', lambda il,a,b,z: il.logical_shift_right(z,a,b)],
+    8: ['neg', lambda il,a,b,z: il.not_expr(z,b)],
+    9: ['mod', lambda il,a,b,z: il.mod_unsigned(z,a,b)],
+    0xa: ['xor', lambda il,a,b,z: il.xor_expr(z,a,b)],
+    0xb: ['mov', lambda il,a,b,z: b],
+    0xc: ['arsh', lambda il,a,b,z: il.arith_shift_right(z,a,b)],
+}
+
+
+def signed(size, val):
+    if (val >> (size - 1)) & 1:
+        return val - (2**size)
+    else:
+        return val
+
+
+def alu64(op, s, dst, src, imm) -> Instruction:
+    if not op in ALU_OPS:
+        return None
+
+    name, fn = ALU_OPS[op]
+
+    return Instruction(
+        text=[tI(name), tT(' '), tR(f'r{dst}'), tT(', '), (tR(f'r{src}') if s else tN(hex(signed(32, imm)), signed(32, imm)))],
+        info=InstructionInfo(length=8),
+        llil=lambda il: il.append(
+            il.set_reg(
+                8, 
+                f'r{dst}', 
+                fn(
+                    il,
+                    il.reg(8, f'r{dst}'),
+                    (il.reg(8, f'r{src}') if s else il.sign_extend(8, il.const(4, imm))),
+                    8,
+                )
+            )
+        )
+    )
+
+
+JUMP_COND = {
+    1: ['jeq', lambda il,a,b: il.compare_equal(8,a,b)],
+    2: ['jgt', lambda il,a,b: il.compare_unsigned_greater_than(8,a,b)],
+    3: ['jge', lambda il,a,b: il.compare_unsigned_greater_equal(8,a,b)],
+    4: ['jset', lambda il,a,b: il.compare_not_equal(8, il.const(8,0), il.and_expr(8,a,b))],
+    5: ['jne', lambda il,a,b: il.compare_not_equal(8,a,b)],
+    6: ['jsgt', lambda il,a,b: il.compare_signed_greater_than(8,a,b)],
+    7: ['jsge', lambda il,a,b: il.compare_signed_greater_equal(8,a,b)],
+    0xa: ['jlt', lambda il,a,b: il.compare_unsigned_less_than(8,a,b)],
+    0xb: ['jle', lambda il,a,b: il.compare_unsigned_less_equal(8,a,b)],
+    0xc: ['jslt', lambda il,a,b: il.compare_signed_less_than(8,a,b)],
+    0xd: ['jsle', lambda il,a,b: il.compare_signed_less_equal(8,a,b)],
+}
+
+
+def fmt_jump_offset(off) -> str:
+    return f'+{off}' if off > 0 else str(off)
+
+
+def branch_type(op, s, dst, src, imm, off, addr) -> Instruction:
+    if op == 0: # ja
+        # target = addr + 8 + (signed(32, imm) * 8)
+        target = addr + 8 + (signed(16, off) * 8)
+        info = InstructionInfo(length=8)
+        info.add_branch(BranchType.UnconditionalBranch, target)
+        return Instruction(
+            text=[
+                tI('ja'), tT(' '),
+                tS('<'), tN(fmt_jump_offset(signed(16, off)), signed(16, off)), tS('>'),
+            ],
+            info=info,
+            llil=lambda il: il_jump(il, target)
+        )
+    elif op == 8: # call
+        target = addr + 8 + (signed(32, imm) * 8)
+        info = InstructionInfo(length=8)
+
+        if src == 2:
+            # Custom marker, hardcoded to extern address.
+            info.add_branch(BranchType.CallDestination, imm)
+            return Instruction(
+                text=[tI('call'), tT(' '), tA(hex(imm), imm)],
+                info=info,
+                llil=lambda il: il.append(il.call(il.const(8, imm)))
+            )
+        if imm == 0xffffffff:
+            info.add_branch(BranchType.SystemCall)
+            return Instruction(
+                text=[tI('syscall')],
+                info=info,
+                llil=lambda il: il.append(il.system_call())
+            )
+        else:
+            # TODO: no idea why but this causes binja to crash:
+            info.add_branch(BranchType.CallDestination, target)
+            return Instruction(
+                text=[tI('call'), tT(' '), tA(hex(target), target)],
+                info=info,
+                llil=lambda il: il.append(il.call(il.const(8, target))),
+            )
+    elif op == 9: # ret
+        info = InstructionInfo(length=8)
+        info.add_branch(BranchType.FunctionReturn)
+        return Instruction(
+            text=[tI('exit')],
+            info=info,
+            llil=lambda il: il.append(il.ret(il.pop(8)))
+        )
+    elif op in JUMP_COND:
+        name, cond = JUMP_COND[op]
+
+        tpos = addr + 8 + (signed(16, off) * 8)
+        tneg = addr + 8
+
+        info = InstructionInfo(length=8)
+        info.add_branch(BranchType.TrueBranch, tpos)
+        info.add_branch(BranchType.FalseBranch, tneg)
+
+        return Instruction(
+            # e.g: "jgt <+20> r3, 4"
+            text=[
+                tI(name), tT(' '),
+                tS('<'), tN(fmt_jump_offset(signed(16, off)), signed(16, off)), tS('>'),
+                tT(' '), tR(f'r{dst}'), tT(', '), (tR(f'r{src}') if s else tN(hex(signed(32, imm)), signed(32, imm)))],
+            info=info,
+            llil=lambda il: il_cond_branch(
+                il, 
+                cond(
+                    il,
+                    il.reg(8, f'r{dst}'),
+                    (il.reg(8, f'r{src}') if s else il.sign_extend(8, il.const(4, imm))),
+                ),
+                tpos,
+                tneg
+            )
+        )
+
+    else:
+        return None
+
+
+def decode(data: bytes, addr: int) -> Instruction:
+    if len(data) < 8:
+        return None
+
+    op = data[0]
+    regs = data[1]
+    dst = regs & 0xf
+    src = (regs >> 4) & 0xf
+    off = int.from_bytes(data[2:4], 'little')
+    imm = int.from_bytes(data[4:8], 'little')
+
+    aop = (op >> 4) & 0xf
+    s = (op >> 3) & 1
+    sz = (op >> 3) & 0b11
+    ldop = (op >> 3) & 0b11111
+
+    clz = op & 0b111
+
+    if clz == 0b000:
+        if ldop == 3: # lddw
+            if len(data) < 16:
+                return None
+            
+            imm2 = int.from_bytes(data[12:16], 'little')
+            return lddw(dst, imm | (imm2 << 32))
+        else:
+            return ld(ldop, dst, src, imm)
+    elif clz == 0b001: return ldx(dst, src, off, sz)
+    elif clz == 0b010: return st(dst, off, imm, sz)
+    elif clz == 0b011: return stx(dst, src, off, sz)
+    elif clz == 0b111: return alu64(aop, s, dst, src, imm)
+    elif clz == 0b100:
+        # 32-bit ALU
+        pass
+    elif clz == 0b101: return branch_type(aop, s, dst, src, imm, off, addr)
+
+
+    return None
+
+```
+
+`plugin.json`:
+
+```json
+{
+    "pluginmetadataversion": 2,
+    "name": "bn-ebpf-solana",
+    "type": [
+      "architecture",
+      "binaryview"
+    ],
+    "api": [
+      "python3"
+    ],
+    "description": "An architecture/binaryview plugin for Solana EBPF.",
+    "longdescription": "",
+    "license": {
+      "name": "MIT",
+      "text": "Copyright (c) 2022 OtterSec LLC\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+    },
+    "platforms": [
+      "Darwin",
+      "Linux",
+      "Windows"
+    ],
+    "dependencies": {
+      "pip": [
+        "lief"
+      ]
+    },
+    "version": "1.0.0",
+    "author": "OtterSec LLC",
+    "minimumbinaryninjaversion": 3164
+}
+
+```
+
+`solana.py`:
+
+```py
+
+from binaryninja import Platform
+
+
+class Solana(Platform):
+    name = "Solana"
+
+```
+
+`solanaview.py`:
+
+```py
+
+import os
+import pathlib
+
+from binaryninja import BinaryView, Architecture, SegmentFlag, SectionSemantics, Symbol, SymbolType, Platform
+import lief
+
+
+FUNCTION_SIGS = {
+    'abort': 'void abort() __noreturn',
+    'sol_panic_': 'void sol_panic_(const char *file_str, int file_str_len, int line, int col) __noreturn',
+    'sol_log_': 'void sol_log_(char *message, int size)',
+    'sol_log_64_': 'void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);',
+    'sol_log_compute_units_': 'void sol_log_compute_units_();',
+    'sol_log_pubkey': 'void sol_log_pubkey(SolPubkey *pk);',
+    'sol_create_program_address': 'uint64_t sol_create_program_address(const SolSignerSeed *seeds, int num_seeds, const SolPubkey *program_id, SolPubkey *out);',
+    'sol_try_find_program_address': 'uint64_t sol_try_find_program_address(const SolSignerSeed *seeds, int num_seeds, const SolPubkey *program_id, SolPubkey *out, uint8_t *out_bump);',
+    'sol_sha256': 'uint64_t sol_sha256(const SolBytes *bytes, int bytes_len, uint8_t *result);',
+    'sol_keccak256': 'uint64_t sol_keccak256(const SolBytes *bytes, int bytes_len, uint8_t *result);',
+    'sol_secp256k1_recover': 'uint64_t sol_secp256k1_recover(const uint8_t *hash, uint64_t recovery_id, const uint8_t *signature, uint8_t *result);',
+    'sol_get_clock_sysvar': 'uint64_t sol_get_clock_sysvar(uint8_t *out);',
+    'sol_get_epoch_schedule_sysvar': 'uint64_t sol_get_epoch_schedule_sysvar(uint8_t *out);',
+    'sol_get_rent_sysvar': 'uint64_t sol_get_rent_sysvar(uint8_t *out);',
+    'sol_memcpy_': 'void sol_memcpy_(uint8_t *dst, uint8_t *src, int n);',
+    'sol_memmove_': 'void sol_memmove_(uint8_t *dst, uint8_t *src, int n);',
+    'sol_memcmp_': 'int sol_memcmp_(uint8_t *s1, uint8_t *s2, int n);',
+    'sol_memset_': 'void sol_memset_(uint8_t *s, uint8_t c, int n);',
+    'sol_invoke_signed_c': 'uint64_t sol_invoke_signed_c(const SolInstruction *instruction, const SolAccountInfo *accounts, int num_accounts, const SolSignerSeeds *signers, int num_signers);',
+    'sol_invoke_signed_rust': 'void sol_invoke_signed_rust(void *instr, void *accounts, int num_accounts, void *seeds, int num_seeds)',
+    'sol_set_return_data': 'void sol_set_return_data(const uint8_t *bytes, uint64_t bytes_len);',
+    'sol_get_return_data': 'uint64_t sol_get_return_data(const uint8_t *bytes, uint64_t bytes_len, SolPubkey *program_id);',
+    'sol_log_data': 'void sol_log_data(SolBytes *, uint64_t);',
+    # 'sol_get_processed_sibling_instruction': '', # TODO
+    'sol_get_stack_height': 'uint64_t sol_get_stack_height();',
+}
+
+EXTERN_START = 0x1000
+EXTERN_SIZE = 0x2000
+
+class SolanaView(BinaryView):
+    name = 'Solana'
+    long_name = 'Solana'
+
+    @classmethod
+    def is_valid_for_data(self, data):
+        return data.read(0,4) == b'\x7fELF' and data.read(0x12, 2) == b'\xf7\x00'
+
+    def __init__(self, data):
+        BinaryView.__init__(self, parent_view=data, file_metadata=data.file)
+        self.platform = Platform['Solana']
+        self.data = data
+
+        self.extern_data = [0] * EXTERN_SIZE
+
+    def perform_read(self, addr: int, length: int) -> bytes:
+        # Override with custom extern data.
+        if addr >= EXTERN_START and addr < EXTERN_START + EXTERN_SIZE:
+            if addr + length > EXTERN_START + EXTERN_SIZE:
+                return b''
+            return bytes(self.extern_data[addr - EXTERN_START : addr + length - EXTERN_START])
+        else:
+            return super().perform_read(addr, length)
+
+    def perform_write(self, addr: int, data: bytes) -> int:
+        # Override with custom extern data.
+        if addr >= EXTERN_START and addr < EXTERN_START + EXTERN_SIZE:
+            self.extern_data[addr - EXTERN_START : addr + len(data) - EXTERN_START] = list(data)
+            return len(data)
+        else:
+            return super().perform_write(addr, data)
+
+    def load_types(self):
+        plugin_root = pathlib.Path(os.path.realpath(__file__)).parent
+
+        types = open(plugin_root / 'types.c', 'r').read()
+
+        info = self.parse_types_from_string(types)
+
+        for k in info.types:
+            t = info.types[k]
+            self.define_type(str(k), str(k), t)
+
+    def init(self):
+        print('init')
+
+        self.load_types()
+
+        p = lief.ELF.parse(list(self.data[:]))
+        
+        # Add LOAD segments
+        for s in p.segments:
+            if s.type == lief.ELF.SEGMENT_TYPES.LOAD:
+                self.add_auto_segment((1 << 32) + s.virtual_address, s.virtual_size, s.physical_address, s.physical_size, int(s.flags))
+
+        self.add_auto_segment(2 << 32, 0x8000, 0, 0, SegmentFlag.SegmentReadable | SegmentFlag.SegmentWritable)
+        self.add_auto_segment(3 << 32, 0x8000, 0, 0, SegmentFlag.SegmentReadable | SegmentFlag.SegmentWritable)
+        self.add_auto_segment(4 << 32, 0x8000, 0, 0, SegmentFlag.SegmentReadable | SegmentFlag.SegmentWritable)
+        
+        self.add_user_section("stack", 2 << 32, 0x8000, SectionSemantics.ReadWriteDataSectionSemantics)
+        self.add_user_section("heap", 3 << 32, 0x8000, SectionSemantics.ReadWriteDataSectionSemantics)
+        self.add_user_section("input", 4 << 32, 0x8000, SectionSemantics.ReadWriteDataSectionSemantics)
+
+        # Special extern section with syscalls.
+        # self.add_auto_segment(EXTERN_START, EXTERN_SIZE, 0, EXTERN_SIZE, SegmentFlag.SegmentExecutable | SegmentFlag.SegmentReadable)
+        self.add_auto_section('extern', EXTERN_START, EXTERN_SIZE, SectionSemantics.ReadOnlyCodeSectionSemantics)
+
+        # Map extern symbols to index.
+        extern_map = {}
+        curr_extern = 0
+        for s in p.symbols:
+            if s.type == lief.ELF.SYMBOL_TYPES.NOTYPE and s.binding == lief.ELF.SYMBOL_BINDINGS.GLOBAL:
+                # Skip duplicates
+                if s.name in extern_map:
+                    continue
+
+                extern_map[s.name] = curr_extern
+
+                pos = EXTERN_START + (curr_extern * 16)
+
+                # Define symbol.
+                self.define_auto_symbol(Symbol(
+                    SymbolType.LibraryFunctionSymbol,
+                    pos,
+                    s.name
+                ))
+
+                self.add_function(pos, Platform['Solana'])
+                self.write(pos, bytes([
+                    0x85,0x10,0,0,0xff,0xff,0xff,0xff, # syscall marker
+                    0x95,0,0,0,0,0,0,0 # exit
+                ]))
+
+                if s.name in FUNCTION_SIGS:
+                    f = self.get_function_at(pos)
+                    if f is not None:
+                        f.function_type = FUNCTION_SIGS[s.name]
+
+                curr_extern += 1
+
+        for s in p.sections:
+            if s.size != 0:
+                self.add_user_section(s.name, (1 << 32) + s.offset, s.size, SectionSemantics.ReadOnlyCodeSectionSemantics)
+
+        # Apply relocations.
+        for r in p.dynamic_relocations:
+            addr = r.address + (1 << 32)
+
+            if r.type == 8:
+                lo = int.from_bytes(self.read(addr + 4, 4), 'little')
+                hi = int.from_bytes(self.read(addr + 12, 4), 'little')
+                v = (hi << 32) + lo
+
+                # if already relocated, bail
+                if v >= 0x100000000:
+                    continue
+
+                v += (1 << 32)
+                lo = v & 0xffffffff
+                hi = v >> 32
+                self.write(addr + 4, lo.to_bytes(4, 'little'))
+                self.write(addr + 12, hi.to_bytes(4, 'little'))
+            elif r.type == 10:
+                if r.symbol.is_function:
+                    # BPF Function
+                    target = r.symbol.value + (1 << 32)
+                    off = (target - (addr + 8)) // 8
+                    if off < 0:
+                        off += 0x100000000
+                    self.write(addr + 4, off.to_bytes(4, 'little'))
+                else:
+                    # Syscall
+                    name = r.symbol.name
+                    if name in extern_map:
+                        idx = extern_map[name]
+                        pos = EXTERN_START + (idx * 16)
+                        self.write(addr + 4, pos.to_bytes(4, 'little'))
+                        self.write(addr + 1, bytes([2 << 4])) # Mark as absolute extern
+                        print('syscall @ ', hex(addr))
+                    else:
+                        print('Unhandled syscall: ', name)
+            else:
+                print('Unhandled relocation type: ', r)
+
+        # Apply function symbols.
+        for s in p.symbols:
+            if s.is_function:
+                # BPF Function
+                self.define_auto_symbol(Symbol(
+                    SymbolType.FunctionSymbol,
+                    s.value + (1 << 32),
+                    s.name
+                ))
+
+        return True
+
+```
+
+`types.c`:
+
+```c
+
+typedef struct {
+  const uint8_t *addr; /** bytes */
+  uint64_t len; /** number of bytes*/
+} SolBytes;
+
+typedef struct {
+  uint8_t x[32];
+} SolPubkey;
+
+typedef struct {
+  SolPubkey *key;      /** Public key of the account */
+  uint64_t *lamports;  /** Number of lamports owned by this account */
+  uint64_t data_len;   /** Length of data in bytes */
+  uint8_t *data;       /** On-chain data within this account */
+  SolPubkey *owner;    /** Program that owns this account */
+  uint64_t rent_epoch; /** The epoch at which this account will next owe rent */
+  bool is_signer;      /** Transaction was signed by this account's key? */
+  bool is_writable;    /** Is the account writable? */
+  bool executable;     /** This account's data contains a loaded program (and is now read-only) */
+} SolAccountInfo;
+
+typedef struct {
+  SolPubkey *pubkey; /** An account's public key */
+  bool is_writable; /** True if the `pubkey` can be loaded as a read-write account */
+  bool is_signer; /** True if an Instruction requires a Transaction signature matching `pubkey` */
+} SolAccountMeta;
+
+// fixed size arrays to help binja understand
+typedef struct {
+    SolAccountInfo accounts[32];
+} FixedAccountInfo;
+
+typedef struct {
+    SolAccountMeta metas[0x100];
+} FixedAccountMeta;
+
+typedef struct {
+  SolPubkey *program_id; /** Pubkey of the instruction processor that executes this instruction */
+  FixedAccountMeta *accounts; /** Metadata for what accounts should be passed to the instruction processor */
+  uint64_t account_len; /** Number of SolAccountMetas */
+  uint8_t *data; /** Opaque data passed to the instruction processor */
+  uint64_t data_len; /** Length of the data in bytes */
+} SolInstruction;
+
+typedef struct {
+  const uint8_t *addr; /** Seed bytes */
+  uint64_t len; /** Length of the seed bytes */
+} SolSignerSeed;
+
+typedef struct {
+  const SolSignerSeed *addr; /** An array of a signer's seeds */
+  uint64_t len; /** Number of seeds */
+} SolSignerSeeds;
+
+typedef struct {
+  FixedAccountInfo* ka; /** Pointer to an array of SolAccountInfo, must already
+                          point to an array of SolAccountInfos */
+  uint64_t ka_num; /** Number of SolAccountInfo entries in `ka` */
+  const uint8_t *data; /** pointer to the instruction data */
+  uint64_t data_len; /** Length in bytes of the instruction data */
+  const SolPubkey *program_id; /** program_id of the currently executing program */
+} SolParameters;
+
+```
