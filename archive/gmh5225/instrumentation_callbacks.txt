@@ -1,0 +1,669 @@
+Project Path: arc_gmh5225_instrumentation_callbacks_5rj3dc_b
+
+Source Tree:
+
+```txt
+arc_gmh5225_instrumentation_callbacks_5rj3dc_b
+├── LICENSE
+├── README.md
+├── instrumentation_callbacks
+│   ├── bridge.asm
+│   ├── common.h
+│   ├── instrumentation.cc
+│   ├── instrumentation.h
+│   ├── instrumentation_callbacks.vcxproj
+│   ├── instrumentation_callbacks.vcxproj.filters
+│   ├── main.cc
+│   ├── symbols.cc
+│   └── symbols.h
+└── instrumentation_callbacks.sln
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2021 Deputation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`README.md`:
+
+```md
+# instrumentation_callbacks
+Instrumentation callbacks are quite a fun undocumented part of Windows.
+All the code in this repository is released under the MIT license.
+This repository uses google style C++ spacing.
+
+PRs are welcome if you find issues, bugs, or believe a specific feature should be added.
+
+## What are they?
+Instrumentation callbacks will let you handle all syscalls (and exceptions!) dispatched by a process on which you placed a callback. 
+
+## The problem with callbacks.
+Of course, every syscall will be caught, so while the callback is executing you normally shouldn't issue any more syscalls inside it unless you want to end up recursing forever.
+
+This would limit greatly what you can do inside the callback, or at least pose some sort of design challenge, but in the next paragraph you'll see a fairly elegant solution to the problem.
+
+It is not flawless, since an eventual attacker can purposefully set the variable to disable the callback, but it's near perfect for analysis purposes.
+
+## The possible solution(s).
+One solution to this problem could be setting a flag to true/false that enables and disables the callback's analysis capabilities, essentially letting every syscall through if another syscall is already being handled.
+
+This, however, will let most syscalls seep through.
+
+This repository, instead, solves the issue of not being able to issue syscalls inside a callback by setting a TLS-dependent variable, making sure we handle **all** syscalls from all threads while being able to call them ourselves, the only syscalls we'll miss are the ones we'll issue from inside the callback, which (in most situations, such as ones in which we're analyzing software) we arguably don't care about.
+
+## Hypothetical uses.
+Instrumentation callbacks have a lot of possible uses, one of them could be for anti-cheating purposes, you could analyze syscalls coming from the process, and determine whether they come from an illegitimate address space or are being used for nefarious purposes without needing to fill system DLLs with bytepatches and hooks.
+
+You could also use them to gain code execution inside a process, if you can allocate and write to memory then set the process' information, you will be able to hijack a thread executing a syscall by making it call a callback of yours.
+
+Of course, I do not condone the usage of any code in this or my other repositories to develop cheating/malicious software.
+
+What you do with this is your own responsibility.
+
+```
+
+`instrumentation_callbacks.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31702.278
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "instrumentation_callbacks", "instrumentation_callbacks\instrumentation_callbacks.vcxproj", "{1E0E29D4-3AB4-4066-8261-2B9314128E3E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1E0E29D4-3AB4-4066-8261-2B9314128E3E}.Debug|x64.ActiveCfg = Debug|x64
+		{1E0E29D4-3AB4-4066-8261-2B9314128E3E}.Debug|x64.Build.0 = Debug|x64
+		{1E0E29D4-3AB4-4066-8261-2B9314128E3E}.Release|x64.ActiveCfg = Release|x64
+		{1E0E29D4-3AB4-4066-8261-2B9314128E3E}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4115140C-3F8C-479B-9D0A-7CEDE8DC6320}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`instrumentation_callbacks/bridge.asm`:
+
+```asm
+EXTERN callback:NEAR
+EXTERNDEF __imp_RtlCaptureContext:QWORD
+
+.code
+
+bridge PROC	
+    ; credits to https://gist.github.com/esoterix/df38008568c50d4f83123e3a90b62ebb
+    mov gs:[2e0h], rsp ; Win10 TEB InstrumentationCallbackPreviousSp
+    mov gs:[2d8h], r10 ; Win10 TEB InstrumentationCallbackPreviousPc
+	
+	mov r10, rcx ; save rcx
+	sub rsp, 4d0h ; CONTEXT structure size
+	and rsp, -10h ; align rsp
+	mov rcx, rsp ; parameters are fun
+	call __imp_RtlCaptureContext ; capture the thread's context
+	
+	sub rsp, 20h ; shadow stack space
+	call callback ; call our callback which will restore context and go back to where we want
+	
+	int 3 ; we should not be here.
+bridge ENDP
+
+END
+```
+
+`instrumentation_callbacks/common.h`:
+
+```h
+#pragma once
+#include <iostream>
+#include <string>
+#include <vector>
+#include <mutex>
+#include <thread>
+#include <chrono>
+
+#include <Windows.h>
+#include <DbgHelp.h>
+
+#include "instrumentation.h"
+#include "symbols.h"
+```
+
+`instrumentation_callbacks/instrumentation.cc`:
+
+```cc
+#include "common.h"
+
+DWORD instrumentation::tls_index;
+
+void callback(CONTEXT* ctx) {
+  // by using the TLS, we can make sure to handle all syscalls coming from
+  // all threads, and we can call syscalls ourselves inside the callback without
+  // recursing forever.
+
+  // Update these offsets to your windows version from ntdiff:
+  // https://ntdiff.github.io/
+  // /* 0x02d0 */ unsigned __int64 InstrumentationCallbackSp;
+  // /* 0x02d8 */ unsigned __int64 InstrumentationCallbackPreviousPc;
+  // /* 0x02e0 */ unsigned __int64 InstrumentationCallbackPreviousSp;
+
+  // Grab the teb to extract instrumentation callback specific information.
+  auto teb = reinterpret_cast<uint64_t>(NtCurrentTeb());
+
+  // Grab and store the address we should return to.
+  ctx->Rip = *reinterpret_cast<uint64_t*>(teb + 0x02d8);
+  // Grab and store the stack pointer that we should restore.
+  ctx->Rsp = *reinterpret_cast<uint64_t*>(teb + 0x02e0);
+  // Recover original RCX.
+  ctx->Rcx = ctx->R10;
+
+  // First check if this thread is already handling a syscall, hence this coming
+  // syscall is coming from inside the callback itself.
+  if (instrumentation::is_thread_handling_syscall()) {
+    // Abort if it's already handling a syscall, or if reading the data is not
+    // successful.
+    RtlRestoreContext(ctx, nullptr);
+  }
+
+  // Try setting the TLS variable to indicate that the thread is now handling a
+  // syscall.
+  if (!instrumentation::set_thread_handling_syscall(true)) {
+    // Abort if the variable couldn't be set.
+    RtlRestoreContext(ctx, nullptr);
+  }
+
+  // Grab the return address of the call.
+  auto return_address = reinterpret_cast<void*>(ctx->Rip);
+  // Grab the return value of the call.
+  auto return_value = reinterpret_cast<void*>(ctx->Rax);
+  // Variable that will hold teh amount of bytes into the function
+  // the return address is located into.
+  uint64_t offset_into_function;
+  // Grab the function's name.
+  auto function_name = syms::g_parser->get_function_sym_by_address(
+      return_address, &offset_into_function);
+
+  // Print out all the information.
+  std::cout << "[rax=0x" << return_value << "] "
+            << "[rip=0x" << return_address << "] "
+            << "syscall returning to " << function_name << "+0x" << std::hex
+            << offset_into_function << " (" << function_name << ")"
+            << std::endl;
+
+  // Unlock the thread so that it will be able to handle another syscall.
+  instrumentation::set_thread_handling_syscall(false);
+  // Restore the context back to the original one, continuing execution.
+  RtlRestoreContext(ctx, nullptr);
+}
+
+bool* instrumentation::get_thread_data_pointer() {
+  void* thread_data = nullptr;
+  bool* data_pointer = nullptr;
+
+  thread_data = TlsGetValue(instrumentation::tls_index);
+
+  if (thread_data == nullptr) {
+    thread_data = reinterpret_cast<void*>(LocalAlloc(LPTR, 256));
+
+    if (thread_data == nullptr) {
+      return nullptr;
+    }
+
+    RtlZeroMemory(thread_data, 256);
+
+
+    if (!TlsSetValue(instrumentation::tls_index, thread_data)) {
+      return nullptr;
+    }
+  }
+
+  data_pointer = reinterpret_cast<bool*>(thread_data);
+
+  return data_pointer;
+}
+
+bool instrumentation::set_thread_handling_syscall(bool value) {
+  if (auto data_pointer = get_thread_data_pointer()) {
+    *data_pointer = value;
+    return true;
+  }
+
+  return false;
+}
+
+bool instrumentation::is_thread_handling_syscall() {
+  if (auto data_pointer = get_thread_data_pointer()) {
+    return *data_pointer;
+  }
+
+  return false;
+}
+
+bool instrumentation::initialize() {
+  auto nt_dll = LoadLibrary(L"ntdll.dll");
+
+  if (!nt_dll) {
+    std::cout << "[+] Couldn't load ntdll.dll" << std::endl;
+
+    return false;
+  }
+
+  auto nt_set_information_process =
+      reinterpret_cast<instrumentation::nt_set_information_process_t>(
+          GetProcAddress(nt_dll, "NtSetInformationProcess"));
+
+  if (!nt_set_information_process) {
+    std::cout << "[+] Couldn't gather address for NtSetInformationProcess"
+              << std::endl;
+    return false;
+  }
+
+  instrumentation::tls_index = TlsAlloc();
+
+  if (instrumentation::tls_index == TLS_OUT_OF_INDEXES) {
+    std::cout << "Couldn't allocate a TLS index" << std::endl;
+
+    return false;
+  }
+
+  process_instrumentation_callback_info_t info;
+  info.version = 0;  // x64 mode
+  info.reserved = 0;
+  info.callback = bridge;
+
+  nt_set_information_process(GetCurrentProcess(),
+                             static_cast<PROCESS_INFORMATION_CLASS>(0x28),
+                             &info, sizeof(info));
+
+  return true;
+}
+```
+
+`instrumentation_callbacks/instrumentation.h`:
+
+```h
+#pragma once
+
+namespace instrumentation {
+/// <summary>
+/// Structure describing the syscall NtSetInformationProcess, its return value
+/// and its arguments.
+/// </summary>
+using nt_set_information_process_t = NTSTATUS(NTAPI*)(HANDLE,
+                                                      PROCESS_INFORMATION_CLASS,
+                                                      PVOID, ULONG);
+/// <summary>
+/// Structure describing the callback the system will call.
+/// </summary>
+using bridge_function_t = void (*)();
+
+/// <summary>
+/// System structure used to describe an instrumentation callback, will be sent
+/// to the NtSetInformationProcess syscall.
+/// </summary>
+struct process_instrumentation_callback_info_t {
+  uint32_t version;
+  uint32_t reserved;
+  bridge_function_t callback;
+};
+
+/// <summary>
+/// TLS index used to store thread specific information.
+/// </summary>
+extern DWORD tls_index;
+
+/// <summary>
+/// Get a pointer to the thread specific information we allocated (a boolean
+/// telling us whether the current thread is handling a syscall or not.
+/// </summary>
+/// <returns>A pointer to the boolean describing whether or not the current
+/// thread is handling a syscall.</returns>
+bool* get_thread_data_pointer();
+
+/// <summary>
+/// Gets a pointer to the thread specific data describing whether or not the
+/// current thread is handling a syscall, and sets it to the value defined in parameters.
+/// </summary>
+/// <param name="value">Value to set the syscall "lock" to.</param>
+/// <returns>True if the operation was successful, false if not.</returns>
+bool set_thread_handling_syscall(bool value);
+
+/// <summary>
+/// Gets a pointer to the thread specific data describing whether or not the
+/// curreent thread is handling a syscall, dereferences it and returns its
+/// value.
+/// </summary>
+/// <returns>Ture if the variable was set to true, false if it wasn't or there
+/// was an error.</returns>
+bool is_thread_handling_syscall();
+
+/// <summary>
+/// Initializes the TLS index and places the instrumentation callback.
+/// </summary>
+/// <returns>True if initialization was successful, false if not.</returns>
+bool initialize();
+}  // namespace instrumentation
+
+/// <summary>
+/// "Bridge" function used to call the instrumentationc allback and setting up
+/// the stack properly.
+/// </summary>
+extern "C" void bridge();
+
+/// <summary>
+/// Actual instrumentation callback which will receive syscall. Extern'd so that
+/// it may be called directly from the .asm file.
+/// </summary>
+/// <param name="ctx">syscall context.</param>
+extern "C" void callback(CONTEXT* ctx);
+```
+
+`instrumentation_callbacks/instrumentation_callbacks.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{1e0e29d4-3ab4-4066-8261-2b9314128e3e}</ProjectGuid>
+    <RootNamespace>instrumentationcallbacks</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>imagehlp.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>imagehlp.lib;ntdll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="instrumentation.cc" />
+    <ClCompile Include="main.cc" />
+    <ClCompile Include="symbols.cc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common.h" />
+    <ClInclude Include="instrumentation.h" />
+    <ClInclude Include="symbols.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="bridge.asm">
+      <FileType>Document</FileType>
+    </MASM>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>
+```
+
+`instrumentation_callbacks/instrumentation_callbacks.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="instrumentation.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="symbols.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="instrumentation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="symbols.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="bridge.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
+  </ItemGroup>
+</Project>
+```
+
+`instrumentation_callbacks/main.cc`:
+
+```cc
+#include "common.h"
+
+int main(void) {
+  syms::initialize();
+
+  if (!instrumentation::initialize()) {
+    std::cout << "[+] Couldn't initialize instrumentation callbacks. "
+              << std::endl;
+  }
+
+  while (true) {
+    using namespace std::chrono_literals;
+
+    // Issue a call for the callback to catch!
+
+    // NtClose call will be caught.
+    CloseHandle(reinterpret_cast<HANDLE>(0x1));
+
+    // NtDelayExecution call will be caught.
+    std::this_thread::sleep_for(1000ms);
+  }
+
+  return 0;
+}
+```
+
+`instrumentation_callbacks/symbols.cc`:
+
+```cc
+#include "common.h"
+
+std::shared_ptr<syms::parser_t> syms::g_parser;
+
+std::string syms::parser_t::get_function_sym_by_address(
+    void* address, uint64_t* offset_into_function_output) {
+  auto buffer = std::malloc(sizeof(SYMBOL_INFO) + MAX_SYM_NAME);
+
+  if (!buffer) {
+    return "Couldn't retrieve function name.";
+  }
+
+  RtlZeroMemory(buffer, sizeof(buffer));
+
+  auto symbol_information = reinterpret_cast<PSYMBOL_INFO>(buffer);
+  symbol_information->SizeOfStruct = sizeof(SYMBOL_INFO);
+  symbol_information->MaxNameLen = MAX_SYM_NAME;
+
+  DWORD64 offset_into_function = 0;
+
+  auto result = SymFromAddr(reinterpret_cast<HANDLE>(-1),
+                            reinterpret_cast<DWORD64>(address),
+                            &offset_into_function, symbol_information);
+
+  if (!result) {
+    std::free(buffer);
+    return "Couldn't retrieve function name.";
+  }
+
+  if (offset_into_function_output) {
+    *offset_into_function_output = offset_into_function;
+  }
+
+  auto built_string = std::string(symbol_information->Name);
+  
+  std::free(buffer);
+
+  return built_string;
+}
+
+syms::parser_t::parser_t() {
+  SymSetOptions(SYMOPT_UNDNAME);
+  SymInitialize(reinterpret_cast<HANDLE>(-1), nullptr, true);
+}
+
+void syms::initialize() { g_parser = std::make_shared<parser_t>(); }
+```
+
+`instrumentation_callbacks/symbols.h`:
+
+```h
+#pragma once
+
+namespace syms {
+/// <summary>
+/// Parser clased used to interface with the DbgHelp interface.
+/// </summary>
+class parser_t {
+ public:
+  /// <summary>
+  /// Gets a function's name given its address.
+  /// </summary>
+  /// <param name="address">Function address (can be any number of bytes into
+  /// the function.)</param> <param name="offset_into_function_output">Pointer
+  /// to a variable which will receive the amount of bytes the address is into
+  /// the function.</param>
+  /// <returns>The function's name if successful., otherwise an error
+  /// message.</returns>
+  std::string get_function_sym_by_address(
+      void* address, uint64_t* offset_into_function_output = nullptr);
+
+  /// <summary>
+  /// Initializes the symbol parsing interface.
+  /// </summary>
+  parser_t();
+};
+
+/// <summary>
+/// Singleton used to let the program interface elegantly with the symbol
+/// parsing interface.
+/// </summary>
+extern std::shared_ptr<parser_t> g_parser;
+
+/// <summary>
+/// Initializes the symbol parsing interface.
+/// </summary>
+void initialize();
+}  // namespace syms
+```
