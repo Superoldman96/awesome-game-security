@@ -1,0 +1,2495 @@
+Project Path: arc_gmh5225_VAC_7e2c_a1d
+
+Source Tree:
+
+```txt
+arc_gmh5225_VAC_7e2c_a1d
+├── README.md
+└── VAC (Valve Anti-Cheat)
+    ├── VAC (Valve Anti-Cheat)
+    │   ├── AimbotDedection
+    │   │   ├── Check.cs
+    │   │   ├── Control.cs
+    │   │   ├── Math.cs
+    │   │   └── Vectors.cs
+    │   ├── App.config
+    │   ├── ConsoleHelper.cs
+    │   ├── CurrentTime.cs
+    │   ├── InternalDedection
+    │   │   ├── AntiInject.cs
+    │   │   ├── Scan.cs
+    │   │   ├── Structs.cs
+    │   │   └── TrustedModules.cs
+    │   ├── IsAdministor.cs
+    │   ├── IsDisconnected.cs
+    │   ├── IsGameOpened.cs
+    │   ├── Offsets.cs
+    │   ├── ProcessChecks
+    │   │   ├── DedectString.cs
+    │   │   ├── ProcessList.cs
+    │   │   ├── Processes.cs
+    │   │   └── ScanProcess.cs
+    │   ├── Program.cs
+    │   ├── Properties
+    │   │   └── AssemblyInfo.cs
+    │   ├── ResAdministor.cs
+    │   ├── UserInformation
+    │   │   ├── BiosInformation.cs
+    │   │   ├── BiosVersion.cs
+    │   │   ├── DISCorUSB.cs
+    │   │   ├── HWID.cs
+    │   │   ├── IPAddress.cs
+    │   │   └── ProcessorInformation.cs
+    │   ├── VAC (Valve Anti-Cheat).csproj
+    │   └── obj
+    │       └── Debug
+    │           ├── DesignTimeResolveAssemblyReferences.cache
+    │           ├── DesignTimeResolveAssemblyReferencesInput.cache
+    │           ├── VAC (Valve Anti-Cheat).csproj.AssemblyReference.cache
+    │           ├── VAC (Valve Anti-Cheat).csproj.CoreCompileInputs.cache
+    │           ├── VAC (Valve Anti-Cheat).csproj.FileListAbsolute.txt
+    │           ├── VAC (Valve Anti-Cheat).csproj.SuggestedBindingRedirects.cache
+    │           ├── VAC (Valve Anti-Cheat).exe
+    │           └── VAC (Valve Anti-Cheat).pdb
+    └── VAC (Valve Anti-Cheat).sln
+
+```
+
+`README.md`:
+
+```md
+> -> This development is not over :)
+
+
+Features:
+> -> Getting user information. (HWID, IP Address, BIOS, Processor ID etc..)
+
+> -> Getting Processes information / Advanced processes scanning (external cheat dedection)
+
+> -> Simple Aimbot dedection example
+
+> -> Internal cheat dedection; Getting CS:GO Modules and comparing with those in the safe list. cuz when a cheat is injected, the module that is not in the safe list is added. NOT: Trusted modules can be expanded.
+
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat).sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32526.322
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VAC (Valve Anti-Cheat)", "VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat).csproj", "{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {20190421-575B-47C7-B73D-483F9732DE47}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/AimbotDedection/Check.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.AimbotDedection
+{
+    public static class Check
+    {
+        public static bool Do(Vector3 viewangles)
+        {
+            if (viewangles.X > 360f) return true;
+            if (viewangles.X < -89f) return true;
+
+            if (viewangles.Y > 360f) return true;
+            if (viewangles.Y < -180f) return true;
+
+            if (viewangles.Z != 0) return true;
+
+            return false;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/AimbotDedection/Control.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using static VAC.AimbotDedection.Vectors;
+
+namespace VAC.AimbotDedection
+{
+    public static class Control
+    {
+        public static void Do()
+        {
+            restart:
+
+            if (!IsGameOpened.check())
+            {
+                Thread.Sleep(2500);
+                goto restart;
+            }
+            // if csgo started;
+
+
+            // while connected
+            while (Offsets.clientstate == 6) 
+            {
+                new Thread(() =>
+                {
+                    Vectors.rnd(); // initalize random to add viewangles
+                }).Start();
+
+                Thread.Sleep(50); // 50 is so slowly..
+
+
+                // if local player not connected, jump end.
+                if (!IsConnected.check())
+                {
+                    Clear(); continue;
+                }
+
+                // if local player is ded, jump end.
+                if (Offsets.localplayer_Health == 0)
+                {
+                    Clear(); continue;
+                }
+
+                //player moving is basicly changes viewangles
+                AimAngles.X += PlayerMoving.X;
+                AimAngles.Y += PlayerMoving.Y;
+                AimAngles.Z += PlayerMoving.Z;
+
+
+                //this is normalized (true) viewangles
+                Vector3 CurrentViewAngles = Math.normalize(AimAngles);
+                //Console.WriteLine("x: " + CurrentViewAngles.X);
+                //Console.WriteLine("y: " + CurrentViewAngles.Y);
+                //Console.WriteLine("y: " + CurrentViewAngles.Z);
+
+                
+
+                // control aim angles
+                // if some cheats changing viewangles with broken aimbot math, it be should return true.
+                // So will be dedected:
+                if (Check.Do(CurrentViewAngles)) // you can test with not normalized AimAngles too :)
+                {
+                    MessageBox.Show("Rejecting invalid value.\nX: " + CurrentViewAngles.X + " Y: " + CurrentViewAngles.Y + " Z: " + CurrentViewAngles.Z);
+                }     
+            }
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/AimbotDedection/Math.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.AimbotDedection
+{
+    public static class Math
+    {
+        public static Vector3 normalize(Vector3 delta)
+        {
+            // X
+            if (delta.X > 89.0f && delta.X <= 180.0f)
+                delta.X = 89.0f;
+            while (delta.X > 180.0f)
+                delta.X -= 360.0f;
+            while (delta.X < -89.0f)
+                delta.X = -89.0f;
+
+            // Y
+            while (delta.Y > 180.0f)
+                delta.Y -= 360.0f;
+            while (delta.Y < -180.0f)
+                delta.Y += 360.0f;
+
+            // Z
+            delta.Z = 0;
+
+            return delta;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/AimbotDedection/Vectors.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.AimbotDedection
+{
+    public static class Vectors
+    {
+        public static Vector3 AimAngles = new Vector3();
+        public static Vector3 PlayerMoving = new Vector3();
+
+        public static void Clear()
+        {
+            AimAngles.X = 0;
+            AimAngles.Y = 0;
+            AimAngles.Z = 0;
+        }
+
+        public static void rnd()
+        {
+            Random rand = new Random();
+            double min = 1;
+            double max = 10;
+            double range = max - min;
+            for (int i = 0; i < 10; i++)
+            {
+                double sample = rand.NextDouble();
+                double scaled = (sample * range) + min;
+                float x = (float)scaled;
+                float y = (float)((float)scaled * 0.7);
+                float z = 0;
+
+                PlayerMoving.X = x * 2.5f;
+                PlayerMoving.Y = y * 1.4f;
+                PlayerMoving.Z = z;
+
+                // test move
+                //Console.WriteLine("PlayerMoving.X: " + PlayerMoving.X);
+                //Console.WriteLine("PlayerMoving.Y: " + PlayerMoving.Y);
+                //Console.WriteLine("PlayerMoving.Z: " + PlayerMoving.Z);
+            }
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/App.config`:
+
+```config
+<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+    <startup> 
+        <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.7.2" />
+    </startup>
+</configuration>
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ConsoleHelper.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class ConsoleHelper
+    {
+        public static void Error(string message)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(message);
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+
+        public static void Warning(string message)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine(message);
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+
+        public static void Clear()
+        {
+            Thread.Sleep(250);
+            Console.Clear();
+        }
+
+        public static void Dedected(string message)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkMagenta;
+            Console.WriteLine(message);
+            Console.ForegroundColor = ConsoleColor.White;
+        }
+
+        public static void Title(string Title)
+        {
+            Console.Title = Title;
+        }
+
+        public static void BadTitle(string Title, string CurrentTime)
+        {
+            Console.Title = Title + " - " + CurrentTime;
+        }
+
+        public static bool DisplayCheckResult(string process, string status)
+        {
+            Console.WriteLine(process + "..." + status);
+
+            return false;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/CurrentTime.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class CurrentTime
+    {
+        public static string Get()
+        {
+            return DateTime.Now.ToString("h:mm:ss tt");
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/InternalDedection/AntiInject.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.InternalDedection
+{
+    public static class AntiInject
+    {
+        static class imports
+        {
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern IntPtr GetModuleHandle(string lib);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern IntPtr GetProcAddress(IntPtr ModuleHandle, string Function);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool WriteProcessMemory(IntPtr ProcHandle, IntPtr BaseAddress, byte[] Buffer, uint size, int NumOfBytes);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            public static extern bool SetProcessMitigationPolicy(int policy, ref Structs.PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY lpBuffer, int size);
+        }
+
+        public static string PatchLoadLibraryA()
+        {
+            IntPtr KernelModule = imports.GetModuleHandle("kernelbase.dll");
+            IntPtr LoadLibraryA = imports.GetProcAddress(KernelModule, "LoadLibraryA");
+            byte[] HookedCode = { 0xC2, 0x04, 0x00 };
+            bool Status = imports.WriteProcessMemory(Process.GetCurrentProcess().Handle /*current process yerine csgo..*/, LoadLibraryA, HookedCode, 3, 0);
+            if (Status)
+                return "Success";
+            return "Failed";
+        }
+
+        public static string PatchLoadLibraryW()
+        {
+            IntPtr KernelModule = imports.GetModuleHandle("kernelbase.dll");
+            IntPtr LoadLibraryW = imports.GetProcAddress(KernelModule, "LoadLibraryW");
+            byte[] HookedCode = { 0xC2, 0x04, 0x00 };
+            bool Status = imports.WriteProcessMemory(Process.GetCurrentProcess().Handle /*current process yerine csgo..*/, LoadLibraryW, HookedCode, 3, 0);
+            if (Status)
+                return "Success";
+            return "Failed";
+        }
+
+        public static string BinaryImageSignatureMitigationAntiDllInjection()
+        {
+            Structs.PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY OnlyMicrosoftBinaries = new Structs.PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY();
+            OnlyMicrosoftBinaries.MicrosoftSignedOnly = 1;
+            if (imports.SetProcessMitigationPolicy(8, ref OnlyMicrosoftBinaries, Marshal.SizeOf(typeof(Structs.PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY))))
+                return "Success";
+            return "Failed";
+        }
+
+        public static void patch()
+        {
+            PatchLoadLibraryA();
+            PatchLoadLibraryW();
+            BinaryImageSignatureMitigationAntiDllInjection();
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/InternalDedection/Scan.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.InternalDedection
+{
+    public static class Scan
+    {
+        public static void Do()
+        {
+            Process CSGO = Process.GetProcessesByName("csgo")[0];
+            if (Process.GetProcessesByName("csgo").Length > 0)
+            {
+                int i = 0;
+
+                foreach (ProcessModule module in CSGO.Modules)
+                {
+
+                    string modulename = module.ModuleName;
+
+                    //Console.WriteLine("modulename: " + modulename);
+
+                    if (TrustedModules.list.Any(x => x == modulename))
+                    {                        
+                        // do some action here if true...
+                    }
+                    else
+                    {
+                        i++;
+                        Console.WriteLine("invalid dll -> " + modulename + " found in CS:GO modules.");
+                    }
+                }
+
+                if (i == 0) Console.WriteLine("no injected dll was found");
+                else i = 0;
+
+
+                //rescan yapılacak.
+            }
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/InternalDedection/Structs.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.InternalDedection
+{
+    class Structs
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct CONTEXT
+        {
+            public uint P1Home;
+            public uint P2Home;
+            public uint P3Home;
+            public uint P4Home;
+            public uint P5Home;
+            public uint P6Home;
+            public long ContextFlags;
+            public uint Dr0;
+            public uint Dr1;
+            public uint Dr2;
+            public uint Dr3;
+            public uint Dr4;
+            public uint Dr5;
+            public uint Dr6;
+            public uint Dr7;
+        }
+        public struct PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY
+        {
+            public uint MicrosoftSignedOnly;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        public struct SYSTEM_CODEINTEGRITY_INFORMATION
+        {
+            [FieldOffset(0)]
+            public ulong Length;
+
+            [FieldOffset(4)]
+            public uint CodeIntegrityOptions;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PROCESS_BASIC_INFORMATION
+        {
+            internal IntPtr Reserved1;
+            internal IntPtr PebBaseAddress;
+            internal IntPtr Reserved2_0;
+            internal IntPtr Reserved2_1;
+            internal IntPtr UniqueProcessId;
+            internal IntPtr InheritedFromUniqueProcessId;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SYSTEM_KERNEL_DEBUGGER_INFORMATION
+        {
+            [MarshalAs(UnmanagedType.U1)]
+            public bool KernelDebuggerEnabled;
+
+            [MarshalAs(UnmanagedType.U1)]
+            public bool KernelDebuggerNotPresent;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct UNICODE_STRING
+        {
+            public ushort Length;
+            public ushort MaximumLength;
+            public IntPtr Buffer;
+        }
+        public struct ANSI_STRING
+        {
+            public short Length;
+            public short MaximumLength;
+            public string Buffer;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/InternalDedection/TrustedModules.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.InternalDedection
+{
+    public static class TrustedModules
+    {
+        public static string[] list = new string[] {
+        "csgo.exe",
+        "ntdll.dll",
+        "KERNEL32.DLL",
+        "KERNELBASE.dll",
+        "apphelp.dll",
+        "AcGenral.DLL",
+        "msvcrt.dll",
+        "sechost.dll",
+        "RPCRT4.dll",
+        "SHLWAPI.dll",
+        "USER32.dll",
+        "win32u.dll",
+        "GDI32.dll",
+        "gdi32full.dll",
+        "msvcp_win.dll",
+        "ucrtbase.dll",
+        "ole32.dll",
+        "combase.dll",
+        "OLEAUT32.dll",
+        "SHELL32.dll",
+        "ADVAPI32.dll",
+        "UxTheme.dll",
+        "WINMM.dll",
+        "samcli.dll",
+        "MSACM32.dll",
+        "VERSION.dll",
+        "USERENV.dll",
+        "dwmapi.dll",
+        "urlmon.dll",
+        "WINSPOOL.DRV",
+        "MPR.dll",
+        "SspiCli.dll",
+        "winmmbase.dll",
+        "iertutil.dll",
+        "shcore.dll",
+        "srvcli.dll",
+        "netutils.dll",
+        "IMM32.DLL",
+        "gameoverlayrenderer.dll",
+        "PSAPI.DLL",
+        "wintrust.dll",
+        "CRYPT32.dll",
+        "MSASN1.dll",
+        "launcher.dll",
+        "WSOCK32.dll",
+        "WS2_32.dll",
+        "steam_api.dll",
+        "tier0.dll",
+        "vstdlib.dll",
+        "POWRPROF.dll",
+        "UMPDC.dll",
+        "filesystem_stdio.dll",
+        "kernel.appcore.dll",
+        "bcryptPrimitives.dll",
+        "engine.dll",
+        "WININET.dll",
+        "IPHLPAPI.DLL",
+        "phonon.dll",
+        "steamnetworkingsockets.dll",
+        "bcrypt.dll",
+        "inputsystem.dll",
+        "vphysics.dll",
+        "materialsystem.dll",
+        "datacache.dll",
+        "studiorender.dll",
+        "soundemittersystem.dll",
+        "vscript.dll",
+        "soundsystem.dll",
+        "valve_avi.dll",
+        "AVIFIL32.dll",
+        "MSVFW32.dll",
+        "COMCTL32.dll",
+        "vguimatsurface.dll",
+        "vgui2.dll",
+        "panoramauiclient.dll",
+        "v8.dll",
+        "video.dll",
+        "WINNSI.DLL",
+        "amdihk32.dll",
+        "atiu9pag.dll",
+        "v8_libbase.dll",
+        "icui18n.dll",
+        "icuuc.dll",
+        "Wlanapi.dll",
+        "aticfx32.dll",
+        "libavcodec-56.dll",
+        "libavformat-56.dll",
+        "libpangoft2-1.0-0.dll",
+        "libavresample-2.dll",
+        "libavutil-54.dll",
+        "libgobject-2.0-0.dll",
+        "libavcodec - 56.dll",
+        "libavformat - 56.dll",
+        "libavresample - 2.dll",
+        "libavutil - 54.dll",
+        "libswscale - 3.dll",
+        "dbghelp.dll",
+        "panorama.dll",
+        "cairo.dll",
+        "parsifal.dll",
+        "v8_libplatform.dll",
+        "shaderapidx9.dll",
+        "d3d9.dll",
+        "windows.storage.dll",
+        "Wldp.dll",
+        "nvapi.dll",
+        "SETUPAPI.dll",
+        "cfgmgr32.dll",
+        "cryptnet.dll",
+        "drvstore.dll",
+        "devobj.dll",
+        "DEVOBJ.dll",
+        "cryptbase.dll",
+        "CRYPTBASE.DLL",
+        "imemanager.dll",
+        "localize.dll",
+        "panorama_text_pango.dll",
+        "libfontconfig - 1.dll",
+        "libglib - 2.0 - 0.dll",
+        "libpango-1.0-0.dll",
+        "libswscale-3.dll",
+        "atiumdag.dll",
+        "dhcpcsvc6.DLL",
+        "libgobject - 2.0 - 0.dll",
+        "libfontconfig-1.dll",
+        "libglib-2.0-0.dll",
+        "libgmodule-2.0-0.dll",
+        "libfreetype-6.dll",
+        "libfreetype - 6.dll",
+        "libpango - 1.0 - 0.dll",
+        "libpangoft2 - 1.0 - 0.dll",
+        "libgmodule - 2.0 - 0.dll",
+        "USP10.dll",
+        "nvldumd.dll",
+        "imagehlp.dll",
+        "CRYPTSP.dll",
+        "rsaenh.dll",
+        "nvd3dum.dll",
+        "steamclient.dll",
+        "tier0_s.dll",
+        "vstdlib_s.dll",
+        "MSWSOCK.dll",
+        "Secur32.dll",
+        "crashhandler.dll",
+        "stdshader_dbg.dll",
+        "stdshader_dx9.dll",
+        "MMDevAPI.DLL",
+        "wdmaud.drv",
+        "ksuser.dll",
+        "AVRT.dll",
+        "AUDIOSES.DLL",
+        "dbgcore.DLL",
+        "msacm32.drv",
+        "atiumdva.dll",
+        "midimap.dll",
+        "clbcatq.dll",
+        "XInput1_4.dll",
+        "inputhost.dll",
+        "CoreMessaging.dll",
+        "PROPSYS.dll",
+        "wintypes.dll",
+        "CoreUIComponents.dll",
+        "ntmarta.dll",
+        "DINPUT.DLL",
+        "HID.DLL",
+        "wbemprox.dll",
+        "wbemcomn.dll",
+        "wbemsvc.dll",
+        "fastprox.dll",
+        "amsi.dll",
+        "profapi.dll",
+        "napinsp.dll",
+        "pnrpnsp.dll",
+        "wshbth.dll",
+        "NLAapi.dll",
+        "DNSAPI.dll",
+        "NSI.dll",
+        "winrnr.dll",
+        "fwpuclnt.dll",
+        "rasadhlp.dll",
+        "MSCTF.dll",
+        "textinputframework.dll",
+        "nvspcap.dll",
+        "gpapi.dll",
+        "NvCamera32.dll",
+        "XINPUT9_1_0.dll",
+        "DINPUT8.dll",
+        "WindowsCodecs.dll",
+        "dxgi.dll",
+        "d3d11.dll",
+        "d3dcompiler_47_32.dll",
+        "nvwgf2um.dll",
+        "dxcore.dll",
+        "dcomp.dll",
+        "mscms.dll",
+        "ColorAdapterClient.dll",
+        "Windows.Internal.Graphics.Display.DisplayColorManagement.dll",
+        "Windows.UI.dll",
+        "WindowManagementAPI.dll",
+        "twinapi.appcore.dll",
+        "matchmaking.dll",
+        "client.dll",
+        "server.dll",
+        "scenefilecache.dll",
+        "shfolder.dll",
+        "vaudio_miles.dll",
+        "mss32.dll",
+        "mssmp3.asi",
+        "mssds3d.flt",
+        "XAudio2_7.dll",
+        "resourcepolicyclient.dll",
+        "DSOUND.DLL",
+        "dhcpcsvc.DLL",
+        "vaudio_celt.dll",
+        "serverbrowser.dll",
+        "winhttp.dll"
+
+        };
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/IsAdministor.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Principal;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class IsAdministor
+    {
+        public static bool check()
+        {
+            return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/IsDisconnected.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using static VAC.Offsets;
+
+namespace VAC
+{
+    public static class IsConnected
+    {
+        public static bool check()
+        {
+            return localplayer > 0 && clientstate == 6; 
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/IsGameOpened.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class IsGameOpened
+    {
+        public static bool check()
+        {
+            Process[] csgo = Process.GetProcessesByName("csgo");
+            if (csgo.Length == 0) return false;
+
+            return true;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/Offsets.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class Offsets
+    {
+        // GAME STATUS
+
+        public static int clientstate = 6; // 6 = connected
+        public static int localplayer = 9370242;
+        public static int localplayer_Health = 100;
+        public static bool shootsfired = true; // m_iShotsFired returns 1 if local player shooting
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ProcessChecks/DedectString.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.ProcessChecks
+{
+    public static class DedectString
+    {
+        public static string list = "h a c k";
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ProcessChecks/ProcessList.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using VAC.ProcessChecks;
+using static VAC.Processes;
+using static VAC.ConsoleHelper;
+using System.Threading;
+
+namespace VAC
+{
+    public static class ProcessList
+    {
+        public static void ScanAll()
+        {
+            rescan:
+
+            for (Process[] processlist = Process.GetProcesses(); ;)
+            {
+                try
+                {
+                    _0 = processlist[0].ProcessName;
+                    try { check(processlist[0].MainModule.FileName); } catch { }
+
+                    _1 = processlist[1].ProcessName;
+                    try { check(processlist[1].MainModule.FileName); } catch { }
+
+                    _2 = processlist[2].ProcessName;
+                    try { check(processlist[2].MainModule.FileName); } catch { }
+
+                    _3 = processlist[3].ProcessName;
+                    try { check(processlist[3].MainModule.FileName); } catch { }
+
+                    _4 = processlist[4].ProcessName;
+                    try { check(processlist[4].MainModule.FileName); } catch { }
+
+                    _5 = processlist[5].ProcessName;
+                    try { check(processlist[5].MainModule.FileName); } catch { }
+
+                    _6 = processlist[6].ProcessName;
+                    try { check(processlist[6].MainModule.FileName); } catch { }
+
+                    _7 = processlist[7].ProcessName;
+                    try { check(processlist[7].MainModule.FileName); } catch { }
+
+                    _8 = processlist[8].ProcessName;
+                    try { check(processlist[8].MainModule.FileName); } catch { }
+
+                    _9 = processlist[9].ProcessName;
+                    try { check(processlist[9].MainModule.FileName); } catch { }
+
+                    _10 = processlist[10].ProcessName;
+                    try { check(processlist[10].MainModule.FileName); } catch { }
+
+                    _11 = processlist[11].ProcessName;
+                    try { check(processlist[11].MainModule.FileName); } catch { }
+
+                    _12 = processlist[12].ProcessName;
+                    try { check(processlist[12].MainModule.FileName); } catch { }
+
+                    _13 = processlist[13].ProcessName;
+                    try { check(processlist[13].MainModule.FileName); } catch { }
+
+                    _14 = processlist[14].ProcessName;
+                    try { check(processlist[14].MainModule.FileName); } catch { }
+
+                    _15 = processlist[15].ProcessName;
+                    try { check(processlist[15].MainModule.FileName); } catch { }
+
+                    _16 = processlist[16].ProcessName;
+                    try { check(processlist[16].MainModule.FileName); } catch { }
+
+                    _17 = processlist[17].ProcessName;
+                    try { check(processlist[17].MainModule.FileName); } catch { }
+
+                    _18 = processlist[18].ProcessName;
+                    try { check(processlist[18].MainModule.FileName); } catch { }
+
+                    _19 = processlist[19].ProcessName;
+                    try { check(processlist[19].MainModule.FileName); } catch { }
+
+                    _20 = processlist[20].ProcessName;
+                    try { check(processlist[20].MainModule.FileName); } catch { }
+
+                    _21 = processlist[21].ProcessName;
+                    try { check(processlist[21].MainModule.FileName); } catch { }
+
+                    _22 = processlist[22].ProcessName;
+                    try { check(processlist[22].MainModule.FileName); } catch { }
+
+                    _23 = processlist[23].ProcessName;
+                    try { check(processlist[23].MainModule.FileName); } catch { }
+
+                    _24 = processlist[24].ProcessName;
+                    try { check(processlist[24].MainModule.FileName); } catch { }
+
+                    _25 = processlist[25].ProcessName;
+                    try { check(processlist[25].MainModule.FileName); } catch { }
+
+                    _26 = processlist[26].ProcessName;
+                    try { check(processlist[26].MainModule.FileName); } catch { }
+
+                    _27 = processlist[27].ProcessName;
+                    try { check(processlist[27].MainModule.FileName); } catch { }
+
+                    _28 = processlist[28].ProcessName;
+                    try { check(processlist[28].MainModule.FileName); } catch { }
+
+                    _29 = processlist[29].ProcessName;
+                    try { check(processlist[29].MainModule.FileName); } catch { }
+
+                    _30 = processlist[30].ProcessName;
+                    try { check(processlist[30].MainModule.FileName); } catch { }
+
+                    _31 = processlist[31].ProcessName;
+                    try { check(processlist[31].MainModule.FileName); } catch { }
+
+                    _32 = processlist[32].ProcessName;
+                    try { check(processlist[32].MainModule.FileName); } catch { }
+
+                    _33 = processlist[33].ProcessName;
+                    try { check(processlist[33].MainModule.FileName); } catch { }
+
+                    _34 = processlist[34].ProcessName;
+                    try { check(processlist[34].MainModule.FileName); } catch { }
+
+                    _35 = processlist[35].ProcessName;
+                    try { check(processlist[35].MainModule.FileName); } catch { }
+
+                    _36 = processlist[36].ProcessName;
+                    try { check(processlist[36].MainModule.FileName); } catch { }
+
+                    _37 = processlist[37].ProcessName;
+                    try { check(processlist[37].MainModule.FileName); } catch { }
+
+                    _38 = processlist[38].ProcessName;
+                    try { check(processlist[38].MainModule.FileName); } catch { }
+
+                    _39 = processlist[39].ProcessName;
+                    try { check(processlist[39].MainModule.FileName); } catch { }
+
+                    _40 = processlist[40].ProcessName;
+                    try { check(processlist[40].MainModule.FileName); } catch { }
+
+                    _41 = processlist[41].ProcessName;
+                    try { check(processlist[41].MainModule.FileName); } catch { }
+
+                    _42 = processlist[42].ProcessName;
+                    try { check(processlist[42].MainModule.FileName); } catch { }
+
+                    _43 = processlist[43].ProcessName;
+                    try { check(processlist[43].MainModule.FileName); } catch { }
+
+                    _44 = processlist[44].ProcessName;
+                    try { check(processlist[44].MainModule.FileName); } catch { }
+
+                    _45 = processlist[45].ProcessName;
+                    try { check(processlist[45].MainModule.FileName); } catch { }
+
+                    _46 = processlist[46].ProcessName;
+                    try { check(processlist[46].MainModule.FileName); } catch { }
+
+                    _47 = processlist[47].ProcessName;
+                    try { check(processlist[47].MainModule.FileName); } catch { }
+
+                    _48 = processlist[48].ProcessName;
+                    try { check(processlist[48].MainModule.FileName); } catch { }
+
+                    _49 = processlist[49].ProcessName;
+                    try { check(processlist[49].MainModule.FileName); } catch { }
+
+                    _50 = processlist[50].ProcessName;
+                    try { check(processlist[50].MainModule.FileName); } catch { }
+
+                    _51 = processlist[51].ProcessName;
+                    try { check(processlist[51].MainModule.FileName); } catch { }
+
+                    _52 = processlist[52].ProcessName;
+                    try { check(processlist[52].MainModule.FileName); } catch { }
+
+                    _53 = processlist[53].ProcessName;
+                    try { check(processlist[53].MainModule.FileName); } catch { }
+
+                    _54 = processlist[54].ProcessName;
+                    try { check(processlist[54].MainModule.FileName); } catch { }
+
+                    _55 = processlist[55].ProcessName;
+                    try { check(processlist[55].MainModule.FileName); } catch { }
+
+                    _56 = processlist[56].ProcessName;
+                    try { check(processlist[56].MainModule.FileName); } catch { }
+
+                    _57 = processlist[57].ProcessName;
+                    try { check(processlist[57].MainModule.FileName); } catch { }
+
+                    _58 = processlist[58].ProcessName;
+                    try { check(processlist[58].MainModule.FileName); } catch { }
+
+                    _59 = processlist[59].ProcessName;
+                    try { check(processlist[59].MainModule.FileName); } catch { }
+
+                    _60 = processlist[60].ProcessName;
+                    try { check(processlist[60].MainModule.FileName); } catch { }
+
+                    _61 = processlist[61].ProcessName;
+                    try { check(processlist[61].MainModule.FileName); } catch { }
+
+                    _62 = processlist[62].ProcessName;
+                    try { check(processlist[62].MainModule.FileName); } catch { }
+
+                    _63 = processlist[63].ProcessName;
+                    try { check(processlist[63].MainModule.FileName); } catch { }
+
+                    _64 = processlist[64].ProcessName;
+                    try { check(processlist[64].MainModule.FileName); } catch { }
+
+                    _65 = processlist[65].ProcessName;
+                    try { check(processlist[65].MainModule.FileName); } catch { }
+
+                    _66 = processlist[66].ProcessName;
+                    try { check(processlist[66].MainModule.FileName); } catch { }
+
+                    _67 = processlist[67].ProcessName;
+                    try { check(processlist[67].MainModule.FileName); } catch { }
+
+                    _68 = processlist[68].ProcessName;
+                    try { check(processlist[68].MainModule.FileName); } catch { }
+
+                    _69 = processlist[69].ProcessName;
+                    try { check(processlist[69].MainModule.FileName); } catch { }
+
+                    _70 = processlist[70].ProcessName;
+                    try { check(processlist[70].MainModule.FileName); } catch { }
+
+                    _71 = processlist[71].ProcessName;
+                    try { check(processlist[71].MainModule.FileName); } catch { }
+
+                    _72 = processlist[72].ProcessName;
+                    try { check(processlist[72].MainModule.FileName); } catch { }
+
+                    _73 = processlist[73].ProcessName;
+                    try { check(processlist[73].MainModule.FileName); } catch { }
+
+                    _74 = processlist[74].ProcessName;
+                    try { check(processlist[74].MainModule.FileName); } catch { }
+
+                    _75 = processlist[75].ProcessName;
+                    try { check(processlist[75].MainModule.FileName); } catch { }
+
+                    _76 = processlist[76].ProcessName;
+                    try { check(processlist[76].MainModule.FileName); } catch { }
+
+                    _77 = processlist[77].ProcessName;
+                    try { check(processlist[77].MainModule.FileName); } catch { }
+
+                    _78 = processlist[78].ProcessName;
+                    try { check(processlist[78].MainModule.FileName); } catch { }
+
+                    _79 = processlist[79].ProcessName;
+                    try { check(processlist[79].MainModule.FileName); } catch { }
+
+                    _80 = processlist[80].ProcessName;
+                    try { check(processlist[80].MainModule.FileName); } catch { }
+
+                    _81 = processlist[81].ProcessName;
+                    try { check(processlist[81].MainModule.FileName); } catch { }
+
+                    _82 = processlist[82].ProcessName;
+                    try { check(processlist[82].MainModule.FileName); } catch { }
+
+                    _83 = processlist[83].ProcessName;
+                    try { check(processlist[83].MainModule.FileName); } catch { }
+
+                    _84 = processlist[84].ProcessName;
+                    try { check(processlist[84].MainModule.FileName); } catch { }
+
+                    _85 = processlist[85].ProcessName;
+                    try { check(processlist[85].MainModule.FileName); } catch { }
+
+                    _86 = processlist[86].ProcessName;
+                    try { check(processlist[86].MainModule.FileName); } catch { }
+
+                    _87 = processlist[87].ProcessName;
+                    try { check(processlist[87].MainModule.FileName); } catch { }
+
+                    _88 = processlist[88].ProcessName;
+                    try { check(processlist[88].MainModule.FileName); } catch { }
+
+                    _89 = processlist[89].ProcessName;
+                    try { check(processlist[89].MainModule.FileName); } catch { }
+
+                    _90 = processlist[90].ProcessName;
+                    try { check(processlist[90].MainModule.FileName); } catch { }
+
+                    _91 = processlist[91].ProcessName;
+                    try { check(processlist[91].MainModule.FileName); } catch { }
+
+                    _92 = processlist[92].ProcessName;
+                    try { check(processlist[92].MainModule.FileName); } catch { }
+
+                    _93 = processlist[93].ProcessName;
+                    try { check(processlist[93].MainModule.FileName); } catch { }
+
+                    _94 = processlist[94].ProcessName;
+                    try { check(processlist[94].MainModule.FileName); } catch { }
+
+                    _95 = processlist[95].ProcessName;
+                    try { check(processlist[95].MainModule.FileName); } catch { }
+
+                    _96 = processlist[96].ProcessName;
+                    try { check(processlist[96].MainModule.FileName); } catch { }
+
+                    _97 = processlist[97].ProcessName;
+                    try { check(processlist[97].MainModule.FileName); } catch { }
+
+                    _98 = processlist[98].ProcessName;
+                    try { check(processlist[98].MainModule.FileName); } catch { }
+
+                    _99 = processlist[99].ProcessName;
+                    try { check(processlist[99].MainModule.FileName); } catch { }
+
+                    _100 = processlist[100].ProcessName;
+                    try { check(processlist[100].MainModule.FileName); } catch { }
+
+                    _101 = processlist[101].ProcessName;
+                    try { check(processlist[101].MainModule.FileName); } catch { }
+
+                    _102 = processlist[102].ProcessName;
+                    try { check(processlist[102].MainModule.FileName); } catch { }
+
+                    _103 = processlist[103].ProcessName;
+                    try { check(processlist[103].MainModule.FileName); } catch { }
+
+                    _104 = processlist[104].ProcessName;
+                    try { check(processlist[104].MainModule.FileName); } catch { }
+
+                    _105 = processlist[105].ProcessName;
+                    try { check(processlist[105].MainModule.FileName); } catch { }
+
+                    _106 = processlist[106].ProcessName;
+                    try { check(processlist[106].MainModule.FileName); } catch { }
+
+                    _107 = processlist[107].ProcessName;
+                    try { check(processlist[107].MainModule.FileName); } catch { }
+
+                    _108 = processlist[108].ProcessName;
+                    try { check(processlist[108].MainModule.FileName); } catch { }
+
+                    _109 = processlist[109].ProcessName;
+                    try { check(processlist[109].MainModule.FileName); } catch { }
+
+                    _110 = processlist[110].ProcessName;
+                    try { check(processlist[110].MainModule.FileName); } catch { }
+
+                    _111 = processlist[111].ProcessName;
+                    try { check(processlist[111].MainModule.FileName); } catch { }
+
+                    _112 = processlist[112].ProcessName;
+                    try { check(processlist[112].MainModule.FileName); } catch { }
+
+                    _113 = processlist[113].ProcessName;
+                    try { check(processlist[113].MainModule.FileName); } catch { }
+
+                    _114 = processlist[114].ProcessName;
+                    try { check(processlist[114].MainModule.FileName); } catch { }
+
+                    _115 = processlist[115].ProcessName;
+                    try { check(processlist[115].MainModule.FileName); } catch { }
+
+                    _116 = processlist[116].ProcessName;
+                    try { check(processlist[116].MainModule.FileName); } catch { }
+
+                    _117 = processlist[117].ProcessName;
+                    try { check(processlist[117].MainModule.FileName); } catch { }
+
+                    _118 = processlist[118].ProcessName;
+                    try { check(processlist[118].MainModule.FileName); } catch { }
+
+                    _119 = processlist[119].ProcessName;
+                    try { check(processlist[119].MainModule.FileName); } catch { }
+
+                    _120 = processlist[120].ProcessName;
+                    try { check(processlist[120].MainModule.FileName); } catch { }
+
+                    _121 = processlist[121].ProcessName;
+                    try { check(processlist[121].MainModule.FileName); } catch { }
+
+                    _122 = processlist[122].ProcessName;
+                    try { check(processlist[122].MainModule.FileName); } catch { }
+
+                    _123 = processlist[123].ProcessName;
+                    try { check(processlist[123].MainModule.FileName); } catch { }
+
+                    _124 = processlist[124].ProcessName;
+                    try { check(processlist[124].MainModule.FileName); } catch { }
+
+                    _125 = processlist[125].ProcessName;
+                    try { check(processlist[125].MainModule.FileName); } catch { }
+
+                    _126 = processlist[126].ProcessName;
+                    try { check(processlist[126].MainModule.FileName); } catch { }
+
+                    _127 = processlist[127].ProcessName;
+                    try { check(processlist[27].MainModule.FileName); } catch { }
+
+                    _128 = processlist[128].ProcessName;
+                    try { check(processlist[128].MainModule.FileName); } catch { }
+
+                    _129 = processlist[129].ProcessName;
+                    try { check(processlist[129].MainModule.FileName); } catch { }
+
+                    _130 = processlist[130].ProcessName;
+                    try { check(processlist[130].MainModule.FileName); } catch { }
+
+                    _131 = processlist[131].ProcessName;
+                    try { check(processlist[131].MainModule.FileName); } catch { }
+
+                    _132 = processlist[132].ProcessName;
+                    try { check(processlist[132].MainModule.FileName); } catch { }
+
+                    _133 = processlist[133].ProcessName;
+                    try { check(processlist[133].MainModule.FileName); } catch { }
+
+                    _134 = processlist[134].ProcessName;
+                    try { check(processlist[134].MainModule.FileName); } catch { }
+
+                    _135 = processlist[135].ProcessName;
+                    try { check(processlist[135].MainModule.FileName); } catch { }
+
+                    _136 = processlist[136].ProcessName;
+                    try { check(processlist[136].MainModule.FileName); } catch { }
+
+                    _137 = processlist[137].ProcessName;
+                    try { check(processlist[137].MainModule.FileName); } catch { }
+
+                    _138 = processlist[138].ProcessName;
+                    try { check(processlist[38].MainModule.FileName); } catch { }
+
+                    _139 = processlist[139].ProcessName;
+                    try { check(processlist[139].MainModule.FileName); } catch { }
+
+                    _140 = processlist[140].ProcessName;
+                    try { check(processlist[140].MainModule.FileName); } catch { }
+
+                    _141 = processlist[141].ProcessName;
+                    try { check(processlist[141].MainModule.FileName); } catch { }
+
+                    _142 = processlist[142].ProcessName;
+                    try { check(processlist[142].MainModule.FileName); } catch { }
+
+                    _143 = processlist[143].ProcessName;
+                    try { check(processlist[143].MainModule.FileName); } catch { }
+
+                    _144 = processlist[144].ProcessName;
+                    try { check(processlist[144].MainModule.FileName); } catch { }
+
+                    _145 = processlist[145].ProcessName;
+                    try { check(processlist[145].MainModule.FileName); } catch { }
+
+                    _146 = processlist[146].ProcessName;
+                    try { check(processlist[146].MainModule.FileName); } catch { }
+
+                    _147 = processlist[147].ProcessName;
+                    try { check(processlist[147].MainModule.FileName); } catch { }
+
+                    _148 = processlist[148].ProcessName;
+                    try { check(processlist[148].MainModule.FileName); } catch { }
+
+                    _149 = processlist[149].ProcessName;
+                    try { check(processlist[149].MainModule.FileName); } catch { }
+
+                    _150 = processlist[150].ProcessName;
+                    try { check(processlist[150].MainModule.FileName); } catch { }
+
+                    _151 = processlist[151].ProcessName;
+                    try { check(processlist[151].MainModule.FileName); } catch { }
+
+                    _152 = processlist[152].ProcessName;
+                    try { check(processlist[152].MainModule.FileName); } catch { }
+
+                    _153 = processlist[153].ProcessName;
+                    try { check(processlist[153].MainModule.FileName); } catch { }
+
+                    _154 = processlist[154].ProcessName;
+                    try { check(processlist[154].MainModule.FileName); } catch { }
+
+                    _155 = processlist[155].ProcessName;
+                    try { check(processlist[155].MainModule.FileName); } catch { }
+
+                    _156 = processlist[156].ProcessName;
+                    try { check(processlist[156].MainModule.FileName); } catch { }
+
+                    _157 = processlist[157].ProcessName;
+                    try { check(processlist[157].MainModule.FileName); } catch { }
+
+                    _158 = processlist[158].ProcessName;
+                    try { check(processlist[158].MainModule.FileName); } catch { }
+
+                    _159 = processlist[159].ProcessName;
+                    try { check(processlist[159].MainModule.FileName); } catch { }
+
+                    _160 = processlist[160].ProcessName;
+                    try { check(processlist[160].MainModule.FileName); } catch { }
+
+                    _161 = processlist[161].ProcessName;
+                    try { check(processlist[161].MainModule.FileName); } catch { }
+
+                    _162 = processlist[162].ProcessName;
+                    try { check(processlist[162].MainModule.FileName); } catch { }
+
+                    _163 = processlist[163].ProcessName;
+                    try { check(processlist[163].MainModule.FileName); } catch { }
+
+                    _164 = processlist[164].ProcessName;
+                    try { check(processlist[164].MainModule.FileName); } catch { }
+
+                    _165 = processlist[165].ProcessName;
+                    try { check(processlist[165].MainModule.FileName); } catch { }
+
+                    _166 = processlist[166].ProcessName;
+                    try { check(processlist[166].MainModule.FileName); } catch { }
+
+                    _167 = processlist[167].ProcessName;
+                    try { check(processlist[167].MainModule.FileName); } catch { }
+
+                    _168 = processlist[168].ProcessName;
+                    try { check(processlist[168].MainModule.FileName); } catch { }
+
+                    _169 = processlist[169].ProcessName;
+                    try { check(processlist[169].MainModule.FileName); } catch { }
+
+                    _170 = processlist[170].ProcessName;
+                    try { check(processlist[170].MainModule.FileName); } catch { }
+
+                    _171 = processlist[171].ProcessName;
+                    try { check(processlist[171].MainModule.FileName); } catch { }
+
+                    _172 = processlist[172].ProcessName;
+                    try { check(processlist[172].MainModule.FileName); } catch { }
+
+                    _173 = processlist[173].ProcessName;
+                    try { check(processlist[173].MainModule.FileName); } catch { }
+
+                    _174 = processlist[174].ProcessName;
+                    try { check(processlist[174].MainModule.FileName); } catch { }
+
+                    _175 = processlist[175].ProcessName;
+                    try { check(processlist[175].MainModule.FileName); } catch { }
+
+                    _176 = processlist[176].ProcessName;
+                    try { check(processlist[176].MainModule.FileName); } catch { }
+
+                    _177 = processlist[177].ProcessName;
+                    try { check(processlist[177].MainModule.FileName); } catch { }
+
+                    _178 = processlist[178].ProcessName;
+                    try { check(processlist[178].MainModule.FileName); } catch { }
+
+                    _179 = processlist[179].ProcessName;
+                    try { check(processlist[179].MainModule.FileName); } catch { }
+
+                    _180 = processlist[180].ProcessName;
+                    try { check(processlist[180].MainModule.FileName); } catch { }
+
+                    _181 = processlist[181].ProcessName;
+                    try { check(processlist[181].MainModule.FileName); } catch { }
+
+                    _182 = processlist[182].ProcessName;
+                    try { check(processlist[182].MainModule.FileName); } catch { }
+
+                    _183 = processlist[183].ProcessName;
+                    try { check(processlist[183].MainModule.FileName); } catch { }
+
+                    _184 = processlist[184].ProcessName;
+                    try { check(processlist[184].MainModule.FileName); } catch { }
+
+                    _185 = processlist[185].ProcessName;
+                    try { check(processlist[185].MainModule.FileName); } catch { }
+
+                    _186 = processlist[186].ProcessName;
+                    try { check(processlist[186].MainModule.FileName); } catch { }
+
+                    _187 = processlist[187].ProcessName;
+                    try { check(processlist[187].MainModule.FileName); } catch { }
+
+                    _188 = processlist[188].ProcessName;
+                    try { check(processlist[188].MainModule.FileName); } catch { }
+
+                    _189 = processlist[189].ProcessName;
+                    try { check(processlist[189].MainModule.FileName); } catch { }
+
+                    _190 = processlist[190].ProcessName;
+                    try { check(processlist[190].MainModule.FileName); } catch { }
+
+                    _191 = processlist[191].ProcessName;
+                    try { check(processlist[191].MainModule.FileName); } catch { }
+
+                    _192 = processlist[192].ProcessName;
+                    try { check(processlist[192].MainModule.FileName); } catch { }
+
+                    _193 = processlist[193].ProcessName;
+                    try { check(processlist[193].MainModule.FileName); } catch { }
+
+                    _194 = processlist[194].ProcessName;
+                    try { check(processlist[94].MainModule.FileName); } catch { }
+
+                    _195 = processlist[195].ProcessName;
+                    try { check(processlist[195].MainModule.FileName); } catch { }
+
+                    _196 = processlist[196].ProcessName;
+                    try { check(processlist[196].MainModule.FileName); } catch { }
+
+                    _197 = processlist[197].ProcessName;
+                    try { check(processlist[197].MainModule.FileName); } catch { }
+
+                    _198 = processlist[198].ProcessName;
+                    try { check(processlist[198].MainModule.FileName); } catch { }
+
+                    _199 = processlist[199].ProcessName;
+                    try { check(processlist[199].MainModule.FileName); } catch { }
+
+                    _200 = processlist[200].ProcessName;
+                    try { check(processlist[200].MainModule.FileName); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    Error("\nError while getting process: \n" + ex.Message + "\n");
+                }
+
+                new Thread(() =>
+                {
+                    Thread.Sleep(1500);
+                    Console.WriteLine("Scan ended. Press enter for rescan.");
+                }).Start();
+                
+                Thread.Sleep(2750);
+                Console.ReadKey();
+                Clear(); goto rescan;
+            }
+        }
+
+        public static bool check(string process)
+        {
+            if (process == null || process == "") return false;
+
+            return dedect(process);
+        }
+
+        public static bool dedect(string filename)
+        {
+            byte[] bytes = File.ReadAllBytes(filename);
+            string value = new ASCIIEncoding().GetString(bytes);
+
+            bool dedected = false;
+            string reason = "";
+
+            if (value.Contains("csgo") && value.Contains("OpenProcess"))
+            {
+                //MessageBox.Show("Dedected -> csgo handle");
+                reason = reason + "Handling game with openprocess. -> " + filename;
+                dedected = true;
+            }
+            if (value.Contains("client.dll"))
+            {
+                //MessageBox.Show("Dedected -> client handle");
+                reason = "\n" + reason + "Game client found in external program. -> " + filename;
+                dedected = true;
+            }
+            if (value.Contains("hack") || value.Contains("cheat") || value.Contains("ware"))
+            {
+                //MessageBox.Show("Dedected -> hack");
+                reason = "\n" + reason + "Bad words found in a external program. -> " + filename;
+                dedected = true;
+            }
+            if (value.Contains("ReadProcessMemory") && value.Contains("csgo"))
+            {
+                //MessageBox.Show("Dedected -> ReadProcessMemory");
+                reason = "\n" + reason + "Reading csgo memory. -> " + filename;
+                dedected = true;
+            }
+            if (value.Contains("WriteProcessMemory") && value.Contains("csgo"))
+            {
+                //MessageBox.Show("Dedected -> WriteProcessMemory");
+                reason = "\n" + reason + "Writing csgo memory. -> " + filename;
+                dedected = true;
+            }
+            if (value.Contains("WorldToScreen"))
+            {
+                //MessageBox.Show("Dedected -> WriteProcessMemory");
+                reason = "\n" + reason + "using WorldToScreen function. -> " + filename;
+                dedected = true;
+            }
+
+            if (dedected == true)
+            {
+                //MessageBox.Show(reason);
+                Dedected(reason);
+                return true;
+            }
+
+            return false;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ProcessChecks/Processes.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC
+{
+    public static class Processes
+    {
+        public static string _0;
+        public static string _1;
+        public static string _2;
+        public static string _3;
+        public static string _4;
+        public static string _5;
+        public static string _6;
+        public static string _7;
+        public static string _8;
+        public static string _9;
+        public static string _10;
+        public static string _11;
+        public static string _12;
+        public static string _13;
+        public static string _14;
+        public static string _15;
+        public static string _16;
+        public static string _17;
+        public static string _18;
+        public static string _19;
+        public static string _20;
+        public static string _21;
+        public static string _22;
+        public static string _23;
+        public static string _24;
+        public static string _25;
+        public static string _26;
+        public static string _27;
+        public static string _28;
+        public static string _29;
+        public static string _30;
+        public static string _31;
+        public static string _32;
+        public static string _33;
+        public static string _34;
+        public static string _35;
+        public static string _36;
+        public static string _37;
+        public static string _38;
+        public static string _39;
+        public static string _40;
+        public static string _41;
+        public static string _42;
+        public static string _43;
+        public static string _44;
+        public static string _45;
+        public static string _46;
+        public static string _47;
+        public static string _48;
+        public static string _49;
+        public static string _50;
+        public static string _51;
+        public static string _52;
+        public static string _53;
+        public static string _54;
+        public static string _55;
+        public static string _56;
+        public static string _57;
+        public static string _58;
+        public static string _59;
+        public static string _60;
+        public static string _61;
+        public static string _62;
+        public static string _63;
+        public static string _64;
+        public static string _65;
+        public static string _66;
+        public static string _67;
+        public static string _68;
+        public static string _69;
+        public static string _70;
+        public static string _71;
+        public static string _72;
+        public static string _73;
+        public static string _74;
+        public static string _75;
+        public static string _76;
+        public static string _77;
+        public static string _78;
+        public static string _79;
+        public static string _80;
+        public static string _81;
+        public static string _82;
+        public static string _83;
+        public static string _84;
+        public static string _85;
+        public static string _86;
+        public static string _87;
+        public static string _88;
+        public static string _89;
+        public static string _90;
+        public static string _91;
+        public static string _92;
+        public static string _93;
+        public static string _94;
+        public static string _95;
+        public static string _96;
+        public static string _97;
+        public static string _98;
+        public static string _99;
+        public static string _100;
+        public static string _101;
+        public static string _102;
+        public static string _103;
+        public static string _104;
+        public static string _105;
+        public static string _106;
+        public static string _107;
+        public static string _108;
+        public static string _109;
+        public static string _110;
+        public static string _111;
+        public static string _112;
+        public static string _113;
+        public static string _114;
+        public static string _115;
+        public static string _116;
+        public static string _117;
+        public static string _118;
+        public static string _119;
+        public static string _120;
+        public static string _121;
+        public static string _122;
+        public static string _123;    
+        public static string _124;
+        public static string _125;
+        public static string _126;
+        public static string _127;
+        public static string _128;
+        public static string _129;
+        public static string _130;
+        public static string _131;
+        public static string _132;
+        public static string _133;
+        public static string _134;
+        public static string _135;
+        public static string _136;
+        public static string _137;
+        public static string _138;
+        public static string _139;
+        public static string _140;
+        public static string _141;
+        public static string _142;
+        public static string _143;
+        public static string _144;
+        public static string _145;
+        public static string _146;
+        public static string _147;
+        public static string _148;
+        public static string _149;
+        public static string _150;
+        public static string _151;
+        public static string _152;
+        public static string _153;
+        public static string _154;
+        public static string _155;
+        public static string _156;
+        public static string _157;
+        public static string _158;
+        public static string _159;
+        public static string _160;
+        public static string _161;
+        public static string _162;
+        public static string _163;
+        public static string _164;
+        public static string _165;
+        public static string _166;
+        public static string _167;
+        public static string _168;
+        public static string _169;
+        public static string _170;
+        public static string _171;
+        public static string _172;
+        public static string _173;
+        public static string _174;
+        public static string _175;
+        public static string _176;
+        public static string _177;
+        public static string _178;
+        public static string _179;
+        public static string _180;
+        public static string _181;
+        public static string _182;
+        public static string _183;
+        public static string _184;
+        public static string _185;
+        public static string _186;
+        public static string _187;
+        public static string _188;
+        public static string _189;
+        public static string _190;
+        public static string _191;
+        public static string _192;
+        public static string _193;
+        public static string _194;
+        public static string _195;
+        public static string _196;
+        public static string _197;
+        public static string _198;
+        public static string _199;
+        public static string _200;
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ProcessChecks/ScanProcess.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using static VAC.ConsoleHelper;
+
+namespace VAC
+{
+    public static class ScanProcess
+    {
+        public static void Do()
+        {
+            for (; ; ) // while (true) da olur
+            {
+
+                // csgo kapalı ise atlar
+                if (!IsGameOpened.check())
+                {
+                    Warning("CS:GO not opened.");
+                    Thread.Sleep(2500);
+
+                    continue;
+                }
+
+
+                // bu yöntemin içindeki goto rescan sayesine döngü tamamlanmadan düzgün çalışır.
+                ProcessList.ScanAll();
+
+            }
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/Program.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using VAC.InternalDedection;
+using VAC.UserInformation;
+using static VAC.ConsoleHelper;
+
+namespace VAC
+{
+    public static class Program
+    {
+        public static void Main()
+        {
+            Title("VAC");
+
+            new Thread(() =>
+            {
+                Scan.Do();
+                AntiInject.patch();
+            }).Start();
+            Console.ReadKey();
+
+            if (!IsAdministor.check())
+            {
+                Warning("Restarting as administor...");
+                Thread.Sleep(1600);
+                RestartAsAdministor.Start();
+            }
+
+            new Thread(() =>
+            {
+                ScanProcess.Do();
+            }).Start();
+
+            new Thread(() =>
+            {
+                AimbotDedection.Control.Do();
+            }).Start();
+        }
+
+
+
+
+
+
+        /*
+        // REQUIRED CONSTS
+
+        const int PROCESS_QUERY_INFORMATION = 0x0400;
+        const int MEM_COMMIT = 0x00001000;
+        const int PAGE_READWRITE = 0x04;
+        const int PROCESS_WM_READ = 0x0010;
+
+        // REQUIRED METHODS
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr OpenProcess
+             (int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+        [DllImport("kernel32.dll")]
+        public static extern bool ReadProcessMemory
+        (int hProcess, int lpBaseAddress, byte[] lpBuffer, int dwSize, ref int lpNumberOfBytesRead);
+
+        [DllImport("kernel32.dll")]
+        static extern void GetSystemInfo(out SYSTEM_INFO lpSystemInfo);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern int VirtualQueryEx(IntPtr hProcess,
+        IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, uint dwLength);
+
+
+        // REQUIRED STRUCTS
+
+        public struct MEMORY_BASIC_INFORMATION
+        {
+            public int BaseAddress;
+            public int AllocationBase;
+            public int AllocationProtect;
+            public int RegionSize;
+            public int State;
+            public int Protect;
+            public int lType;
+        }
+
+        public struct SYSTEM_INFO
+        {
+            public ushort processorArchitecture;
+            ushort reserved;
+            public uint pageSize;
+            public IntPtr minimumApplicationAddress;
+            public IntPtr maximumApplicationAddress;
+            public IntPtr activeProcessorMask;
+            public uint numberOfProcessors;
+            public uint processorType;
+            public uint allocationGranularity;
+            public ushort processorLevel;
+            public ushort processorRevision;
+        }
+
+        public static void test()
+        {
+            SYSTEM_INFO sys_info = new SYSTEM_INFO();
+            GetSystemInfo(out sys_info);
+
+            IntPtr proc_min_address = sys_info.minimumApplicationAddress;
+
+            // notepad better be runnin'
+            Process process = Process.GetProcessesByName("csgo")[0];
+            if (process.Id == 0) Console.WriteLine("Error");
+
+            // opening the process with desired access level
+            IntPtr processHandle =
+            OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_WM_READ, false, process.Id);
+
+            StreamWriter sw = new StreamWriter("dump.txt");
+
+            // this will store any information we get from VirtualQueryEx()
+            MEMORY_BASIC_INFORMATION mem_basic_info = new MEMORY_BASIC_INFORMATION();
+
+            int bytesRead = 0;  // number of bytes read with ReadProcessMemory
+
+            // 28 = sizeof(MEMORY_BASIC_INFORMATION)
+            VirtualQueryEx(processHandle, proc_min_address, out mem_basic_info, 28);
+
+            byte[] buffer = new byte[mem_basic_info.RegionSize];
+
+            // read everything in the buffer above
+            ReadProcessMemory((int)processHandle,
+            mem_basic_info.BaseAddress, buffer, mem_basic_info.RegionSize, ref bytesRead);
+
+            Console.WriteLine("mem_basic_info.BaseAddress: " + mem_basic_info.BaseAddress);
+            Console.WriteLine("1: " + mem_basic_info.AllocationBase);
+            Console.WriteLine("2: " + mem_basic_info.RegionSize);
+            Console.WriteLine("3: " + mem_basic_info.Protect);
+            Console.WriteLine("4: " + mem_basic_info.AllocationProtect);
+            Console.WriteLine("5: " + mem_basic_info.State);
+
+            BinaryReader br = new BinaryReader(File.OpenRead("C:\\csgo.exe"));
+            byte[] buf = br.ReadBytes(4);
+            Array.Reverse(buf);
+            string test;
+            test = (BitConverter.ToInt32(buf, 0).ToString("X"));
+            sw.WriteLine(test);
+            br.Dispose();
+
+            sw.Close();
+
+            Console.ReadLine();
+        }
+        */
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/Properties/AssemblyInfo.cs`:
+
+```cs
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+// Bir bütünleştirilmiş koda ilişkin Genel Bilgiler aşağıdaki öznitelikler kümesiyle
+// denetlenir. Bütünleştirilmiş kod ile ilişkili bilgileri değiştirmek için
+// bu öznitelik değerlerini değiştirin.
+[assembly: AssemblyTitle("VAC (Valve Anti-Cheat)")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("VAC (Valve Anti-Cheat)")]
+[assembly: AssemblyCopyright("Copyright ©  2023")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+
+// ComVisible özniteliğinin false olarak ayarlanması bu bütünleştirilmiş koddaki türleri
+// COM bileşenleri için görünmez yapar. Bu bütünleştirilmiş koddaki bir türe
+// erişmeniz gerekirse ComVisible özniteliğini o türde true olarak ayarlayın.
+[assembly: ComVisible(false)]
+
+// Bu proje COM'un kullanımına sunulursa, aşağıdaki GUID tür kitaplığının kimliği içindir
+[assembly: Guid("e6ca3127-e99e-4321-88d2-4c12dede7c98")]
+
+// Bir derlemenin sürüm bilgileri aşağıdaki dört değerden oluşur:
+//
+//      Ana Sürüm
+//      İkincil Sürüm 
+//      Yapı Numarası
+//      Düzeltme
+//
+// Tüm değerleri belirtebilir veya varsayılan Derleme ve Düzeltme Numaralarını kullanmak için
+// aşağıda gösterildiği gibi '*' kullanabilirsiniz:
+// [assembly: AssemblyVersion("1.0.*")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/ResAdministor.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace VAC
+{
+    public static class RestartAsAdministor
+    {
+        public static void Start()
+        {
+            string fileName = Directory.GetCurrentDirectory() + "\\VAC (Valve Anti-Cheat).exe";
+
+            Process proc = new Process();
+            proc.StartInfo.FileName = fileName;
+            proc.StartInfo.UseShellExecute = true;
+            proc.StartInfo.Verb = "runas";
+            proc.Start();
+
+            Environment.Exit(0);
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/BiosInformation.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class BiosInformation
+    {
+        public static string Get()
+        {
+            System.Management.SelectQuery query = new System.Management.SelectQuery(@"Select * from Win32_ComputerSystem");
+
+            //initialize the searcher with the query it is supposed to execute
+            using (System.Management.ManagementObjectSearcher searcher = new System.Management.ManagementObjectSearcher(query))
+            {
+                //execute the query
+                foreach (System.Management.ManagementObject process in searcher.Get())
+                {
+                    //system info
+                    process.Get();
+                    string SystemManufacturer = (string)process["Manufacturer"];
+                    string SystemModel = (string)process["Model"];
+
+                    //Console.WriteLine(SystemManufacturer + "\n" + SystemModel);
+                    return SystemManufacturer + "\n" + SystemModel;
+                }
+            }
+
+            return null;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/BiosVersion.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Management;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class BiosVersion
+    {
+        public static string Get()
+        {
+            System.Management.ManagementObjectSearcher searcher1 = new System.Management.ManagementObjectSearcher("SELECT * FROM Win32_BIOS");
+            System.Management.ManagementObjectCollection collection = searcher1.Get();
+
+            foreach (ManagementObject obj in collection)
+            {
+                if (((string[])obj["BIOSVersion"]).Length > 1)
+                {
+                    //Console.WriteLine("BIOS VERSION: " + ((string[])obj["BIOSVersion"])[0] + " - " + ((string[])obj["BIOSVersion"])[1]);
+                    return ("BIOS VERSION: " + ((string[])obj["BIOSVersion"])[0] + " - " + ((string[])obj["BIOSVersion"])[1]);
+                }
+                else
+                {
+                    //Console.WriteLine("BIOS VERSION: " + ((string[])obj["BIOSVersion"])[0]);
+                    return ("BIOS VERSION: " + ((string[])obj["BIOSVersion"])[0]);   
+                }
+            }
+
+            return null;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/DISCorUSB.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Management;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class DISCorUSB
+    {
+        public static string Get()
+        {
+            ManagementObjectSearcher Drive = new ManagementObjectSearcher("SELECT * FROM Win32_DiskDrive");
+            ManagementObjectCollection GetDrive = Drive.Get();
+
+            foreach (ManagementObject GetHWID in GetDrive)
+            {
+                return GetHWID["Model"].ToString() + GetHWID["SerialNumber"].ToString() + GetHWID["Signature"].ToString() + GetHWID["Manufacturer"].ToString();
+            }
+
+            return null;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/HWID.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class HWID
+    {
+        public static string User()
+        {
+            return System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
+        }
+        public static string Owner()
+        {
+            return System.Security.Principal.WindowsIdentity.GetCurrent().Owner.Value;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/IPAddress.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class IPAddress
+    {
+        //online
+        public static string Get()
+        {
+            return new WebClient().DownloadString("https://ipv4.wtfismyip.com/text");
+        }
+
+        //local
+        public static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+            throw new Exception("No network adapters with an IPv4 address in the system!");
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/UserInformation/ProcessorInformation.cs`:
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Management;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace VAC.UserInformation
+{
+    public static class ProcessorInformation
+    {
+        public static string Get()
+        {
+            var mbs = new ManagementObjectSearcher("Select ProcessorId From Win32_processor");
+            ManagementObjectCollection mbsList = mbs.Get();
+            string id = "";
+            foreach (ManagementObject mo in mbsList)
+            {
+                id = mo["ProcessorId"].ToString();
+                break;
+            }
+
+            return id;
+        }
+    }
+}
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat).csproj`:
+
+```csproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{E6CA3127-E99E-4321-88D2-4C12DEDE7C98}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VAC</RootNamespace>
+    <AssemblyName>VAC %28Valve Anti-Cheat%29</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AimbotDedection\Check.cs" />
+    <Compile Include="AimbotDedection\Control.cs" />
+    <Compile Include="AimbotDedection\Math.cs" />
+    <Compile Include="AimbotDedection\Vectors.cs" />
+    <Compile Include="ConsoleHelper.cs" />
+    <Compile Include="CurrentTime.cs" />
+    <Compile Include="InternalDedection\AntiInject.cs" />
+    <Compile Include="InternalDedection\Scan.cs" />
+    <Compile Include="InternalDedection\Structs.cs" />
+    <Compile Include="InternalDedection\TrustedModules.cs" />
+    <Compile Include="IsAdministor.cs" />
+    <Compile Include="IsDisconnected.cs" />
+    <Compile Include="IsGameOpened.cs" />
+    <Compile Include="Offsets.cs" />
+    <Compile Include="ProcessChecks\DedectString.cs" />
+    <Compile Include="ProcessChecks\Processes.cs" />
+    <Compile Include="ProcessChecks\ProcessList.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ProcessChecks\ScanProcess.cs" />
+    <Compile Include="ResAdministor.cs" />
+    <Compile Include="UserInformation\BiosVersion.cs" />
+    <Compile Include="UserInformation\BiosInformation.cs" />
+    <Compile Include="UserInformation\DISCorUSB.cs" />
+    <Compile Include="UserInformation\HWID.cs" />
+    <Compile Include="UserInformation\IPAddress.cs" />
+    <Compile Include="UserInformation\ProcessorInformation.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/obj/Debug/VAC (Valve Anti-Cheat).csproj.CoreCompileInputs.cache`:
+
+```cache
+f4c3ccde32c05a97158e22a7f2fa68931379b2b5
+
+```
+
+`VAC (Valve Anti-Cheat)/VAC (Valve Anti-Cheat)/obj/Debug/VAC (Valve Anti-Cheat).csproj.FileListAbsolute.txt`:
+
+```txt
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\bin\Debug\VAC (Valve Anti-Cheat).exe.config
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\bin\Debug\VAC (Valve Anti-Cheat).exe
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\bin\Debug\VAC (Valve Anti-Cheat).pdb
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\obj\Debug\VAC (Valve Anti-Cheat).csproj.AssemblyReference.cache
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\obj\Debug\VAC (Valve Anti-Cheat).csproj.SuggestedBindingRedirects.cache
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\obj\Debug\VAC (Valve Anti-Cheat).csproj.CoreCompileInputs.cache
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\obj\Debug\VAC (Valve Anti-Cheat).exe
+C:\Users\csacc\source\repos\VAC (Valve Anti-Cheat)\VAC (Valve Anti-Cheat)\obj\Debug\VAC (Valve Anti-Cheat).pdb
+
+```
