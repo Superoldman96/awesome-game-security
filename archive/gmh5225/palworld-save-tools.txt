@@ -1,0 +1,2230 @@
+Project Path: arc_gmh5225_palworld-save-tools_4moc850i
+
+Source Tree:
+
+```txt
+arc_gmh5225_palworld-save-tools_4moc850i
+├── LICENSE
+├── README.md
+├── convenience_tools
+│   └── convert.cmd
+├── convert.py
+├── lib
+│   ├── __init__.py
+│   ├── archive.py
+│   ├── gvas.py
+│   ├── noindent.py
+│   ├── palsav.py
+│   ├── paltypes.py
+│   └── rawdata.py
+├── resave_test.py
+└── tests
+    ├── __init__.py
+    ├── requirements.txt
+    ├── test_cli_scripts.py
+    ├── test_gvas.py
+    ├── test_rawdata.py
+    └── testdata
+        ├── 00000000000000000000000000000001.sav
+        ├── Level-tricky-unicode-player-name.sav
+        ├── Level.sav
+        ├── LevelMeta.sav
+        ├── LocalData.sav
+        ├── WorldOption.sav
+        └── unicode-saves
+            ├── 00000000000000000000000000000001.sav
+            ├── Level.sav
+            ├── LevelMeta.sav
+            ├── LocalData.sav
+            └── WorldOption.sav
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2024 Jun Siang Cheah
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# palworld-save-tools
+Tools for converting Palworld .sav files to JSON and back.
+
+> [!IMPORTANT]
+> This tool has changed how the JSON files are formatted starting with v0.9.
+> You cannot load JSON files created by older versions of the tool, and other tools that depend on the JSON output of `palworld-save-tools` will break.
+> In exchange, you will no longer need `uesave-rs`, the tool runs faster, and doesn't use as much RAM.
+
+> [!CAUTION]
+> Any versions older than v0.4 will create corrupt `Level.sav` files when converting from JSON to SAV. Please make sure to update to avoid data corruption.
+
+This tool currently supports additional parsing of the following data not handled by `uesave` or other non-Palworld aware Unreal save editors:
+
+1. `Level.sav`:`GroupSaveDataMap`
+    - Groups such as in-game organizations and guilds
+1. `Level.sav`:`CharacterSaveParameterMap`
+    - Characters such as players and pals
+1. `Level.sav`: `MapObjectSaveData.MapObjectSaveData.Model`
+
+## Converting co-op saves to dedicated server saves
+
+Please follow the instructions provided over at https://github.com/xNul/palworld-host-save-fix
+
+## Instructions
+
+> [!IMPORTANT]
+> Converting `Level.sav` files to JSON will result in very large files, and may require significant amounts of RAM to process. Use a modern text editor such as Visual Studio Code or a Jetbrains IDE to open these files.
+
+### Prerequisites
+
+1. Python 3.9 or newer.
+    - Windows users: You can install [Python 3.12 from the Microsoft Store](https://apps.microsoft.com/detail/9NCVDN91XZQP) or from [python.org](https://www.python.org/)
+
+### Windows GUI steps
+
+1. Download the latest release from [https://github.com/cheahjs/palworld-save-tools/releases/latest].
+1. Unzip the file into a folder.
+1. Drag and drop your `.sav` file (for Steam on Windows, these are located at `%LOCALAPPDATA%\Pal\Saved\SaveGames\<SteamID>\<SaveID>`) onto `convert.cmd` to convert the file into JSON.
+1. To convert the `.sav.json` file back into a `.sav` file, drag and drop your `.sav.json` file onto `convert.cmd`.
+
+> [!NOTE]
+> In the event that the `convert.cmd` fails to function correctly, try to disable Python's app execution aliases ("Manage app execution aliases"), or failing that, please use the [Terminal](#terminal) instructions below
+
+### Terminal
+
+1. Download the latest release from [https://github.com/cheahjs/palworld-save-tools/releases/latest].
+1. Unzip the file into a folder.
+1. Open a terminal in the folder you just unzipped.
+1. Depending on how Python is installed, the next steps should use either `python`, `python3`, or `py`.
+1. Run `python convert.py <path to .sav file>` to convert the `.sav` file to a `.sav.json` file.
+1. Run `python convert.py <path to .json file>` to convert the `.sav.json` file to a `.sav` file.
+
+> [!NOTE]
+> On Windows, you can drag and drop the `convert.py` file and the `.sav`/`.sav.json` file to avoid typing out the path.
+
+Additional command line arguments:
+
+1. `--to-json`: Force SAV to JSON conversion regardless of file extension
+1. `--from-json`: Force JSON to SAV conversion regardless of file extension
+1. `--output`: Override the default output path
+1. `--minify-json`: Minify output JSON to help speed up processing by other tools consuming JSON
+
+```
+
+`convenience_tools/convert.cmd`:
+
+```cmd
+@echo off
+setlocal enabledelayedexpansion
+
+:: Switch to script directory
+cd /D "%~dp0"
+
+:: Check if convert.py exists
+if not exist "convert.py" (
+    echo convert.py is missing.
+    pause
+    exit /B 1
+)
+
+:: Try every possible Python command until one works
+for %%A in (python3 python py) do (
+    echo Checking if Python is installed as %%A
+    where %%A
+    if !ERRORLEVEL! equ 0 (
+        echo Found Python at %%A
+        echo Python version:
+        %%A --version
+        %%A convert.py "%~1"
+        goto :Found
+    )
+)
+
+echo Python not found. Please install Python 3.9 or newer.
+pause
+exit /B 1
+
+:Found
+pause
+
+```
+
+`convert.py`:
+
+```py
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+
+from lib.gvas import GvasFile
+from lib.noindent import CustomEncoder
+from lib.palsav import compress_gvas_to_sav, decompress_sav_to_gvas
+from lib.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="palworld-save-tools",
+        description="Converts Palworld save files to and from JSON",
+    )
+    parser.add_argument("filename")
+    parser.add_argument(
+        "--to-json",
+        action="store_true",
+        help="Override heuristics and convert SAV file to JSON",
+    )
+    parser.add_argument(
+        "--from-json",
+        action="store_true",
+        help="Override heuristics and convert JSON file to SAV",
+    )
+    parser.add_argument(
+        "--output",
+        "-o",
+        help="Output file (default: <filename>.json or <filename>.sav)",
+    )
+    parser.add_argument("--minify-json", action="store_true", help="Minify JSON output")
+    args = parser.parse_args()
+
+    if args.to_json and args.from_json:
+        print("Cannot specify both --to-json and --from-json")
+        exit(1)
+
+    if not os.path.exists(args.filename):
+        print(f"{args.filename} does not exist")
+        exit(1)
+    if not os.path.isfile(args.filename):
+        print(f"{args.filename} is not a file")
+        exit(1)
+
+    if args.to_json or args.filename.endswith(".sav"):
+        if not args.output:
+            output_path = args.filename + ".json"
+        else:
+            output_path = args.output
+        convert_sav_to_json(args.filename, output_path, args.minify_json)
+
+    if args.from_json or args.filename.endswith(".json"):
+        if not args.output:
+            output_path = args.filename.replace(".json", "")
+        else:
+            output_path = args.output
+        convert_json_to_sav(args.filename, output_path)
+
+
+def convert_sav_to_json(filename, output_path, minify):
+    print(f"Converting {filename} to JSON, saving to {output_path}")
+    if os.path.exists(output_path):
+        print(f"{output_path} already exists, this will overwrite the file")
+        if not confirm_prompt("Are you sure you want to continue?"):
+            exit(1)
+    print(f"Decompressing sav file")
+    with open(filename, "rb") as f:
+        data = f.read()
+        raw_gvas, _ = decompress_sav_to_gvas(data)
+    print(f"Loading GVAS file")
+    gvas_file = GvasFile.read(raw_gvas, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES)
+    print(f"Writing JSON to {output_path}")
+    with open(output_path, "w", encoding="utf8") as f:
+        indent = None if minify else "\t"
+        json.dump(gvas_file.dump(), f, indent=indent, cls=CustomEncoder)
+
+
+def convert_json_to_sav(filename, output_path):
+    print(f"Converting {filename} to SAV, saving to {output_path}")
+    if os.path.exists(output_path):
+        print(f"{output_path} already exists, this will overwrite the file")
+        if not confirm_prompt("Are you sure you want to continue?"):
+            exit(1)
+    print(f"Loading JSON from {filename}")
+    with open(filename, "r", encoding="utf8") as f:
+        data = json.load(f)
+    gvas_file = GvasFile.load(data)
+    print(f"Compressing SAV file")
+    if (
+        "Pal.PalWorldSaveGame" in gvas_file.header.save_game_class_name
+        or "Pal.PalLocalWorldSaveGame" in gvas_file.header.save_game_class_name
+    ):
+        save_type = 0x32
+    else:
+        save_type = 0x31
+    sav_file = compress_gvas_to_sav(
+        gvas_file.write(PALWORLD_CUSTOM_PROPERTIES), save_type
+    )
+    print(f"Writing SAV file to {output_path}")
+    with open(output_path, "wb") as f:
+        f.write(sav_file)
+
+
+def confirm_prompt(question: str) -> bool:
+    reply = None
+    while reply not in ("y", "n"):
+        reply = input(f"{question} (y/n): ").casefold()
+    return reply == "y"
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`lib/archive.py`:
+
+```py
+import io
+import os
+import struct
+import uuid
+from typing import Any, Callable, Optional, Union
+
+
+def instance_id_reader(reader: "FArchiveReader"):
+    return {
+        "guid": reader.guid(),
+        "instance_id": reader.guid(),
+    }
+
+
+def uuid_reader(reader: "FArchiveReader"):
+    b = reader.read(16)
+    if len(b) != 16:
+        raise Exception("could not read 16 bytes for uuid")
+    return uuid.UUID(
+        bytes=bytes(
+            [
+                b[0x3],
+                b[0x2],
+                b[0x1],
+                b[0x0],
+                b[0x7],
+                b[0x6],
+                b[0x5],
+                b[0x4],
+                b[0xB],
+                b[0xA],
+                b[0x9],
+                b[0x8],
+                b[0xF],
+                b[0xE],
+                b[0xD],
+                b[0xC],
+            ]
+        )
+    )
+
+
+class FArchiveReader:
+    data: io.BytesIO
+    size: int
+    type_hints: dict[str, str]
+    custom_properties: dict[str, tuple[Callable, Callable]]
+
+    def __init__(
+        self,
+        data,
+        type_hints: dict[str, str] = {},
+        custom_properties: dict[str, tuple[Callable, Callable]] = {},
+    ):
+        self.data = io.BytesIO(data)
+        self.size = len(self.data.read())
+        self.data.seek(0)
+        self.type_hints = type_hints
+        self.custom_properties = custom_properties
+
+    def __enter__(self):
+        self.size = len(self.data.read())
+        self.data.seek(0)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.data.close()
+
+    def get_type_or(self, path: str, default: str):
+        if path in self.type_hints:
+            return self.type_hints[path]
+        else:
+            print(f"Struct type for {path} not found, assuming {default}")
+            return default
+
+    def eof(self) -> bool:
+        return self.data.tell() >= self.size
+
+    def read(self, size: int) -> bytes:
+        return self.data.read(size)
+
+    def read_to_end(self) -> bytes:
+        return self.data.read(self.size - self.data.tell())
+
+    def bool(self) -> bool:
+        return self.byte() > 0
+
+    def fstring(self) -> str:
+        size = self.i32()
+        LoadUCS2Char: bool = size < 0
+
+        if LoadUCS2Char:
+            if size == -2147483648:
+                raise Exception("Archive is corrupted.")
+
+            size = -size
+
+        if size == 0:
+            return ""
+
+        data: bytes
+        encoding: str
+        if LoadUCS2Char:
+            data = self.read(size * 2)[:-2]
+            encoding = "utf-16-le"
+        else:
+            data = self.read(size)[:-1]
+            encoding = "ascii"
+        try:
+            return data.decode(encoding)
+        except Exception as e:
+            try:
+                escaped = data.decode(encoding, errors="surrogatepass")
+                print(
+                    f"Error decoding {encoding} string of length {size}, data loss may occur! {bytes(data)}"
+                )
+                return escaped
+            except Exception as e:
+                raise Exception(
+                    f"Error decoding {encoding} string of length {size}: {bytes(data)}"
+                ) from e
+
+    def i16(self) -> int:
+        return struct.unpack("h", self.data.read(2))[0]
+
+    def u16(self) -> int:
+        return struct.unpack("H", self.data.read(2))[0]
+
+    def i32(self) -> int:
+        return struct.unpack("i", self.data.read(4))[0]
+
+    def u32(self) -> int:
+        return struct.unpack("I", self.data.read(4))[0]
+
+    def i64(self) -> int:
+        return struct.unpack("q", self.data.read(8))[0]
+
+    def u64(self) -> int:
+        return struct.unpack("Q", self.data.read(8))[0]
+
+    def float(self) -> float:
+        return struct.unpack("f", self.data.read(4))[0]
+
+    def double(self) -> float:
+        return struct.unpack("d", self.data.read(8))[0]
+
+    def byte(self) -> int:
+        return struct.unpack("B", self.data.read(1))[0]
+
+    def byte_list(self, size: int) -> list[int]:
+        return struct.unpack(str(size) + "B", self.data.read(size))
+
+    def skip(self, size: int) -> None:
+        self.data.read(size)
+
+    def guid(self) -> uuid.UUID:
+        return uuid_reader(self)
+
+    def optional_guid(self) -> Optional[uuid.UUID]:
+        return uuid_reader(self) if self.bool() else None
+
+    def tarray(
+        self, type_reader: Callable[["FArchiveReader"], dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        count = self.u32()
+        array = []
+        for _ in range(count):
+            array.append(type_reader(self))
+        return array
+
+    def properties_until_end(self, path: str = "") -> dict[str, Any]:
+        properties = {}
+        while True:
+            name = self.fstring()
+            if name == "None":
+                break
+            type_name = self.fstring()
+            size = self.u64()
+            properties[name] = self.property(type_name, size, f"{path}.{name}")
+        return properties
+
+    def property(
+        self, type_name: str, size: int, path: str, allow_custom: bool = True
+    ) -> dict[str, Any]:
+        value = {}
+        if allow_custom and path in self.custom_properties:
+            value = self.custom_properties[path][0](self, type_name, size, path)
+            value["custom_type"] = path
+        elif type_name == "StructProperty":
+            value = self.struct(path)
+        elif type_name == "IntProperty":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.i32(),
+            }
+        elif type_name == "Int64Property":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.i64(),
+            }
+        elif type_name == "FixedPoint64Property":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.i32(),
+            }
+        elif type_name == "FloatProperty":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.float(),
+            }
+        elif type_name == "StrProperty":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.fstring(),
+            }
+        elif type_name == "NameProperty":
+            value = {
+                "id": self.optional_guid(),
+                "value": self.fstring(),
+            }
+        elif type_name == "EnumProperty":
+            enum_type = self.fstring()
+            _id = self.optional_guid()
+            enum_value = self.fstring()
+            value = {
+                "id": _id,
+                "value": {
+                    "type": enum_type,
+                    "value": enum_value,
+                },
+            }
+        elif type_name == "BoolProperty":
+            value = {
+                "value": self.bool(),
+                "id": self.optional_guid(),
+            }
+        elif type_name == "ArrayProperty":
+            array_type = self.fstring()
+            value = {
+                "array_type": array_type,
+                "id": self.optional_guid(),
+                "value": self.array_property(array_type, size - 4, path),
+            }
+        elif type_name == "MapProperty":
+            key_type = self.fstring()
+            value_type = self.fstring()
+            _id = self.optional_guid()
+            self.u32()
+            count = self.u32()
+            values = {}
+            key_path = path + ".Key"
+            if key_type == "StructProperty":
+                key_struct_type = self.get_type_or(key_path, "Guid")
+            else:
+                key_struct_type = None
+            value_path = path + ".Value"
+            if value_type == "StructProperty":
+                value_struct_type = self.get_type_or(value_path, "StructProperty")
+            else:
+                value_struct_type = None
+            values = []
+            for _ in range(count):
+                key = self.prop_value(key_type, key_struct_type, key_path)
+                value = self.prop_value(value_type, value_struct_type, value_path)
+                values.append(
+                    {
+                        "key": key,
+                        "value": value,
+                    }
+                )
+            value = {
+                "key_type": key_type,
+                "value_type": value_type,
+                "key_struct_type": key_struct_type,
+                "value_struct_type": value_struct_type,
+                "id": _id,
+                "value": values,
+            }
+        else:
+            raise Exception(f"Unknown type: {type_name} ({path})")
+        value["type"] = type_name
+        return value
+
+    def prop_value(self, type_name: str, struct_type_name: str, path: str):
+        if type_name == "StructProperty":
+            return self.struct_value(struct_type_name, path)
+        elif type_name == "EnumProperty":
+            return self.fstring()
+        elif type_name == "NameProperty":
+            return self.fstring()
+        elif type_name == "IntProperty":
+            return self.i32()
+        elif type_name == "BoolProperty":
+            return self.bool()
+        else:
+            raise Exception(f"Unknown property value type: {type_name} ({path})")
+
+    def struct(self, path: str) -> dict[str, Any]:
+        struct_type = self.fstring()
+        struct_id = self.guid()
+        _id = self.optional_guid()
+        value = self.struct_value(struct_type, path)
+        return {
+            "struct_type": struct_type,
+            "struct_id": struct_id,
+            "id": _id,
+            "value": value,
+        }
+
+    def struct_value(self, struct_type: str, path: str = ""):
+        if struct_type == "Vector":
+            return {
+                "x": self.double(),
+                "y": self.double(),
+                "z": self.double(),
+            }
+        elif struct_type == "DateTime":
+            return self.u64()
+        elif struct_type == "Guid":
+            return self.guid()
+        elif struct_type == "Quat":
+            return {
+                "x": self.double(),
+                "y": self.double(),
+                "z": self.double(),
+                "w": self.double(),
+            }
+        elif struct_type == "LinearColor":
+            return {
+                "r": self.float(),
+                "g": self.float(),
+                "b": self.float(),
+                "a": self.float(),
+            }
+        else:
+            if os.environ.get("DEBUG", "0") == "1":
+                print(f"Assuming struct type: {struct_type} ({path})")
+            return self.properties_until_end(path)
+
+    def array_property(self, array_type: str, size: int, path: str):
+        count = self.u32()
+        value = {}
+        if array_type == "StructProperty":
+            prop_name = self.fstring()
+            prop_type = self.fstring()
+            self.u64()
+            type_name = self.fstring()
+            _id = self.guid()
+            self.skip(1)
+            prop_values = []
+            for _ in range(count):
+                prop_values.append(self.struct_value(type_name, f"{path}.{prop_name}"))
+            value = {
+                "prop_name": prop_name,
+                "prop_type": prop_type,
+                "values": prop_values,
+                "type_name": type_name,
+                "id": _id,
+            }
+        else:
+            value = {
+                "values": self.array_value(array_type, count, size, path),
+            }
+        return value
+
+    def array_value(self, array_type: str, count: int, size: int, path: str):
+        values = []
+        for _ in range(count):
+            if array_type == "EnumProperty":
+                values.append(self.fstring())
+            elif array_type == "NameProperty":
+                values.append(self.fstring())
+            elif array_type == "Guid":
+                values.append(self.guid())
+            elif array_type == "ByteProperty":
+                if size == count:
+                    values.append(self.byte())
+                else:
+                    raise Exception("Labelled ByteProperty not implemented")
+            else:
+                raise Exception(f"Unknown array type: {array_type} ({path})")
+        return values
+
+
+def uuid_writer(writer, s: Union[str, uuid.UUID]):
+    if isinstance(s, str):
+        u = uuid.UUID(s)
+        b = u.bytes
+    else:
+        b = s.bytes
+    ub = bytes(
+        [
+            b[0x3],
+            b[0x2],
+            b[0x1],
+            b[0x0],
+            b[0x7],
+            b[0x6],
+            b[0x5],
+            b[0x4],
+            b[0xB],
+            b[0xA],
+            b[0x9],
+            b[0x8],
+            b[0xF],
+            b[0xE],
+            b[0xD],
+            b[0xC],
+        ]
+    )
+    writer.write(ub)
+
+
+def instance_id_writer(writer, d):
+    uuid_writer(writer, d["guid"])
+    uuid_writer(writer, d["instance_id"])
+
+
+class FArchiveWriter:
+    data: io.BytesIO
+    size: int
+    custom_properties: dict[str, tuple[Callable, Callable]]
+
+    def __init__(self, custom_properties: dict[str, tuple[Callable, Callable]] = {}):
+        self.data = io.BytesIO()
+        self.custom_properties = custom_properties
+
+    def __enter__(self):
+        self.data.seek(0)
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.data.close()
+
+    def copy(self) -> "FArchiveWriter":
+        return FArchiveWriter(self.custom_properties)
+
+    def bytes(self) -> bytes:
+        pos = self.data.tell()
+        self.data.seek(0)
+        b = self.data.read()
+        self.data.seek(pos)
+        return b
+
+    def write(self, data: bytes):
+        self.data.write(data)
+
+    def bool(self, bool: bool):
+        self.data.write(struct.pack("?", bool))
+
+    def fstring(self, string: str) -> int:
+        start = self.data.tell()
+        if string == "":
+            self.i32(0)
+        elif string.isascii():
+            str_bytes = string.encode("ascii")
+            self.i32(len(str_bytes) + 1)
+            self.data.write(str_bytes)
+            self.data.write(b"\x00")
+        else:
+            str_bytes = string.encode("utf-16-le", errors="surrogatepass")
+            assert len(str_bytes) % 2 == 0
+            self.i32(-((len(str_bytes) // 2) + 1))
+            self.data.write(str_bytes)
+            self.data.write(b"\x00\x00")
+        return self.data.tell() - start
+
+    def i16(self, i: int):
+        self.data.write(struct.pack("h", i))
+
+    def u16(self, i: int):
+        self.data.write(struct.pack("H", i))
+
+    def i32(self, i: int):
+        self.data.write(struct.pack("i", i))
+
+    def u32(self, i: int):
+        self.data.write(struct.pack("I", i))
+
+    def i64(self, i: int):
+        self.data.write(struct.pack("q", i))
+
+    def u64(self, i: int):
+        self.data.write(struct.pack("Q", i))
+
+    def float(self, i: float):
+        self.data.write(struct.pack("f", i))
+
+    def double(self, i: float):
+        self.data.write(struct.pack("d", i))
+
+    def byte(self, b: int):
+        self.data.write(bytes([b]))
+
+    def u(self, b: int):
+        self.data.write(struct.pack("B", b))
+
+    def guid(self, u: Union[str, uuid.UUID]):
+        uuid_writer(self, u)
+
+    def optional_uuid(self, u: Optional[Union[str, uuid.UUID]]):
+        if u is None:
+            self.bool(False)
+        else:
+            self.bool(True)
+            uuid_writer(self, u)
+
+    def tarray(
+        self, type_writer: Callable[["FArchiveWriter", dict[str, Any]], None], array
+    ):
+        self.u32(len(array))
+        for i in range(len(array)):
+            type_writer(self, array[i])
+
+    def properties(self, properties: dict[str, Any]):
+        for key in properties:
+            self.fstring(key)
+            self.property(properties[key])
+        self.fstring("None")
+
+    def property(self, property: dict[str, Any]):
+        # write type_name
+        self.fstring(property["type"])
+        nested_writer = self.copy()
+        size: int
+        property_type = property["type"]
+        size = nested_writer.property_inner(property_type, property)
+        buf = nested_writer.bytes()
+        # write size
+        self.u64(size)
+        self.write(buf)
+
+    def property_inner(self, property_type: str, property: dict[str, Any]) -> int:
+        if "custom_type" in property:
+            if property["custom_type"] in self.custom_properties:
+                size = self.custom_properties[property["custom_type"]][1](
+                    self, property_type, property
+                )
+            else:
+                raise Exception(
+                    f"Unknown custom property type: {property['custom_type']}"
+                )
+        elif property_type == "StructProperty":
+            size = self.struct(property)
+        elif property_type == "IntProperty":
+            self.optional_uuid(property.get("id", None))
+            self.i32(property["value"])
+            size = 4
+        elif property_type == "Int64Property":
+            self.optional_uuid(property.get("id", None))
+            self.i64(property["value"])
+            size = 8
+        elif property_type == "FixedPoint64Property":
+            self.optional_uuid(property.get("id", None))
+            self.i32(property["value"])
+            size = 4
+        elif property_type == "FloatProperty":
+            self.optional_uuid(property.get("id", None))
+            self.float(property["value"])
+            size = 4
+        elif property_type == "StrProperty":
+            self.optional_uuid(property.get("id", None))
+            size = self.fstring(property["value"])
+        elif property_type == "NameProperty":
+            self.optional_uuid(property.get("id", None))
+            size = self.fstring(property["value"])
+        elif property_type == "EnumProperty":
+            self.fstring(property["value"]["type"])
+            self.optional_uuid(property.get("id", None))
+            size = self.fstring(property["value"]["value"])
+        elif property_type == "BoolProperty":
+            self.bool(property["value"])
+            self.optional_uuid(property.get("id", None))
+            size = 0
+        elif property_type == "ArrayProperty":
+            self.fstring(property["array_type"])
+            self.optional_uuid(property.get("id", None))
+            array_writer = self.copy()
+            array_writer.array_property(property["array_type"], property["value"])
+            array_buf = array_writer.bytes()
+            size = len(array_buf)
+            self.write(array_buf)
+        elif property_type == "MapProperty":
+            self.fstring(property["key_type"])
+            self.fstring(property["value_type"])
+            self.optional_uuid(property.get("id", None))
+            map_writer = self.copy()
+            map_writer.u32(0)
+            map_writer.u32(len(property["value"]))
+            for entry in property["value"]:
+                map_writer.prop_value(
+                    property["key_type"], property["key_struct_type"], entry["key"]
+                )
+                map_writer.prop_value(
+                    property["value_type"],
+                    property["value_struct_type"],
+                    entry["value"],
+                )
+            map_buf = map_writer.bytes()
+            size = len(map_buf)
+            self.write(map_buf)
+        else:
+            raise Exception(f"Unknown property type: {property_type}")
+        return size
+
+    def struct(self, property: dict[str, Any]) -> int:
+        self.fstring(property["struct_type"])
+        self.guid(property["struct_id"])
+        self.optional_uuid(property.get("id", None))
+        start = self.data.tell()
+        self.struct_value(property["struct_type"], property["value"])
+        return self.data.tell() - start
+
+    def struct_value(self, struct_type: str, value):
+        if struct_type == "Vector":
+            self.double(value["x"])
+            self.double(value["y"])
+            self.double(value["z"])
+        elif struct_type == "DateTime":
+            self.u64(value)
+        elif struct_type == "Guid":
+            self.guid(value)
+        elif struct_type == "Quat":
+            self.double(value["x"])
+            self.double(value["y"])
+            self.double(value["z"])
+            self.double(value["w"])
+        elif struct_type == "LinearColor":
+            self.float(value["r"])
+            self.float(value["g"])
+            self.float(value["b"])
+            self.float(value["a"])
+        else:
+            if os.environ.get("DEBUG", "0") == "1":
+                print(f"Assuming struct type: {struct_type}")
+            return self.properties(value)
+
+    def prop_value(self, type_name: str, struct_type_name: str, value):
+        if type_name == "StructProperty":
+            self.struct_value(struct_type_name, value)
+        elif type_name == "EnumProperty":
+            self.fstring(value)
+        elif type_name == "NameProperty":
+            self.fstring(value)
+        elif type_name == "IntProperty":
+            self.i32(value)
+        elif type_name == "BoolProperty":
+            self.bool(value)
+        else:
+            raise Exception(f"Unknown property value type: {type_name}")
+
+    def array_property(self, array_type: str, value: dict[str, Any]):
+        count = len(value["values"])
+        self.u32(count)
+        if array_type == "StructProperty":
+            self.fstring(value["prop_name"])
+            self.fstring(value["prop_type"])
+            nested_writer = self.copy()
+            for i in range(count):
+                nested_writer.struct_value(value["type_name"], value["values"][i])
+            data_buf = nested_writer.bytes()
+            self.u64(len(data_buf))
+            self.fstring(value["type_name"])
+            self.guid(value["id"])
+            self.u(0)
+            self.write(data_buf)
+        else:
+            self.array_value(array_type, count, value["values"])
+
+    def array_value(self, array_type: str, count: int, values: list[Any]):
+        for i in range(count):
+            if array_type == "IntProperty":
+                self.i32(values[i])
+            elif array_type == "Int64Property":
+                self.i64(values[i])
+            elif array_type == "FloatProperty":
+                self.float(values[i])
+            elif array_type == "StrProperty":
+                self.fstring(values[i])
+            elif array_type == "NameProperty":
+                self.fstring(values[i])
+            elif array_type == "EnumProperty":
+                self.fstring(values[i])
+            elif array_type == "BoolProperty":
+                self.bool(values[i])
+            elif array_type == "ByteProperty":
+                self.byte(values[i])
+            else:
+                raise Exception(f"Unknown array type: {array_type}")
+
+```
+
+`lib/gvas.py`:
+
+```py
+import base64
+from typing import Any, Callable
+
+from lib.archive import FArchiveReader, FArchiveWriter
+
+
+def custom_version_reader(reader: FArchiveReader):
+    return (reader.guid(), reader.i32())
+
+
+def custom_version_writer(writer: FArchiveWriter, value: tuple[str, int]):
+    writer.guid(value[0])
+    writer.i32(value[1])
+
+
+class GvasHeader:
+    magic: int
+    save_game_version: int
+    package_file_version_ue4: int
+    package_file_version_ue5: int
+    engine_version_major: int
+    engine_version_minor: int
+    engine_version_patch: int
+    engine_version_changelist: int
+    engine_version_branch: str
+    custom_version_format: int
+    custom_versions: list[tuple[str, int]]
+    save_game_class_name: str
+
+    @staticmethod
+    def read(reader: FArchiveReader) -> "GvasHeader":
+        header = GvasHeader()
+        # FileTypeTag
+        header.magic = reader.i32()
+        if header.magic != 0x53415647:
+            raise Exception("invalid magic")
+        # SaveGameFileVersion
+        header.save_game_version = reader.i32()
+        if header.save_game_version != 3:
+            raise Exception(
+                f"expected save game version 3, got {header.save_game_version}"
+            )
+        # PackageFileUEVersion
+        header.package_file_version_ue4 = reader.i32()
+        header.package_file_version_ue5 = reader.i32()
+        # SavedEngineVersion
+        header.engine_version_major = reader.u16()
+        header.engine_version_minor = reader.u16()
+        header.engine_version_patch = reader.u16()
+        header.engine_version_changelist = reader.u32()
+        header.engine_version_branch = reader.fstring()
+        # CustomVersionFormat
+        header.custom_version_format = reader.i32()
+        if header.custom_version_format != 3:
+            raise Exception(
+                f"expected custom version format 3, got {header.custom_version_format}"
+            )
+        # CustomVersions
+        header.custom_versions = reader.tarray(custom_version_reader)
+        header.save_game_class_name = reader.fstring()
+        return header
+
+    @staticmethod
+    def load(dict: dict[str, Any]) -> "GvasHeader":
+        header = GvasHeader()
+        header.magic = dict["magic"]
+        header.save_game_version = dict["save_game_version"]
+        header.package_file_version_ue4 = dict["package_file_version_ue4"]
+        header.package_file_version_ue5 = dict["package_file_version_ue5"]
+        header.engine_version_major = dict["engine_version_major"]
+        header.engine_version_minor = dict["engine_version_minor"]
+        header.engine_version_patch = dict["engine_version_patch"]
+        header.engine_version_changelist = dict["engine_version_changelist"]
+        header.engine_version_branch = dict["engine_version_branch"]
+        header.custom_version_format = dict["custom_version_format"]
+        header.custom_versions = dict["custom_versions"]
+        header.save_game_class_name = dict["save_game_class_name"]
+        return header
+
+    def dump(self) -> dict[str, Any]:
+        return {
+            "magic": self.magic,
+            "save_game_version": self.save_game_version,
+            "package_file_version_ue4": self.package_file_version_ue4,
+            "package_file_version_ue5": self.package_file_version_ue5,
+            "engine_version_major": self.engine_version_major,
+            "engine_version_minor": self.engine_version_minor,
+            "engine_version_patch": self.engine_version_patch,
+            "engine_version_changelist": self.engine_version_changelist,
+            "engine_version_branch": self.engine_version_branch,
+            "custom_version_format": self.custom_version_format,
+            "custom_versions": self.custom_versions,
+            "save_game_class_name": self.save_game_class_name,
+        }
+
+    def write(self, writer: FArchiveWriter):
+        writer.i32(self.magic)
+        writer.i32(self.save_game_version)
+        writer.i32(self.package_file_version_ue4)
+        writer.i32(self.package_file_version_ue5)
+        writer.u16(self.engine_version_major)
+        writer.u16(self.engine_version_minor)
+        writer.u16(self.engine_version_patch)
+        writer.u32(self.engine_version_changelist)
+        writer.fstring(self.engine_version_branch)
+        writer.i32(self.custom_version_format)
+        writer.tarray(custom_version_writer, self.custom_versions)
+        writer.fstring(self.save_game_class_name)
+
+
+class GvasFile:
+    header: GvasHeader
+    properties: dict[str, Any]
+    trailer: bytes
+
+    @staticmethod
+    def read(
+        data: bytes,
+        type_hints: dict[str, str] = {},
+        custom_properties: dict[str, tuple[Callable, Callable]] = {},
+    ) -> "GvasFile":
+        gvas_file = GvasFile()
+        reader = FArchiveReader(data, type_hints, custom_properties)
+        gvas_file.header = GvasHeader.read(reader)
+        gvas_file.properties = reader.properties_until_end()
+        gvas_file.trailer = reader.read_to_end()
+        if gvas_file.trailer != b"\x00\x00\x00\x00":
+            print(
+                f"{len(gvas_file.trailer)} bytes of trailer data, file may not have fully parsed"
+            )
+        return gvas_file
+
+    @staticmethod
+    def load(dict: dict[str, Any]) -> "GvasFile":
+        gvas_file = GvasFile()
+        gvas_file.header = GvasHeader.load(dict["header"])
+        gvas_file.properties = dict["properties"]
+        gvas_file.trailer = base64.b64decode(dict["trailer"])
+        return gvas_file
+
+    def dump(self) -> dict[str, Any]:
+        return {
+            "header": self.header.dump(),
+            "properties": self.properties,
+            "trailer": base64.b64encode(self.trailer).decode("utf-8"),
+        }
+
+    def write(
+        self, custom_properties: dict[str, tuple[Callable, Callable]] = {}
+    ) -> bytes:
+        writer = FArchiveWriter(custom_properties)
+        self.header.write(writer)
+        writer.properties(self.properties)
+        writer.write(self.trailer)
+        return writer.bytes()
+
+```
+
+`lib/noindent.py`:
+
+```py
+import ctypes
+import json
+import re
+import uuid
+
+
+class NoIndent(object):
+    """Value wrapper."""
+
+    def __init__(self, value):
+        if not isinstance(value, (list, tuple)):
+            raise TypeError("Only lists and tuples can be wrapped")
+        self.value = value
+
+
+class CustomEncoder(json.JSONEncoder):
+    FORMAT_SPEC = "@@{}@@"
+    regex = re.compile(FORMAT_SPEC.format(r"(\d+)"))
+
+    def __init__(self, **kwargs):
+        # Keyword arguments to ignore when encoding NoIndent wrapped values.
+        ignore = {"cls", "indent"}
+
+        # Save copy of any keyword argument values needed for use here.
+        self._kwargs = {k: v for k, v in kwargs.items() if k not in ignore}
+        super(CustomEncoder, self).__init__(**kwargs)
+
+    def default(self, obj):
+        if isinstance(obj, NoIndent):
+            return self.FORMAT_SPEC.format(id(obj))
+        elif isinstance(obj, uuid.UUID):
+            return str(obj)
+        return super(CustomEncoder, self).default(obj)
+
+    def iterencode(self, obj, **kwargs):
+        format_spec = self.FORMAT_SPEC  # Local var to expedite access.
+
+        # Replace any marked-up NoIndent wrapped values in the JSON repr
+        # with the json.dumps() of the corresponding wrapped Python object.
+        for encoded in super(CustomEncoder, self).iterencode(obj, **kwargs):
+            match = self.regex.search(encoded)
+            if match:
+                id = int(match.group(1))
+                no_indent = ctypes.cast(id, ctypes.py_object).value
+                json_repr = json.dumps(no_indent.value, **self._kwargs)
+                # Replace the matched id string with json formatted representation
+                # of the corresponding Python object.
+                encoded = encoded.replace(
+                    '"{}"'.format(format_spec.format(id)), json_repr
+                )
+
+            yield encoded
+
+
+class NoIndentByteDecoder(json.JSONDecoder):
+    def __init__(self, *args, **kwargs):
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+
+    def object_hook(self, dct):
+        if "value" in dct:
+            if "values" in dct["value"]:
+                if isinstance(dct["value"]["values"], list):
+                    if isinstance(dct["value"]["values"][0], int):
+                        dct["value"]["values"] = NoIndent(dct["value"]["values"])
+        return dct
+
+```
+
+`lib/palsav.py`:
+
+```py
+import zlib
+
+
+def decompress_sav_to_gvas(data: bytes) -> tuple[bytes, int]:
+    uncompressed_len = int.from_bytes(data[0:4], byteorder="little")
+    compressed_len = int.from_bytes(data[4:8], byteorder="little")
+    magic_bytes = data[8:11]
+    save_type = data[11]
+    # Check for magic bytes
+    if magic_bytes != b"PlZ":
+        raise Exception(
+            f"not a compressed Palworld save, found {magic_bytes} instead of P1Z"
+        )
+    # Valid save types
+    if save_type not in [0x30, 0x31, 0x32]:
+        raise Exception(f"unknown save type: {save_type}")
+    # We only have 0x31 (single zlib) and 0x32 (double zlib) saves
+    if save_type not in [0x31, 0x32]:
+        raise Exception(f"unhandled compression type: {save_type}")
+    if save_type == 0x31:
+        # Check if the compressed length is correct
+        if compressed_len != len(data) - 12:
+            raise Exception(f"incorrect compressed length: {compressed_len}")
+    # Decompress file
+    uncompressed_data = zlib.decompress(data[12:])
+    if save_type == 0x32:
+        # Check if the compressed length is correct
+        if compressed_len != len(uncompressed_data):
+            raise Exception(f"incorrect compressed length: {compressed_len}")
+        # Decompress file
+        uncompressed_data = zlib.decompress(uncompressed_data)
+    # Check if the uncompressed length is correct
+    if uncompressed_len != len(uncompressed_data):
+        raise Exception(f"incorrect uncompressed length: {uncompressed_len}")
+
+    return uncompressed_data, save_type
+
+
+def compress_gvas_to_sav(data: bytes, save_type: int) -> bytes:
+    uncompressed_len = len(data)
+    compressed_data = zlib.compress(data)
+    compressed_len = len(compressed_data)
+    if save_type == 0x32:
+        compressed_data = zlib.compress(compressed_data)
+
+    # Create a byte array and append the necessary information
+    result = bytearray()
+    result.extend(uncompressed_len.to_bytes(4, byteorder="little"))
+    result.extend(compressed_len.to_bytes(4, byteorder="little"))
+    result.extend(b"PlZ")
+    result.extend(bytes([save_type]))
+    result.extend(compressed_data)
+
+    return bytes(result)
+
+```
+
+`lib/paltypes.py`:
+
+```py
+from lib.rawdata import *
+
+PALWORLD_TYPE_HINTS: dict[str, str] = {
+    ".worldSaveData.CharacterContainerSaveData.Key": "StructProperty",
+    ".worldSaveData.CharacterSaveParameterMap.Key": "StructProperty",
+    ".worldSaveData.CharacterSaveParameterMap.Value": "StructProperty",
+    ".worldSaveData.FoliageGridSaveDataMap.Key": "StructProperty",
+    ".worldSaveData.FoliageGridSaveDataMap.Value.ModelMap.Value": "StructProperty",
+    ".worldSaveData.FoliageGridSaveDataMap.Value.ModelMap.Value.InstanceDataMap.Key": "StructProperty",
+    ".worldSaveData.FoliageGridSaveDataMap.Value.ModelMap.Value.InstanceDataMap.Value": "StructProperty",
+    ".worldSaveData.FoliageGridSaveDataMap.Value": "StructProperty",
+    ".worldSaveData.ItemContainerSaveData.Key": "StructProperty",
+    ".worldSaveData.MapObjectSaveData.MapObjectSaveData.ConcreteModel.ModuleMap.Value": "StructProperty",
+    ".worldSaveData.MapObjectSaveData.MapObjectSaveData.Model.EffectMap.Value": "StructProperty",
+    ".worldSaveData.MapObjectSpawnerInStageSaveData.Key": "StructProperty",
+    ".worldSaveData.MapObjectSpawnerInStageSaveData.Value": "StructProperty",
+    ".worldSaveData.MapObjectSpawnerInStageSaveData.Value.SpawnerDataMapByLevelObjectInstanceId.Key": "Guid",
+    ".worldSaveData.MapObjectSpawnerInStageSaveData.Value.SpawnerDataMapByLevelObjectInstanceId.Value": "StructProperty",
+    ".worldSaveData.MapObjectSpawnerInStageSaveData.Value.SpawnerDataMapByLevelObjectInstanceId.Value.ItemMap.Value": "StructProperty",
+    ".worldSaveData.WorkSaveData.WorkSaveData.WorkAssignMap.Value": "StructProperty",
+    ".worldSaveData.BaseCampSaveData.Key": "Guid",
+    ".worldSaveData.BaseCampSaveData.Value": "StructProperty",
+    ".worldSaveData.BaseCampSaveData.Value.ModuleMap.Value": "StructProperty",
+    ".worldSaveData.ItemContainerSaveData.Value": "StructProperty",
+    ".worldSaveData.CharacterContainerSaveData.Value": "StructProperty",
+    ".worldSaveData.GroupSaveDataMap.Key": "Guid",
+    ".worldSaveData.GroupSaveDataMap.Value": "StructProperty",
+    ".worldSaveData.EnemyCampSaveData.EnemyCampStatusMap.Value": "StructProperty",
+    ".worldSaveData.DungeonSaveData.DungeonSaveData.MapObjectSaveData.MapObjectSaveData.Model.EffectMap.Value": "StructProperty",
+    ".worldSaveData.DungeonSaveData.DungeonSaveData.MapObjectSaveData.MapObjectSaveData.ConcreteModel.ModuleMap.Value": "StructProperty",
+}
+
+PALWORLD_CUSTOM_PROPERTIES: dict[
+    str,
+    tuple[
+        Callable[[FArchiveReader, str, int, str], dict[str, Any]],
+        Callable[[FArchiveWriter, str, dict[str, Any]], int],
+    ],
+] = {
+    ".worldSaveData.GroupSaveDataMap": (decode_group_data, encode_group_data),
+    ".worldSaveData.CharacterSaveParameterMap.Value.RawData": (
+        decode_character_data,
+        encode_character_data,
+    ),
+    ".worldSaveData.MapObjectSaveData.MapObjectSaveData.Model.BuildProcess.RawData": (
+        decode_build_process,
+        encode_build_process,
+    ),
+    ".worldSaveData.MapObjectSaveData.MapObjectSaveData.Model.Connector.RawData": (
+        decode_connector,
+        encode_connector,
+    ),
+    ".worldSaveData.MapObjectSaveData.MapObjectSaveData.Model.RawData": (
+        decode_map_model,
+        encode_map_model,
+    ),
+    # ".worldSaveData.MapObjectSaveData.MapObjectSaveData.ConcreteModel.ModuleMap.Value.RawData": (),
+    # ".worldSaveData.MapObjectSaveData.MapObjectSaveData.ConcreteModel.RawData": (),
+    # ".worldSaveData.MapObjectSaveData.MapObjectSaveData.ConcreteModel": (
+    #     decode_map_concrete_model,
+    #     encode_map_concrete_model,
+    # ),
+    # ".worldSaveData.FoliageGridSaveDataMap.Value.ModelMap.Value.InstanceDataMap.Value.RawData": (),
+    # ".worldSaveData.FoliageGridSaveDataMap.Value.ModelMap.Value.RawData": (),
+    # ".worldSaveData.CharacterContainerSaveData.Value.RawData": (),
+    # ".worldSaveData.CharacterContainerSaveData.Value.Slots.Slots.RawData": (),
+    # ".worldSaveData.DynamicItemSaveData.DynamicItemSaveData.RawData": (),
+    # ".worldSaveData.ItemContainerSaveData.Value.RawData": (),
+    # ".worldSaveData.ItemContainerSaveData.Value.Slots.Slots.RawData": (),
+}
+
+```
+
+`lib/rawdata.py`:
+
+```py
+from typing import Any, Sequence
+
+from lib.archive import *
+
+
+def decode_group_data(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    # Decode the raw bytes and replace the raw data
+    group_map = value["value"]
+    for group in group_map:
+        group_type = group["value"]["GroupType"]["value"]["value"]
+        group_bytes = group["value"]["RawData"]["value"]["values"]
+        group["value"]["RawData"]["value"] = decode_group_data_bytes(
+            group_bytes, group_type
+        )
+    return value
+
+
+def decode_group_data_bytes(
+    group_bytes: Sequence[int], group_type: str
+) -> dict[str, Any]:
+    reader = FArchiveReader(bytes(group_bytes))
+    group_data = {
+        "group_type": group_type,
+        "group_id": reader.guid(),
+        "group_name": reader.fstring(),
+        "individual_character_handle_ids": reader.tarray(instance_id_reader),
+    }
+    if group_type in [
+        "EPalGroupType::Guild",
+        "EPalGroupType::IndependentGuild",
+        "EPalGroupType::Organization",
+    ]:
+        org = {
+            "org_type": reader.byte(),
+            "base_ids": reader.tarray(uuid_reader),
+        }
+        group_data |= org
+    if group_type in ["EPalGroupType::Guild", "EPalGroupType::IndependentGuild"]:
+        guild = {
+            "base_camp_level": reader.i32(),
+            "map_object_instance_ids_base_camp_points": reader.tarray(uuid_reader),
+            "guild_name": reader.fstring(),
+        }
+        group_data |= guild
+    if group_type == "EPalGroupType::IndependentGuild":
+        indie = {
+            "player_uid": reader.guid(),
+            "guild_name_2": reader.fstring(),
+            "player_info": {
+                "last_online_real_time": reader.i64(),
+                "player_name": reader.fstring(),
+            },
+        }
+        group_data |= indie
+    if group_type == "EPalGroupType::Guild":
+        guild = {"admin_player_uid": reader.guid(), "players": []}
+        player_count = reader.i32()
+        for _ in range(player_count):
+            player = {
+                "player_uid": reader.guid(),
+                "player_info": {
+                    "last_online_real_time": reader.i64(),
+                    "player_name": reader.fstring(),
+                },
+            }
+            guild["players"].append(player)
+        group_data |= guild
+    if not reader.eof():
+        raise Exception("Warning: EOF not reached")
+    return group_data
+
+
+def encode_group_data(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {property_type}")
+    del properties["custom_type"]
+    group_map = properties["value"]
+    for group in group_map:
+        if "values" in group["value"]["RawData"]["value"]:
+            continue
+        p = group["value"]["RawData"]["value"]
+        encoded_bytes = encode_group_data_bytes(p)
+        group["value"]["RawData"]["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_group_data_bytes(p: dict[str, Any]) -> bytes:
+    writer = FArchiveWriter()
+    writer.guid(p["group_id"])
+    writer.fstring(p["group_name"])
+    writer.tarray(instance_id_writer, p["individual_character_handle_ids"])
+    if p["group_type"] in [
+        "EPalGroupType::Guild",
+        "EPalGroupType::IndependentGuild",
+        "EPalGroupType::Organization",
+    ]:
+        writer.byte(p["org_type"])
+        writer.tarray(uuid_writer, p["base_ids"])
+    if p["group_type"] in ["EPalGroupType::Guild", "EPalGroupType::IndependentGuild"]:
+        writer.i32(p["base_camp_level"])
+        writer.tarray(uuid_writer, p["map_object_instance_ids_base_camp_points"])
+        writer.fstring(p["guild_name"])
+    if p["group_type"] == "EPalGroupType::IndependentGuild":
+        writer.guid(p["player_uid"])
+        writer.fstring(p["guild_name_2"])
+        writer.i64(p["player_info"]["last_online_real_time"])
+        writer.fstring(p["player_info"]["player_name"])
+    if p["group_type"] == "EPalGroupType::Guild":
+        writer.guid(p["admin_player_uid"])
+        writer.i32(len(p["players"]))
+        for i in range(len(p["players"])):
+            writer.guid(p["players"][i]["player_uid"])
+            writer.i64(p["players"][i]["player_info"]["last_online_real_time"])
+            writer.fstring(p["players"][i]["player_info"]["player_name"])
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+
+def decode_character_data(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    char_bytes = value["value"]["values"]
+    value["value"] = decode_character_data_bytes(char_bytes)
+    return value
+
+
+def decode_character_data_bytes(char_bytes: Sequence[int]) -> dict[str, Any]:
+    reader = FArchiveReader(bytes(char_bytes))
+    char_data = {}
+    char_data["object"] = reader.properties_until_end()
+    char_data["unknown_bytes"] = reader.byte_list(4)
+    char_data["group_id"] = reader.guid()
+    if not reader.eof():
+        raise Exception("Warning: EOF not reached")
+    return char_data
+
+
+def encode_character_data(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {property_type}")
+    del properties["custom_type"]
+    encoded_bytes = encode_character_data_bytes(properties["value"])
+    properties["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_character_data_bytes(p: dict[str, Any]) -> bytes:
+    writer = FArchiveWriter()
+    writer.properties(p["object"])
+    writer.write(bytes(p["unknown_bytes"]))
+    writer.guid(p["group_id"])
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+
+def decode_debug(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    debug_bytes = value["value"]["values"]
+    if len(debug_bytes) > 0:
+        print("".join(f"{b:02x}" for b in debug_bytes))
+        # print(bytes(debug_bytes))
+    return value
+
+
+def encode_debug(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {property_type}")
+    del properties["custom_type"]
+    return writer.property_inner(property_type, properties)
+
+
+def decode_build_process(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    data_bytes = value["value"]["values"]
+    value["value"] = decode_build_process_bytes(data_bytes)
+    return value
+
+
+def decode_build_process_bytes(b_bytes: Sequence[int]) -> dict[str, Any]:
+    reader = FArchiveReader(bytes(b_bytes))
+    data = {}
+    data["state"] = reader.byte()
+    data["id"] = reader.guid()
+    if not reader.eof():
+        raise Exception("Warning: EOF not reached")
+    return data
+
+
+def encode_build_process(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {property_type}")
+    del properties["custom_type"]
+    encoded_bytes = encode_build_process_bytes(properties["value"])
+    properties["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_build_process_bytes(p: dict[str, Any]) -> bytes:
+    writer = FArchiveWriter()
+    writer.byte(p["state"])
+    writer.guid(p["id"])
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+
+def decode_connector(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    data_bytes = value["value"]["values"]
+    value["value"] = decode_connector_bytes(data_bytes)
+    return value
+
+
+def connect_info_item_reader(reader: FArchiveReader) -> dict[str, Any]:
+    return {
+        "connect_to_model_instance_id": reader.guid(),
+        "index": reader.byte(),
+    }
+
+
+def connect_info_item_writer(writer: FArchiveWriter, properties: dict[str, Any]):
+    writer.guid(properties["connect_to_model_instance_id"])
+    writer.byte(properties["index"])
+
+
+def decode_connector_bytes(c_bytes: Sequence[int]) -> dict[str, Any]:
+    if len(c_bytes) == 0:
+        return None
+    reader = FArchiveReader(bytes(c_bytes))
+    data = {}
+    data["supported_level"] = reader.i32()
+    data["connect"] = {
+        "index": reader.byte(),
+        "any_place": reader.tarray(connect_info_item_reader),
+    }
+    # We are guessing here, we don't have information about the type without mapping object names -> types
+    # Stairs have 2 connectors (up and down),
+    # Roofs have 4 connectors (front, back, right, left)
+    if not reader.eof():
+        data["other_connectors"] = []
+        while not reader.eof():
+            data["other_connectors"].append(
+                {
+                    "index": reader.byte(),
+                    "connect": reader.tarray(connect_info_item_reader),
+                }
+            )
+        if len(data["other_connectors"]) not in [2, 4]:
+            print(
+                f"Warning: unknown connector type with {len(data['other_connectors'])} connectors"
+            )
+    return data
+
+
+def encode_connector(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {property_type}")
+    del properties["custom_type"]
+    encoded_bytes = encode_connector_bytes(properties["value"])
+    properties["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_connector_bytes(p: dict[str, Any]) -> bytes:
+    if p is None:
+        return bytes()
+    writer = FArchiveWriter()
+    writer.i32(p["supported_level"])
+    writer.byte(p["connect"]["index"])
+    writer.tarray(connect_info_item_writer, p["connect"]["any_place"])
+    if "other_connectors" in p:
+        for other in p["other_connectors"]:
+            writer.byte(other["index"])
+            writer.tarray(connect_info_item_writer, other["connect"])
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+
+def decode_map_model(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    data_bytes = value["value"]["values"]
+    value["value"] = decode_map_model_bytes(data_bytes)
+    return value
+
+
+def decode_map_model_bytes(m_bytes: Sequence[int]) -> dict[str, Any]:
+    reader = FArchiveReader(bytes(m_bytes))
+    data = {}
+    data["instance_id"] = reader.guid()
+    data["concrete_model_instance_id"] = reader.guid()
+    data["base_camp_id_belong_to"] = reader.guid()
+    data["group_id_belong_to"] = reader.guid()
+    data["hp"] = {
+        "current": reader.i32(),
+        "max": reader.i32(),
+    }
+    data["initital_transform_cache"] = {
+        "rotation": {
+            "x": reader.double(),
+            "y": reader.double(),
+            "z": reader.double(),
+            "w": reader.double(),
+        },
+        "translation": {
+            "x": reader.double(),
+            "y": reader.double(),
+            "z": reader.double(),
+        },
+        "scale3d": {
+            "x": reader.double(),
+            "y": reader.double(),
+            "z": reader.double(),
+        },
+    }
+    data["repair_work_id"] = reader.guid()
+    data["owner_spawner_level_object_instance_id"] = reader.guid()
+    data["owner_instance_id"] = reader.guid()
+    data["build_player_uid"] = reader.guid()
+    data["interact_restrict_type"] = reader.byte()
+    data["stage_instance_id_belong_to"] = {
+        "id": reader.guid(),
+        "valid": reader.u32() > 0,
+    }
+    data["created_at"] = reader.i64()
+    if not reader.eof():
+        raise Exception("Warning: EOF not reached")
+    return data
+
+
+def encode_map_model(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "ArrayProperty":
+        raise Exception(f"Expected ArrayProperty, got {property_type}")
+    del properties["custom_type"]
+    encoded_bytes = encode_map_model_bytes(properties["value"])
+    properties["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_map_model_bytes(p: dict[str, Any]) -> bytes:
+    writer = FArchiveWriter()
+
+    writer.guid(p["instance_id"])
+    writer.guid(p["concrete_model_instance_id"])
+    writer.guid(p["base_camp_id_belong_to"])
+    writer.guid(p["group_id_belong_to"])
+
+    writer.i32(p["hp"]["current"])
+    writer.i32(p["hp"]["max"])
+
+    writer.double(p["initital_transform_cache"]["rotation"]["x"])
+    writer.double(p["initital_transform_cache"]["rotation"]["y"])
+    writer.double(p["initital_transform_cache"]["rotation"]["z"])
+    writer.double(p["initital_transform_cache"]["rotation"]["w"])
+
+    writer.double(p["initital_transform_cache"]["translation"]["x"])
+    writer.double(p["initital_transform_cache"]["translation"]["y"])
+    writer.double(p["initital_transform_cache"]["translation"]["z"])
+
+    writer.double(p["initital_transform_cache"]["scale3d"]["x"])
+    writer.double(p["initital_transform_cache"]["scale3d"]["y"])
+    writer.double(p["initital_transform_cache"]["scale3d"]["z"])
+
+    writer.guid(p["repair_work_id"])
+    writer.guid(p["owner_spawner_level_object_instance_id"])
+    writer.guid(p["owner_instance_id"])
+    writer.guid(p["build_player_uid"])
+
+    writer.byte(p["interact_restrict_type"])
+
+    writer.guid(p["stage_instance_id_belong_to"]["id"])
+    writer.u32(1 if p["stage_instance_id_belong_to"]["valid"] else 0)
+
+    writer.i64(p["created_at"])
+
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+
+def decode_map_concrete_model(
+    reader: FArchiveReader, type_name: str, size: int, path: str
+) -> dict[str, Any]:
+    if type_name != "StructProperty":
+        raise Exception(f"Expected StructProperty, got {type_name}")
+    value = reader.property(type_name, size, path, allow_custom=False)
+    # Decode the raw bytes for the map object and replace the raw data
+    raw_bytes = value["value"]["RawData"]["value"]["values"]
+    print("".join(f"{b:02x}" for b in raw_bytes))
+    # value["value"]["RawData"]["value"] = decode_map_concrete_model_bytes(raw_bytes)
+    # Decode the raw bytes for the module map and replace the raw data
+    # group_map = value["value"]
+    # for group in group_map:
+    #     group_type = group["value"]["GroupType"]["value"]["value"]
+    #     group_bytes = group["value"]["RawData"]["value"]["values"]
+    #     group["value"]["RawData"]["value"] = decode_map_concrete_model_bytes(
+    #         group_bytes, group_type
+    #     )
+    # EPalMapObjectConcreteModelModuleType::None = 0,
+    # EPalMapObjectConcreteModelModuleType::ItemContainer = 1,
+    # EPalMapObjectConcreteModelModuleType::CharacterContainer = 2,
+    # EPalMapObjectConcreteModelModuleType::Workee = 3,
+    # EPalMapObjectConcreteModelModuleType::Energy = 4,
+    # EPalMapObjectConcreteModelModuleType::StatusObserver = 5,
+    # EPalMapObjectConcreteModelModuleType::ItemStack = 6,
+    # EPalMapObjectConcreteModelModuleType::Switch = 7,
+    # EPalMapObjectConcreteModelModuleType::PlayerRecord = 8,
+    # EPalMapObjectConcreteModelModuleType::BaseCampPassiveEffect = 9,
+    # EPalMapObjectConcreteModelModuleType::PasswordLock = 10,
+    return value
+
+
+def decode_map_concrete_model_bytes(m_bytes: Sequence[int]) -> dict[str, Any]:
+    if len(m_bytes) == 0:
+        return None
+    reader = FArchiveReader(bytes(m_bytes))
+    map_concrete_model = {}
+
+    if not reader.eof():
+        raise Exception("Warning: EOF not reached")
+    return map_concrete_model
+
+
+def encode_map_concrete_model(
+    writer: FArchiveWriter, property_type: str, properties: dict[str, Any]
+) -> int:
+    if property_type != "MapProperty":
+        raise Exception(f"Expected MapProperty, got {property_type}")
+    del properties["custom_type"]
+    # encoded_bytes = encode_map_concrete_model_bytes(properties["value"]["RawData"]["value"])
+    # properties["value"]["RawData"]["value"] = {"values": [b for b in encoded_bytes]}
+    return writer.property_inner(property_type, properties)
+
+
+def encode_map_concrete_model_bytes(p: dict[str, Any]) -> bytes:
+    writer = FArchiveWriter()
+
+    encoded_bytes = writer.bytes()
+    return encoded_bytes
+
+```
+
+`resave_test.py`:
+
+```py
+#!/usr/bin/env python3
+# This scripts takes a .sav file as input, and runs through the sav > JSON > sav process to ensure that the output is the same as the input.
+import sys
+
+from convert import convert_json_to_sav, convert_sav_to_json
+from lib.palsav import decompress_sav_to_gvas
+
+
+def main():
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} <input>")
+        sys.exit(1)
+    input_path = sys.argv[1]
+    print(f"Testing if {input_path} is the same after resaving...")
+    output_json_path = input_path + ".resave.json"
+    output_sav_path = input_path + ".resave.sav"
+    convert_sav_to_json(input_path, output_json_path, True)
+    convert_json_to_sav(output_json_path, output_sav_path)
+    print(f"Comparing {input_path} and {output_sav_path}...")
+    with open(input_path, "rb") as f:
+        input_bytes = f.read()
+        original_gvas = decompress_sav_to_gvas(input_bytes)
+    with open(output_sav_path, "rb") as f:
+        output_bytes = f.read()
+        resaved_gvas = decompress_sav_to_gvas(output_bytes)
+    if original_gvas == resaved_gvas:
+        print("Files are the same!")
+    else:
+        print("Files are different!")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`tests/requirements.txt`:
+
+```txt
+# These are dependencies only for tests
+# Default usage of the library must not rely on any external dependencies!
+parameterized==0.9.0
+
+```
+
+`tests/test_cli_scripts.py`:
+
+```py
+import contextlib
+import os
+import subprocess
+import unittest
+
+from parameterized import parameterized
+
+
+class TestCliScripts(unittest.TestCase):
+    @parameterized.expand(
+        [
+            ("Level.sav"),
+            ("Level-tricky-unicode-player-name.sav"),
+            ("LevelMeta.sav"),
+            ("LocalData.sav"),
+            ("WorldOption.sav"),
+            ("00000000000000000000000000000001.sav"),
+            ("unicode-saves/Level.sav"),
+            ("unicode-saves/LevelMeta.sav"),
+            ("unicode-saves/LocalData.sav"),
+            ("unicode-saves/WorldOption.sav"),
+            ("unicode-saves/00000000000000000000000000000001.sav"),
+        ]
+    )
+    def test_sav_roundtrip(self, file_name):
+        try:
+            base_name = os.path.basename(file_name)
+            dir_name = os.path.dirname(file_name)
+            # Convert sav to JSON
+            run = subprocess.run(
+                [
+                    "python3",
+                    "convert.py",
+                    f"tests/testdata/{dir_name}/{base_name}",
+                ]
+            )
+            self.assertEqual(run.returncode, 0)
+            self.assertTrue(
+                os.path.exists(f"tests/testdata/{dir_name}/{base_name}.json")
+            )
+            # Convert JSON back to sav
+            os.rename(
+                f"tests/testdata/{dir_name}/{base_name}.json",
+                f"tests/testdata/{dir_name}/1-{base_name}.json",
+            )
+            run = subprocess.run(
+                [
+                    "python3",
+                    "convert.py",
+                    f"tests/testdata/{dir_name}/1-{base_name}.json",
+                ]
+            )
+            self.assertEqual(run.returncode, 0)
+            self.assertTrue(os.path.exists(f"tests/testdata/{dir_name}/1-{base_name}"))
+            # Reconvert sav back to JSON
+            os.rename(
+                f"tests/testdata/{dir_name}/1-{base_name}",
+                f"tests/testdata/{dir_name}/2-{base_name}",
+            )
+            run = subprocess.run(
+                [
+                    "python3",
+                    "convert.py",
+                    f"tests/testdata/{dir_name}/2-{base_name}",
+                ]
+            )
+            self.assertEqual(run.returncode, 0)
+            self.assertTrue(
+                os.path.exists(f"tests/testdata/{dir_name}/2-{base_name}.json")
+            )
+            # Reconvert JSON back to sav
+            os.rename(
+                f"tests/testdata/{dir_name}/2-{base_name}.json",
+                f"tests/testdata/{dir_name}/3-{base_name}.json",
+            )
+            run = subprocess.run(
+                [
+                    "python3",
+                    "convert.py",
+                    f"tests/testdata/{dir_name}/3-{base_name}.json",
+                ]
+            )
+            self.assertEqual(run.returncode, 0)
+            self.assertTrue(os.path.exists(f"tests/testdata/{dir_name}/3-{base_name}"))
+            # Compare the final sav to the intermediate save
+            with open(f"tests/testdata/{dir_name}/2-{base_name}", "rb") as f:
+                intermediate_data = f.read()
+            with open(f"tests/testdata/{dir_name}/3-{base_name}", "rb") as f:
+                final_data = f.read()
+            self.assertEqual(intermediate_data, final_data)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/{base_name}.json")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/1-{base_name}")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/1-{base_name}.json")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/2-{base_name}")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/2-{base_name}.json")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/3-{base_name}")
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(f"tests/testdata/{dir_name}/3-{base_name}.json")
+
+```
+
+`tests/test_gvas.py`:
+
+```py
+import base64
+import json
+import unittest
+from uuid import UUID
+
+from parameterized import parameterized
+
+from lib.archive import FArchiveReader, FArchiveWriter
+from lib.gvas import GvasFile, GvasHeader
+from lib.noindent import CustomEncoder
+from lib.palsav import decompress_sav_to_gvas
+from lib.paltypes import PALWORLD_CUSTOM_PROPERTIES, PALWORLD_TYPE_HINTS
+
+
+class TestGvas(unittest.TestCase):
+    def test_header(self):
+        test_data = base64.b64decode(
+            "R1ZBUwMAAAAKAgAA8AMAAAUAAQABAAAAAAASAAAAKytVRTUrUmVsZWFzZS01LjEAAwAAAEUAAACn+9JA5UxIS3VaOLCeSU6IBwAAAPp69fyDQnZQWOapuTItoP9MAAAAe0clCQFAPXZz1pGdEbR1CwEAAAAbIYhCxhZIRbJndhoAKnpQAQAAAMzOuRoTaQAAdUgAAPtRPSBkAAAAIZLvTDrUDkeMPWB+JleZFgEAAAB+fHHi00T1UkBTDJVeAxWzBwAAAO0KMRFhTVUuo5pnrywIocURAAAA+wyCp1lDpyAULFSMUM8jlhUAAAB4u9/25KBQu024GEAjr8tgAgAAAPN6uySDT0ZWwi0vH/+WrUkFAAAAKSOldrVFIwlB2K6Y2GovzwUAAAAHabxfrkDIVYTxZ44/8f9eAQAAAE5854KlQyMzxRNrtPMNMZcAAAAAbPb8D5lIkBH4nGCxXkdGSgEAAAAi1VScvk8mqEYHIZTQgrRhLAAAAOQy2LANT4kft37PrKJK/TYKAAAAKEPG4VNNLKKGjmyjjL0XZAAAAAA8wV43+0jkBvCEALV+cSomBAAAAO1osOTpQpT0C9oxokG7Ri4oAAAAP3T8z4BEsEPfFJGTcyAdFyUAAAC1SSuw6UQgu7cyBKNgA+RSAwAAAFwQ5KS1SaFZxEDFp+7fflQAAAAAyTHIOdxH5loXnESafI4cPgAAAAAzG/B4mE/q6+qEtLmiWrnMFAAAAA84MWbgQ00tJ88JgFqpVmkAAAAAn4v4EvxKdYgM2XymKb06OC0AAABM51p7EExw0phXWKlaKiELDQAAABhpKdfdS9YdqGTinYQ4wTwDAAAAeFKhwv5K57//kBdsVfcdUwEAAADUo6xuwUzsQO2LhrfFj0IJAwAAAN115SknRqPgdtIQnercLCMRAAAAXaZDr0dJ03+OPnOYBbvB2Q8AAADsbCZrj0vHHtnkC6MH/EIJAQAAAGE99w3qRz+i6Yknt5pJQQwBAAAAhhgdYIRPZKze0xaq1sfqDVAAAAC3Bkxb+EpjJHC/W4Dd0PXNCgAAAGhjCOdYTCNrcBs5hJFeJhYEAAAA1rz/nVgBT0mCEiHiiKiSPAoAAACs0K7yb0H+mn+qZIb81ib6AQAAAAsfTxelRca06C4/sX2R+9AKAAAAg0r5NWxAWOL1CRijfCQQlikAAABuwY+24kIbi1whU7T+RIgFAQAAAAaF4bLCz3NCu/ROpQe6i3UBAAAANon1ZLpCG/2Jcpa6TvrQ1QEAAACB1X1pq0FP5uxRSqootre+WAAAAEJem9hGTb0kqKwShHkXZN8pAAAAUl3aWUhJMhJ4WXi4i+m4cAgAAAAyWgcmCEcPczKM6YgFnVnxAAAAACfYDm+VSAmmjZmRnKQOGJACAAAA44vVMIJC6pVZseOmarDr2AEAAADnnn9xOkmw6TKRs4gHgTgbEAAAABlNDENwSVRxaZtph+WwkN8PAAAAvTL+qhRMlVMlXmq23dEyEAEAAACO4a8jWE7hTFLCYY23vlO5CwAAAOq3YqQ6Tpn0H+zBmbLhJIIEAAAAvf21LhBNrAGP8zaB2qWTMwUAAABPNZ1QL0nm9rKFSaccYzwHAAAAABwb47bsEZ/ShZ9+heJwmW8BAAAAQOtWStwR9RB+NNOS52rJsgIAAAAASorXl0ZY6LUZqLq0Rn1IEgAAAIb4eVUfTDqTewi6gy+5YWMCAAAAUr4vYQtAU9qRTw2RfIWxnwEAAAA2eiOkyUHqyvgYoo/zG2hYBQAAAHU/ToBJS4hwBozWpNy2fjwFAAAA9EjQHmhMLi+kU9CJLRCP8QEAAADyCmj7o0vvWbUZqLo9RMhzAgAAAA63UJkXThq0DfrMu9Z/gVcBAAAAllGWq/wI2EWNIte3nlateAEAAAAdAAAAL1NjcmlwdC9QYWwuUGFsV29ybGRTYXZlR2FtZQA="
+        )
+        reader = FArchiveReader(test_data)
+        header = GvasHeader.read(reader)
+        expected_header = {
+            "magic": 1396790855,
+            "save_game_version": 3,
+            "package_file_version_ue4": 522,
+            "package_file_version_ue5": 1008,
+            "engine_version_major": 5,
+            "engine_version_minor": 1,
+            "engine_version_patch": 1,
+            "engine_version_changelist": 0,
+            "engine_version_branch": "++UE5+Release-5.1",
+            "custom_version_format": 3,
+            "custom_versions": [
+                (UUID("40d2fba7-4b48-4ce5-b038-5a75884e499e"), 7),
+                (UUID("fcf57afa-5076-4283-b9a9-e658ffa02d32"), 76),
+                (UUID("0925477b-763d-4001-9d91-d6730b75b411"), 1),
+                (UUID("4288211b-4548-16c6-1a76-67b2507a2a00"), 1),
+                (UUID("1ab9cecc-0000-6913-0000-4875203d51fb"), 100),
+                (UUID("4cef9221-470e-d43a-7e60-3d8c16995726"), 1),
+                (UUID("e2717c7e-52f5-44d3-950c-5340b315035e"), 7),
+                (UUID("11310aed-2e55-4d61-af67-9aa3c5a1082c"), 17),
+                (UUID("a7820cfb-20a7-4359-8c54-2c149623cf50"), 21),
+                (UUID("f6dfbb78-bb50-a0e4-4018-b84d60cbaf23"), 2),
+                (UUID("24bb7af3-5646-4f83-1f2f-2dc249ad96ff"), 5),
+                (UUID("76a52329-0923-45b5-98ae-d841cf2f6ad8"), 5),
+                (UUID("5fbc6907-55c8-40ae-8e67-f1845efff13f"), 1),
+                (UUID("82e77c4e-3323-43a5-b46b-13c597310df3"), 0),
+                (UUID("0ffcf66c-1190-4899-b160-9cf84a46475e"), 1),
+                (UUID("9c54d522-a826-4fbe-9421-074661b482d0"), 44),
+                (UUID("b0d832e4-1f89-4f0d-accf-7eb736fd4aa2"), 10),
+                (UUID("e1c64328-a22c-4d53-a36c-8e866417bd8c"), 0),
+                (UUID("375ec13c-06e4-48fb-b500-84f0262a717e"), 4),
+                (UUID("e4b068ed-f494-42e9-a231-da0b2e46bb41"), 40),
+                (UUID("cffc743f-43b0-4480-9391-14df171d2073"), 37),
+                (UUID("b02b49b5-bb20-44e9-a304-32b752e40360"), 3),
+                (UUID("a4e4105c-59a1-49b5-a7c5-40c4547edfee"), 0),
+                (UUID("39c831c9-5ae6-47dc-9a44-9c173e1c8e7c"), 0),
+                (UUID("78f01b33-ebea-4f98-b9b4-84eaccb95aa2"), 20),
+                (UUID("6631380f-2d4d-43e0-8009-cf276956a95a"), 0),
+                (UUID("12f88b9f-8875-4afc-a67c-d90c383abd29"), 45),
+                (UUID("7b5ae74c-d270-4c10-a958-57980b212a5a"), 13),
+                (UUID("d7296918-1dd6-4bdd-9de2-64a83cc13884"), 3),
+                (UUID("c2a15278-bfe7-4afe-6c17-90ff531df755"), 1),
+                (UUID("6eaca3d4-40ec-4cc1-b786-8bed09428fc5"), 3),
+                (UUID("29e575dd-e0a3-4627-9d10-d276232cdcea"), 17),
+                (UUID("af43a65d-7fd3-4947-9873-3e8ed9c1bb05"), 15),
+                (UUID("6b266cec-1ec7-4b8f-a30b-e4d90942fc07"), 1),
+                (UUID("0df73d61-a23f-47ea-b727-89e90c41499a"), 1),
+                (UUID("601d1886-ac64-4f84-aa16-d3de0deac7d6"), 80),
+                (UUID("5b4c06b7-2463-4af8-805b-bf70cdf5d0dd"), 10),
+                (UUID("e7086368-6b23-4c58-8439-1b7016265e91"), 4),
+                (UUID("9dffbcd6-494f-0158-e221-12823c92a888"), 10),
+                (UUID("f2aed0ac-9afe-416f-8664-aa7ffa26d6fc"), 1),
+                (UUID("174f1f0b-b4c6-45a5-b13f-2ee8d0fb917d"), 10),
+                (UUID("35f94a83-e258-406c-a318-09f59610247c"), 41),
+                (UUID("b68fc16e-8b1b-42e2-b453-215c058844fe"), 1),
+                (UUID("b2e18506-4273-cfc2-a54e-f4bb758bba07"), 1),
+                (UUID("64f58936-fd1b-42ba-ba96-7289d5d0fa4e"), 1),
+                (UUID("697dd581-e64f-41ab-aa4a-51ecbeb7b628"), 88),
+                (UUID("d89b5e42-24bd-4d46-8412-aca8df641779"), 41),
+                (UUID("59da5d52-1232-4948-b878-597870b8e98b"), 8),
+                (UUID("26075a32-730f-4708-88e9-8c32f1599d05"), 0),
+                (UUID("6f0ed827-a609-4895-9c91-998d90180ea4"), 2),
+                (UUID("30d58be3-95ea-4282-a6e3-b159d8ebb06a"), 1),
+                (UUID("717f9ee7-e9b0-493a-88b3-91321b388107"), 16),
+                (UUID("430c4d19-7154-4970-8769-9b69df90b0e5"), 15),
+                (UUID("aafe32bd-5395-4c14-b66a-5e251032d1dd"), 1),
+                (UUID("23afe18e-4ce1-4e58-8d61-c252b953beb7"), 11),
+                (UUID("a462b7ea-f499-4e3a-99c1-ec1f8224e1b2"), 4),
+                (UUID("2eb5fdbd-01ac-4d10-8136-f38f3393a5da"), 5),
+                (UUID("509d354f-f6e6-492f-a749-85b2073c631c"), 0),
+                (UUID("b6e31b1c-d29f-11ec-857e-9f856f9970e2"), 1),
+                (UUID("4a56eb40-10f5-11dc-92d3-347eb2c96ae7"), 2),
+                (UUID("d78a4a00-e858-4697-baa8-19b5487d46b4"), 18),
+                (UUID("5579f886-933a-4c1f-83ba-087b6361b92f"), 2),
+                (UUID("612fbe52-da53-400b-910d-4f919fb1857c"), 1),
+                (UUID("a4237a36-caea-41c9-8fa2-18f858681bf3"), 5),
+                (UUID("804e3f75-7088-4b49-a4d6-8c063c7eb6dc"), 5),
+                (UUID("1ed048f4-2f2e-4c68-89d0-53a4f18f102d"), 1),
+                (UUID("fb680af2-59ef-4ba3-baa8-19b573c8443d"), 2),
+                (UUID("9950b70e-b41a-4e17-bbcc-fa0d57817fd6"), 1),
+                (UUID("ab965196-45d8-08fc-b7d7-228d78ad569e"), 1),
+            ],
+            "save_game_class_name": "/Script/Pal.PalWorldSaveGame",
+        }
+        self.assertEqual(
+            header.dump(), expected_header, "header does not match expected"
+        )
+        writer = FArchiveWriter()
+        header.write(writer)
+        self.assertEqual(
+            writer.bytes(), test_data, "header does not match expected after encoding"
+        )
+
+    @parameterized.expand(
+        [
+            ("Level.sav", "/Script/Pal.PalWorldSaveGame"),
+            ("Level-tricky-unicode-player-name.sav", "/Script/Pal.PalWorldSaveGame"),
+            ("LevelMeta.sav", "/Script/Pal.PalWorldBaseInfoSaveGame"),
+            ("LocalData.sav", "/Script/Pal.PalLocalWorldSaveGame"),
+            ("WorldOption.sav", "/Script/Pal.PalWorldOptionSaveGame"),
+            (
+                "00000000000000000000000000000001.sav",
+                "/Script/Pal.PalWorldPlayerSaveGame",
+            ),
+            ("unicode-saves/Level.sav", "/Script/Pal.PalWorldSaveGame"),
+            ("unicode-saves/LevelMeta.sav", "/Script/Pal.PalWorldBaseInfoSaveGame"),
+            ("unicode-saves/LocalData.sav", "/Script/Pal.PalLocalWorldSaveGame"),
+            ("unicode-saves/WorldOption.sav", "/Script/Pal.PalWorldOptionSaveGame"),
+            (
+                "unicode-saves/00000000000000000000000000000001.sav",
+                "/Script/Pal.PalWorldPlayerSaveGame",
+            ),
+        ]
+    )
+    def test_sav_roundtrip(self, file_name, expected_save_game_class_name):
+        with open("tests/testdata/" + file_name, "rb") as f:
+            data = f.read()
+        gvas_data, _ = decompress_sav_to_gvas(data)
+        gvas_file = GvasFile.read(
+            gvas_data, PALWORLD_TYPE_HINTS, PALWORLD_CUSTOM_PROPERTIES
+        )
+        self.assertEqual(
+            gvas_file.header.dump()["save_game_class_name"],
+            expected_save_game_class_name,
+            "sav save_game_class_name does not match expected",
+        )
+        dump = gvas_file.dump()
+        js = json.dumps(dump, cls=CustomEncoder)
+        new_js = json.loads(js)
+        new_gvas_file = GvasFile.load(new_js)
+        new_gvas_data = new_gvas_file.write(PALWORLD_CUSTOM_PROPERTIES)
+        self.assertEqual(
+            gvas_data,
+            new_gvas_data,
+            "sav does not match expected after roundtrip",
+        )
+
+```
+
+`tests/test_rawdata.py`:
+
+```py
+import base64
+import json
+import unittest
+
+from lib.noindent import CustomEncoder
+from lib.rawdata import *
+
+
+class TestRawData(unittest.TestCase):
+    def test_player(self):
+        test_data = base64.b64decode(
+            "DgAAAFNhdmVQYXJhbWV0ZXIADwAAAFN0cnVjdFByb3BlcnR5AG8QAAAAAAAAJAAAAFBhbEluZGl2aWR1YWxDaGFyYWN0ZXJTYXZlUGFyYW1ldGVyAAAAAAAAAAAAAAAAAAAAAAAABgAAAExldmVsAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAeAAAABAAAAEV4cAAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAmHgEAAkAAABOaWNrTmFtZQAMAAAAU3RyUHJvcGVydHkAEAAAAAAAAAAADAAAAHplcm9ac2hhZG93AAMAAABIUAAPAAAAU3RydWN0UHJvcGVydHkANgAAAAAAAAANAAAARml4ZWRQb2ludDY0AAAAAAAAAAAAAAAAAAAAAAAABgAAAFZhbHVlAA4AAABJbnQ2NFByb3BlcnR5AAgAAAAAAAAAALCmFwAAAAAABQAAAE5vbmUADAAAAEZ1bGxTdG9tYWNoAA4AAABGbG9hdFByb3BlcnR5AAQAAAAAAAAAAB7mtUIJAAAASXNQbGF5ZXIADQAAAEJvb2xQcm9wZXJ0eQAAAAAAAAAAAAEABgAAAE1heEhQAA8AAABTdHJ1Y3RQcm9wZXJ0eQA2AAAAAAAAAA0AAABGaXhlZFBvaW50NjQAAAAAAAAAAAAAAAAAAAAAAAAGAAAAVmFsdWUADgAAAEludDY0UHJvcGVydHkACAAAAAAAAAAAsKYXAAAAAAAFAAAATm9uZQAIAAAAU3VwcG9ydAAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAZAAAAAsAAABDcmFmdFNwZWVkAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAD0AQAADAAAAENyYWZ0U3BlZWRzAA4AAABBcnJheVByb3BlcnR5AB4IAAAAAAAADwAAAFN0cnVjdFByb3BlcnR5AAANAAAADAAAAENyYWZ0U3BlZWRzAA8AAABTdHJ1Y3RQcm9wZXJ0eQDDBwAAAAAAABcAAABQYWxXb3JrU3VpdGFiaWxpdHlJbmZvAAAAAAAAAAAAAAAAAAAAAAAAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACMAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAAB8AAABFUGFsV29ya1N1aXRhYmlsaXR5OjpFbWl0RmxhbWUABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAUAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIgAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHgAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OldhdGVyaW5nAAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAFAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACEAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAAB0AAABFUGFsV29ya1N1aXRhYmlsaXR5OjpTZWVkaW5nAAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAFAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5AC0AAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAACkAAABFUGFsV29ya1N1aXRhYmlsaXR5OjpHZW5lcmF0ZUVsZWN0cmljaXR5AAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAFAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACMAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAAB8AAABFUGFsV29ya1N1aXRhYmlsaXR5OjpIYW5kY3JhZnQABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAUAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAJAAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAIAAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OkNvbGxlY3Rpb24ABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAUAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIgAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHgAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OkRlZm9yZXN0AAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAFAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACAAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAABwAAABFUGFsV29ya1N1aXRhYmlsaXR5OjpNaW5pbmcABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAUAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAJwAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAIwAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6Ok9pbEV4dHJhY3Rpb24ABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAUAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAKQAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAJQAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OlByb2R1Y3RNZWRpY2luZQAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAABQAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAeAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAaAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6Q29vbAAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAABQAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAjAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAfAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6VHJhbnNwb3J0AAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAFAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACUAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFi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"
+        )
+        properties = decode_character_data_bytes(test_data)
+        json_str = json.dumps(
+            properties, cls=CustomEncoder, ensure_ascii=False, indent=2
+        )
+        reparsed_properties = json.loads(json_str)
+        reconverted_data = encode_character_data_bytes(reparsed_properties)
+        self.assertEqual(test_data, reconverted_data)
+
+    def test_character(self):
+        test_data = base64.b64decode(
+            "DgAAAFNhdmVQYXJhbWV0ZXIADwAAAFN0cnVjdFByb3BlcnR5ABAUAAAAAAAAJAAAAFBhbEluZGl2aWR1YWxDaGFyYWN0ZXJTYXZlUGFyYW1ldGVyAAAAAAAAAAAAAAAAAAAAAAAADAAAAENoYXJhY3RlcklEAA0AAABOYW1lUHJvcGVydHkADAAAAAAAAAAACAAAAFBpbmtDYXQABwAAAEdlbmRlcgANAAAARW51bVByb3BlcnR5ABsAAAAAAAAADwAAAEVQYWxHZW5kZXJUeXBlAAAXAAAARVBhbEdlbmRlclR5cGU6OkZlbWFsZQAGAAAATGV2ZWwADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAcAAAAEAAAARXhwAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAABZAQAACgAAAEVxdWlwV2F6YQAOAAAAQXJyYXlQcm9wZXJ0eQBFAAAAAAAAAA0AAABFbnVtUHJvcGVydHkAAAIAAAAkAAAARVBhbFdhemFJRDo6VW5pcXVlX1BpbmtDYXRfQ2F0UHVuY2gAFQAAAEVQYWxXYXphSUQ6OkFpckNhbm9uAA0AAABNYXN0ZXJlZFdhemEADgAAAEFycmF5UHJvcGVydHkARQAAAAAAAAANAAAARW51bVByb3BlcnR5AAACAAAAJAAAAEVQYWxXYXphSUQ6OlVuaXF1ZV9QaW5rQ2F0X0NhdFB1bmNoABUAAABFUGFsV2F6YUlEOjpBaXJDYW5vbgADAAAASFAADwAAAFN0cnVjdFByb3BlcnR5ADYAAAAAAAAADQAAAEZpeGVkUG9pbnQ2NAAAAAAAAAAAAAAAAAAAAAAAAAYAAABWYWx1ZQAOAAAASW50NjRQcm9wZXJ0eQAIAAAAAAAAAAAQ2QwAAAAAAAUAAABOb25lAAoAAABUYWxlbnRfSFAADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAFUAAAANAAAAVGFsZW50X01lbGVlAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAABcAAAADAAAAFRhbGVudF9TaG90AAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAABNAAAADwAAAFRhbGVudF9EZWZlbnNlAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAUAAAADAAAAEZ1bGxTdG9tYWNoAA4AAABGbG9hdFByb3BlcnR5AAQAAAAAAAAAAHJG1kIRAAAAUGFzc2l2ZVNraWxsTGlzdAAOAAAAQXJyYXlQcm9wZXJ0eQAvAAAAAAAAAA0AAABOYW1lUHJvcGVydHkAAAIAAAAUAAAAUEFMX0FMTEF0dGFja19kb3duMQAPAAAARGVmZmVuY2VfZG93bjIAAwAAAE1QAA8AAABTdHJ1Y3RQcm9wZXJ0eQA2AAAAAAAAAA0AAABGaXhlZFBvaW50NjQAAAAAAAAAAAAAAAAAAAAAAAAGAAAAVmFsdWUADgAAAEludDY0UHJvcGVydHkACAAAAAAAAAAAoIYBAAAAAAAFAAAATm9uZQAKAAAAT3duZWRUaW1lAA8AAABTdHJ1Y3RQcm9wZXJ0eQAIAAAAAAAAAAkAAABEYXRlVGltZQAAAAAAAAAAAAAAAAAAAAAAANAHdE4hGdwIDwAAAE93bmVyUGxheWVyVUlkAA8AAABTdHJ1Y3RQcm9wZXJ0eQAQAAAAAAAAAAUAAABHdWlkAAAAAAAAAAAAAAAAAAAAAAAA3CurfwAAAAAAAAAAAAAAABMAAABPbGRPd25lclBsYXllclVJZHMADgAAAEFycmF5UHJvcGVydHkAYAAAAAAAAAAPAAAAU3RydWN0UHJvcGVydHkAAAEAAAATAAAAT2xkT3duZXJQbGF5ZXJVSWRzAA8AAABTdHJ1Y3RQcm9wZXJ0eQAQAAAAAAAAAAUAAABHdWlkAAAAAAAAAAAAAAAAAAAAAAAA3CurfwAAAAAAAAAAAAAAAAYAAABNYXhIUAAPAAAAU3RydWN0UHJvcGVydHkANgAAAAAAAAANAAAARml4ZWRQb2ludDY0AAAAAAAAAAAAAAAAAAAAAAAABgAAAFZhbHVlAA4AAABJbnQ2NFByb3BlcnR5AAgAAAAAAAAAABDZDAAAAAAABQAAAE5vbmUACwAAAENyYWZ0U3BlZWQADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAEYAAAAMAAAAQ3JhZnRTcGVlZHMADgAAAEFycmF5UHJvcGVydHkAHggAAAAAAAAPAAAAU3RydWN0UHJvcGVydHkAAA0AAAAMAAAAQ3JhZnRTcGVlZHMADwAAAFN0cnVjdFByb3BlcnR5AMMHAAAAAAAAFwAAAFBhbFdvcmtTdWl0YWJpbGl0eUluZm8AAAAAAAAAAAAAAAAAAAAAAAAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIwAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHwAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OkVtaXRGbGFtZQAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAAAAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAiAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAeAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6V2F0ZXJpbmcABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAAAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIQAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHQAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OlNlZWRpbmcABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAAAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkALQAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAKQAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OkdlbmVyYXRlRWxlY3RyaWNpdHkABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAAAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIwAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHwAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6OkhhbmRjcmFmdAAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAAQAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAkAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAgAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6Q29sbGVjdGlvbgAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAAQAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAiAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAeAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6RGVmb3Jlc3QABQAAAFJhbmsADAAAAEludFByb3BlcnR5AAQAAAAAAAAAAAAAAAAFAAAATm9uZQAQAAAAV29ya1N1aXRhYmlsaXR5AA0AAABFbnVtUHJvcGVydHkAIAAAAAAAAAAUAAAARVBhbFdvcmtTdWl0YWJpbGl0eQAAHAAAAEVQYWxXb3JrU3VpdGFiaWxpdHk6Ok1pbmluZwAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAAQAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQAnAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAjAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6T2lsRXh0cmFjdGlvbgAFAAAAUmFuawAMAAAASW50UHJvcGVydHkABAAAAAAAAAAAAAAAAAUAAABOb25lABAAAABXb3JrU3VpdGFiaWxpdHkADQAAAEVudW1Qcm9wZXJ0eQApAAAAAAAAABQAAABFUGFsV29ya1N1aXRhYmlsaXR5AAAlAAAARVBhbFdvcmtTdWl0YWJpbGl0eTo6UHJvZHVjdE1lZGljaW5lAAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAAAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5AB4AAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAABoAAABFUGFsV29ya1N1aXRhYmlsaXR5OjpDb29sAAUAAABSYW5rAAwAAABJbnRQcm9wZXJ0eQAEAAAAAAAAAAAAAAAABQAAAE5vbmUAEAAAAFdvcmtTdWl0YWJpbGl0eQANAAAARW51bVByb3BlcnR5ACMAAAAAAAAAFAAAAEVQYWxXb3JrU3VpdGFiaWxpdHkAAB8AAABFUGFsV29ya1N1aXRhYmlsaXR5OjpUcmFuc3BvcnQABQAA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"
+        )
+        properties = decode_character_data_bytes(test_data)
+        json_str = json.dumps(
+            properties, cls=CustomEncoder, ensure_ascii=False, indent=2
+        )
+        reparsed_properties = json.loads(json_str)
+        reconverted_data = encode_character_data_bytes(reparsed_properties)
+        self.assertEqual(test_data, reconverted_data)
+
+    def test_group_neutral(self):
+        test_data = base64.b64decode("VjIcY1hKCdXAmtWebNlJCwAAAAAAAAAA")
+        properties = decode_group_data_bytes(test_data, "EPalGroupType::Neutral")
+        json_str = json.dumps(
+            properties, cls=CustomEncoder, ensure_ascii=False, indent=2
+        )
+        reparsed_properties = json.loads(json_str)
+        reconverted_data = encode_group_data_bytes(reparsed_properties)
+        self.assertEqual(test_data, reconverted_data)
+
+    def test_group_guild(self):
+        test_data = base64.b64decode(
+            "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"
+        )
+        properties = decode_group_data_bytes(test_data, "EPalGroupType::Guild")
+        json_str = json.dumps(
+            properties, cls=CustomEncoder, ensure_ascii=False, indent=2
+        )
+        reparsed_properties = json.loads(json_str)
+        reconverted_data = encode_group_data_bytes(reparsed_properties)
+        self.assertEqual(test_data, reconverted_data)
+
+    def test_group_organization(self):
+        test_data = base64.b64decode(
+            "hJYrguAqq0C1R1LYdTOU+AAAAAAhAAAAAAAAAAAAAAAAAAAAAQAAAJP/oPkwde5Mu9LEZz4Ao7kAAAAAAAAAAAAAAAABAAAAS9gbh2lg/EK4JaUv6ZLvpAAAAAAAAAAAAAAAAAEAAABClNaHEgrLQbry8En6Ps5CAAAAAAAAAAAAAAAAAQAAAGi+Y6rkWoJNvNYiWy0wP2oAAAAAAAAAAAAAAAABAAAAyavtNRisZ0GMrffZPRwUUQAAAAAAAAAAAAAAAAEAAABaFkBiBdzaQI561vQWfEVlAAAAAAAAAAAAAAAAAQAAAEHsz/5oAthAqfTDrSU0iTQAAAAAAAAAAAAAAAABAAAAhpYm+oXOHEe0xluVcJae4QAAAAAAAAAAAAAAAAEAAABvbkhSUW08RrJ+2zUmlQosAAAAAAAAAAAAAAAAAQAAADHIBCjyiV5MvbwVQ4WutD8AAAAAAAAAAAAAAAABAAAAkCa0JufIAE6HDwfMXbIoXgAAAAAAAAAAAAAAAAEAAACSJCUqIPgzQ7C6QhHwFmDGAAAAAAAAAAAAAAAAAQAAANITOu234UJAtzHuFdmIf6oAAAAAAAAAAAAAAAABAAAAGf7viWmjZUaZ1YDZY68vpQAAAAAAAAAAAAAAAAEAAADzLXMPNgZxRaZEKrJAsFDRAAAAAAAAAAAAAAAAAQAAACTLT6S0hXBMiWhNCt1Q1CYAAAAAAAAAAAAAAAABAAAA8FIVKqLG+k6oDXo+08QXowAAAAAAAAAAAAAAAAEAAABtbXHJ1oETRaWNTBKI1YGvAAAAAAAAAAAAAAAAAQAAAMMbAwyhoONMqpUcq0MqPAkAAAAAAAAAAAAAAAABAAAAypjWd7uTjU6MdKuetLdZUAAAAAAAAAAAAAAAAAEAAAAyYKiVbDM+QaTY8Hv6ZObLAAAAAAAAAAAAAAAAAQAAAJAFrzxLoPFLl8DrAv8Gd3YAAAAAAAAAAAAAAAABAAAAKIACqxZ7p0GiR0TmrHacnwAAAAAAAAAAAAAAAAEAAADrw5+vNs5US7pOHBAvVR3tAAAAAAAAAAAAAAAAAQAAAF/uko9GJFFHqnPaQJbISvAAAAAAAAAAAAAAAAABAAAABUZ8Ixbmz0615pXXmYkR5AAAAAAAAAAAAAAAAAEAAACYDOqTTI28Qpw5lTLZSrBuAAAAAAAAAAAAAAAAAQAAAPLlWwh4i7JNn9QJ8BQlcS8AAAAAAAAAAAAAAAABAAAAHZMbTe8rTkeVXRN6twsB7QAAAAAAAAAAAAAAAAEAAAAwbMTEkrfWS4tBQ9T8pfmzAAAAAAAAAAAAAAAAAQAAANwynIWIZEpFsUrnDlenJaoAAAAAAAAAAAAAAAABAAAA38dfKnHdkk6/jK09vZCqywAAAAAAAAAAAAAAAAEAAACSTla8evFdSYUiwbuzgJrPAgAAAAA="
+        )
+        properties = decode_group_data_bytes(test_data, "EPalGroupType::Organization")
+        json_str = json.dumps(
+            properties, cls=CustomEncoder, ensure_ascii=False, indent=2
+        )
+        reparsed_properties = json.loads(json_str)
+        reconverted_data = encode_group_data_bytes(reparsed_properties)
+        self.assertEqual(test_data, reconverted_data)
+
+```

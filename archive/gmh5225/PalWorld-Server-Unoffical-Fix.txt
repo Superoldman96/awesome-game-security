@@ -1,0 +1,197 @@
+Project Path: arc_gmh5225_PalWorld-Server-Unoffical-Fix_mkdur6tz
+
+Source Tree:
+
+```txt
+arc_gmh5225_PalWorld-Server-Unoffical-Fix_mkdur6tz
+├── README.md
+└── patch
+    └── 0.1.3.0
+        └── windows
+            ├── hpatchz.exe
+            ├── patch.bin
+            ├── patch_cn.bat
+            └── patch_en.bat
+
+```
+
+`README.md`:
+
+```md
+# PalWorld-Server-Unoffical-Fix
+This is an unofficial palworld server binary distribution project that fixes some problems with the original server.
+
+## Fix what?
+- [x] Memory leak and high cpu load from ```SymbolInfoToHumanReadableString```
+- [x] Memory leak and high cpu load from ```ProgramCounterToHumanReadableString```
+- [x] Memory leak and high cpu load from ```PopulateProgramCounterSymbolInfoFromSymbolFile```
+- [ ] Disable profiling tracing
+- [ ] Fix save broken
+
+## How to use?
+Download binary from [Release](https://github.com/VeroFess/PalWorld-Server-Unoffical-Fix/releases). Just overwrite the official files with the files I provided.
+
+## It's safe?
+Well, I personally swear not to insert harmful code, but if you don't believe me you can check using a tool like bindiff.
+
+-----
+
+# PalWorld 服务器非官方修复
+这是一个非官方的 PalWorld 服务器二进制分发项目，修复了原始服务器的一些问题。
+
+## 修复了什么？
+- [x] 来自“SymbolInfoToHumanReadableString”的内存泄漏和高 CPU 负载
+- [x] 来自“ProgramCounterToHumanReadableString”的内存泄漏和高 CPU 负载
+- [x] 来自“PopulateProgramCounterSymbolInfoFromSymbolFile”的内存泄漏和高 CPU 负载
+- [ ] 禁用分析跟踪
+- [ ] 修复存档损坏的问题
+
+## 如何使用？
+从 [Release](https://github.com/VeroFess/PalWorld-Server-Unoffical-Fix/releases) 下载二进制文件。 用我提供的文件覆盖官方文件即可。
+
+## 它安全不？
+好吧，我对灯发誓不会插入有害代码，但是如果不相信我，可以使用像 Bindiff 这样的工具进行检查。
+
+```
+
+`patch/0.1.3.0/windows/patch_cn.bat`:
+
+```bat
+@echo off
+setlocal enabledelayedexpansion
+
+REM 检测输入的命令行参数
+if "%1"=="" (
+    echo 未提供文件路径作为参数 请将PalServer-Win64-Test-Cmd.exe文件拖到这个bat文件上
+    pause
+    exit /b 1
+)
+
+REM 判断文件是否存在
+if not exist "%1" (
+    echo 错误：文件不存在
+    pause
+    exit /b 1
+)
+
+REM 判断文件名是否为PalServer-Win64-Test-Cmd.exe
+set "filename=%~n1"
+if /i not "!filename!"=="PalServer-Win64-Test-Cmd" (
+    echo 错误：文件名不是 PalServer-Win64-Test-Cmd.exe 请将PalServer-Win64-Test-Cmd.exe文件拖到这个bat文件上
+    pause
+    exit /b 1
+)
+
+REM 使用工具校验文件sha1
+set "file_path=%~1"
+set "expected_sha1=A4E7A2B173D64376410DA78E7982B7F3800E1320"  REM 
+
+echo 校验文件SHA1...
+set "computed_sha1="
+for /f "tokens=*" %%a in ('certutil -hashfile "!file_path!" SHA1 ^| find /i /v "SHA1"') do set "computed_sha1=%%a" & goto :CheckOk
+:CheckOk
+if /i "%computed_sha1%"=="%expected_sha1%" (
+    echo SHA1 校验通过，继续处理...
+) else (
+    echo computed_sha1:%computed_sha1%  expected_sha1:%expected_sha1%
+    echo 错误：SHA1 校验未通过 请确定服务端是否为为0.1.3.0版本 文件未被篡改 是否已经打上补丁
+    pause
+    exit /b 1
+)
+
+REM 重命名文件为PalServer-Win64-Test-Cmd.exe.bak
+move "!file_path!" "!file_path!.bak"
+
+REM 使用 hpatchz 进行补丁
+echo 执行补丁操作...
+set "patch_command=hpatchz.exe "%~1.bak" patch.bin "%~1""
+%patch_command%
+
+REM 再次校验文件sha1
+echo 重新校验文件SHA1...
+set "computed_sha1="
+for /f "tokens=*" %%a in ('certutil -hashfile "!file_path!" SHA1 ^| find /i /v "SHA1"') do set "computed_sha1=%%a" & goto :CheckOk2
+:CheckOk2
+set "expected_sha1=6FA366DA9F8B35D7DB456CEEEA84DFCA88F8C616"
+if /i "%computed_sha1%"=="%expected_sha1%" (
+    echo 补丁成功!!
+    pause
+    exit /b 0
+) else (
+    echo 错误：SHA1 校验未通过 补丁失败  备份文件在PalServer-Win64-Test-Cmd.exe.bak 可以手动恢复
+    pause
+    exit /b 1
+)
+
+```
+
+`patch/0.1.3.0/windows/patch_en.bat`:
+
+```bat
+@echo off
+setlocal enabledelayedexpansion
+
+REM Check command line arguments
+if "%1"=="" (
+    echo No file path provided as a parameter. Please drag the PalServer-Win64-Test-Cmd.exe file onto this bat file.
+    pause
+    exit /b 1
+)
+
+REM Check if the file exists
+if not exist "%1" (
+    echo Error: File does not exist.
+    pause
+    exit /b 1
+)
+
+REM Check if the file name is PalServer-Win64-Test-Cmd.exe
+set "filename=%~n1"
+if /i not "!filename!"=="PalServer-Win64-Test-Cmd" (
+    echo Error: The file name is not PalServer-Win64-Test-Cmd.exe. Please drag the PalServer-Win64-Test-Cmd.exe file onto this bat file.
+    pause
+    exit /b 1
+)
+
+REM Use a tool to verify the file's SHA1
+set "file_path=%~1"
+set "expected_sha1=A4E7A2B173D64376410DA78E7982B7F3800E1320"  REM 
+
+echo Verifying file SHA1...
+set "computed_sha1="
+for /f "tokens=*" %%a in ('certutil -hashfile "!file_path!" SHA1 ^| find /i /v "SHA1"') do set "computed_sha1=%%a" & goto :CheckOk
+:CheckOk
+if /i "%computed_sha1%"=="%expected_sha1%" (
+    echo SHA1 verification passed, continuing processing...
+) else (
+    echo computed_sha1:%computed_sha1%  expected_sha1:%expected_sha1%
+    echo Error: SHA1 verification failed. Please ensure that the server is version 0.1.3.0, the file has not been tampered with, and any patches have been applied.
+    pause
+    exit /b 1
+)
+
+REM Rename the file to PalServer-Win64-Test-Cmd.exe.bak
+move "!file_path!" "!file_path!.bak"
+
+REM Apply patch using hpatchz
+echo Applying patch...
+set "patch_command=hpatchz.exe "%~1.bak" patch.bin "%~1""
+%patch_command%
+
+REM Verify file SHA1 again
+echo Re-verifying file SHA1...
+set "computed_sha1="
+for /f "tokens=*" %%a in ('certutil -hashfile "!file_path!" SHA1 ^| find /i /v "SHA1"') do set "computed_sha1=%%a" & goto :CheckOk2
+:CheckOk2
+set "expected_sha1=6FA366DA9F8B35D7DB456CEEEA84DFCA88F8C616"
+if /i "%computed_sha1%"=="%expected_sha1%" (
+    echo Patch successful!
+    pause
+    exit /b 0
+) else (
+    echo Error: SHA1 verification failed. Patch unsuccessful. Backup file is PalServer-Win64-Test-Cmd.exe.bak, you can manually restore it.
+    pause
+    exit /b 1
+)
+
+```

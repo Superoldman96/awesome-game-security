@@ -1,0 +1,376 @@
+Project Path: arc_gmh5225_docker-palworld-dedicated-server_op64fphu
+
+Source Tree:
+
+```txt
+arc_gmh5225_docker-palworld-dedicated-server_op64fphu
+├── Dockerfile
+├── README.md
+├── backupmanager.sh
+└── servermanager.sh
+
+```
+
+`Dockerfile`:
+
+```
+FROM cm2network/steamcmd:root
+
+LABEL org.opencontainers.image.authors="Sebastian Schmidt"
+LABEL org.opencontainers.image.source="https://github.com/jammsen/docker-palworld-dedicated-server"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends procps xdg-user-dirs \
+    && apt-get clean \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Latest releases available at https://github.com/aptible/supercronic/releases
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 \
+    SUPERCRONIC=supercronic-linux-amd64 \
+    SUPERCRONIC_SHA1SUM=cd48d45c4b10f3f0bfdd3a57d054cd05ac96812b
+
+RUN curl -fsSLO "$SUPERCRONIC_URL" \
+ && echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - \
+ && chmod +x "$SUPERCRONIC" \
+ && mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" \
+ && ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic
+
+USER steam
+
+ENV TIMEZONE=Europe/Berlin \
+    DEBIAN_FRONTEND=noninteractive \
+    PUID=0 \
+    PGID=0 \
+    ALWAYS_UPDATE_ON_START=true \
+    MAX_PLAYERS=32 \
+    MULTITHREAD_ENABLED=true \
+    COMMUNITY_SERVER=true \
+    RCON_ENABLED=true \
+    PUBLIC_IP=10.0.0.1 \
+    PUBLIC_PORT=8211 \
+    SERVER_NAME=jammsen-docker-generated-###RANDOM### \
+    SERVER_DESCRIPTION="Palworld-Dedicated-Server running in Docker by jammsen" \
+    SERVER_PASSWORD=serverPasswordHere \
+    ADMIN_PASSWORD=adminPasswordHere \
+    BACKUP_ENABLED=true \
+    BACKUP_CRON_EXPRESSION="0 * * * *"
+
+VOLUME [ "/palworld" ]
+
+EXPOSE 8211/udp
+EXPOSE 25575/tcp
+
+ADD --chmod=777 servermanager.sh /servermanager.sh
+ADD --chmod=777 backupmanager.sh /backupmanager.sh
+
+CMD ["/servermanager.sh"]
+
+```
+
+`README.md`:
+
+```md
+## Docker - Palworld Dedicated Server
+
+[![Build Docker Image](https://github.com/jammsen/docker-palworld-dedicated-server/actions/workflows/docker-build-and-push.yml/badge.svg)](https://github.com/jammsen/docker-palworld-dedicated-server/actions/workflows/docker-build-and-push.yml)
+![Docker Pulls](https://img.shields.io/docker/pulls/jammsen/palworld-dedicated-server)
+![Docker Stars](https://img.shields.io/docker/stars/jammsen/palworld-dedicated-server)
+![Image Size](https://img.shields.io/docker/image-size/jammsen/palworld-dedicated-server/latest)
+
+This includes a Palworld Dedicated Server based on Linux and Docker.
+
+## Do you need support for this Docker Image
+
+- What to do?
+  - Feel free to create a NEW issue
+    - It is okay to "reference" that you might have the same problem as the person in issue #number
+  - Follow the instructions and answer the questions of people who are willing to help you
+  - If your issue is done, close it
+    - I will Inactivity-Close any issue thats not been active for a week
+- What NOT to do?
+  - Dont re-use issues / Necro!
+    - You are most likely to chat/spam/harrass thoose participants who didnt agree to be part of your / a new problem and might be totally out of context!
+  - If this happens, i reserve the rights to lock the issue or delete the comments, you have been warned!
+
+## What you need to run this
+
+- Basic understanding of Docker, Docker-Compose, Linux and Networking (Port-Forwarding/NAT)
+
+## Getting started
+
+1. Choose a Docker-Compose examples from below
+2. Create `game` sub-directories on your Dockernode in your game-server-directory (Example: `/srv/palworld`) and give it with `chmod 777 game` full permissions or use `chown -R 1000:1000 game/`.
+3. Setup Port-Forwarding or NAT for the ports in the Docker-Compose file
+4. (Build the image if you need) Start via `docker-compose up -d` - See docker-compose.yml and next section for more infos
+5. After first start, stop the server, setup your config at `game/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini` and start it again
+
+## Environment-Variables
+| Variable               | Description                                                                                                                           | Default Value                                          | Allowed Value   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | --------------- |
+| ALWAYS_UPDATE_ON_START | Updates the server on startup                                                                                                         | true                                                   | false/true      |
+| MAX_PLAYERS            | Maximum amout of players                                                                                                              | 32                                                     | 1-32            |
+| MULTITHREAD_ENABLED    | Sets options for "Improved multi-threaded CPU performance"                                                                            | true                                                   | false/true      |
+| COMMUNITY_SERVER       | Sets the server to a "Community-Server". If true, the server will appear in the Community-Serverlist. Needs PUBLIC_IP and PUBLIC_PORT | true                                                   | false/true      |
+| RCON_ENABLED           | RCON function - use ADMIN_PASSWORD to login after enabling it - Will be listening on port 25575 inside the container                  | true                                                   | false/true      |
+| PUBLIC_IP              | Public ip, auto-detect if not specified, see COMMUNITY_SERVER                                                                         | 10.0.0.1                                               | ip address      |
+| PUBLIC_PORT            | Public port, auto-detect if not specified, see COMMUNITY_SERVER                                                                       | 8211                                                   | 1024-65535      |
+| SERVER_NAME            | Name of the server                                                                                                                    | jammsen-docker-generated-###RANDOM###                  | string          |
+| SERVER_DESCRIPTION     | Description of the server                                                                                                             | Palworld-Dedicated-Server running in Docker by jammsen | string          |
+| SERVER_PASSWORD        | Password of the server                                                                                                                | serverPasswordHere                                     | string          |
+| ADMIN_PASSWORD         | Admin password of the server                                                                                                          | adminPasswordHere                                      | string          |
+| BACKUP_ENABLED         | Backup function, creates backups in your `game` directory                                                                             | true                                                   | false/true      |
+| BACKUP_CRON_EXPRESSION | Needs a Cron-Expression - See https://github.com/aptible/supercronic#crontab-format or https://crontab-generator.org/                 | 0 * * * * (meaning every hour)                         | Cron-Expression |
+
+Look at https://tech.palworldgame.com/optimize-game-balance for more information and config-settings in `game/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini`
+
+## Docker-Compose examples
+
+### Standalone gameserver
+```yml
+version: '3.9'
+services:
+  palworld-dedicated-server:
+    #build: .
+    container_name: palworld-dedicated-server
+    image: jammsen/palworld-dedicated-server:latest
+    restart: always
+    network_mode: bridge
+    ports:
+      - target: 8211 # gamerserver port inside of the container
+        published: 8211 # gamerserver port on your host
+        protocol: udp
+        mode: host
+      - target: 25575 # rcon port inside of the container
+        published: 25575 # rcon port on your host
+        protocol: tcp
+        mode: host
+    environment:
+      - ALWAYS_UPDATE_ON_START=true
+      - MAX_PLAYERS=32
+      - MULTITHREAD_ENABLED=true
+      - COMMUNITY_SERVER=true
+      - RCON_ENABLED=true
+      - RCON_PORT=25575
+      - PUBLIC_IP=10.0.0.5
+      - PUBLIC_PORT=8211
+      - SERVER_NAME=jammsen-docker-generated-###RANDOM###
+      - SERVER_DESCRIPTION=Palworld-Dedicated-Server running in Docker by jammsen
+      - SERVER_PASSWORD=serverPasswordHere
+      - ADMIN_PASSWORD=adminPasswordHere
+      - BACKUP_ENABLED=true
+      - BACKUP_CRON_EXPRESSION=0 * * * *
+    volumes:
+      - ./game:/palworld
+```
+### Gameserver with RCON
+```yml
+version: '3.9'
+services:
+  palworld-dedicated-server:
+    #build: .
+    container_name: palworld-dedicated-server
+    image: jammsen/palworld-dedicated-server:latest
+    restart: always
+    network_mode: bridge
+    ports:
+      - target: 8211 # gamerserver port inside of the container
+        published: 8211 # gamerserver port on your host
+        protocol: udp
+        mode: host
+      - target: 25575 # rcon port inside of the container
+        published: 25575 # rcon port on your host
+        protocol: tcp
+        mode: host
+    environment:
+      - ALWAYS_UPDATE_ON_START=true
+      - MAX_PLAYERS=32
+      - MULTITHREAD_ENABLED=true
+      - COMMUNITY_SERVER=true
+      - RCON_ENABLED=true
+      - RCON_PORT=25575
+      - PUBLIC_IP=10.0.0.5
+      - PUBLIC_PORT=8211
+      - SERVER_NAME=jammsen-docker-generated-###RANDOM###
+      - SERVER_DESCRIPTION=Palworld-Dedicated-Server running in Docker by jammsen
+      - SERVER_PASSWORD=serverPasswordHere
+      - ADMIN_PASSWORD=adminPasswordHere
+      - BACKUP_ENABLED=true
+      - BACKUP_CRON_EXPRESSION=0 * * * *
+    volumes:
+      - ./game:/palworld
+  
+  rcon:
+    image: outdead/rcon:latest
+    entrypoint: ['/rcon', '-a', '10.0.0.5:25575', '-p', 'adminPasswordHere']
+    profiles: ['rcon'] 
+```
+The profiles defintion, prevents the container from starting with the server and in your console you can run now RCON commands via
+#### RCON
+In your shell you can now run commands against the gameserver via RCON
+```shell
+$ docker compose run --rm rcon ShowPlayers
+name,playeruid,steamid
+$ docker compose run --rm rcon info
+Welcome to Pal Server[v0.1.2.0] jammsen-docker-generated-20384
+$ docker compose run --rm rcon save
+Complete Save
+```
+**Imporant:**
+- Keep the `--rm` in the command line, or you will have many exited containers in your list. 
+- All RCON-Commands can be research here: https://tech.palworldgame.com/server-commands
+
+## FAQ
+
+### How can i look into the config of my Palworld container?
+You can run this `docker exec -ti palworld-dedicated-server cat /palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini` and it will show you the config inside the container.
+
+### Im seeing S_API errors in my logs when i start the container
+Errors like `[S_API FAIL] Tried to access Steam interface SteamUser021 before SteamAPI_Init succeeded.` are safe to ignore.
+
+## Planned features in the future
+
+- Feel free to suggest something
+
+## Software used
+
+- CM2Network SteamCMD (Officially recommended by Valve - https://developer.valvesoftware.com/wiki/SteamCMD#Docker) 
+- Palworld Dedicated Server (APP-ID: 2394010 - https://steamdb.info/app/2394010/config/)
+
+```
+
+`backupmanager.sh`:
+
+```sh
+#!/bin/bash
+
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Create backup dir and change into it
+mkdir -p /palworld/backups && cd /palworld/Pal
+echo ">>> Creating backup"
+tar cfz /palworld/backups/saved-$DATE.tar.gz Saved/
+echo ">>> Done"
+
+```
+
+`servermanager.sh`:
+
+```sh
+#!/bin/bash
+
+GAME_PATH="/palworld"
+
+function installServer() {
+    # force a fresh install of all
+    echo ">>> Doing a fresh install of the gameserver"
+    /home/steam/steamcmd/steamcmd.sh +force_install_dir "/palworld" +login anonymous +app_update 2394010 validate +quit
+}
+
+function updateServer() {
+    # force an update and validation
+    echo ">>> Doing an update of the gameserver"
+    /home/steam/steamcmd/steamcmd.sh +force_install_dir "/palworld" +login anonymous +app_update 2394010 validate +quit
+}
+
+function startServer() {
+    # IF Bash extendion usaged:
+    # https://stackoverflow.com/a/13864829
+    # https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_02
+
+    echo ">>> Starting the gameserver"
+    cd $GAME_PATH
+
+    echo "Checking if config exists"
+    if [ ! -f ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini ]; then
+        echo "No config found, generating one"
+        if [ ! -d ${GAME_PATH}/Pal/Saved/Config/LinuxServer ]; then
+            mkdir -p ${GAME_PATH}/Pal/Saved/Config/LinuxServer
+        fi
+        # Copy default-config, which comes with the server to gameserver-save location
+        cp ${GAME_PATH}/DefaultPalWorldSettings.ini ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+
+    if [[ ! -z ${RCON_ENABLED+x} ]]; then
+        echo "Setting rcon-enabled to $RCON_ENABLED"
+        sed -i "s/RCONEnabled=[a-zA-Z]*/RCONEnabled=$RCON_ENABLED/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${PUBLIC_IP+x} ]]; then
+        echo "Setting public ip to $PUBLIC_IP"
+        sed -i "s/PublicIP=\"[^\"]*\"/PublicIP=\"$PUBLIC_IP\"/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${PUBLIC_PORT+x} ]]; then
+        echo "Setting public port to $PUBLIC_PORT"
+        sed -i "s/PublicPort=[0-9]*/PublicPort=$PUBLIC_PORT/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${SERVER_NAME+x} ]]; then
+        echo "Setting server name to $SERVER_NAME"
+        sed -i "s/ServerName=\"[^\"]*\"/ServerName=\"$SERVER_NAME\"/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+        if [[ "$SERVER_NAME" == *"###RANDOM###"* ]]; then
+            RAND_VALUE=$RANDOM
+            echo "Found standard template, using random numbers in server name"
+            sed -i -e "s/###RANDOM###/$RAND_VALUE/g" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+            echo "Server name is now jammsen-docker-generated-$RAND_VALUE"
+        fi
+    fi
+    if [[ ! -z ${SERVER_DESCRIPTION+x} ]]; then
+        echo "Setting server description to $SERVER_DESCRIPTION"
+        sed -i "s/ServerDescription=\"[^\"]*\"/ServerDescription=\"$SERVER_DESCRIPTION\"/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${SERVER_PASSWORD+x} ]]; then
+        echo "Setting server password to $SERVER_PASSWORD"
+        sed -i "s/ServerPassword=\"[^\"]*\"/ServerPassword=\"$SERVER_PASSWORD\"/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${ADMIN_PASSWORD+x} ]]; then
+        echo "Setting server admin password to $ADMIN_PASSWORD"
+        sed -i "s/AdminPassword=\"[^\"]*\"/AdminPassword=\"$ADMIN_PASSWORD\"/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+    if [[ ! -z ${MAX_PLAYERS+x} ]]; then
+        echo "Setting max-players to $MAX_PLAYERS"
+        sed -i "s/ServerPlayerMaxNum=[0-9]*/ServerPlayerMaxNum=$MAX_PLAYERS/" ${GAME_PATH}/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini
+    fi
+
+    START_OPTIONS=""
+    if [[ -n $COMMUNITY_SERVER ]] && [[ $COMMUNITY_SERVER == "true" ]]; then
+        START_OPTIONS="$START_OPTIONS EpicApp=PalServer"
+    fi
+    if [[ -n $MULTITHREAD_ENABLED ]] && [[ $MULTITHREAD_ENABLED == "true" ]]; then
+        START_OPTIONS="$START_OPTIONS -useperfthreads -NoAsyncLoadingThread -UseMultithreadForDS"
+    fi
+    ./PalServer.sh "$START_OPTIONS"
+}
+
+function startMain() {
+    if [[ -n $BACKUP_ENABLED ]] && [[ $BACKUP_ENABLED == "true" ]]; then
+        # Preparing the cronlist file
+        echo "$BACKUP_CRON_EXPRESSION /backupmanager.sh" >> cronlist
+        # Making sure supercronic is enabled and the cronfile is loaded
+        /usr/local/bin/supercronic cronlist &
+    fi
+    # Check if server is installed, if not try again
+    if [ ! -f "/palworld/PalServer.sh" ]; then
+        installServer
+    fi
+    if [ $ALWAYS_UPDATE_ON_START == "true" ]; then
+        updateServer
+    fi
+    startServer
+}
+
+term_handler() {
+	kill -SIGTERM $(pidof PalServer-Linux-Test)
+	tail --pid=$(pidof PalServer-Linux-Test) -f 2>/dev/null
+	exit 143;
+}
+
+trap 'kill ${!}; term_handler' SIGTERM
+
+startMain &
+killpid="$!"
+while true
+do
+  wait $killpid
+  exit 0;
+done
+
+```
