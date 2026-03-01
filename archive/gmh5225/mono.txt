@@ -1,0 +1,554 @@
+Project Path: arc_gmh5225_mono_tnmp7uu7
+
+Source Tree:
+
+```txt
+arc_gmh5225_mono_tnmp7uu7
+├── LICENSE
+├── README.md
+├── example
+│   ├── CMakeLists.txt
+│   ├── my_app
+│   │   ├── CMakeLists.txt
+│   │   └── main.ixx
+│   └── my_lib
+│       ├── CMakeLists.txt
+│       ├── main.ixx
+│       └── my_lib-config.cmake.in
+├── hooks
+│   ├── mono-add-executable.cmake
+│   └── mono-add-library.cmake
+├── mono-config.cmake.in
+├── mono-properties.cmake
+└── mono.cmake
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2022 William Roy
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# Mono
+
+Simple, consistent, and powerful interface for CMake's built-in add_library() and add_executable() commands.
+
+**Mono is early in development. You can use it, but it's not ready for production. Please report any bugs you find.**
+
+## Features
+
+* **Simple** - Mono is designed with simplicity in mind. Get started on a new project in seconds.
+
+* **Consistent** - Mono provides a consistent interface for both libraries and executables. No more complicated boilerplate build scripts. Just declare your targets and Mono will take care of the rest.
+
+* **Powerful** - Mono provides a powerful interface for CMake's built-in add_library() and add_executable() commands. It's easy to add custom build steps, link against external libraries, and more.
+
+And so much more!
+
+##### [Try me!](example/)
+```cmake
+add_library(my_lib
+[[pub(include_directories)]]
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+add_executable(my_app
+[[link_libraries]]
+  Qt6::Widgets
+[[pub(link_libraries)]]
+  my_lib
+)
+```
+
+## Get started right away! 🚀
+
+Add the following to your CMakeLists.txt
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(MyProject VERSION 1.0.0)
+
+# Enables populating content at configure time
+include(FetchContent)
+
+# Populate Mono
+FetchContent_Declare(mono
+  GIT_REPOSITORY https://github.com/wroyca/mono.git
+  GIT_TAG        main
+)
+
+# Ensures Mono have been populated
+FetchContent_MakeAvailable(mono)
+
+# Add Mono to your project
+include(${mono_SOURCE_DIR}/mono.cmake)
+
+# Add your library target
+add_library(my_lib)
+
+# Add your executable target
+add_executable(my_app
+[[link_libraries]]
+  my_lib
+)
+```
+**And that's it! You're ready to go! 🎉 🎉 🎉**
+
+
+```bash
+cmake -B build -S .
+cmake --build build
+```
+
+##  Documentation
+
+*TODO*
+
+<!-- TODO:
+* [Quickstart](docs/quickstart.md)
+* [Reference](docs/reference.md)
+* [FAQ](docs/faq.md)
+-->
+<!-- TODO:
+
+### Advanced Usage
+
+```cmake
+# Add a new property to the mono::properties list
+list(APPEND mono::properties [[my_custom_property]])
+
+# Add a new function that will be called when the property is used
+function(mono::on_my_custom_property target)
+  message("my_custom_property was used for target ${target}")
+endfunction()
+```
+
+-->
+
+## License
+
+Mono is licensed under the MIT License. See [LICENSE](LICENSE) for more information.
+
+## Acknowledgements
+
+Mono is inspired by [CMake's built-in add_library() and add_executable() functions](https://cmake.org/cmake/help/latest/command/add_library.html) and [CMake's built-in find_package() and fetch_content() functions](https://cmake.org/cmake/help/latest/command/find_package.html).
+
+```
+
+`example/CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.24)
+project(example VERSION 1.0.0)
+
+# Add Qt6
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core)
+
+# Add Mono
+include(../mono.cmake)
+
+# Qt overwrites CMAKE_CXX_STANDARD, so we need to force it
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory(my_app)
+add_subdirectory(my_lib)
+
+```
+
+`example/my_app/CMakeLists.txt`:
+
+```txt
+add_executable(my_app
+[[link_libraries]]
+  Qt6::Widgets
+[[pub(link_libraries)]]
+  my_lib
+)
+
+```
+
+`example/my_app/main.ixx`:
+
+```ixx
+#include <QApplication>
+#include <QPushButton>
+
+import my_lib;
+
+auto main(int argc, char *argv[]) -> int
+{
+  QApplication app(argc, argv);
+  QPushButton button("Click me!");
+
+  button.connect(&button, &QPushButton::clicked, &app, [&] {
+    button.setText(my_lib::hello());
+  });
+
+  button.show();
+  return app.exec();
+}
+
+```
+
+`example/my_lib/CMakeLists.txt`:
+
+```txt
+add_library(my_lib
+# We don't want INTERFACE_INCLUDE_DIRECTORIES to be prefixed in the
+# source directory. See: https://stackoverflow.com/questions/25676277/cmake-target-include-directories-prints-an-error-when-i-try-to-add-the-source
+[[pub(include_directories)]]
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/my_lib>
+  $<INSTALL_INTERFACE:include/my_lib>
+)
+
+```
+
+`example/my_lib/main.ixx`:
+
+```ixx
+export module my_lib;
+import <iostream>; // std::cout
+
+namespace my_lib
+{
+  export auto hello()
+  {
+    return "Hello, world!";
+  }
+}
+
+```
+
+`example/my_lib/my_lib-config.cmake.in`:
+
+```in
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@-targets.cmake")
+
+check_required_components(@PROJECT_NAME@)
+
+```
+
+`hooks/mono-add-executable.cmake`:
+
+```cmake
+function(add_executable name)
+  cmake_parse_arguments(parsed
+    ""
+    ""
+    "${mono_properties}"
+    ${ARGN}
+  )
+
+  if(parsed_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "Bad arguments: ${parsed_UNPARSED_ARGUMENTS}")
+  endif()
+
+  if(parsed_KEYWORDS_MISSING_VALUES)
+    message(FATAL_ERROR "Missing values for keywords: ${parsed_KEYWORDS_MISSING_VALUES}")
+  endif()
+
+  if(NOT ${name} STREQUAL ${PROJECT_NAME})
+    string(TOUPPER "${PROJECT_NAME}_BUILD_${name}" BUILD)
+    option(${BUILD} "Build ${name}" ON) # This is cached, so it won't be re-evaluated.
+    if(NOT ${BUILD})
+      return()
+    endif()
+  endif()
+
+  file(GLOB_RECURSE modules CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp; *.hpp; *.ixx)
+  _add_executable(${name} ${modules} ${parsed_UNPARSED_ARGUMENTS})
+
+  if ("${parsed_compile_options}" STREQUAL "" AND "${parsed_pubcompile_options}" STREQUAL "")
+    target_compile_options(${name}
+      PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+        $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Werror -pedantic>
+        $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Werror -pedantic>
+    )
+  else()
+    target_compile_options(${name}
+      PRIVATE
+        "${parsed_compile_options}"
+      PUBLIC
+        "${parsed_pub\(compile_options\)}"
+    )
+  endif()
+
+  target_link_libraries(${name}
+    PRIVATE
+      "${parsed_link_libraries}"
+    PUBLIC
+      "${parsed_pub\(link_libraries\)}"
+  )
+
+  target_link_libraries(${name}
+    PRIVATE
+      "${parsed_link_libraries}"
+    PUBLIC
+      "${parsed_pub\(link_libraries\)}"
+  )
+
+  target_link_options(${name}
+    PRIVATE
+      "${parsed_link_options}"
+    PUBLIC
+      "${parsed_pub\(link_options\)}"
+  )
+
+  target_include_directories(${name}
+    PRIVATE
+      "${parsed_include_directories}"
+    PUBLIC
+      "${parsed_pub\(include_directories\)}"
+  )
+
+  install(TARGETS ${name}
+    EXPORT
+      ${project_name}-targets
+    RUNTIME DESTINATION
+      "${CMAKE_INSTALL_BINDIR}"
+  )
+endfunction()
+
+```
+
+`hooks/mono-add-library.cmake`:
+
+```cmake
+function(add_library name)
+  cmake_parse_arguments(parsed
+    ""
+    ""
+    "${mono_properties}"
+    ${ARGN}
+  )
+
+  if(parsed_UNPARSED_ARGUMENTS)
+    message(FATAL_ERROR "Bad arguments: ${parsed_UNPARSED_ARGUMENTS}")
+  endif()
+
+  if(parsed_KEYWORDS_MISSING_VALUES)
+    message(FATAL_ERROR "Missing values for keywords: ${parsed_KEYWORDS_MISSING_VALUES}")
+  endif()
+
+  if(NOT ${name} STREQUAL ${PROJECT_NAME})
+    string(TOUPPER "${PROJECT_NAME}_BUILD_${name}" BUILD)
+    option(${BUILD} "Build ${name}" ON) # This is cached, so it won't be re-evaluated.
+    if(NOT ${BUILD})
+      return()
+    endif()
+  endif()
+
+  file(GLOB_RECURSE modules CONFIGURE_DEPENDS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp; *.hpp; *.ixx)
+  _add_library(${name} ${modules} ${parsed_UNPARSED_ARGUMENTS})
+
+  if ("${parsed_compile_options}" STREQUAL "" AND "${parsed_pubcompile_options}" STREQUAL "")
+    target_compile_options(${name}
+      PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+        $<$<CXX_COMPILER_ID:GNU>:-Wall -Wextra -Werror -pedantic>
+        $<$<CXX_COMPILER_ID:Clang>:-Wall -Wextra -Werror -pedantic>
+    )
+  else()
+    target_compile_options(${name}
+      PRIVATE
+        "${parsed_compile_options}"
+      PUBLIC
+        "${parsed_pub\(compile_options\)}"
+    )
+  endif()
+
+  target_compile_options(${name}
+    PRIVATE
+      "${parsed_compile_options}"
+    PUBLIC
+      "${parsed_pub\(compile_options\)}"
+  )
+
+  target_link_libraries(${name}
+    PRIVATE
+      "${parsed_link_libraries}"
+    PUBLIC
+      "${parsed_pub\(link_libraries\)}"
+  )
+
+  target_link_options(${name}
+    PRIVATE
+      "${parsed_link_options}"
+    PUBLIC
+      "${parsed_pub\(link_options\)}"
+  )
+
+  target_include_directories(${name}
+    PRIVATE
+      "${parsed_include_directories}"
+    PUBLIC
+      "${parsed_pub\(include_directories\)}"
+  )
+
+  install(TARGETS ${name}
+    EXPORT
+      ${name}-targets
+    LIBRARY DESTINATION
+      "${CMAKE_INSTALL_LIBDIR}"
+    ARCHIVE DESTINATION
+      "${CMAKE_INSTALL_LIBDIR}"
+  )
+
+  install(EXPORT ${name}-targets
+    FILE
+      ${name}-targets.cmake
+    NAMESPACE
+      ${name}::
+    DESTINATION
+     "${CMAKE_INSTALL_LIBDIR}/cmake/targets/${name}"
+  )
+
+  include(CMakePackageConfigHelpers)
+
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/${name}-config-version.cmake"
+    VERSION
+      ${PROJECT_VERSION}
+    COMPATIBILITY
+      SameMajorVersion
+  )
+
+  configure_package_config_file(
+    "${CMAKE_CURRENT_LIST_DIR}/${name}-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${name}-config.cmake"
+    INSTALL_DESTINATION
+      "${CMAKE_INSTALL_LIBDIR}/cmake/targets/${name}"
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/${name}-config.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/${name}-config-version.cmake"
+    DESTINATION
+      "${CMAKE_INSTALL_LIBDIR}/cmake/targets/${name}"
+  )
+
+  export(EXPORT ${name}-targets
+  FILE
+    "${CMAKE_CURRENT_BINARY_DIR}/${name}-targets.cmake"
+  NAMESPACE
+    ${name}::
+  )
+
+  export(PACKAGE ${name})
+endfunction()
+
+```
+
+`mono-config.cmake.in`:
+
+```in
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@-targets.cmake")
+
+check_required_components(@PROJECT_NAME@)
+
+```
+
+`mono-properties.cmake`:
+
+```cmake
+# [[ and ]] are interpreted as whitespace outside of a string literal, so
+# [[pub(link_libraries)]] becomes pub(link_libraries) when we pass it to
+# add_library and add_executable. Therefore, we need to use the same
+# interpretation in cmake_parse_arguments.
+
+set(mono_properties
+  "link_options"
+  "link_libraries"
+  "compile_options"
+  "compile_definitions"
+  "include_directories"
+
+  # The following are public equivalents of the above.
+  "pub(link_options)"
+  "pub(link_libraries)"
+  "pub(compile_options)"
+  "pub(compile_definitions)"
+  "pub(include_directories)"
+)
+
+```
+
+`mono.cmake`:
+
+```cmake
+include(${CMAKE_CURRENT_LIST_DIR}/mono-properties.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/hooks/mono-add-executable.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/hooks/mono-add-library.cmake)
+
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
+  set(CMAKE_BUILD_TYPE DEBUG)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL Release)
+  set(CMAKE_BUILD_TYPE RELEASE)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(CMAKE_BUILD_TYPE RELWITHDEBINFO)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+  set(CMAKE_BUILD_TYPE MINSIZEREL)
+endif()
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "RELEASE" CACHE STRING "Choose ${PROJECT_NAME} build type, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
+endif()
+
+if(NOT CMAKE_BUILD_TYPE MATCHES "^(DEBUG|RELEASE|RELWITHDEBINFO|MINSIZEREL)$")
+  message(FATAL_ERROR "Invalid build type: ${CMAKE_BUILD_TYPE}")
+endif()
+
+# Strip CMake default flags. They cause more problems than they solve.
+
+string(REPLACE "" "" CMAKE_C_FLAGS_DEBUG "")
+string(REPLACE "" "" CMAKE_CXX_FLAGS_DEBUG "")
+string(REPLACE "" "" CMAKE_LINKER_FLAGS_DEBUG "")
+string(REPLACE "" "" CMAKE_C_FLAGS_RELEASE "")
+string(REPLACE "" "" CMAKE_CXX_FLAGS_RELEASE "")
+string(REPLACE "" "" CMAKE_LINKER_FLAGS_RELEASE "")
+string(REPLACE "" "" CMAKE_C_FLAGS_RELWITHDEBINFO "")
+string(REPLACE "" "" CMAKE_CXX_FLAGS_RELWITHDEBINFO "")
+string(REPLACE "" "" CMAKE_LINKER_FLAGS_RELWITHDEBINFO "")
+string(REPLACE "" "" CMAKE_C_FLAGS_MINSIZEREL "")
+string(REPLACE "" "" CMAKE_CXX_FLAGS_MINSIZEREL "")
+string(REPLACE "" "" CMAKE_LINKER_FLAGS_MINSIZEREL "")
+
+```
