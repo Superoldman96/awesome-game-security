@@ -1477,6 +1477,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/blacktop/ida-mcp-rs [Headless IDA Pro MCP server]
 - https://github.com/kweatherman/yara4ida [Unofficial YARA IDA Pro plugin]
 - https://github.com/Berk000x/BinaryLens [An IDA plugin that uses LLM to speed up binary analysis]
+- https://github.com/jtang613/IDAssist [AI-powered RE plugin for IDA Pro: LLM function explanation, semantic knowledge graph, RAG, MCP integration]
 - https://github.com/CyberSecurityUP/DriverVuln-Analyzer-IDA-Plugin [Driver Vuln Analyzer]
 - https://github.com/ssmugabi/IDAPlugins [Integrate essential IDA Pro plugins for enhanced functionality, including deobfuscation, binary diffing, and custom cryptography support]
 - https://github.com/momo5502/patch-finder [IDA plugin to find patched memory]
