@@ -232,6 +232,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - [A maintained collection of useful & free unity scripts / library's / plugins and extensions](https://github.com/michidk/Unity-Script-Collection)
 - [ChatGPT integration with Unity Editor](https://github.com/keijiro/AICommand)
 - [Code editor integration for supporting Cursor as code editor for unity](https://github.com/boxqkrtm/com.unity.ide.cursor)
+- https://github.com/Besty0728/Unity-Skills [AI automation skills specifically designed for Unity]
 
 > Game Engine Plugins:Godot
 - https://github.com/libriscv/godot-sandbox [Sandboxing that enables safe modding for Godot games]
