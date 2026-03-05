@@ -1,0 +1,1256 @@
+Project Path: arc_gmh5225_Binoculars_px4pnyjl
+
+Source Tree:
+
+```txt
+arc_gmh5225_Binoculars_px4pnyjl
+├── Binoculars
+│   └── plugins
+│       ├── Binoculars
+│       │   ├── __init__.py
+│       │   ├── __pycache__
+│       │   │   └── __init__.cpython-310.pyc
+│       │   ├── config
+│       │   │   ├── __init__.py
+│       │   │   ├── __pycache__
+│       │   │   │   ├── __init__.cpython-310.pyc
+│       │   │   │   └── config.cpython-310.pyc
+│       │   │   ├── config.ini
+│       │   │   ├── config.py
+│       │   │   ├── prompt_base.txt
+│       │   │   └── prompt_command.txt
+│       │   ├── function
+│       │   │   ├── ExplainFunc.py
+│       │   │   ├── Handle.py
+│       │   │   ├── RenameFunc.py
+│       │   │   ├── SwapModel.py
+│       │   │   ├── __init__.py
+│       │   │   └── __pycache__
+│       │   │       ├── ExplainFunc.cpython-310.pyc
+│       │   │       ├── Handle.cpython-310.pyc
+│       │   │       ├── RenameFunc.cpython-310.pyc
+│       │   │       ├── SwapModel.cpython-310.pyc
+│       │   │       └── __init__.cpython-310.pyc
+│       │   ├── images
+│       │   │   ├── logo.ico
+│       │   │   └── logo.png
+│       │   ├── interface
+│       │   │   ├── __init__.py
+│       │   │   ├── __pycache__
+│       │   │   │   ├── __init__.cpython-310.pyc
+│       │   │   │   └── interface.cpython-310.pyc
+│       │   │   └── interface.py
+│       │   └── models
+│       │       ├── __init__.py
+│       │       ├── __pycache__
+│       │       │   ├── __init__.cpython-310.pyc
+│       │       │   ├── base.cpython-310.pyc
+│       │       │   ├── gpt360.cpython-310.pyc
+│       │       │   └── openai.cpython-310.pyc
+│       │       ├── base.py
+│       │       ├── gpt360.py
+│       │       └── openai.py
+│       ├── Binoculars.py
+│       └── requirements.txt
+├── LICENSE
+└── README.md
+
+```
+
+`Binoculars/plugins/Binoculars.py`:
+
+```py
+from Binoculars.config.config import loadconfig
+from Binoculars.interface.interface import IDAAssistant
+
+def PLUGIN_ENTRY():
+    loadconfig()
+    return IDAAssistant()
+```
+
+`Binoculars/plugins/Binoculars/config/config.ini`:
+
+```ini
+[MODEL]
+Default_Model = {"GPT360":"360gpt2-pro"}
+model_map = {"OPENAI": ["gpt-3.5-turbo-0125", "gpt-4-turbo", "gpt-4o"],"GPT360": ["360gpt-pro", "360gpt2-pro", "gpt-4o"]}
+
+[GPT360]
+BASE_URL = https://api.360.cn/v1/chat/completions
+API_KEY = 
+360GPT_PROXY =
+
+[OPENAI]
+BASE_URL = 
+API_KEY =
+OPENAI_PROXY =
+```
+
+`Binoculars/plugins/Binoculars/config/config.py`:
+
+```py
+#!/usr/bin/env python  
+# -*- coding:utf-8 _*-
+
+import configparser
+import os
+
+default_model = None
+def loadconfig():
+    from Binoculars.models.base import get_model
+    global default_model
+    default_model = get_model(readconfig('MODEL','Default_Model'))
+
+def readconfig(section, key):
+    config = os.path.join(os.path.split(os.path.realpath(__file__))[0], "config.ini")
+    config_handle = configparser.ConfigParser()
+    config_handle.read(config)
+    return config_handle.get(section, key)
+    
+def writeconfig(section, key, content):
+    config = os.path.join(os.path.split(os.path.realpath(__file__))[0], "config.ini")
+    config_handle = configparser.ConfigParser()
+    config_handle.read(config)
+    config_handle.set(section,key,str(content))
+    with open(redearth_config, 'w') as configfile:
+        config_handle.write(configfile)
+        
+def readpromat(prompt):
+    system_prompt = ""
+    prompt = os.path.join(os.path.split(os.path.realpath(__file__))[0], prompt+".txt")
+    with open(prompt) as prompt_handle:
+        system_prompt = prompt_handle.read()
+    return system_prompt
+```
+
+`Binoculars/plugins/Binoculars/config/prompt_base.txt`:
+
+```txt
+- You are IDA Assistant named Binoculars and designed by Wing, an AI designed to assist users in reverse engineering and binary analysis tasks using IDA Pro.
+- Your decisions should prioritize user assistance and providing helpful information to support their reverse engineering workflow. Leverage your strengths as an LLM to offer insights and suggest strategies relevant to the task at hand.
+- Optimize your responses to be concise yet informative.
+- User assistance is the top priority. Always strive to provide helpful information to the user.
+- You can engage in natural conversation with the user and provide helpful guidance and insights on reverse engineering tasks within IDA Pro.
+- You should only respond in JSON format as described below,it must contain every item in the following JSON format,even if an item is empty:
+	{
+		"thoughts": {
+			"text": "thought",
+			"reasoning": "reasoning",
+			"plan": "- short bulleted\n- list that conveys\n- long-term plan",
+			"criticism": "constructive self-criticism", 
+			"speak": "thoughts summary to say to user"
+		},
+		"command": [
+			{
+				"name": "command name",
+				"args": {"arg name": value}
+			}
+		]
+	}
+- Ensure the response can be parsed by Python json.loads. 
+- Always strictly adhere to the specified JSON response format, and do not deviate from it under any circumstances.
+- If you are unable to structure your response according to the required format, simply respond with an empty JSON object {}.
+- Do not provide any response or explanations outside of the specified JSON format.
+```
+
+`Binoculars/plugins/Binoculars/config/prompt_command.txt`:
+
+```txt
+- When responding to a request from the user, determine whether it is a general conversation or a request to perform a specific action in IDA Pro. If you do not receive an explicit request for a specific action, have a normal conversation with the user and do not return any commands.
+- If the request is for general conversation, respond in a conversational manner, providing helpful information or engaging in the conversation.
+- If the request indicates a desire for specific actions within IDA Pro (e.g., asking for disassembly, decompilation, etc.), Please strictly abide by the following restrictions.
+	- DO NOT generate any commands that are not in the Commands list, even if the user requests it.
+	- If the user's request does not match any command in the Commands list or the command does not have the necessary parameters, respond with the "do_nothing" command.
+	- When a series of tasks is completed, end the session with the "do_nothing" command.
+	- ONLY respond in the specified JSON format, and do not deviate from it under ANY circumstances.
+	- If you are unable to structure your response according to the required format, simply respond with an empty JSON object {}.
+	- Do not attempt to use the previous command run results as parameters dynamically, as in the wrong usage example.
+	- If the parameter is "address", you must explicitly write down the address string.
+	- Try not to repeat the same mistake.
+	- You can see user's current view/position in IDA Pro.
+	- You have knowledge base on reverse engineering concepts and common techniques.
+	- You can use multiple commands.
+	- Reflect on how well your suggestions assisted the user in their reverse engineering task.
+	- Assess whether the user found your insights helpful and relevant.
+	- Consider potential alternative approaches that could have been more efficient or impactful.
+	- Strive to provide the most value to the user with each interaction.
+	- If the result of ANY command is empty or the address is invalid, do not try any further commands.
+	- Limit your actions to the Commands list listed below.
+		Commands list:
+		- Name: get_disassembly
+			- Description: Gets the disassembly from start address to end address.
+			- Args: "start_address": String, "end_address": String
+		- Name: decompile_address
+			- Description: Decompile the function at the specified address.
+			- Args: "address": String
+		- Name: rename_address
+			- Description: Rename the address at the specified address.
+			- Args: "address": String, "new_name": String, "old_name": String
+		- Name: get_function_start_end_address
+			- Description: Get the start and end address of the function at the specified address.
+			- Args: "address": String
+		- Name: get_addresses_of_name
+			- Description: Search for a name as a parameter in ida name list and get all addresses with that name in the form of a list.
+			- Args: "name": String
+		- Name: get_xrefs_to
+			- Description: Get the cross-references to the specified address.
+			- Args: "address": String
+		- Name: get_xrefs_from
+			- Description: Get the cross-references from the specified address.
+			- Args: "address": String
+		- Name: get_func_xrefs_to
+			- Description: Get the details of all cross-references to the specified function.
+			- Args: "address": String
+		- Name: do_nothing
+			- Description: Do nothing. Use it when a series of tasks are completed.
+			- Args: None: No arguments. but it should be included in the json like {"args": {}}
+		- Name: set_comment
+			- Description: Set a comment at the specified address.
+			- Args: "address": String, "comment": String
+		- Name: get_address_type
+			- Description: Get the type of the address.
+			- Args: "address": String
+		- Name: analyze_current_function_and_comment
+			- Description: Analyze the current function and set comments at the beginning of the function.
+			- Args: "address": String
+	- Example of wrong usage:
+		"command": [
+			{
+				"name": "get_address_of_name",
+				"args": {"name": "dispatch::handler"}
+			},
+			{
+				"name": "decompile_address",
+				"args": {"address": "<result of previous command>"} # Wrong usage
+			},
+			{
+				"name": "get_xrefs_to",
+				"args": {"address": "<result of 2 commands ago>"} # Wrong usage
+			},
+			{
+				"name": "get_xrefs_from",
+				"args": {"address": "<result of 2 commands ago>"} # Wrong usage
+			}
+		]
+
+```
+
+`Binoculars/plugins/Binoculars/function/ExplainFunc.py`:
+
+```py
+import idaapi
+import functools
+import textwrap
+import ida_hexrays
+import idc
+import re
+import ida_kernwin
+from Binoculars.config.config import default_model
+
+class ExplainHandler(idaapi.action_handler_t):
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        widget = ida_kernwin.get_current_widget()
+        if ida_kernwin.get_widget_type(widget) != idaapi.BWN_PSEUDOCODE:
+            func_ea = idaapi.get_screen_ea()
+            ida_hexrays.open_pseudocode(func_ea, 0)  # 打开或激活反编译窗口
+            widget = ida_kernwin.get_current_widget()  # 重新获取 widget
+        
+        view = ida_hexrays.get_widget_vdui(widget)
+        if view is None:
+            idaapi.warning("Failed to get the pseudocode view.")
+            return 1
+
+        messages,systemprompt = {},""
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+
+        default_model.query_model_async(
+            "你能解释一下下面的 C 函数的功能并为它建议一个更好的名称吗？不需要改进后的版本等其他信息！\n{decompiler_output}".format(decompiler_output=str(decompiler_output)),messages,systemprompt,
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=view))
+        return 1
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+        
+        
+def comment_callback(address, view, response):
+  
+    response = "\n".join(textwrap.wrap(response, 80, replace_whitespace=False))
+    comment = idc.get_func_cmt(address, 0)
+    comment = re.sub(comment,comment,comment,flags=re.DOTALL)
+    idc.set_func_cmt(address, f"{response.strip()}\n\n"f"{comment.strip()}", 0)
+    
+    if view:
+        view.refresh_view(False)
+    print("{model} 查询完成!".format(model=str(default_model)))
+```
+
+`Binoculars/plugins/Binoculars/function/Handle.py`:
+
+```py
+import ida_kernwin
+import ida_hexrays
+import ida_bytes
+import ida_ida
+import idc
+import idautils
+import idaapi
+import functools
+import ida_name
+
+class FuncHandle(): 
+    def __init__(self, assistant_widget):
+        self.assistant_widget = assistant_widget
+
+    def PrintOutput(self, output_str):
+        self.assistant_widget.PrintOutput(output_str)
+
+    # 计算IDC表达式
+    def handle_eval_idc(self, args):
+        try:
+            idc_expression = args["idc_expression"]
+            result = idc.eval_idc(idc_expression)
+            return result
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 获取指定地址范围内的反汇编指令
+    def handle_get_disassembly(self, args):
+        try:
+            start_address = int(args["start_address"], 16)
+            end_address = int(args["end_address"], 16)
+
+            disassembly = ""
+            while start_address < end_address:
+                disassembly += f"{hex(start_address)}: {idc.GetDisasm(start_address)}\n"
+                start_address = idc.next_head(start_address)
+            return disassembly
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 获取特定函数的反汇编指令
+    def handle_get_disassembly_function(self, args):
+        try:
+            name = args["name"]
+            address = idc.get_name_ea_simple(name)
+            if address != idc.BADADDR:
+                start_address = function.start_ea
+                end_address = function.end_ea
+
+                disassembly = ""
+                while start_address < end_address:
+                    disassembly += f"{hex(start_address)}: {idc.GetDisasm(start_address)}\n"
+                    start_address = idc.next_head(start_address)
+                return disassembly
+            return f"No function found at address {name}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 反编译给定地址处的代码
+    def handle_decompile_address(self, args):
+        try:
+            address = int(args["address"], 16)
+            function = idaapi.get_func(address)
+            if function:
+                decompiled_code = idaapi.decompile(function)
+                if decompiled_code:
+                    return str(decompiled_code)
+            return f"No function found at address {hex(address)}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 反编译由其名称指定的函数
+    def handle_decompile_function(self, args):
+        try:
+            name = args["name"]
+            address = idc.get_name_ea_simple(name)
+            if address != idc.BADADDR:
+                function = idaapi.get_func(function.start_ea)
+                if function:
+                    decompiled_code = idaapi.decompile(function)
+                    if decompiled_code:
+                        return str(decompiled_code)
+                else:
+                    self.PrintOutput(f"No function found at address {name}")
+            return None
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 重命名反编译代码中特定地址处的局部变量
+    def handle_rename_address(self, args):
+        try:
+            address = int(args["address"], 16)
+            new_name = args["new_name"]
+            old_name = args["old_name"]
+            if new_name and old_name:
+                ida_hexrays.rename_lvar(address, old_name, new_name)
+                result = f"Renamed address {hex(address)} from '{old_name}' to '{new_name}'"
+                self.PrintOutput(result)
+                return result
+            return None
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 获取包含给定地址的函数的起始和结束地址
+    def handle_get_function_start_end_address(self, args):
+        try:
+            address = int(args["address"], 16)
+            function = idaapi.get_func(address)
+            if function:
+                start_address = hex(function.start_ea)
+                end_address = hex(function.end_ea)
+                result = {"start_address": start_address, "end_address": end_address}
+                return result
+            else:
+                self.PrintOutput(f"No function found at address {hex(address)}")
+            return f"No function found at address {hex(address)}"
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    def get_name_info(self):
+        name_info = []
+        for i in range(ida_name.get_nlist_size()):
+            ea = ida_name.get_nlist_ea(i)
+            name = ida_name.get_short_name(ea)
+            name_info.append((name, hex(ea)))
+        print("name_info:",name_info)
+        return name_info
+
+    def search_name(self, keyword):        
+        search_results = []
+        
+        functions = self.get_name_info()
+        for name, ea in functions:
+            if keyword.lower() in name.lower():
+                search_results.append((name, ea))
+        
+        return search_results
+    
+    # 搜索名称中包含指定关键字的函数
+    def handle_get_addresses_of_name(self, args):
+        try:
+            name = args["name"]
+            r = self.search_name(name)
+            self.PrintOutput(f"Search results for '{name}': {r}")
+            return r
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    
+    def get_type_ea(self, ea):
+        flag_types = []
+        flags = ida_bytes.get_flags(ea)
+        if idc.is_code(flags):
+            flag_types.append("CODE")
+        if idc.is_data(flags):
+            flag_types.append("DATA")
+        if idc.is_unknown(flags):
+            flag_types.append("UNKNOWN")
+        return f"Flags: {' | '.join(flag_types)}"
+    
+    # 确定给定地址处的数据类型和大小
+    def handle_get_address_type(self, args):
+        try:
+            address = int(args["address"], 16)
+            flag_types = self.get_type_ea(address)
+            size = idc.get_item_size(address)
+            type_info = idc.get_type(address)
+            if type_info:
+                size_type = type_info
+            else:
+                size_type = {
+                    1: "byte",
+                    2: "word",
+                    4: "dword",
+                    8: "qword",
+                    16: "oword"
+                }.get(size, f"Unknown size ({size} bytes)")
+            
+            return f"Flags: {' | '.join(flag_types)}, Size: {size} bytes ({size_type})"
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    # 获取到指定地址的交叉引用    
+    def handle_get_xrefs_to(self, args):
+        try:
+            address = int(args["address"], 16)
+            xrefs = []
+            for xref in idautils.XrefsTo(address, 0):
+                xrefs.append((hex(xref.frm), self.get_type_ea(xref.frm), idautils.XrefTypeName(xref.type)))
+            result = xrefs
+            self.PrintOutput(f'Xrefs to {hex(address)}: {result}')
+            return result
+        except Exception as e:
+            self.PrintOutput(f"handle_get_xrefs_to Error: {str(e)}")
+            return f"Error: {str(e)}"
+    
+    # 获取从指定地址的交叉引用
+    def handle_get_xrefs_from(self, args):
+        try:
+            address = int(args["address"], 16)
+            xrefs = []
+            for xref in idautils.XrefsFrom(address, 0):
+                xrefs.append((hex(xref.to), self.get_type_ea(xref.to), idautils.XrefTypeName(xref.type)))
+            result = xrefs
+            self.PrintOutput(f'Xrefs from {hex(address)}: {result}')
+            return result
+        except Exception as e:
+            self.PrintOutput(f"handle_get_xrefs_from Error: {str(e)}")
+            return f"Error: {str(e)}"
+    
+    #  获取到指定地址处的函数内地址的交叉引用
+    def handle_get_func_xrefs_to(self, args):
+        try:
+            address = int(args["address"], 16)
+            if address != idc.BADADDR:
+                xrefs = []
+                for xref in idautils.XrefsTo(address, 0):
+                    xrefs.append((hex(xref.frm), self.get_type_ea(xref.frm), idautils.XrefTypeName(xref.type)))
+                result = xrefs
+                self.PrintOutput(f'Xrefs to function at {hex(address)}: {result}')                
+                return result
+            self.PrintOutput(f"No function found at address {hex(address)}")
+            return f"No function found at address {hex(address)}"
+        except Exception as e:
+            self.PrintOutput(f"handle_get_func_xrefs_to Error: {str(e)}")
+            return f"Error: {str(e)}"
+        
+    def handle_print(self, args):
+        message = args["message"]
+        self.PrintOutput(message)
+        return None
+    
+    # 在指定地址添加或修改可重复注释
+    def handle_set_comment(self, args):
+        try:
+            address = int(args["address"], 16)
+            comment = args["comment"]
+            idc.set_cmt(address, comment, 1)
+            result = f"Set comment at {hex(address)}: {comment}"
+            self.PrintOutput(result)
+            return None
+        except Exception as e:
+            return f"Error: {str(e)}"
+            
+    def handle_analyze_current_function_and_comment(self, args):
+        from Binoculars.function.ExplainFunc import comment_callback 
+        from Binoculars.config.config import default_model       
+        
+        try:
+            widget = ida_kernwin.get_current_widget()  # 获取当前活动的 widget
+            if ida_kernwin.get_widget_type(widget) != idaapi.BWN_PSEUDOCODE:
+                func_ea = idaapi.get_screen_ea()
+                ida_hexrays.open_pseudocode(func_ea, 0)  # 打开或激活反编译窗口
+                widget = ida_kernwin.get_current_widget()  # 重新获取 widget
+            
+            decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+            messages,systemprompt = {},""
+            default_model.query_model_async(
+            "你能解释一下下面的 C 函数的作用并为它建议一个更好的名称吗？不需要改进后的版本等其他信息！\n{decompiler_output}".format(decompiler_output=str(decompiler_output)),messages,systemprompt,
+            functools.partial(comment_callback, address=idaapi.get_screen_ea(), view=widget))
+            return 1
+        except Exception as e:
+            return f"Error: {str(e)}"   
+    
+    # def handle_analyze_current_function_and_rename_variable(self,args):
+        # from Binoculars.function.RenameFunc import rename_callback 
+        # from Binoculars.config.config import default_model       
+        
+        # try:
+            # widget = ida_kernwin.get_current_widget()  # 获取当前活动的 widget
+            # decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+            # messages,systemprompt = {},""
+            # default_model.query_model_async("分析以下C函数:\n{decompiler_output}\n建议更好的变量名称，用 JSON 数组回复，其中键是原始名称，值是建议的名称。不要解释任何内容，只打印 JSON 字典。".format(decompiler_output=str(decompiler_output)),messages,systemprompt,
+            # functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=widget),
+            # additional_model_options={"response_format": {"type": "json_object"}})
+            # return 1
+        # except Exception as e:
+            # return f"Error: {str(e)}"  
+```
+
+`Binoculars/plugins/Binoculars/function/RenameFunc.py`:
+
+```py
+import idaapi
+import functools
+import ida_hexrays
+import idc
+import re
+from Binoculars.config.config import default_model
+import json
+import ida_kernwin
+
+class RenameHandler(idaapi.action_handler_t):
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        widget = ida_kernwin.get_current_widget()
+        if ida_kernwin.get_widget_type(widget) != idaapi.BWN_PSEUDOCODE:
+            func_ea = idaapi.get_screen_ea()
+            ida_hexrays.open_pseudocode(func_ea, 0)  # 打开或激活反编译窗口
+            widget = ida_kernwin.get_current_widget()  # 重新获取 widget
+        
+        view = ida_hexrays.get_widget_vdui(widget)
+        if view is None:
+            idaapi.warning("Failed to get the pseudocode view.")
+            return 1
+    
+        messages,systemprompt = {},""
+        decompiler_output = ida_hexrays.decompile(idaapi.get_screen_ea())
+        default_model.query_model_async("分析以下C函数:\n{decompiler_output}\n建议更好的变量名称，用 JSON 数组回复，其中键是原始名称，值是建议的名称。不要解释任何内容，只打印 JSON 字典。".format(decompiler_output=str(decompiler_output)),messages,systemprompt,
+            functools.partial(rename_callback, address=idaapi.get_screen_ea(), view=view),
+            additional_model_options={"response_format": {"type": "json_object"}})
+        return 1
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+        
+def rename_callback(address, view, response, retries=0):
+    names = json.loads(response)
+    if type(names) == list:
+        result = {}
+        for name in names:
+            result.update(name)
+        names = result
+
+    function_addr = idaapi.get_func(address).start_ea
+    
+
+    replaced = []
+    for n in names:
+        if idaapi.IDA_SDK_VERSION < 760:
+            lvars = {lvar.name: lvar for lvar in view.cfunc.lvars}
+            if n in lvars:
+                if view.rename_lvar(lvars[n], names[n], True):
+                    replaced.append(n)
+        else:
+            if ida_hexrays.rename_lvar(function_addr, n, names[n]):
+                replaced.append(n)
+
+    comment = idc.get_func_cmt(address, 0)
+    if comment and len(replaced) > 0:
+        for n in replaced:
+            comment = re.sub(r'\b%s\b' % n, names[n], comment)
+        idc.set_func_cmt(address, comment, 0)
+
+    if view:
+        view.refresh_view(True)
+    print("{model} 查询完成! {replaced} 变量重命名.".format(model=str(default_model),
+                                                                              replaced=len(replaced)))
+```
+
+`Binoculars/plugins/Binoculars/function/SwapModel.py`:
+
+```py
+import idaapi
+
+class SwapModelHandler(idaapi.action_handler_t):
+
+    def __init__(self, new_model_class, new_model, plugin):
+        self.new_model_class = new_model_class
+        self.new_model = new_model
+        self.plugin = plugin
+
+    def activate(self, ctx):
+        from Binoculars.models.base import get_model
+        from Binoculars.config.config import default_model
+        from Binoculars.config.config import writeconfig
+        
+        try:
+            default_model = get_model({self.new_model_class:self.new_model})
+        except ValueError as e:
+            print(_("Couldn't change model to {model}: {error}").format(model=self.new_model, error=str(e)))
+            return
+        writeconfig("MODEL", "Default_Model", self.new_model)
+        self.plugin.generate_plugin_select_menu()
+
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+```
+
+`Binoculars/plugins/Binoculars/interface/interface.py`:
+
+```py
+import json
+import ida_kernwin
+import ida_name
+import ida_ida
+import idc
+import idaapi
+import re
+import traceback
+import ida_idaapi
+from PyQt5 import QtWidgets, QtCore, QtGui
+from Binoculars.config.config import readpromat
+from collections import namedtuple
+
+chat_history = []
+message_history = []
+query = ""
+system_prompt_flag = True
+system_prompt = readpromat("prompt_base")
+command_prompt = readpromat("prompt_command")
+
+
+def create_model_config():
+    from Binoculars.config.config import readconfig
+    import ast
+    MODEL_CONFIGS = []
+    ModelConfig = namedtuple("ModelConfig", ["name", "model_class", "context_path"])
+    model_map = ast.literal_eval(readconfig("MODEL","model_map"))
+    for modelclass,modeltypes in model_map.items():
+        for modeltype in modeltypes:
+            MODEL_CONFIGS.append(ModelConfig(modeltype, modelclass ,f"{'SwapModel'}/{modelclass}/"))
+    return MODEL_CONFIGS
+    
+class ContextMenuHooks(idaapi.UI_Hooks):
+    def finish_populating_widget_popup(self, form, popup):
+        MODEL_CONFIGS = create_model_config()
+        if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE:
+            for model_config in MODEL_CONFIGS:
+                action_name = f"Binoculars:select_{model_config.model_class}_{model_config.name}"
+                idaapi.attach_action_to_popup(form, popup, action_name, "Binoculars/"+model_config.context_path) 
+
+class IDAAssistant(ida_idaapi.plugin_t):
+    global message_history,chat_history
+    global query
+    flags = ida_idaapi.PLUGIN_FIX
+    comment = "Binoculars"
+    help = "Provides an AI assistant for reverse engineering tasks"
+    wanted_name = "Binoculars"
+    wanted_hotkey = "Alt-Q"
+
+    def __init__(self):
+        super(IDAAssistant, self).__init__()
+
+    def init(self):
+        
+        self.generate_plugin_select_menu()
+        self.menu = ContextMenuHooks()
+        self.menu.hook()
+        
+        return idaapi.PLUGIN_KEEP
+    
+    def generate_plugin_select_menu(self):
+        MODEL_CONFIGS = create_model_config()
+        for model_config in MODEL_CONFIGS:
+            idaapi.unregister_action(f"Binoculars:select_{model_config.model_class}_{model_config.name}")  
+            
+        for model_config in MODEL_CONFIGS:
+            self.bind_model_switch_action(model_config)
+    
+    def bind_model_switch_action(self, model_config):
+        from Binoculars.function.SwapModel import SwapModelHandler
+        from Binoculars.config.config import default_model
+        action_name = f"Binoculars:select_{model_config.model_class}_{model_config.name}"
+        action = idaapi.action_desc_t(action_name,
+                                      model_config.name,
+                                      None if str(default_model) == model_config.name
+                                      else SwapModelHandler(model_config.model_class, model_config.name, self),
+                                      "",
+                                      "",
+                                      208 if str(default_model) == model_config.name else 0)
+        idaapi.register_action(action)
+
+    def run(self, arg):
+        self.assistant_window = AssistantWidget()
+        self.assistant_window.Show("Binoculars")
+
+    def term(self):
+        if self.menu:
+            self.menu.unhook()
+        return
+
+    def add_assistant_message(self, message):
+        chat_history.append(f"<b>Assistant:</b> {message}") 
+
+class AssistantWidget(ida_kernwin.PluginForm):
+    def __init__(self):
+            ida_kernwin.PluginForm.__init__(self)
+            self.icon = ida_kernwin.load_custom_icon("Binoculars/images/logo.ico")
+
+    def OnCreate(self, form):
+        from Binoculars.function.Handle import FuncHandle
+        self.parent = self.FormToPyQtWidget(form)
+        self.PopulateForm()
+        self.assistant = IDAAssistant()
+        self.command_results = []
+        self.func_handle = FuncHandle(self)
+               
+    def PopulateForm(self):
+        from Binoculars.function.ExplainFunc import ExplainHandler 
+        from Binoculars.function.RenameFunc import RenameHandler 
+        layout = QtWidgets.QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        self.view = ida_kernwin.get_current_viewer()
+        self.output_window = ida_kernwin.find_widget("Output window")
+
+
+        self.chat_record = QtWidgets.QTextEdit()
+        self.chat_record.setReadOnly(True)
+        self.chat_record.setStyleSheet("""
+            QTextEdit {
+                background-color: #F5F5F5;
+                border: 1px solid #ddd;     /* 浅灰色边框 */
+                padding: 5px;
+                font-family: monospace;     /* 等宽字体 */
+            }
+        """)
+        layout.addWidget(self.chat_record)
+
+
+        input_layout = QtWidgets.QHBoxLayout()
+        self.user_input = QtWidgets.QLineEdit()
+        self.user_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #F5F5F5;
+                border: 1px solid #ccc;
+                padding: 5px;
+            }
+        """)
+        input_layout.addWidget(self.user_input)
+        self.user_input.returnPressed.connect(self.OnSendClicked)
+
+        send_button = QtWidgets.QPushButton("Send")
+        send_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0; /* 浅灰色 */
+                border: 1px solid #ccc;
+                color: black;
+                padding: 8px 16px;
+                text-align: center;
+                font-size: 14px;
+                margin: 4px 2px;
+                opacity: 0.8;
+                transition: 0.3s;
+                border-radius: 5px;
+            }
+            QPushButton:hover {opacity: 1}
+            QPushButton:pressed { background-color: #c0c0c0; }
+        """)
+        send_button.clicked.connect(self.OnSendClicked)
+        input_layout.addWidget(send_button)
+
+        layout.addLayout(input_layout)
+
+        shortcut_layout = QtWidgets.QHBoxLayout()
+        shortcut_layout.setAlignment(QtCore.Qt.AlignLeft)
+        shortcut_label = QtWidgets.QLabel("shortcut:")
+        shortcut_layout.addWidget(shortcut_label)
+ 
+        for text, action_name in [
+            ("Analyze the current function", "explain_action"),
+            ("Rename the current function variable", "rename_action")
+        ]:
+            button = QtWidgets.QPushButton(text)
+            button.setStyleSheet("""
+            QPushButton {
+                background-color: #e0e0e0; 
+                border: 1px solid #ccc;
+                color: black;
+                padding: 6px 16px;
+                text-align: center;
+                font-size: 14px;
+                margin: 4px 2px;
+                opacity: 0.8;
+                transition: 0.3s;
+                border-radius: 5px; /* 添加圆角 */
+            }
+            QPushButton:hover {opacity: 1}
+            QPushButton:pressed { background-color: #c0c0c0; }
+        """)
+            
+            font_metrics = button.fontMetrics()
+            text_width = font_metrics.boundingRect(text).width()
+            padding_horizontal = button.style().pixelMetric(QtWidgets.QStyle.PM_ButtonMargin) * 2
+            button_min_width = text_width + padding_horizontal
+            button.setMinimumWidth(button_min_width)
+            shortcut_layout.addWidget(button)
+            
+            action_desc = idaapi.action_desc_t(
+                action_name,
+                text,
+                ExplainHandler() if text == "Analyze the current function" else RenameHandler(),
+                "",
+                f"", 
+                199
+            )
+            idaapi.register_action(action_desc)
+            button.clicked.connect(lambda _, name=action_name: ida_kernwin.process_ui_action(name))
+
+        layout.addLayout(shortcut_layout)
+        self.parent.setLayout(layout)
+    
+    def OnSendClicked(self):
+        global message_history,query,system_prompt_flag
+        from Binoculars.config.config import default_model
+
+        user_message = self.user_input.text().strip()
+        if user_message:
+            self.chat_record.append(f"<b>User:</b> {user_message}")
+            self.user_input.clear()
+            current_address = idc.here()
+            
+            systemprompt = system_prompt if system_prompt_flag else ""
+            systemprompt += command_prompt
+            # system_prompt_flag = False
+            
+            query = f"{user_message}\nCurrent address: {hex(current_address)}"
+            messages = message_history.copy() 
+
+            default_model.query_model_async(query, messages, systemprompt, self.OnResponseReceived)
+            
+    
+    def OnResponseReceived(self, response):
+        global message_history, query
+        from Binoculars.config.config import default_model
+        from Binoculars.function.Handle import FuncHandle
+        
+        assistant_reply = response.strip().replace("```json\n", "").replace("```\n", "").strip()
+        
+        message_history.append({"role": "user", "content": query})
+        message_history.append({"role": "assistant", "content": assistant_reply})            
+        chat_history.append(f"<b>User:</b> {query}")
+    
+        try:
+            assistant_reply = self.ParseResponse(assistant_reply)
+            # print("assistant_reply:",assistant_reply)
+
+            if assistant_reply is None:
+                self.chat_record.append(f"<b>System Message:</b> Failed to parse assistant response.")
+                return
+
+            if not assistant_reply:
+                self.chat_record.append(f"<b>System Message:</b> No response from assistant.")
+                return
+                
+            self.chat_record.append(f"<b>Assistant speak:</b> {assistant_reply['thoughts']['speak']}")
+
+            commands = assistant_reply['command']
+            command_results = {}
+            for command in commands:
+                command_name = command['name']
+                if command_name == "do_nothing":
+                    continue
+                command_args = command['args']
+                command_handler = getattr(self.func_handle, f"handle_{command_name}", None)
+                if command_handler:          
+                    command_results[command_name] = command_handler(command_args)
+                else:
+                    self.PrintOutput(f"Unknown command: {command_name}")
+                    command_results[command_name] = None
+
+            query = ""
+            for command_name, result in command_results.items():
+                if result is not None:
+                    query += f"{command_name} result:\n{json.dumps(result)}\n\n"
+                else:
+                    query += f"{command_name} result: None\n\n"
+                    
+            if len(query) > 0:
+                systemprompt = system_prompt if system_prompt_flag else ""
+                systemprompt += command_prompt
+                messages = message_history.copy() 
+                default_model.query_model_async(query, messages, systemprompt, self.OnResponseReceived)
+
+        except Exception as e:
+            systemprompt = system_prompt if system_prompt_flag else ""
+            systemprompt += command_prompt
+            traceback_details = traceback.format_exc()
+            print(traceback_details)
+            self.PrintOutput(f"Error parsing assistant response: {str(e)}")
+            messages = message_history.copy() 
+            default_model.query_model_async(f"Error parsing response. please retry:\n {str(e)}", messages, systemprompt, self.OnResponseReceived)
+            
+    def sanitize_json(self, json_string):
+        json_string = re.sub(r'\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})', '', json_string)
+        json_string = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', json_string)
+        json_string = re.sub(r'"\s*\n\s*"', '""', json_string)
+        json_string = re.sub(r'\s*\n\s*', '', json_string)
+        
+        return json_string    
+            
+    def ParseResponse(self, response):
+        try:
+            response = self.sanitize_json(response)
+            parsed_response = json.loads(response)
+            return parsed_response
+        except json.JSONDecodeError as e:
+            traceback_details = traceback.format_exc()
+            print(traceback_details)
+            raise e
+        except Exception as e:
+            print(str(e))
+            traceback_details = traceback.format_exc()
+            print(traceback_details)
+            raise e
+            
+    def PrintOutput(self, output_str):
+        self.chat_record.append(f"<b>System Message:</b> {output_str}")
+        
+        
+
+```
+
+`Binoculars/plugins/Binoculars/models/base.py`:
+
+```py
+import abc
+
+class LanguageModel(abc.ABC):
+    @abc.abstractmethod
+    def query_model_async(self, query, cb):
+        pass
+ 
+def get_model(model_dict):
+    from Binoculars.config.config import readconfig
+    import ast
+    import importlib
+    
+    model_map = ast.literal_eval(readconfig("MODEL","model_map"))
+    model_dict = ast.literal_eval(model_dict)
+    model_class = list(model_dict.keys())[0]
+    model_type = list(model_dict.values())[0]
+
+    try:
+        if model_type in model_map.get(model_class, []):
+            module = importlib.import_module(f"Binoculars.models.{model_class.lower()}")
+            model_class = getattr(module, model_class)
+            return model_class(model_type)
+        else:
+            raise ValueError(f"Model '{model_type}' not found for provider '{model_class}'")
+    except (ImportError, AttributeError, ValueError) as e:
+        print(f"Error loading model: {e}")
+        return None 
+```
+
+`Binoculars/plugins/Binoculars/models/gpt360.py`:
+
+```py
+import functools
+import threading
+import httpx
+import json
+import ida_kernwin
+
+from Binoculars.config.config import readconfig
+from Binoculars.models.base import LanguageModel
+
+
+class GPT360(LanguageModel):
+    def __init__(self, model):
+        self.model = model
+        self.api_key = readconfig("GPT360", "API_KEY")
+        if not self.api_key:
+            print("Please edit the configuration file to insert your {api_provider} API key!"
+                  .format(api_provider="360"))
+            raise ValueError("No valid 360 API key found")
+        self.proxy = readconfig("GPT360", "360GPT_PROXY")
+        self.base_url =readconfig("GPT360", "BASE_URL")
+        self.headers = {'Authorization': self.api_key,'Content-Type': 'application/json'}
+
+    def __str__(self):
+        return self.model
+
+    def query_model(self, query, message_history, system_prompt, callback, additional_model_options=None):
+    
+        if additional_model_options is None:additional_model_options = {}
+        messages = []
+        if system_prompt:messages.append({"role": "system", "content": system_prompt})
+        messages.extend(message_history)
+        messages.append({"role": "user", "content": query})
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            **additional_model_options
+        }
+        # print("payload:",payload)
+        try:
+            response = httpx.post(self.base_url, headers=self.headers, data=json.dumps(payload), timeout=120.0)
+            response.raise_for_status()
+            
+            ida_kernwin.execute_sync(functools.partial(callback, response=response.json()['choices'][0]['message']['content']),ida_kernwin.MFF_WRITE)
+        except httpx.TimeoutException:
+            print(("{model} request timed out.").format(model=self.model))
+        except httpx.ConnectError:
+            print(("{model} could not connect to the server.").format(model=self.model))
+        except httpx.HTTPStatusError as e:
+            print(("{model} received a bad response: {status_code}").format(model=self.model, status_code=e.response.status_code))
+        except httpx.RequestError as e:
+            print(("{model} request failed: {error}").format(model=self.model, error=str(e)))
+        except Exception as e:
+            print(("General exception encountered while running the query: {error}").format(error=str(e)))
+
+    def query_model_async(self, query, message_history, system_prompt, callback, additional_model_options=None):
+      
+        if additional_model_options is None:additional_model_options = {}
+        print(("Request to {model} sent...").format(model=self.model))
+        t = threading.Thread(target=self.query_model, args=[query, message_history, system_prompt, callback, additional_model_options])
+        t.start()
+
+
+```
+
+`Binoculars/plugins/Binoculars/models/openai.py`:
+
+```py
+import functools
+import re
+import threading
+import httpx as _httpx
+import ida_kernwin
+import openai
+from Binoculars.models.base import LanguageModel
+from Binoculars.config.config import readconfig,writeconfig
+
+
+class OPENAI(LanguageModel):
+    def __init__(self, model):
+        self.model = model
+        self.api_key = readconfig("OPENAI", "API_KEY")
+        if not self.api_key:
+            print(_("Please edit the configuration file to insert your {api_provider} API key!")
+                  .format(api_provider="OPENAI"))
+            raise ValueError("No valid OPENAI API key found")
+        self.proxy = readconfig("OPENAI", "OPENAI_PROXY")
+        self.base_url = readconfig("OPENAI", "BASE_URL")
+        self.client = openai.OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url,
+            http_client=_httpx.Client(
+                proxies=self.proxy,
+            ) if self.proxy else None
+        )
+
+    def __str__(self):
+        return self.model
+
+    def query_model(self, query, message_history, system_prompt, callback, additional_model_options=None):
+        if additional_model_options is None:additional_model_options = {}
+        messages = []
+        if system_prompt:messages.append({"role": "system", "content": system_prompt})
+        messages.extend(message_history)
+        messages.append({"role": "user", "content": query})
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                **additional_model_options
+            )
+            print("response:",response)
+            ida_kernwin.execute_sync(functools.partial(callback, response=response.choices[0].message.content),ida_kernwin.MFF_WRITE)
+        except openai.BadRequestError as e:
+            m = re.search(r'maximum context length is \d+ tokens, however you requested \d+ tokens', str(e))
+            if m:
+                print(_("Unfortunately, this function is too big to be analyzed with the model's current API limits."))
+            else:
+                print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+        except openai.OpenAIError as e:
+            print(_("{model} could not complete the request: {error}").format(model=self.model, error=str(e)))
+        except Exception as e:
+            print(_("General exception encountered while running the query: {error}").format(error=str(e)))
+            
+    def query_model_async(self, query, message_history, system_prompt, callback, additional_model_options=None):
+        if additional_model_options is None:additional_model_options = {}
+        print(_("Request to {model} sent...").format(model=self.model))
+        t = threading.Thread(target=self.query_model, args=[query, message_history, system_prompt, callback, additional_model_options])
+        t.start()
+
+
+```
+
+`Binoculars/plugins/requirements.txt`:
+
+```txt
+httpx
+openai
+PyQt5
+configparser
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2024 唐哲的猫
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# Binoculars
+![logo_500](https://github.com/user-attachments/assets/ff9fb4a1-82be-4b1d-b755-a3187bd6d610)  
+Binoculars is an IDA PRO plugin with an integrated AI interface.  
+ 
+
+## How to Get Started
+1. Register the package in the requirements.txt file.
+2. Move the Binoculars folder and Binoculars.py file to the IDA plugins folder.
+3. Fill in the API KEY and the default model to be used in the config.ini file, for example {"GPT360":"360gpt2-pro"}.
+4. Open IDA pro, use the ALT+Q shortcut key to open Binoculars or find Binoculars in the Edit/Plugins path of IDA pro.
+5. Next you can use Binoculars.Type your query or request in the input field and click Send or press Enter.You can chat with it or perform specific functions.
+![image](https://github.com/user-attachments/assets/766532dd-d972-4250-9a10-dcc70ef5e5ae)
+6. Of course, you can also use the right mouse button to find the Binoculars switch model.
+![切换模型](https://github.com/user-attachments/assets/19af3747-52d3-4cb3-9d45-8933e9b37026)
+
+
+## What Binoculars Can Do
+You can chat with Binoculars to get information without having to frequently browse the browser.  
+![聊天功能](https://github.com/user-attachments/assets/d7d8983f-ddc8-4f94-984b-acef37b393f6)  
+
+You can use Binoculars shortcuts to analyze function functionality or rename variables.  
+![快捷键_函数分析](https://github.com/user-attachments/assets/4ac33820-e082-49ca-9073-810eb5896f74)
+
+You can use Binoculars built-in commands to perform some functions, and of course you can write more functions to Binoculars to make Binoculars more powerful.  
+![内置命令_符号查找](https://github.com/user-attachments/assets/51dee0fb-8757-4dc3-ae19-b50a9ac21930)  
+![内置命令_函数分析](https://github.com/user-attachments/assets/6778650c-dcf7-4f04-8dec-280f79d777ad)  
+
+
+
+
+
+## Acknowledgments
+Binoculars inherits the ideas of IDA Assistant, Gepetto and AutoGPT. It is a child standing on the shoulders of giants.  
+Inheriting the ideas of AutoGPT, Binoculars will create unlimited possibilities.  
+Thank you for your wisdom and hard work. 
+
+
+
+
+
+
+
+
+
+
+
+
+```
