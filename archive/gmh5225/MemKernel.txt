@@ -1,0 +1,867 @@
+Project Path: arc_gmh5225_MemKernel_dn1_stwa
+
+Source Tree:
+
+```txt
+arc_gmh5225_MemKernel_dn1_stwa
+├── LICENSE
+├── README.md
+├── kernel
+│   ├── Kconfig
+│   ├── Makefile
+│   ├── comm.h
+│   ├── entry.c
+│   ├── memory.c
+│   ├── memory.h
+│   ├── process.c
+│   ├── process.h
+│   └── setup.sh
+└── user
+    ├── driver.hpp
+    └── main.cpp
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2023 JiangNight
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# MemKernel
+MemKernel is a Kernel Driver for Android.
+Created by [Jiang-Night](https://github.com/Jiang-Night/Kernel_driver_hack), modified according to my personal need.
+This driver Reads, Writes physical memory of target process (effectively bypassing anticheats).
+
+## Integration
+3 ways you can integrate this driver to your kernel source (for compilation) using setup script:
+* __Y__ : To build the source as part of the kernel. (statically build within kernel).
+```
+curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s Y
+```
+* __M__ : To build lkm (loadable kernel module). after adding this driver and building the kernel again, the lkm might be shipped within kernel (remember it).
+```
+curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M
+```
+* __M-OUT__ : People who don't want to integrate this driver to their kernel source can use this option. this tells the setup script that the driver will be build out-of-tree as module. (Note: upstream linux discourages support for building out-of-tree modules: [Read-Article](https://source.android.com/docs/core/architecture/kernel/kernel-code#out-of-tree-modules))
+```
+curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M-OUT
+```
+
+**TIP** : By default the setup script generates random name for the driver (/dev/*randomname*), this is to bypass existency check done via [*access(2)*](https://man7.org/linux/man-pages/man2/access.2.html) syscall. but you can override this behaviour by providing 2nd argument to the setup script like this:
+
+```curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M myname```
+
+## Compilation
+Totally depends on the kernel source you're building (gki & non-gki). I leave this part upto you.
+
+## How It Works
+On a higher level:
+
+This driver code (be it lkm or inbuilt within kernel) creates a [character](https://linux-kernel-labs.github.io/refs/heads/master/labs/device_drivers.html) device driver in dev folder (/dev/drivername). A userspace app with root permission can talk to this driver (file) via [*ioctl(2)*](https://man7.org/linux/man-pages/man2/ioctl.2.html) syscall. the kernel part (driver) reads or writes the target memory behalf on userspace app and forward read data to userspace app to use.
+
+## Problems
+* This driver currently don't have synchronisation mechanism to handle multiple users or multiple threads of single user.
+* No validation layer exists, so any root users can use this driver (if they know the name and purpose of the driver). it's a critical security risk, **You have been warned: use it at your own risk**.
+
+```
+
+`kernel/Kconfig`:
+
+```
+config MEMKERNEL
+    tristate "Physical Mem Operation Driver"
+    default y
+    help
+      Read-Write physical memory of target process.
+      Also retrieves base address of any library within any target process.
+      Y to statically build within kernel.
+      M to build as loadable kernel module (lkm).
+
+```
+
+`kernel/Makefile`:
+
+```
+ifneq ($(KERNELRELEASE),)
+# kbuild part of makefile
+	obj-$(CONFIG_MEMKERNEL)  := memkernel.o
+	memkernel-y := memory.o process.o entry.o
+else
+# normal makefile
+default:
+	# Assume kernel source is at KDIR or fail
+	ifeq ($(KDIR),)
+		$(error KDIR is not set. Please define KDIR to point to the kernel source directory.)
+	endif
+	make -C $(KDIR) M=$(PWD) modules
+clean:
+	rm -f *.ko *.o *.mod.o *.mod.c *.symvers .*.cmd
+endif
+```
+
+`kernel/comm.h`:
+
+```h
+typedef struct _COPY_MEMORY
+{
+	pid_t pid;
+	uintptr_t addr;
+	void *buffer;
+	size_t size;
+} COPY_MEMORY, *PCOPY_MEMORY;
+
+typedef struct _MODULE_BASE
+{
+	pid_t pid;
+	char *name;
+	uintptr_t base;
+} MODULE_BASE, *PMODULE_BASE;
+
+enum OPERATIONS
+{
+	OP_READ_MEM = 0x801,
+	OP_WRITE_MEM = 0x802,
+	OP_MODULE_BASE = 0x803,
+};
+```
+
+`kernel/entry.c`:
+
+```c
+#include <linux/module.h>
+#include <linux/tty.h>
+#include <linux/miscdevice.h>
+#include "comm.h"
+#include "memory.h"
+#include "process.h"
+
+#define DEVICE_NAME "phmeop"
+
+int dispatch_open(struct inode *node, struct file *file) {
+	return 0;
+}
+
+int dispatch_close(struct inode *node, struct file *file) {
+	return 0;
+}
+
+long dispatch_ioctl(struct file *const file, unsigned int const cmd, unsigned long const arg)
+{
+	static COPY_MEMORY cm;
+	static MODULE_BASE mb;
+	static char name[0x100] = {0};
+
+	switch (cmd)
+	{
+	case OP_READ_MEM:
+	{
+		if (copy_from_user(&cm, (void __user *)arg, sizeof(cm)) != 0) {
+			return -1;
+		}
+		if (read_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
+			return -1;
+		}
+		break;
+	}
+	case OP_WRITE_MEM:
+	{
+		if (copy_from_user(&cm, (void __user *)arg, sizeof(cm)) != 0) {
+			return -1;
+		}
+		if (write_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
+			return -1;
+		}
+		break;
+	}
+	case OP_MODULE_BASE:
+	{
+		if (copy_from_user(&mb, (void __user *)arg, sizeof(mb)) != 0 || copy_from_user(name, (void __user *)mb.name, sizeof(name) - 1) != 0) {
+			return -1;
+		}
+		mb.base = get_module_base(mb.pid, name);
+		if (copy_to_user((void __user *)arg, &mb, sizeof(mb)) != 0) {
+			return -1;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return 0;
+}
+
+struct file_operations dispatch_functions = {
+	.owner = THIS_MODULE,
+	.open = dispatch_open,
+	.release = dispatch_close,
+	.unlocked_ioctl = dispatch_ioctl,
+};
+
+struct miscdevice misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = DEVICE_NAME,
+	.fops = &dispatch_functions,
+};
+
+int __init driver_entry(void)
+{
+	int ret;
+	printk("[+] driver_entry");
+	ret = misc_register(&misc);
+	return ret;
+}
+
+void __exit driver_unload(void)
+{
+	printk("[+] driver_unload");
+	misc_deregister(&misc);
+}
+
+module_init(driver_entry);
+module_exit(driver_unload);
+
+MODULE_DESCRIPTION("Linux Kernel.");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Uiwbkd");
+
+```
+
+`kernel/memory.c`:
+
+```c
+#include "memory.h"
+#include <linux/tty.h>
+#include <linux/io.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+
+#include <asm/cpu.h>
+#include <asm/io.h>
+#include <asm/page.h>
+#include <asm/pgtable.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/mm.h>
+#include <linux/sched/task.h>
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+#include <linux/mmap_lock.h>
+#define MM_READ_LOCK(mm) mmap_read_lock(mm);
+#define MM_READ_UNLOCK(mm) mmap_read_unlock(mm);
+#else
+#include <linux/rwsem.h>
+#define MM_READ_LOCK(mm) down_read(&(mm)->mmap_sem);
+#define MM_READ_UNLOCK(mm) up_read(&(mm)->mmap_sem);
+#endif
+
+
+phys_addr_t translate_linear_address(struct mm_struct *mm, uintptr_t va)
+{
+	pgd_t *pgd;
+#if __PAGETABLE_P4D_FOLDED == 1
+	p4d_t *p4d;
+#endif
+	pmd_t *pmd;
+	pte_t *pte;
+	pud_t *pud;
+
+	phys_addr_t page_addr;
+	uintptr_t page_offset;
+
+	pgd = pgd_offset(mm, va);
+	if (pgd_none(*pgd) || pgd_bad(*pgd)) {
+		return 0;
+	}
+#if __PAGETABLE_P4D_FOLDED == 1
+	p4d = p4d_offset(pgd, va);
+	if (p4d_none(*p4d) || p4d_bad(*p4d)) {
+		return 0;
+	}
+	pud = pud_offset(p4d, va);
+#else
+    pud = pud_offset(pgd, va);
+#endif
+	if (pud_none(*pud) || pud_bad(*pud)) {
+		return 0;
+	}
+	pmd = pmd_offset(pud, va);
+	if (pmd_none(*pmd)) {
+		return 0;
+	}
+	pte = pte_offset_kernel(pmd, va);
+	if (pte_none(*pte)) {
+		return 0;
+	}
+	if (!pte_present(*pte)) {
+		return 0;
+	}
+	page_addr = (phys_addr_t)(pte_pfn(*pte) << PAGE_SHIFT);
+	page_offset = va & (PAGE_SIZE - 1);
+
+	return page_addr + page_offset;
+}
+
+#if !defined(ARCH_HAS_VALID_PHYS_ADDR_RANGE) || defined(MODULE)
+static inline int memk_valid_phys_addr_range(phys_addr_t addr, size_t size)
+{
+	return addr + size <= __pa(high_memory);
+}
+#define IS_VALID_PHYS_ADDR_RANGE(x,y) memk_valid_phys_addr_range(x,y)
+#else
+#define IS_VALID_PHYS_ADDR_RANGE(x,y) valid_phys_addr_range(x,y)
+#endif
+
+bool read_physical_address(phys_addr_t pa, void *buffer, size_t size)
+{
+	void *mapped;
+
+	if (!pfn_valid(__phys_to_pfn(pa))) {
+		return false;
+	}
+	if (!IS_VALID_PHYS_ADDR_RANGE(pa, size)) {
+		return false;
+	}
+	mapped = ioremap_cache(pa, size);
+	if (!mapped) {
+		return false;
+	}
+	if (copy_to_user(buffer, mapped, size)) {
+		iounmap(mapped);
+		return false;
+	}
+	iounmap(mapped);
+	return true;
+}
+
+bool write_physical_address(phys_addr_t pa, void *buffer, size_t size)
+{
+	void *mapped;
+
+	if (!pfn_valid(__phys_to_pfn(pa))) {
+		return false;
+	}
+	if (!IS_VALID_PHYS_ADDR_RANGE(pa, size)) {
+		return false;
+	}
+	mapped = ioremap_cache(pa, size);
+	if (!mapped) {
+		return false;
+	}
+	if (copy_from_user(mapped, buffer, size)) {
+		iounmap(mapped);
+		return false;
+	}
+	iounmap(mapped);
+	return true;
+}
+
+bool read_process_memory(
+	pid_t pid,
+	uintptr_t addr,
+	void *buffer,
+	size_t size)
+{
+
+	struct task_struct *task;
+	struct mm_struct *mm;
+	struct pid *pid_struct;
+	phys_addr_t pa;
+
+	pid_struct = find_get_pid(pid);
+	if (!pid_struct) {
+		return false;
+	}
+	task = get_pid_task(pid_struct, PIDTYPE_PID);
+	put_pid(pid_struct);
+	if (!task) {
+		return false;
+	}
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm) {
+		return false;
+	}
+	MM_READ_LOCK(mm);
+	pa = translate_linear_address(mm, addr);
+	MM_READ_UNLOCK(mm);
+	mmput(mm);
+	if (!pa) {
+		return false;
+	}
+
+	return read_physical_address(pa, buffer, size);
+}
+
+bool write_process_memory(
+	pid_t pid,
+	uintptr_t addr,
+	void *buffer,
+	size_t size)
+{
+
+	struct task_struct *task;
+	struct mm_struct *mm;
+	struct pid *pid_struct;
+	phys_addr_t pa;
+
+	pid_struct = find_get_pid(pid);
+	if (!pid_struct) {
+		return false;
+	}
+	task = get_pid_task(pid_struct, PIDTYPE_PID);
+	put_pid(pid_struct);
+	if (!task) {
+		return false;
+	}
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm) {
+		return false;
+	}
+	MM_READ_LOCK(mm);
+	pa = translate_linear_address(mm, addr);
+	MM_READ_UNLOCK(mm);
+	mmput(mm);
+	if (!pa) {
+		return false;
+	}
+
+	return write_physical_address(pa, buffer, size);
+}
+
+```
+
+`kernel/memory.h`:
+
+```h
+#include <linux/kernel.h>
+#include <linux/sched.h>
+
+phys_addr_t translate_linear_address(struct mm_struct *mm, uintptr_t va);
+
+bool read_physical_address(phys_addr_t pa, void *buffer, size_t size);
+
+bool write_physical_address(phys_addr_t pa, void *buffer, size_t size);
+
+bool read_process_memory(pid_t pid, uintptr_t addr, void *buffer, size_t size);
+
+bool write_process_memory(pid_t pid, uintptr_t addr, void *buffer, size_t size);
+
+```
+
+`kernel/process.c`:
+
+```c
+#include "process.h"
+#include <linux/sched.h>
+#include <linux/module.h>
+#include <linux/tty.h>
+#include <linux/mm.h>
+#include <linux/version.h>
+
+#define ARC_PATH_MAX 256
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/mm.h>
+#include <linux/sched/task.h>
+#endif
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+#include <linux/mmap_lock.h>
+#define MM_READ_LOCK(mm) mmap_read_lock(mm);
+#define MM_READ_UNLOCK(mm) mmap_read_unlock(mm);
+#else
+#include <linux/rwsem.h>
+#define MM_READ_LOCK(mm) down_read(&(mm)->mmap_sem);
+#define MM_READ_UNLOCK(mm) up_read(&(mm)->mmap_sem);
+#endif
+
+
+uintptr_t get_module_base(pid_t pid, char *name)
+{
+	struct pid *pid_struct;
+	struct task_struct *task;
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	struct vma_iterator vmi;
+#endif
+	uintptr_t module_base = 0;
+
+	pid_struct = find_get_pid(pid);
+	if (!pid_struct) {
+		return false;
+	}
+	task = get_pid_task(pid_struct, PIDTYPE_PID);
+	put_pid(pid_struct);
+	if (!task) {
+		return false;
+	}
+	mm = get_task_mm(task);
+	put_task_struct(task);
+	if (!mm) {
+		return false;
+	}
+
+	MM_READ_LOCK(mm);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
+	vma_iter_init(&vmi, mm, 0);
+	for_each_vma(vmi, vma)
+#else
+	for (vma = mm->mmap; vma; vma = vma->vm_next)
+#endif
+	{
+		char buf[ARC_PATH_MAX];
+		char *path_nm = "";
+
+		if (vma->vm_file) {
+			path_nm = file_path(vma->vm_file, buf, ARC_PATH_MAX - 1);
+			if (!strcmp(kbasename(path_nm), name)) {
+				module_base = vma->vm_start;
+				break;
+			}
+		}
+	}
+
+	MM_READ_UNLOCK(mm);
+	mmput(mm);
+	return module_base;
+}
+
+```
+
+`kernel/process.h`:
+
+```h
+#include <linux/kernel.h>
+
+uintptr_t get_module_base(pid_t pid, char *name);
+
+```
+
+`kernel/setup.sh`:
+
+```sh
+#!/bin/sh
+# copied from KernelSU repo
+
+set -eu
+
+GKI_ROOT=$(pwd)
+
+display_usage() {
+    echo "Usage: $0 [--cleanup | <integration-options>]"
+    echo "  --cleanup:              Cleans up previous modifications made by the script."
+    echo "  <integration-options>:   Tells us how MemKernel should be intrigated into kernel source (Y, M, M-OUT)."
+    echo "  <driver-name>:          Optional argument, should be used after <integration-options>. if not mentioned random name will be used."
+    echo "  -h, --help:             Displays this usage information."
+    echo "  (no args):              Sets up or updates the MemKernel environment to the latest commit (integration as Y)."
+}
+
+initialize_variables() {
+    if test -d "$GKI_ROOT/common/drivers"; then
+         DRIVER_DIR="$GKI_ROOT/common/drivers"
+    elif test -d "$GKI_ROOT/drivers"; then
+         DRIVER_DIR="$GKI_ROOT/drivers"
+    else
+        DRIVER_DIR=""
+    fi
+
+    DRIVER_MAKEFILE=$DRIVER_DIR/Makefile
+    DRIVER_KCONFIG=$DRIVER_DIR/Kconfig
+}
+
+# Reverts modifications made by this script (for all integration Y, M, M-OUT )
+perform_cleanup() {
+    echo "[+] Cleaning up..."
+    if [ -n "$DRIVER_DIR" ]; then
+        [ -L "$DRIVER_DIR/memkernel" ] && rm "$DRIVER_DIR/memkernel" && echo "[-] Symlink removed."
+        grep -q "memkernel" "$DRIVER_MAKEFILE" && sed -i '/memkernel/d' "$DRIVER_MAKEFILE" && echo "[-] Makefile reverted."
+        grep -q "drivers/memkernel/Kconfig" "$DRIVER_KCONFIG" && sed -i '/drivers\/memkernel\/Kconfig/d' "$DRIVER_KCONFIG" && echo "[-] Kconfig reverted."
+    fi
+    [ -d "$GKI_ROOT/MemKernel" ] && rm -rf "$GKI_ROOT/MemKernel" && echo "[-] MemKernel directory deleted."
+}
+
+
+# Generates and inserts a random 6 char string to MemKernel/kernel/entry.c as driver device name
+insert_random_dev_name() {
+    local random_name
+    if [ -n "${1:-}" ]; then
+        random_name="$1"
+    else
+        random_name=$(tr -dc 'a-z' </dev/urandom | (head -c 6))
+    fi
+    sed -i "s/#define DEVICE_NAME \".*\"/#define DEVICE_NAME \"$random_name\"/" "$GKI_ROOT/MemKernel/kernel/entry.c"
+    sed -i "s|#define DEVICE_NAME \"/dev/.*\"|#define DEVICE_NAME \"/dev/$random_name\"|" "$GKI_ROOT/MemKernel/user/driver.hpp"
+    echo -e "\e[36mDevice Name: $random_name\e[0m"
+}
+
+# Sets up or update MemKernel environment for all integration (Y, M, M-OUT)
+setup_memkernel() {
+    if [ "$1" != "M-OUT" ] && [ -z "$DRIVER_DIR" ]; then
+        echo '[ERROR] "drivers/" directory not found.'
+        exit 127;
+    fi
+    
+    echo "[+] Setting up MemKernel..."
+    test -d "$GKI_ROOT/MemKernel" || git clone https://github.com/Poko-Apps/MemKernel && echo "[+] Repository cloned."
+    cd "$GKI_ROOT/MemKernel"
+    git stash && echo "[-] Stashed current changes."
+    git checkout main && echo "[-] Switched to main branch."
+    git pull && echo "[+] Repository updated."
+    git checkout main && echo "[-] Switched to main branch."
+
+    if [ "$1" != "M-OUT" ]; then
+        if [ "$1" = "M" ]; then
+            sed -i 's/default y/default m/' kernel/Kconfig
+        elif [ "$1" != "Y" ]; then
+            echo "[ERROR] First argument not valid. should be any of these: Y, M, M-OUT"
+            exit 128;
+        fi
+        cd "$DRIVER_DIR"
+        ln -sf "$(realpath --relative-to="$DRIVER_DIR" "$GKI_ROOT/MemKernel/kernel")" "memkernel" && echo "[+] Symlink created."
+
+        # Add entries in Makefile and Kconfig if not already existing
+        grep -q "memkernel" "$DRIVER_MAKEFILE" || printf "\nobj-\$(CONFIG_MEMKERNEL) += memkernel/\n" >> "$DRIVER_MAKEFILE" && echo "[+] Modified Makefile."
+        grep -q "source \"drivers/memkernel/Kconfig\"" "$DRIVER_KCONFIG" || sed -i "/endmenu/i\source \"drivers/memkernel/Kconfig\"" "$DRIVER_KCONFIG" && echo "[+] Modified Kconfig."
+    else
+        sed -i 's/\$(CONFIG_MEMKERNEL)/m/g' "$GKI_ROOT/MemKernel/kernel/Makefile" && echo "[+] Modified our Makefile."
+    fi
+
+    if [ "$#" -ge 2 ]; then
+        insert_random_dev_name "$2"
+    else
+        insert_random_dev_name
+    fi
+    echo '[+] Done.'
+}
+
+
+# Process command-line arguments
+if [ "$#" -eq 0 ]; then
+    initialize_variables
+    setup_memkernel Y
+elif [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    display_usage
+elif [ "$1" = "--cleanup" ]; then
+    initialize_variables
+    perform_cleanup
+else
+    initialize_variables
+    setup_memkernel "$@"
+fi
+```
+
+`user/driver.hpp`:
+
+```hpp
+#include <sys/fcntl.h>
+#include <sys/ioctl.h>
+
+#define DEVICE_NAME "/dev/phmeop"
+
+class c_driver
+{
+private:
+	int fd;
+	pid_t pid;
+
+	typedef struct _COPY_MEMORY
+	{
+		pid_t pid;
+		uintptr_t addr;
+		void *buffer;
+		size_t size;
+	} COPY_MEMORY, *PCOPY_MEMORY;
+
+	typedef struct _MODULE_BASE
+	{
+		pid_t pid;
+		char *name;
+		uintptr_t base;
+	} MODULE_BASE, *PMODULE_BASE;
+
+	enum OPERATIONS
+	{
+		OP_READ_MEM = 0x801,
+		OP_WRITE_MEM = 0x802,
+		OP_MODULE_BASE = 0x803,
+	};
+
+public:
+	c_driver()
+	{
+		fd = open(DEVICE_NAME, O_RDWR);
+		if (fd == -1)
+		{
+			printf("[-] open driver failed\n");
+		}
+	}
+
+	~c_driver()
+	{
+		if (fd > 0)
+			close(fd);
+	}
+
+	void initialize(pid_t pid)
+	{
+		this->pid = pid;
+	}
+
+	bool read(uintptr_t addr, void *buffer, size_t size)
+	{
+		COPY_MEMORY cm;
+
+		cm.pid = this->pid;
+		cm.addr = addr;
+		cm.buffer = buffer;
+		cm.size = size;
+
+		if (ioctl(fd, OP_READ_MEM, &cm) != 0)
+		{
+			return false;
+		}
+		return true;
+	}
+
+	bool write(uintptr_t addr, void *buffer, size_t size)
+	{
+		COPY_MEMORY cm;
+
+		cm.pid = this->pid;
+		cm.addr = addr;
+		cm.buffer = buffer;
+		cm.size = size;
+
+		if (ioctl(fd, OP_WRITE_MEM, &cm) != 0)
+		{
+			return false;
+		}
+		return true;
+	}
+
+	template <typename T>
+	T read(uintptr_t addr)
+	{
+		T res;
+		if (this->read(addr, &res, sizeof(T)))
+			return res;
+		return {};
+	}
+
+	template <typename T>
+	bool write(uintptr_t addr, T value)
+	{
+		return this->write(addr, &value, sizeof(T));
+	}
+
+	uintptr_t get_module_base(char *name)
+	{
+		MODULE_BASE mb;
+		char buf[0x100];
+		strcpy(buf, name);
+		mb.pid = this->pid;
+		mb.name = buf;
+
+		if (ioctl(fd, OP_MODULE_BASE, &mb) != 0)
+		{
+			return 0;
+		}
+		return mb.base;
+	}
+};
+
+static c_driver *driver = new c_driver();
+
+```
+
+`user/main.cpp`:
+
+```cpp
+#include <unistd.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+#include "driver.hpp"
+
+uint64_t get_tick_count64()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (ts.tv_sec * 1000 + ts.tv_nsec / (1000 * 1000));
+}
+
+pid_t get_name_pid(char *name)
+{
+	FILE *fp;
+	pid_t pid;
+	char cmd[0x100] = "pidof ";
+
+	strcat(cmd, name);
+	fp = popen(cmd, "r");
+	fscanf(fp, "%d", &pid);
+	pclose(fp);
+	return pid;
+}
+
+int main(int argc, char const *argv[])
+{
+
+	uintptr_t base = 0;
+	uint64_t result = 0;
+	char module_name[0x100] = "libunity.so";
+	pid_t pid = get_name_pid((char *)"com.tencent.tmgp.sgame");
+	printf("pid = %d\n", pid);
+
+	driver->initialize(pid);
+
+	base = driver->get_module_base(module_name);
+	printf("base = %lx\n", base);
+
+	{
+		size_t number = 1;
+		uint64_t now = get_tick_count64();
+		for (size_t i = 0; i < number; i++)
+		{
+			result = driver->read<uint64_t>(base);
+		}
+		printf("Read %ld times cost = %lfs\n", number,
+			   (double)(get_tick_count64() - now) / 1000);
+	}
+	printf("result = %lx\n", result);
+
+	return 0;
+}
+
+```
