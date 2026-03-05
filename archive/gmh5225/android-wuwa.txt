@@ -1,0 +1,2528 @@
+Project Path: arc_gmh5225_android-wuwa_fnyb743_
+
+Source Tree:
+
+```txt
+arc_gmh5225_android-wuwa_fnyb743_
+├── Makefile
+├── README.md
+├── docs
+│   └── LR_REDIRECT.md
+├── wuwa.c
+├── wuwa_common.h
+├── wuwa_d0_mm_fault.c
+├── wuwa_d0_mm_fault.h
+├── wuwa_ioctl.c
+├── wuwa_ioctl.h
+├── wuwa_kallsyms.h
+├── wuwa_page_walk.c
+├── wuwa_page_walk.h
+├── wuwa_protocol.c
+├── wuwa_protocol.h
+├── wuwa_safe_signal.c
+├── wuwa_safe_signal.h
+├── wuwa_sock.c
+├── wuwa_sock.h
+├── wuwa_utils.c
+└── wuwa_utils.h
+
+```
+
+`Makefile`:
+
+```
+MODULE = android-wuwa
+
+obj-m :=$(MODULE).o
+$(MODULE)-objs := \
+    wuwa.o \
+    wuwa_sock.o \
+    wuwa_protocol.o \
+    wuwa_utils.o \
+    wuwa_ioctl.o \
+    wuwa_page_walk.o \
+    wuwa_safe_signal.o \
+    wuwa_d0_mm_fault.o \
+    wuwa_cproc.o
+
+all:
+	make -C $(KDIR) M=$(PWD) modules
+
+clean:
+	make -C $(KDIR) M=$(PWD) clean
+
+.PHONY: all clean
+```
+
+`README.md`:
+
+```md
+# Features
+
+- [x] Custom protocol family for user-space (EL0) 
+- [x] Virtual ⇄ physical address translation for any process
+- [x] Physical page descriptor lookup (flags, ref_count, and friends)
+- [x] One-step mapping of a process’s virtual memory into a DMA-BUF fd
+- [x] Page-table injections that bypass VMA
+- [x] Dump a process’s memory map straight to dmesg for easy inspection
+- [ ] Low-level page-table permission tweaks plus VMA permission masking 
+- [ ] Arbitrary physical memory read/write 
+- [ ] Memory-scan traps for stealthy injection protection 
+- [ ] Cross-process memory remap to build shared memory
+- [ ] EL1 channel based on exception vectors
+- [x] Kprobe blacklist bypass/disable
+
+# Heads-up
+
+- Tested only on my device running kernel 6.1.
+- No guarantees on other versions; treat this as a proof of concept.
+- Everything not explicitly marked “planned” has been run and verified on my setup—use at your own risk.
+```
+
+`docs/LR_REDIRECT.md`:
+
+```md
+
+# Sample
+
+```c++
+#define LUCKY_LUO 0xfaceb00c
+
+unsigned char* shellcode = (unsigned char*)0x100000;
+STP_PRE_IMM(shellcode, fp, lr, sp, -16);
+STP_PRE_IMM(shellcode, x0, x1, sp, -16);
+STP_PRE_IMM(shellcode, x2, x3, sp, -16);
+MOV_IMM(shellcode, x2, LUCKY_LUO);
+MOV_IMM(shellcode, x3, 0x10002c); // real LR address
+STP_PRE_IMM(shellcode, x2, x3, sp, -16);
+MOV_IMM(shellcode, lr, LUCKY_LUO);
+BR_REG(shellcode, x1);
+ADD_IMM(shellcode, sp, sp, 16);
+LDP_POST_IMM(shellcode, x2, x3, sp, 16);
+LDP_POST_IMM(shellcode, x0, x1, sp, 16);
+LDP_POST_IMM(shellcode, fp, lr, sp, 16);
+MOV_IMM(shellcode, x1, 42);
+STR_PRE_IMM(shellcode, x1, x0, 0);
+RET(shellcode);
+```
+```
+
+`wuwa.c`:
+
+```c
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/syscalls.h>
+#include <linux/kprobes.h>
+#include <asm/unistd.h>
+#include <asm/tlbflush.h>
+#include <linux/list.h>
+#include <linux/types.h>
+#include <linux/init_task.h>
+#include <linux/fs.h>
+#include "wuwa_sock.h"
+#include "wuwa_protocol.h"
+#include "wuwa_common.h"
+#include "wuwa_utils.h"
+#include "wuwa_safe_signal.h"
+#include "wuwa_d0_mm_fault.h"
+#include "wuwa_kallsyms.h"
+
+static int __init wuwa_init(void) {
+    int ret;
+    wuwa_info("helo!\n");
+
+    ret = disable_kprobe_blacklist();
+    if (ret) {
+        wuwa_err("disable_kprobe_blacklist failed: %d\n", ret);
+        return ret;
+    }
+
+    ret = wuwa_proto_init();
+    if (ret) {
+        wuwa_err("wuwa_socket_init failed: %d\n", ret);
+        goto out;
+    }
+
+    ret = wuwa_safe_signal_init();
+    if (ret) {
+        wuwa_err("wuwa_safe_signal_init failed: %d\n", ret);
+        goto clean_sig;
+    }
+
+    ret = init_d0_mm_fault();
+    if (ret) {
+        wuwa_err("init_d0_mm_fault failed: %d\n", ret);
+        goto clean_d0;
+    }
+
+    return 0;
+
+    clean_d0:
+    wuwa_safe_signal_cleanup();
+
+    clean_sig:
+    wuwa_proto_cleanup();
+
+    out:
+    return ret;
+}
+
+static void __exit wuwa_exit(void) {
+    wuwa_info("bye!\n");
+    wuwa_proto_cleanup();
+    wuwa_safe_signal_cleanup();
+    cleanup_d0_mm_fault();
+}
+
+module_init(wuwa_init);
+module_exit(wuwa_exit);
+
+MODULE_AUTHOR("fuqiuluo");
+MODULE_LICENSE("GPL");
+MODULE_DESCRIPTION("https://github.com/fuqiuluo/android-wuwa");
+MODULE_VERSION("1.0.1");
+
+MODULE_IMPORT_NS(DMA_BUF);
+```
+
+`wuwa_common.h`:
+
+```h
+#ifndef WUWA_COMMON_H
+#define WUWA_COMMON_H
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/net.h>
+#include <net/sock.h>
+#include "wuwa_utils.h"
+
+#define WUWA_LOG_PREFIX "[wuwa] "
+#define wuwa_info(fmt, ...) pr_info(WUWA_LOG_PREFIX fmt, ##__VA_ARGS__)
+#define wuwa_warn(fmt, ...) pr_warn(WUWA_LOG_PREFIX fmt, ##__VA_ARGS__)
+#define wuwa_err(fmt, ...) pr_err(WUWA_LOG_PREFIX fmt, ##__VA_ARGS__)
+#define wuwa_debug(fmt, ...) pr_debug(WUWA_LOG_PREFIX fmt, ##__VA_ARGS__)
+
+#define ovo_info(fmt, ...) \
+    pr_info(WUWA_LOG_PREFIX "%s: " fmt, __func__, ##__VA_ARGS__)
+
+#define ovo_warn(fmt, ...) \
+    pr_warn(WUWA_LOG_PREFIX "%s: " fmt, __func__, ##__VA_ARGS__)
+
+#define ovo_err(fmt, ...) \
+    pr_err(WUWA_LOG_PREFIX "%s: " fmt, __func__, ##__VA_ARGS__)
+
+#define ovo_debug(fmt, ...) \
+    pr_debug(WUWA_LOG_PREFIX "%s: " fmt, __func__, ##__VA_ARGS__)
+
+#define LUCKY_LUO 0x00000000faceb00c
+
+#define CONFIG_COMPARE_TASK 0
+#define CONFIG_COMPARE_PT_REGS 0
+
+#define CONFIG_COPY_PROCESS 0
+/*
+ * !!!Poor performance!!!
+ */
+#define CONFIG_REDIRECT_VIA_ABORT 0
+
+/*
+ * !!!!Poor performance!!!
+ * The LR address redirection is achieved by using the Linux signal processor mechanism.
+ *  > is unsafe and has competition risks.
+ *  > is only used for learning and verification that
+ *     it can be injected into the executable memory and executed normally without any trace.
+ */
+#define CONFIG_REDIRECT_VIA_SIGNAL 0
+
+#define CMD_MAX_BYTES  (50 * 1024 * 1024)
+#define CMD_MAX_PAGES  (CMD_MAX_BYTES / PAGE_SIZE)
+
+struct wuwa_sock {
+    struct sock sk;
+
+    int version;
+
+    pid_t session;
+
+    struct karray_list* used_pages;
+};
+
+struct wuwa_dmabuf_private {
+    struct sg_table *sgt;
+
+
+};
+
+#endif /* WUWA_COMMON_H */
+```
+
+`wuwa_d0_mm_fault.c`:
+
+```c
+#include "wuwa_d0_mm_fault.h"
+
+#include <linux/stddef.h>
+#include <linux/kprobes.h>
+#include <linux/vmalloc.h>
+
+#include "wuwa_common.h"
+#include "wuwa_utils.h"
+
+struct fault_probe_data {
+    unsigned long far;
+    unsigned long esr;
+    struct pt_regs *regs;
+
+    struct pt_regs old_regs;
+    unsigned long thread_flags;
+};
+
+// void do_mem_abort(unsigned long far, unsigned long esr, struct pt_regs *regs)
+static int do_mem_abort_entry(struct kretprobe_instance *ri,
+                              struct pt_regs *regs)
+{
+#if CONFIG_REDIRECT_VIA_ABORT == 1
+    struct fault_probe_data *d = (struct fault_probe_data *)ri->data;
+    unsigned long far;
+    unsigned long esr;
+    struct pt_regs *user_regs;
+
+    far = regs->regs[0];
+    esr = regs->regs[1];
+    user_regs = (typeof(user_regs))regs->regs[2];
+
+    d->far = far;
+    d->esr = esr;
+    d->regs = user_regs;
+
+    memcpy(&d->old_regs, user_regs, sizeof(*user_regs));
+
+    d->thread_flags = current->thread_info.flags;
+#endif
+    return 0;
+}
+
+static int do_mem_abort_ret(struct kretprobe_instance *ri,
+                            struct pt_regs *regs)
+{
+#if CONFIG_REDIRECT_VIA_ABORT == 1
+    struct fault_probe_data *d = (struct fault_probe_data *)ri->data;
+    unsigned long far = d->far;
+    unsigned long esr = d->esr;
+    struct pt_regs *user_regs = d->regs;
+
+    if (far == LUCKY_LUO) {
+        ovo_info("Lucky memory access at 0x%lx, esr=0x%lx\n", far, esr);
+        ovo_info("pc=0x%llx, sp=0x%llx, fp=0x%llx\n",
+                 user_regs->pc, user_regs->sp, user_regs->regs[29]);
+
+        memcpy(user_regs, &d->old_regs, sizeof(*user_regs));
+
+        u64 magic[2];
+        u64 __user *sp = (typeof(sp))user_regs->sp;
+        if (copy_from_user(&magic, sp, sizeof(magic)) == 0) {
+            ovo_info("Magic values: 0x%llx, 0x%llx\n", magic[0], magic[1]);
+        }
+
+        if (magic[0] != LUCKY_LUO) {
+            return 0; // Not a valid magic value, do nothing
+        }
+
+        if (system_supports_bti()) {
+            user_regs->pstate &= ~PSR_BTYPE_MASK;
+            user_regs->pstate |= PSR_BTYPE_C;
+        }
+
+        /* TCO (Tag Check Override) always cleared for signal handlers */
+        user_regs->pstate &= ~PSR_TCO_BIT;
+
+        user_regs->pc = magic[1];
+
+        struct task_struct *tsk = current;
+
+        spin_lock_irq(&tsk->sighand->siglock);
+
+        sigdelset(&tsk->pending.signal, SIGSEGV);
+        sigdelset(&tsk->signal->shared_pending.signal, SIGSEGV);
+
+        static void (*recalc_sigpending)(void) = NULL;
+        if (recalc_sigpending == NULL) {
+            recalc_sigpending = (void (*)(void))kallsyms_lookup_name("recalc_sigpending");
+        }
+
+        recalc_sigpending();
+
+        spin_unlock_irq(&tsk->sighand->siglock);
+    }
+#endif
+    return 0;
+}
+
+// void arm64_force_sig_fault(int signo, int code, unsigned long far,const char *str)
+static int arm64_force_sig_fault_pre(struct kprobe *p, struct pt_regs *regs) {
+    return 0;
+}
+
+static void arm64_force_sig_fault_post(struct kprobe *p, struct pt_regs *regs, unsigned long flags) {
+}
+
+static struct kretprobe krp_do_mem_abort = {
+    .kp.symbol_name = "do_mem_abort",
+    .handler       = do_mem_abort_ret,
+    .entry_handler = do_mem_abort_entry,
+    .data_size     = sizeof(struct fault_probe_data),
+    .maxactive     = 20,
+};
+
+static struct kprobe kp_arm64_force_sig_fault = {
+    .symbol_name = "arm64_force_sig_fault",
+    .pre_handler = arm64_force_sig_fault_pre,
+    .post_handler = arm64_force_sig_fault_post,
+};
+
+int init_d0_mm_fault(void) {
+    int ret, maxactive;
+
+    maxactive = 2 * num_possible_cpus();
+    if (maxactive < 20) {
+        maxactive = 20;
+    }
+
+    krp_do_mem_abort.maxactive = maxactive;
+
+    ret = register_kretprobe(&krp_do_mem_abort);
+    if (ret < 0) {
+        wuwa_err("register_kretprobe failed, returned %d\n", ret);
+        goto out;
+    }
+
+    ret = register_kprobe(&kp_arm64_force_sig_fault);
+    if (ret < 0) {
+        wuwa_err("register_kprobe for arm64_force_sig_fault failed, returned %d\n", ret);
+        unregister_kretprobe(&krp_do_mem_abort);
+        goto out;
+    }
+
+    return 0;
+
+    out:
+    return ret;
+}
+
+void cleanup_d0_mm_fault(void) {
+    unregister_kretprobe(&krp_do_mem_abort);
+    unregister_kprobe(&kp_arm64_force_sig_fault);
+}
+```
+
+`wuwa_d0_mm_fault.h`:
+
+```h
+#ifndef WUWA_D0_MM_FAULT_H
+#define WUWA_D0_MM_FAULT_H
+
+int init_d0_mm_fault(void);
+void cleanup_d0_mm_fault(void);
+
+#endif //WUWA_D0_MM_FAULT_H
+
+```
+
+`wuwa_ioctl.c`:
+
+```c
+#include "wuwa_ioctl.h"
+#include "wuwa_utils.h"
+#include "wuwa_sock.h"
+#include "wuwa_page_walk.h"
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/dma-buf.h>
+#include <linux/mm.h>
+#include <linux/scatterlist.h>
+#include <linux/slab.h>
+#include <asm/pgtable.h>
+#include <asm/pgtable-prot.h>
+#include <asm/pgtable-types.h>
+
+#include "wuwa_safe_signal.h"
+#include "wuwa_cproc.h"
+
+int do_vaddr_translate(struct socket *sock, void *arg) {
+    struct wuwa_addr_translate_cmd cmd;
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        put_task_struct(task);
+        return -ESRCH;
+    }
+
+    cmd.phy_addr = vaddr_to_phy_addr(mm, cmd.va);
+    mmput(mm);
+
+    if (cmd.phy_addr == 0) {
+        return -EFAULT;
+    }
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        return -EFAULT;
+    }
+    return 0;
+}
+
+int do_debug_info(struct socket *sock, void *arg) {
+    struct wuwa_debug_info_cmd debug_info_cmd;
+
+    debug_info_cmd.ttbr0_el1 = read_sysreg_s(SYS_TTBR0_EL1);
+    debug_info_cmd.task_struct = (u64)current;
+    debug_info_cmd.mm_struct = (u64)current->mm;
+    debug_info_cmd.pgd_addr = (u64)current->mm->pgd;
+    debug_info_cmd.pgd_phys_addr = virt_to_phys(current->mm->pgd);
+    debug_info_cmd.mm_asid = ASID(current->mm);
+    debug_info_cmd.mm_right = ((uint64_t)(ASID(current->mm)) << 48 | virt_to_phys(current->mm->pgd) | (uint64_t)1) == debug_info_cmd.ttbr0_el1;
+
+    if (copy_to_user(arg, &debug_info_cmd, sizeof(debug_info_cmd))) {
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+int do_at_s1e0r(struct socket *sock, void *arg) {
+    struct wuwa_at_s1e0r_cmd cmd;
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        put_task_struct(task);
+        return -ESRCH;
+    }
+
+    u64 original_ttbr0 = read_sysreg_s(SYS_TTBR0_EL1);
+    u64 new_ttbr0 = (uint64_t)(ASID(mm)) << 48 | virt_to_phys(mm->pgd) | (uint64_t)1;
+    dsb(ish);
+    asm volatile("msr ttbr0_el1, %0" :: "r" (new_ttbr0));
+    dsb(ish);
+    isb();
+
+    asm volatile("at s1e0r, %0" :: "r" (cmd.va));
+    isb();
+    uintptr_t pa = read_sysreg_s(SYS_PAR_EL1);
+    cmd.phy_addr = pa;
+    mmput(mm);
+
+    dsb(ish);
+    asm volatile("msr ttbr0_el1, %0" :: "r" (original_ttbr0));
+    dsb(ish);
+    isb();
+
+    if (cmd.phy_addr == 0) {
+        return -EFAULT;
+    }
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        return -EFAULT;
+    }
+    return 0;
+}
+
+int do_get_page_info(struct socket *sock, void *arg) {
+    struct wuwa_page_info_cmd cmd;
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        put_task_struct(task);
+        return -ESRCH;
+    }
+
+    struct page* page_struct = vaddr_to_page(mm, cmd.va);
+    if (!page_struct) {
+        wuwa_warn("failed to get page for va: %lx\n", cmd.va);
+        mmput(mm);
+        return -EFAULT;
+    }
+
+    phys_addr_t phy_addr = page_to_phys(page_struct);
+    cmd.page.phy_addr = phy_addr;
+    cmd.page.flags = page_struct->flags;
+    cmd.page._mapcount = page_struct->_mapcount;
+    cmd.page._refcount = page_struct->_refcount;
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+static struct sg_table *wuwa_dmabuf_map_dma_buf(struct dma_buf_attachment *attachment, enum dma_data_direction dir) {
+    struct wuwa_dmabuf_private *priv = attachment->dmabuf->priv;
+    return priv->sgt;
+}
+
+static void wuwa_dmabuf_unmap_dma_buf(struct dma_buf_attachment *attachment, struct sg_table *sgt, enum dma_data_direction dir) {
+}
+
+static void wuwa_dmabuf_release(struct dma_buf *dmabuf) {
+    struct wuwa_dmabuf_private *priv = dmabuf->priv;
+    if (!priv) {
+        return;
+    }
+
+    wuwa_info("releasing dmabuf private data\n");
+    if (priv->sgt) {
+        struct scatterlist *sg;
+        int i;
+
+        for_each_sg(priv->sgt->sgl, sg, priv->sgt->nents, i) {
+            struct page *page = sg_page(sg);
+            if (page) {
+                put_page(page);
+            }
+        }
+
+        sg_free_table(priv->sgt);
+        kfree(priv->sgt);
+    }
+
+    kfree(priv);
+}
+
+static int wuwa_dmabuf_begin_cpu_access(struct dma_buf *dmabuf, enum dma_data_direction dir) {
+    return 0;
+}
+
+static int wuwa_dmabuf_end_cpu_access(struct dma_buf *dmabuf, enum dma_data_direction dir) {
+    return 0;
+}
+
+static int wuwa_dmabuf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma) {
+    struct wuwa_dmabuf_private *priv = dmabuf->priv;
+    struct page *page;
+    unsigned long pfn;
+
+    // make sure there is only one page
+    if (priv->sgt->nents != 1) {
+        wuwa_err("invalid number of sg entries: %d\n", priv->sgt->nents);
+        return -EINVAL;
+    }
+
+    page = sg_page(priv->sgt->sgl);
+    if (!page) {
+        wuwa_err("failed to get page from sg_table\n");
+        return -EINVAL;
+    }
+
+    pfn = page_to_pfn(page);
+    vm_flags_set(vma, vma->vm_flags | VM_DONTEXPAND | VM_DONTDUMP);
+    // vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+    // Turning this on will cause the cache and main memory to be out of sync
+
+    wuwa_debug("remapping PFN %lx to vma start %lx\n", pfn, vma->vm_start);
+    return remap_pfn_range(vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot);
+}
+
+static const struct dma_buf_ops wuwa_dmabuf_ops = {
+    .map_dma_buf        = wuwa_dmabuf_map_dma_buf,
+    .unmap_dma_buf      = wuwa_dmabuf_unmap_dma_buf,
+    .release            = wuwa_dmabuf_release,
+    .begin_cpu_access   = wuwa_dmabuf_begin_cpu_access,
+    .end_cpu_access     = wuwa_dmabuf_end_cpu_access,
+    .mmap               = wuwa_dmabuf_mmap,
+};
+
+int do_create_dma_buf(struct socket *sock, void *arg) {
+    struct wuwa_dma_buf_create_cmd cmd;
+    struct sg_table *sgt;
+    struct wuwa_dmabuf_private *priv;
+    DEFINE_DMA_BUF_EXPORT_INFO(exp_info);
+
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        put_task_struct(task);
+        return -ESRCH;
+    }
+
+    struct page* page_struct = vaddr_to_page(mm, cmd.va);
+    mmput(mm);
+    if (!page_struct) {
+        return -EFAULT;
+    }
+
+    get_page(page_struct);
+
+    sgt = kmalloc(sizeof(*sgt), GFP_KERNEL);
+    if (!sgt) {
+        return -ENOMEM;
+    }
+
+    if (sg_alloc_table_from_pages(sgt, &page_struct, 1, 0, cmd.size, GFP_KERNEL)) {
+        kfree(sgt);
+        return -ENOMEM;
+    }
+
+    priv = kmalloc(sizeof(*priv), GFP_KERNEL);
+    if (!priv) {
+        sg_free_table(sgt);
+        kfree(sgt);
+        return -ENOMEM;
+    }
+    priv->sgt = sgt;
+
+    exp_info.ops = &wuwa_dmabuf_ops;
+    exp_info.size = cmd.size;
+    exp_info.flags = O_CLOEXEC | O_RDWR;
+    exp_info.priv = priv;
+    exp_info.owner = THIS_MODULE;
+
+    struct dma_buf *dmabuf = dma_buf_export(&exp_info);
+    if (IS_ERR(dmabuf)) {
+        sg_free_table(sgt);
+        kfree(sgt);
+        kfree(priv);
+        return PTR_ERR(dmabuf);
+    }
+
+    cmd.fd = dma_buf_fd(dmabuf, O_CLOEXEC | O_RDWR);
+    if (cmd.fd < 0) {
+        dma_buf_put(dmabuf);
+        return cmd.fd;
+    }
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        dma_buf_put(dmabuf);
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+int do_pte_mapping(struct socket *sock, void *arg) {
+    struct wuwa_sock* ws = (struct wuwa_sock *)sock->sk;
+    struct wuwa_pte_mapping_cmd cmd;
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    if (cmd.start_addr < 0 || cmd.start_addr >= TASK_SIZE_64) {
+        wuwa_warn("invalid start address: 0x%lx\n", cmd.start_addr);
+        return -EINVAL;
+    }
+
+    if (cmd.num_pages <= 0 || cmd.num_pages > (TASK_SIZE_64 - cmd.start_addr) / PAGE_SIZE) {
+        wuwa_warn("invalid number of pages: %zu\n", cmd.num_pages);
+        return -EINVAL;
+    }
+
+    pgd_t *pgd;
+    p4d_t *p4d;
+    pud_t *pud;
+    pmd_t *pmd;
+    pte_t *pte;
+    struct page* page = NULL;
+    int ret = 0;
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    static int (*my__pmd_alloc)(struct mm_struct *mm, pud_t *pud, unsigned long address) = NULL;
+    my__pmd_alloc = (int (*)(struct mm_struct *, pud_t *, unsigned long))kallsyms_lookup_name("__pmd_alloc");
+    static int (*my__pte_alloc)(struct mm_struct *mm, pmd_t *pmd) = NULL;
+    my__pte_alloc = (int (*)(struct mm_struct *, pmd_t *))kallsyms_lookup_name("__pte_alloc");
+
+    if (my__pmd_alloc == NULL || my__pte_alloc == NULL) {
+        wuwa_err("failed to find __pmd_alloc or __pte_alloc symbols\n");
+        ret = -ENOENT;
+        goto out_mm;
+    }
+
+#define my_pte_alloc(mm, pmd) (unlikely(pmd_none(*(pmd))) && my__pte_alloc(mm, pmd))
+#define my_pte_alloc_map(mm, pmd, address) (my_pte_alloc(mm, pmd) ? NULL : pte_offset_map(pmd, address))
+
+    unsigned long addr = cmd.start_addr;
+    size_t i;
+    struct page **page_arr = kmalloc_array(cmd.num_pages, sizeof(struct page *), GFP_KERNEL);
+    if (!page_arr) {
+        wuwa_err("failed to allocate page array\n");
+        ret = -ENOMEM;
+        goto out_mm;
+    }
+
+    for (i = 0; i < cmd.num_pages; i++) {
+        pgd = pgd_offset(mm, addr);
+        if (pgd_none(*pgd) || pgd_bad(*pgd)) {
+            ret = -EINVAL;
+            wuwa_err("bad pgd for 0x%lx\n", addr);
+            goto rollback;
+        }
+
+        p4d = p4d_alloc(mm, pgd, addr);
+        if (!p4d) { ret = -ENOMEM; goto rollback; }
+
+        pud = pud_alloc(mm, p4d, addr);
+        if (!pud) { ret = -ENOMEM; goto rollback; }
+
+        if (unlikely(pud_none(*pud))) {
+            if (my__pmd_alloc(mm, pud, addr)) {
+                wuwa_err("failed to allocate pmd\n");
+                ret = -ENOMEM;
+                goto rollback;
+            }
+        }
+
+        pmd = pmd_offset(pud, addr);
+        if (!pmd) {
+            wuwa_err("failed to get pmd\n");
+            ret = -ENOMEM;
+            goto rollback;
+        }
+
+        pte = my_pte_alloc_map(mm, pmd, addr);
+        if (!pte) {
+            ret = -ENOMEM;
+            wuwa_err("failed to allocate pte for address 0x%lx\n", addr);
+            goto rollback;
+        }
+        if (!pte_none(*pte)) {
+            ret = -EEXIST;
+            wuwa_err("pte already exists for address 0x%lx\n", addr);
+            pte_unmap(pte);
+            goto rollback;
+        }
+
+        page = alloc_page(GFP_USER | __GFP_ZERO);
+        if (!page) {
+            ret = -ENOMEM;
+            wuwa_err("failed to allocate page %zu\n", i);
+            pte_unmap(pte);
+            goto rollback;
+        }
+        page_arr[i] = page;
+
+        pte_t new_pte = mk_pte(page, PAGE_SHARED_EXEC);
+        new_pte = pte_mkwrite(pte_mkdirty(pte_mkyoung(new_pte)));
+        set_pte(pte, new_pte);
+        pte_unmap(pte);
+
+        wuwa_info("mapped page %zu at address 0x%lx\n", i, addr);
+        addr += PAGE_SIZE;
+    }
+
+    flush_tlb_all();
+
+    mmput(mm);
+
+    for (int i = 0; i < cmd.num_pages; ++i) {
+        struct page* p = page_arr[i];
+
+        if (!p) {
+            wuwa_err("page %d is NULL\n", i);
+            continue;
+        }
+
+        if (!ws->used_pages) {
+            wuwa_err("used_pages array not initialized\n");
+            break;
+        }
+
+        arraylist_add(ws->used_pages, p);
+    }
+    kfree(page_arr);
+
+    if (cmd.hide) {
+        wuwa_add_unsafe_region(ws->session, task->cred->uid.val, cmd.start_addr, cmd.num_pages);
+    }
+
+    wuwa_info("successfully mapped page at address 0x%lx for pid %d\n", cmd.start_addr, cmd.pid);
+    return 0;
+
+    rollback:
+    while (i--)
+        __free_page(page_arr[i]);
+out_mm:
+    mmput(mm);
+    return ret;
+}
+
+int do_page_table_walk(struct socket *sock, void *arg) {
+    struct wuwa_page_table_walk_cmd cmd;
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+
+    struct pid* pid_struct = find_get_pid(cmd.pid);
+    if (!pid_struct) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+
+    struct mm_struct *mm = get_task_mm(task);
+    put_task_struct(task);
+    if (!mm) {
+        wuwa_warn("failed to get mm: %d\n", cmd.pid);
+        put_task_struct(task);
+        return -ESRCH;
+    }
+
+    traverse_page_tables(mm);
+
+    mmput(mm);
+
+    return 0;
+}
+
+// static void (*wake_up_new_task)(struct task_struct *tsk) = NULL;
+// if (!wake_up_new_task) {
+//     wake_up_new_task = (void (*)(struct task_struct *))kallsyms_lookup_name("wake_up_new_task");
+// }
+//
+// wake_up_new_task(p);
+// static __latent_entropy struct task_struct *(*copy_process)(
+//             struct pid *pid,
+//             int trace,
+//             int node,
+//             struct kernel_clone_args *args) = NULL;
+// if (copy_process == NULL) {
+//     copy_process = (typeof(copy_process))kallsyms_lookup_name("copy_process");
+// }
+//
+// if (!copy_process) {
+//     ovo_warn("copy_process symbol not found\n");
+//     return -ENOENT;
+// }
+// __latent_entropy struct task_struct *copy_process(
+//                     struct pid *pid,
+//                     int trace,
+//                     int node,
+//                     struct kernel_clone_args *args)
+int do_copy_process(struct socket *sock, void *arg) {
+    int ret = 0;
+    struct wuwa_copy_process_cmd cmd;
+    struct pid *pid;
+    struct task_struct *task, *p;
+    
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        return -EFAULT;
+    }
+    
+    if (!cmd.fn || !cmd.child_stack) {
+        wuwa_err("invalid function pointer or child stack\n");
+        return -EINVAL;
+    }
+    
+    
+    pid = find_get_pid(cmd.pid);
+    if (!pid) {
+        wuwa_warn("failed to find pid_struct: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+    
+    task = get_pid_task(pid, PIDTYPE_PID);
+    put_pid(pid);
+    if (!task) {
+        wuwa_warn("failed to get task: %d\n", cmd.pid);
+        return -ESRCH;
+    }
+    
+    ret = create_remote_thread(task, &p, cmd.child_tid, NULL, cmd.flags);
+    put_task_struct(task);
+    if (ret) {
+        wuwa_err("failed to create remote thread: %d\n", ret);
+        goto prepare_fault;
+    }
+    
+    return 0;
+    
+    prepare_fault:
+    return ret;
+}
+
+
+```
+
+`wuwa_ioctl.h`:
+
+```h
+#ifndef WUWA_IOCTL_H
+#define WUWA_IOCTL_H
+
+#include "wuwa_common.h"
+
+struct wuwa_addr_translate_cmd {
+    phys_addr_t phy_addr; /* Output: Physical address after translation */
+    pid_t pid; /* Input: Process ID owning the virtual address */
+    uintptr_t va; /* Input: Virtual address to translate */
+};
+
+struct wuwa_debug_info_cmd {
+    u64 ttbr0_el1; /* Translation Table Base Register 0 */
+    u64 task_struct;
+    u64 mm_struct; /* Memory Management Structure */
+    u64 pgd_addr; /* Page Global Directory address */
+    u64 pgd_phys_addr;
+    u64 mm_asid; /* Address Space ID */
+    u32 mm_right;
+};
+
+struct wuwa_at_s1e0r_cmd {
+    phys_addr_t phy_addr;
+    pid_t pid;
+    uintptr_t va;
+};
+
+struct kernel_page {
+	unsigned long flags;		/* Atomic flags, some possibly */
+    union {		/* This union is 4 bytes in size. */
+        /*
+         * If the page can be mapped to userspace, encodes the number
+         * of times this page is referenced by a page table.
+         */
+        atomic_t _mapcount;
+
+        /*
+         * If the page is neither PageSlab nor mappable to userspace,
+         * the value stored here may help determine what this page
+         * is used for.  See page-flags.h for a list of page types
+         * which are currently stored here.
+         */
+        unsigned int page_type;
+    };
+
+    /* Usage count. *DO NOT USE DIRECTLY*. See page_ref.h */
+    atomic_t _refcount;
+
+    phys_addr_t phy_addr;
+};
+
+struct wuwa_page_info_cmd {
+    pid_t pid;
+    uintptr_t va;
+
+    struct kernel_page page; /* Output: Page information */
+};
+
+struct wuwa_dma_buf_create_cmd {
+    pid_t pid;
+    uintptr_t va;
+    size_t size;
+    int fd;
+};
+
+struct wuwa_pte_mapping_cmd {
+    pid_t pid;
+    uintptr_t start_addr;
+    size_t num_pages;
+    int hide; /* Hide the page if true */
+};
+
+struct wuwa_page_table_walk_cmd {
+    pid_t pid;
+};
+
+struct wuwa_copy_process_cmd {
+    pid_t pid;
+    int (* __user fn)(void*);
+    void* __user child_stack;
+    size_t child_stack_size;
+    u64 flags;
+    void* __user arg;
+
+    int __user* child_tid;
+};
+
+/* IOCTL command for virtual to physical address translation */
+#define WUWA_IOCTL_ADDR_TRANSLATE       _IOWR('W', 1, struct wuwa_addr_translate_cmd)
+/* IOCTL command for debugging information */
+#define WUWA_IOCTL_DEBUG_INFO   _IOR('W', 2, struct wuwa_debug_info_cmd)
+/* * IOCTL command for va to phys translation */
+#define WUWA_IOCTL_AT_S1E0R        _IOWR('W', 3, struct wuwa_at_s1e0r_cmd)
+/* IOCTL command for getting page information at a specific virtual address */
+#define WUWA_IOCTL_PAGE_INFO  _IOWR('W', 4, struct wuwa_page_info_cmd)
+/* IOCTL command for creating a DMA buffer at a specific virtual address */
+#define WUWA_IOCTL_DMA_BUF_CREATE _IOWR('W', 5, struct wuwa_dma_buf_create_cmd)
+/* IOCTL command for getting PTE mapping information */
+#define WUWA_IOCTL_PTE_MAPPING _IOWR('W', 6, struct wuwa_pte_mapping_cmd)
+/* IOCTL command for page table walk */
+#define WUWA_IOCTL_PAGE_TABLE_WALK _IOWR('W', 7, struct wuwa_page_table_walk_cmd)
+#define WUWA_IOCTL_COPY_PROCESS _IOWR('W', 8, struct wuwa_copy_process_cmd)
+
+int do_vaddr_translate(struct socket *sock, void __user * arg);
+int do_debug_info(struct socket *sock, void __user * arg);
+int do_at_s1e0r(struct socket *sock, void __user * arg);
+int do_get_page_info(struct socket *sock, void __user * arg);
+int do_create_dma_buf(struct socket *sock, void __user * arg);
+int do_pte_mapping(struct socket *sock, void __user * arg);
+int do_page_table_walk(struct socket *sock, void __user * arg);
+int do_copy_process(struct socket *sock, void __user * arg);
+
+typedef int (*ioctl_handler_t)(struct socket *sock, void __user * arg);
+
+static const struct ioctl_cmd_map {
+    unsigned int cmd;
+    ioctl_handler_t handler;
+} ioctl_handlers[] = {
+    { .cmd = WUWA_IOCTL_ADDR_TRANSLATE, .handler = do_vaddr_translate },
+    { .cmd = WUWA_IOCTL_DEBUG_INFO, .handler = do_debug_info },
+    { .cmd = WUWA_IOCTL_AT_S1E0R, .handler = do_at_s1e0r }, /* Reusing the same handler for AT VA */
+    { .cmd = WUWA_IOCTL_PAGE_INFO, .handler = do_get_page_info },
+    { .cmd = WUWA_IOCTL_DMA_BUF_CREATE, .handler = do_create_dma_buf },
+    { .cmd = WUWA_IOCTL_PTE_MAPPING, .handler = do_pte_mapping },
+    { .cmd = WUWA_IOCTL_PAGE_TABLE_WALK, .handler = do_page_table_walk },
+    { .cmd = WUWA_IOCTL_COPY_PROCESS, .handler = do_copy_process },
+    { .cmd = 0, .handler = NULL } /* Sentinel to mark end of array */
+};
+
+#endif //WUWA_IOCTL_H
+
+```
+
+`wuwa_kallsyms.h`:
+
+```h
+#ifndef WUWA_KALLSYMS_H
+#define WUWA_KALLSYMS_H
+
+#include "wuwa_utils.h"
+#include "wuwa_common.h"
+#include <linux/errno.h>
+#include <linux/kernel.h>
+#include <linux/sched.h>
+
+#define DECLARE_KSYM_RAW(name)  \
+static void* _wuwa_sym_##name __section(".data");    \
+static void* __maybe_unused get_##name(void) {              \
+    return _wuwa_sym_##name;         \
+} \
+static int __maybe_unused ksym_find_##name(void) { \
+    _wuwa_sym_##name = (void*)kallsyms_lookup_name(#name); \
+    if (!_wuwa_sym_##name) { \
+        ovo_err("Failed to find symbol: %s\n", #name); \
+        return -ENOENT; \
+    } \
+    return 0; \
+}
+
+#define DECLARE_KSYM_FUN(name, ret, args)  \
+static ret (*wuwa_##name)args = NULL;    \
+static int __maybe_unused ksym_find_##name(void) { \
+    if (wuwa_##name) { \
+        return 0; \
+    } \
+    wuwa_##name = (typeof(wuwa_##name))kallsyms_lookup_name(#name); \
+    if (!wuwa_##name) { \
+        ovo_err("Failed to find symbol: %s\n", #name); \
+        return -ENOENT; \
+    } \
+    return 0; \
+}
+
+#endif //WUWA_KALLSYMS_H
+
+```
+
+`wuwa_page_walk.c`:
+
+```c
+#include "wuwa_page_walk.h"
+#include "wuwa_common.h"
+#include <linux/sched/signal.h>
+#include <linux/sched/mm.h>
+#include <linux/mm.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/uaccess.h>
+#include <asm/pgtable.h>
+#include <linux/hugetlb.h>
+
+#include "wuwa_utils.h"
+
+// Function to merge and print contiguous memory regions
+static void print_merged_region(unsigned long *start, unsigned long *end) {
+    if (*start != -1UL) {
+        // [start, end) is the format used by /proc/pid/maps
+        wuwa_info("Found region: 0x%lx - 0x%lx\n", *start, *end + 1);
+    }
+    *start = -1UL;
+    *end = -1UL;
+}
+
+// Walk the Page Table Entries (PTEs)
+static void walk_pte_level(pmd_t *pmd, unsigned long addr, unsigned long end,
+                          unsigned long *region_start, unsigned long *region_end) {
+    pte_t *ptep, pte;
+    unsigned long current_addr;
+    unsigned long pte_end;
+
+    pte_end = (addr + PMD_SIZE) & PMD_MASK;
+    if (end < pte_end)
+        pte_end = end;
+
+    ptep = pte_offset_map(pmd, addr);
+    if (!ptep) {
+        return;
+    }
+
+    for (current_addr = addr; current_addr < pte_end; current_addr += PAGE_SIZE) {
+        pte = *ptep;
+        if (pte_present(pte)) {
+            // Found a mapped page
+            if (*region_start != -1UL && current_addr != *region_end + PAGE_SIZE) {
+                print_merged_region(region_start, region_end);
+            }
+
+            if (*region_start == -1UL) {
+                *region_start = current_addr;
+            }
+            *region_end = current_addr;
+        } else {
+            // Gap detected, print the last region if it exists
+            print_merged_region(region_start, region_end);
+        }
+        ptep++;
+    }
+
+    pte_unmap(ptep - ((pte_end - addr) >> PAGE_SHIFT));
+}
+
+// Walk the Page Middle Directories (PMDs)
+static void walk_pmd_level(pud_t *pud, unsigned long addr, unsigned long end,
+                          unsigned long *region_start, unsigned long *region_end) {
+    pmd_t *pmd;
+    unsigned long next;
+
+    pmd = pmd_offset(pud, addr);
+
+    do {
+        next = pmd_addr_end(addr, end);
+        if (pmd_present(*pmd) && !pmd_none(*pmd)) {
+            if (pmd_huge(*pmd)) {
+                if (*region_start != -1UL && addr != *region_end + PAGE_SIZE) {
+                    print_merged_region(region_start, region_end);
+                }
+                if (*region_start == -1UL) {
+                    *region_start = addr;
+                }
+                *region_end = next - PAGE_SIZE;
+            } else {
+                walk_pte_level(pmd, addr, next, region_start, region_end);
+            }
+        } else {
+            print_merged_region(region_start, region_end);
+        }
+        addr = next;
+        pmd++;
+    } while (addr < end);
+}
+
+// Walk the Page Upper Directories (PUDs)
+static void walk_pud_level(p4d_t *p4d, unsigned long addr, unsigned long end,
+                          unsigned long *region_start, unsigned long *region_end) {
+    pud_t *pud;
+    unsigned long next;
+
+    pud = pud_offset(p4d, addr);
+
+    do {
+        next = pud_addr_end(addr, end);
+        if (pud_present(*pud) && !pud_none(*pud)) {
+            if (pud_huge(*pud)) {
+                if (*region_start != -1UL && addr != *region_end + PAGE_SIZE) {
+                    print_merged_region(region_start, region_end);
+                }
+                if (*region_start == -1UL) {
+                    *region_start = addr;
+                }
+                *region_end = next - PAGE_SIZE;
+            } else {
+                walk_pmd_level(pud, addr, next, region_start, region_end);
+            }
+        } else {
+            print_merged_region(region_start, region_end);
+        }
+        addr = next;
+        pud++;
+    } while (addr < end);
+}
+
+// Walk the Page 4th-level Directories (P4Ds)
+static void walk_p4d_level(pgd_t *pgd, unsigned long addr, unsigned long end,
+                          unsigned long *region_start, unsigned long *region_end) {
+    p4d_t *p4d;
+    unsigned long next;
+
+    p4d = p4d_offset(pgd, addr);
+
+    do {
+        next = p4d_addr_end(addr, end);
+        if (p4d_present(*p4d) && !p4d_none(*p4d)) {
+            walk_pud_level(p4d, addr, next, region_start, region_end);
+        } else {
+            print_merged_region(region_start, region_end);
+        }
+        addr = next;
+        p4d++;
+    } while (addr < end);
+}
+
+void traverse_page_tables(struct mm_struct *mm) {
+    unsigned long addr = 0;
+    unsigned long region_start = -1UL, region_end = -1UL;
+    pgd_t *pgd;
+    unsigned long next;
+
+    if (!mm) {
+        return;
+    }
+
+    MM_READ_LOCK(mm);
+
+    pgd = mm->pgd;
+
+    do {
+        next = pgd_addr_end(addr, TASK_SIZE);
+        if (pgd_present(*pgd) && !pgd_none(*pgd)) {
+            walk_p4d_level(pgd, addr, next, &region_start, &region_end);
+        } else {
+            print_merged_region(&region_start, &region_end);
+        }
+        addr = next;
+        pgd++;
+    } while (addr < TASK_SIZE && addr != 0);
+
+    print_merged_region(&region_start, &region_end);
+
+    MM_READ_UNLOCK(mm);
+}
+```
+
+`wuwa_page_walk.h`:
+
+```h
+#ifndef WUWA_PAGE_WALK_H
+#define WUWA_PAGE_WALK_H
+
+#include <linux/mm_types.h>
+
+void traverse_page_tables(struct mm_struct *mm);
+
+#endif //WUWA_PAGE_WALK_H
+
+```
+
+`wuwa_protocol.c`:
+
+```c
+#include "wuwa_protocol.h"
+#include "wuwa_common.h"
+
+#include <wuwa_sock.h>
+#include <net/sock.h>
+
+static int free_family = AF_DECnet;
+
+struct proto wuwa_proto = {
+    .name = "NFC_LLCP",
+    .owner = THIS_MODULE,
+    .obj_size = sizeof(struct wuwa_sock),
+};
+
+static int register_free_family(void) {
+    int err = 0;
+
+    for(int family = free_family; family < NPROTO; family++) {
+        wuwa_family_ops.family = family;
+        err = sock_register(&wuwa_family_ops);
+        if (err)
+            continue;
+        free_family = family;
+        wuwa_proto_ops.family = free_family;
+        wuwa_info("find free proto_family: %d\n", wuwa_proto_ops.family);
+        return 0;
+    }
+
+    wuwa_err("can't find any free proto_family!\n");
+    return err;
+}
+
+int wuwa_proto_init(void) {
+    int err = proto_register(&wuwa_proto, 1);
+    if (err)
+        goto out;
+
+    err = register_free_family();
+    if (err)
+        goto out_proto;
+
+    return 0;
+
+    sock_unregister(free_family);
+    out_proto:
+    proto_unregister(&wuwa_proto);
+    out:
+    return err;
+}
+
+void wuwa_proto_cleanup(void) {
+    sock_unregister(free_family);
+    proto_unregister(&wuwa_proto);
+}
+
+static int wuwa_sock_create(struct net *net, struct socket *sock, int protocol,
+                      int kern)
+{
+    if (!capable(CAP_NET_BIND_SERVICE)) {
+        return -EACCES;
+    }
+
+    uid_t caller_uid = *(uid_t *) &current_cred()->uid;
+    if (caller_uid != 0) {
+        wuwa_warn("only root can create wuwa socket!\n");
+        return -EAFNOSUPPORT;
+    }
+
+    if (sock->type != SOCK_RAW) {
+        wuwa_warn("socket must be SOCK_RAW!\n");
+        return -ENOKEY;
+    }
+
+    sock->state = SS_UNCONNECTED;
+    struct sock *sk = sk_alloc(net, PF_INET, GFP_KERNEL, &wuwa_proto, kern);
+    if (!sk) {
+        wuwa_warn("sk_alloc failed!\n");
+        return -ENOBUFS;
+    }
+
+    wuwa_family_ops.family = free_family;
+    sock->ops = &wuwa_proto_ops;
+    sock_init_data(sock, sk);
+
+    struct wuwa_sock *ws = (struct wuwa_sock *) sk;
+    ws->version = 1;
+    ws->session = current->pid;
+    ws->used_pages = arraylist_create(10);
+
+    return 0;
+}
+
+struct net_proto_family wuwa_family_ops = {
+    .family = PF_DECnet,
+    .create = wuwa_sock_create,
+    .owner	= THIS_MODULE,
+};
+
+```
+
+`wuwa_protocol.h`:
+
+```h
+#ifndef WUWA_PROTOCOL_H
+#define WUWA_PROTOCOL_H
+
+#include "wuwa_common.h"
+
+int wuwa_proto_init(void);
+void wuwa_proto_cleanup(void);
+
+extern struct proto wuwa_proto;
+extern struct net_proto_family wuwa_family_ops;
+
+#endif /* WUWA_PROTOCOL_H */
+```
+
+`wuwa_safe_signal.c`:
+
+```c
+#include "wuwa_safe_signal.h"
+#include "wuwa_common.h"
+#include <linux/stddef.h>
+#include <linux/signal_types.h>
+#include <linux/ptrace.h>
+#include <linux/kprobes.h>
+#include <linux/vmalloc.h>
+#include <asm/ucontext.h>
+#include "wuwa_utils.h"
+
+struct unsafe_region_area {
+    u64 addr;
+    u32 nums_page;
+    uid_t uid;
+    pid_t session_pid;
+} __aligned(sizeof(u64));
+
+static struct karray_list* unsafe_region_areas = NULL;
+static DEFINE_RWLOCK(unsafe_region_areas_lock);
+
+static bool is_safe_prof_signal(struct ksignal *ksig, struct pt_regs *regs) {
+    u64 lr = regs->regs[30];
+    u64 pc = regs->pc;
+
+    if (!unsafe_region_areas->data) {
+        wuwa_err("unsafe region areas list is empty\n");
+        return true;
+    }
+
+    read_lock(&unsafe_region_areas_lock);
+
+    for (int i = 0; i < unsafe_region_areas->size; ++i) {
+        struct unsafe_region_area *area = unsafe_region_areas->data[i];
+        if (!area) {
+            continue;
+        }
+        if (area->uid != current_uid().val) {
+            continue;
+        }
+        u64 start = area->addr;
+        u64 end = start + area->nums_page * PAGE_SIZE;
+        if (pc >= start && pc < end) {
+            // The PC is within a safe region
+            wuwa_info("PC=0x%llx is in a unsafe region for pid %d\n", pc, current->pid);
+            read_unlock(&unsafe_region_areas_lock);
+            return false;
+        }
+
+        if (lr >= start && lr < end) {
+            // The LR is within a safe region
+            wuwa_info("LR=0x%llx is in a unsafe region for pid %d\n", lr, current->pid);
+            read_unlock(&unsafe_region_areas_lock);
+            return false;
+        }
+    }
+
+    read_unlock(&unsafe_region_areas_lock);
+
+    return true;
+}
+
+struct setup_rt_frame_data {
+    int unsafe;
+    int usig;
+    struct ksignal *ksig;
+    sigset_t *set;
+    struct pt_regs *regs;
+    struct pt_regs old_regs;
+};
+
+/*
+ * Do a signal return; undo the signal stack. These are aligned to 128-bit.
+ */
+struct rt_sigframe {
+    struct siginfo info;
+    struct ucontext uc;
+};
+
+struct user_access_state {
+    u64 por_el0;
+};
+
+// static int setup_rt_frame(int usig, struct ksignal *ksig, sigset_t *set, struct pt_regs *regs)
+// kernel 6.1 static int setup_rt_frame(int usig, struct ksignal *ksig, sigset_t *set, struct pt_regs *regs)
+static int setup_rt_frame_entry(struct kretprobe_instance *ri,
+                                struct pt_regs *regs)
+{
+    int usig                 = (int) regs->regs[0];
+    struct ksignal *ksig     = (struct ksignal *) regs->regs[1];
+    sigset_t *set            = (sigset_t *) regs->regs[2];
+    struct pt_regs *user_regs = (struct pt_regs *) regs->regs[3];
+
+    struct setup_rt_frame_data *d =
+        (struct setup_rt_frame_data *)ri->data;
+    d->unsafe = 0;
+    d->usig = usig;
+    d->ksig = ksig;
+    d->set = set;
+    d->regs = user_regs;
+
+    if (usig < 0 || usig >= _NSIG) {
+        wuwa_err("Invalid signal number: %d\n", usig);
+        return 0;
+    }
+    if (!ksig || !set) {
+        wuwa_err("Invalid ksignal or sigset_t pointer\n");
+        return 0;
+    }
+
+    if (usig == SIGPROF && !is_safe_prof_signal(ksig, user_regs)) {
+        d->unsafe = 1;
+        regs_set_return_value(regs, 1);
+        regs->pc = regs->regs[30];
+        return 1;
+    }
+
+#if CONFIG_REDIRECT_VIA_SIGNAL != 0
+    if (usig == SIGSEGV && (u64)ksig->info.si_addr == LUCKY_LUO) {
+        wuwa_info("==> setup_rt_frame_entry: Lucky SIGSEGV caught, pid=%d\n", current->pid);
+        wuwa_info("    x0=0x%llx, x1=0x%llx, x2=0x%llx, x3=0x%llx\n",
+                  user_regs->regs[0], user_regs->regs[1],
+                  user_regs->regs[2], user_regs->regs[3]);
+        wuwa_info("    pc=0x%llx, lr=0x%llx, sp=0x%llx, fp=0x%llx\n", user_regs->pc, user_regs->regs[30], user_regs->sp, user_regs->regs[29]);
+
+        // static void(*fpsimd_signal_save_current_state)(void) = NULL;
+        // if (!fpsimd_signal_save_current_state) {
+        //     fpsimd_signal_save_current_state = (void(*)(void))kallsyms_lookup_name("fpsimd_signal_preserve_current_state");
+        //     ovo_info("fpsimd_signal_preserve_current_state found at %p\n", fpsimd_signal_save_current_state);
+        // }
+        // if (!fpsimd_signal_save_current_state) {
+        //     fpsimd_signal_save_current_state = (void(*)(void))kallsyms_lookup_name("fpsimd_save_and_flush_current_state");
+        //     ovo_info("fpsimd_save_and_flush_current_state found at %p\n", fpsimd_signal_save_current_state);
+        // }
+        // if (fpsimd_signal_save_current_state) {
+        //     fpsimd_signal_save_current_state();
+        // } else {
+        //     ovo_err("fpsimd_signal_save_current_state not found, cannot preserve FPSIMD state\n");
+        //     return 0;
+        // }
+
+        memcpy(&d->old_regs, user_regs, sizeof(d->old_regs));
+    }
+#endif
+
+    return 0;
+}
+
+static int setup_rt_frame_ret(struct kretprobe_instance *ri,
+                              struct pt_regs *regs)
+{
+    struct setup_rt_frame_data *d =
+        (struct setup_rt_frame_data *)ri->data;
+    if (unlikely(!d)) return 0;
+
+    int usig              = d->usig;
+    struct ksignal *ksig  = d->ksig;
+    sigset_t *set         = d->set;
+    struct pt_regs *user_regs = d->regs;
+
+    if (d->unsafe) {
+        wuwa_warn("Unsafe SIGPROF detected, usig=%d\n", usig);
+        return 0;
+    }
+
+    if (usig < 0 || usig >= _NSIG || !ksig || !set || !user_regs)
+        return 0;
+
+#if CONFIG_REDIRECT_VIA_SIGNAL != 0
+    if (usig == SIGSEGV && (u64)ksig->info.si_addr == LUCKY_LUO) {
+        if (ksig->ka.sa.sa_handler != (void __user *)LUCKY_LUO) {
+            wuwa_warn("setup_rt_frame_ret: Lucky SIGSEGV caught, but handler is not set to LUCKY_LUO\n");
+        }
+
+        int handler_usig = user_regs->regs[0];
+        u64 handler_info = user_regs->regs[1];
+        u64 hanlder_uc = user_regs->regs[2];
+        u64 sp = user_regs->sp;
+        u64 fp = user_regs->regs[29];
+        u64 lr_sigtramp = user_regs->regs[30];
+        u64 pc_handler = user_regs->pc;
+
+        wuwa_info("setup_rt_frame_ret: Lucky SIGSEGV caught!\n");
+        wuwa_info("setup_rt_frame_ret: usig=%d, handler_info=0x%llx, hanlder_uc=0x%llx, sp=0x%llx, fp=0x%llx, lr_sigtramp=0x%llx, pc_handler=0x%llx\n",
+                  handler_usig, handler_info, hanlder_uc, sp, fp, lr_sigtramp, pc_handler);
+
+        struct k_sigaction* ka;
+        ka = &current->sighand->action[usig-1];
+        if (ka->sa.sa_handler == SIG_IGN || ka->sa.sa_handler == SIG_DFL) {
+            ka->sa.sa_handler = (__sighandler_t)LUCKY_LUO;
+        }
+
+        if (!(ksig->ka.sa.sa_flags & SA_NODEFER)) {
+            ksig->ka.sa.sa_flags |= SA_NODEFER;
+        }
+
+#if defined(CONFIG_ARM64_SME)
+#error "SME not supported in this module"
+        if (system_supports_sme()) {
+            current->thread.svcr &= ~SVCR_ZA_MASK;
+            write_sysreg_s(0, SYS_TPIDR2_EL0);
+        }
+#endif
+
+        struct pt_regs sig_regs;
+        memcpy(&sig_regs, user_regs, sizeof(sig_regs));
+        memcpy(user_regs, &d->old_regs, sizeof(d->old_regs));
+
+        d->unsafe = 1;
+        if (system_supports_bti()) {
+            user_regs->pstate &= ~PSR_BTYPE_MASK;
+            user_regs->pstate |= PSR_BTYPE_C;
+        }
+
+        /* TCO (Tag Check Override) always cleared for signal handlers */
+        user_regs->pstate &= ~PSR_TCO_BIT;
+
+        u64 magic[2];
+        u64 __user *magic_sp = (typeof(magic_sp))user_regs->sp;
+        if (copy_from_user(&magic, magic_sp, sizeof(magic)) == 0) {
+            ovo_info("Magic values: 0x%llx, 0x%llx\n", magic[0], magic[1]);
+        }
+
+        if (magic[0] != LUCKY_LUO) {
+            return 0; // Not a lucky luo signal
+        }
+
+        user_regs->pc = magic[1];
+        ksig->ka.sa.sa_handler = (__sighandler_t)user_regs->pc;
+
+        // sigset_t blocked;
+        // clear_restore_sigmask();
+        // sigorsets(&blocked, &current->blocked, &ksig->ka.sa.sa_mask);
+        // sigdelset(&blocked, ksig->sig);
+        // static void (*set_current_blocked)(sigset_t *) = NULL;
+        // if (!set_current_blocked) {
+        //     set_current_blocked = (typeof(set_current_blocked))kallsyms_lookup_name("set_current_blocked");
+        // }
+        // if (set_current_blocked)
+        //     set_current_blocked(&blocked);
+        //
+        // spin_lock_irq(&current->sighand->siglock);
+        //
+        // sigdelset(&current->pending.signal, ksig->sig);
+        // sigdelset(&current->signal->shared_pending.signal, ksig->sig);
+        // static void (*recalc_sigpending)(void) = NULL;
+        // if (recalc_sigpending == NULL) {
+        //     recalc_sigpending = (typeof(recalc_sigpending))kallsyms_lookup_name("recalc_sigpending");
+        // }
+        // recalc_sigpending();
+        //
+        // spin_unlock_irq(&current->sighand->siglock);
+
+        static int (*valid_user_regs)(struct user_pt_regs *regs, struct task_struct *task) = NULL;
+        if (valid_user_regs == NULL) {
+            valid_user_regs = (typeof(valid_user_regs))kallsyms_lookup_name("valid_user_regs");
+        }
+
+        ovo_info("Lucky SIGSEGV setup complete, pc=0x%llx, lr=0x%llx, invalid: %d\n",
+                  user_regs->pc, user_regs->regs[30], !valid_user_regs(&user_regs->user_regs, current));
+
+        regs_set_return_value(regs, 0);
+    }
+#endif
+
+    return 0;
+}
+
+
+struct rp_data_get_signal {
+    struct ksignal *ksig_ptr;        /* get_signal()'s first argument */
+};
+
+// bool get_signal(struct ksignal *ksig)
+static int get_signal_entry_handler(struct kretprobe_instance *ri,
+                    struct pt_regs *regs)
+{
+    struct rp_data_get_signal *data = (struct rp_data_get_signal *)ri->data;
+    struct ksignal *ksig;
+
+    ksig = (struct ksignal *)regs->regs[0];
+    data->ksig_ptr = ksig;
+
+    // if (ksig->sig != SIGSEGV)
+    //     return 0;
+    //
+    // if (ksig->info.si_addr != (void *)LUCKY_LUO)
+    //     return 0;
+    //
+    // ksig->ka.sa.sa_handler = (__sighandler_t)LUCKY_LUO;
+    // ksig->ka.sa.sa_flags  &= ~SA_RESETHAND;
+    // ksig->ka.sa.sa_flags  |= SA_NODEFER;
+    //
+    // sigdelset(&ksig->ka.sa.sa_mask, ksig->sig);
+
+    return 0;
+}
+
+static int get_signal_ret_handler(struct kretprobe_instance *ri,
+                  struct pt_regs *regs)
+{
+    struct rp_data_get_signal *data;
+    struct ksignal *ksig;
+    unsigned long retval;
+
+    if (!ri || !regs)
+        return 0;
+
+    data = (struct rp_data_get_signal *)ri->data;
+    if (unlikely(!data || !data->ksig_ptr))
+        return 0;
+
+    ksig   = data->ksig_ptr;
+    retval = regs_return_value(regs);
+
+#if CONFIG_REDIRECT_VIA_SIGNAL != 0
+    if (ksig->info.si_signo == SIGSEGV && ksig->info.si_addr == (void *)LUCKY_LUO) {
+        ksig->ka.sa.sa_handler = (void __user *)LUCKY_LUO;
+        wuwa_info("====> get_signal_ret_handler: Lucky SIGSEGV caught, setting handler to LUCKY_LUO\n");
+
+        if (!(ksig->ka.sa.sa_flags & SA_SIGINFO)) {
+            ksig->ka.sa.sa_flags |= SA_SIGINFO;
+            wuwa_info("get_signal_ret_handler: Setting SA_SIGINFO flag for Lucky SIGSEGV\n");
+        }
+
+        if (!retval)
+            regs_set_return_value(regs, 1);
+    }
+#endif
+
+    return 0;
+}
+
+static struct kretprobe krp_setup_rt_frame = {
+    .kp.symbol_name = "setup_rt_frame",
+    .entry_handler  = setup_rt_frame_entry,
+    .handler        = setup_rt_frame_ret,
+    .data_size      = sizeof(struct setup_rt_frame_data),
+    .maxactive      = 20,
+};
+
+static struct kretprobe krpget_signal = {
+    .kp.symbol_name		= "get_signal",
+    .entry_handler		= get_signal_entry_handler,
+    .handler		= get_signal_ret_handler,
+    .data_size		= sizeof(struct rp_data_get_signal),
+    .maxactive		= 20,
+};
+
+int wuwa_safe_signal_init(void) {
+    int ret, maxactive;
+
+    maxactive = num_possible_cpus() * 2;
+    if (maxactive < 20) {
+        maxactive = 20; // Ensure a minimum number of active probes
+    }
+    krp_setup_rt_frame.maxactive = maxactive;
+    krpget_signal.maxactive = maxactive;
+
+
+    ret = register_kretprobe(&krp_setup_rt_frame);
+    if (ret) {
+        wuwa_err("register_kprobe failed, returned %d\n", ret);
+        return ret;
+    }
+
+    ret = register_kretprobe(&krpget_signal);
+    if (ret) {
+        wuwa_err("register_kretprobe failed, returned %d\n", ret);
+        goto out;
+    }
+
+    unsafe_region_areas = arraylist_create(ARRAYLIST_DEFAULT_CAPACITY);
+    if (!unsafe_region_areas) {
+        wuwa_err("failed to create unsafe region areas list\n");
+        ret = -ENOMEM;
+        goto out_krpget_signal;
+    }
+
+    return 0;
+
+    out_krpget_signal:
+    unregister_kretprobe(&krpget_signal);
+    out:
+    unregister_kretprobe(&krp_setup_rt_frame);
+    return ret;
+}
+
+void wuwa_safe_signal_cleanup(void) {
+    unregister_kretprobe(&krp_setup_rt_frame);
+    unregister_kretprobe(&krpget_signal);
+
+    write_lock(&unsafe_region_areas_lock);
+    if (unsafe_region_areas) {
+        if (!unsafe_region_areas->data) {
+            write_unlock(&unsafe_region_areas_lock);
+            wuwa_err("unsafe region areas list is empty\n");
+            goto next;
+        }
+
+        for (int i = 0; i < unsafe_region_areas->size; ++i) {
+            void* element = unsafe_region_areas->data[i];
+            if (element)
+                kvfree(element);
+        }
+
+        next:
+        arraylist_destroy(unsafe_region_areas);
+        unsafe_region_areas = NULL;
+    }
+    write_unlock(&unsafe_region_areas_lock);
+}
+
+int wuwa_add_unsafe_region(pid_t session, uid_t uid, uintptr_t start, size_t num_page) {
+    write_lock(&unsafe_region_areas_lock);
+
+    if (!unsafe_region_areas) {
+        write_unlock(&unsafe_region_areas_lock);
+        return -ENOMEM;
+    }
+
+    struct unsafe_region_area *area = kvzalloc(sizeof(*area), GFP_KERNEL);
+    if (!area) {
+        wuwa_err("failed to allocate memory for unsafe region area\n");
+        write_unlock(&unsafe_region_areas_lock);
+        return -ENOMEM;
+    }
+    area->addr = start;
+    area->nums_page = num_page;
+    area->uid = uid;
+    area->session_pid = session;
+
+    if (arraylist_add(unsafe_region_areas, area)) {
+        write_unlock(&unsafe_region_areas_lock);
+        wuwa_err("failed to add unsafe region area\n");
+        return -ENOMEM;
+    }
+
+    wuwa_info("unsafe region area added for pid %d, start=0x%lx, num_page=%zu\n", session, start, num_page);
+    write_unlock(&unsafe_region_areas_lock);
+    return 0;
+}
+
+int wuwa_del_unsafe_region(pid_t pid) {
+    write_lock(&unsafe_region_areas_lock);
+
+    if (!unsafe_region_areas) {
+        write_unlock(&unsafe_region_areas_lock);
+        return -ENOMEM;
+    }
+
+    if (!unsafe_region_areas->data) {
+        write_unlock(&unsafe_region_areas_lock);
+        wuwa_err("unsafe region areas list is empty\n");
+        return -ENOENT;
+    }
+
+    for (int i = 0; i < unsafe_region_areas->size; ++i) {
+        struct unsafe_region_area *area = unsafe_region_areas->data[i];
+        if (area && area->session_pid == pid) {
+            void *removed = arraylist_remove(unsafe_region_areas, i);
+            if (removed) {
+                kvfree(removed);
+            } else {
+                wuwa_err("failed to remove unsafe region area for pid %d\n", pid);
+            }
+        }
+    }
+
+    write_unlock(&unsafe_region_areas_lock);
+    return 0;
+}
+
+```
+
+`wuwa_safe_signal.h`:
+
+```h
+#ifndef WUWA_SAFE_SIGNAL_H
+#define WUWA_SAFE_SIGNAL_H
+
+#include "wuwa_common.h"
+
+int wuwa_safe_signal_init(void);
+void wuwa_safe_signal_cleanup(void);
+
+int wuwa_add_unsafe_region(pid_t session, uid_t uid, uintptr_t start, size_t num_page);
+int wuwa_del_unsafe_region(pid_t pid);
+
+#endif //WUWA_SAFE_SIGNAL_H
+
+```
+
+`wuwa_sock.c`:
+
+```c
+#include "wuwa_protocol.h"
+#include "wuwa_sock.h"
+#include "wuwa_utils.h"
+#include "wuwa_ioctl.h"
+#include <asm/pgtable-hwdef.h>
+#include <asm/pgalloc.h>
+
+#include "wuwa_safe_signal.h"
+
+static int wuwa_release(struct socket *sock) {
+    wuwa_info("release wuwa sock\n");
+
+    struct sock *sk = sock->sk;
+    if (!sk) {
+        return 0;
+    }
+
+    struct wuwa_sock *ws = (struct wuwa_sock *) sk;
+    ws->version = 0;
+
+    if (ws->session) {
+        wuwa_del_unsafe_region(ws->session);
+        ws->session = 0;
+    }
+
+    if (ws->used_pages) {
+        for (int i = 0; i < ws->used_pages->size; ++i) {
+            struct page *page = (typeof(page)) arraylist_get(ws->used_pages, i);
+            if (page) {
+                __free_page(page);
+            }
+        }
+        ovo_info("free %lu used pages\n", ws->used_pages->size);
+        arraylist_destroy(ws->used_pages);
+    }
+
+    sock_orphan(sk);
+    sock_put(sk);
+    return 0;
+}
+
+static int wuwa_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg) {
+    void __user *argp = (void __user *)arg;
+
+    int i;
+    for (i = 0; i < ARRAY_SIZE(ioctl_handlers); i++) {
+        if (cmd == ioctl_handlers[i].cmd) {
+            if (ioctl_handlers[i].handler == NULL) {
+                continue;
+            }
+            return ioctl_handlers[i].handler(sock, argp);
+        }
+    }
+
+    wuwa_warn("unsupported ioctl command: %u\n", cmd);
+    return -ENOTTY;
+}
+
+static __poll_t sock_no_poll(struct file *file, struct socket *sock,
+                         struct poll_table_struct *wait) {
+    return 0;
+}
+
+static int sock_no_setsockopt(struct socket *sock, int level, int optname,
+                          sockptr_t optval, unsigned int optlen)
+{
+    return -ENOPROTOOPT;
+}
+
+static int sock_no_getsockopt(struct socket *sock, int level, int optname,
+                          char __user *optval, int __user *optlen) {
+    return 0;
+}
+
+struct proto_ops wuwa_proto_ops = {
+    .family = PF_DECnet,
+    .owner = THIS_MODULE,
+    .release = wuwa_release,
+    .bind = sock_no_bind,
+    .connect = sock_no_connect,
+    .socketpair = sock_no_socketpair,
+    .accept = sock_no_accept,
+    .getname = sock_no_getname,
+    .poll		= sock_no_poll,
+    .ioctl		= wuwa_ioctl,
+    .listen		= sock_no_listen,
+    .shutdown	= sock_no_shutdown,
+    .setsockopt	= sock_no_setsockopt,
+    .getsockopt	= sock_no_getsockopt,
+    .sendmsg	= sock_no_sendmsg,
+    .recvmsg	= sock_no_recvmsg,
+    .mmap		= sock_no_mmap,
+};
+
+```
+
+`wuwa_sock.h`:
+
+```h
+#ifndef WUWA_SOCK_H
+#define WUWA_SOCK_H
+
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/net.h>
+#include <linux/socket.h>
+#include <linux/skbuff.h>
+#include <net/sock.h>
+#include <linux/init.h>
+
+struct wuwa_sock;
+
+extern struct proto_ops wuwa_proto_ops;
+
+#endif //WUWA_SOCK_H
+
+```
+
+`wuwa_utils.c`:
+
+```c
+#include "wuwa_utils.h"
+
+#include <linux/mm.h>
+#include <linux/printk.h>
+#include <linux/pgtable.h>
+#include <linux/hugetlb.h>
+#include <linux/interrupt.h>
+
+pte_t *page_from_virt_user(struct mm_struct *mm, uintptr_t va) {
+    pgd_t *pgd;
+    p4d_t *p4d;
+    pud_t *pud;
+    pmd_t *pmd;
+    pte_t *ptep = NULL;
+
+    MM_READ_LOCK(mm);
+
+    pgd = pgd_offset(mm, va);
+    if (pgd_none(*pgd) || pgd_bad(*pgd)) {
+        wuwa_warn("PGD entry for address 0x%lx not found or bad\n", va);
+        goto out;
+    }
+
+    p4d = p4d_offset(pgd, va);
+    if (p4d_none(*p4d) || p4d_bad(*p4d)) {
+        wuwa_warn("P4D entry for address 0x%lx not found or bad\n", va);
+        goto out;
+    }
+
+    pud = pud_offset(p4d, va);
+    if (pud_none(*pud) || pud_bad(*pud)) {
+        wuwa_warn("PUD entry for address 0x%lx not found or bad\n", va);
+        goto out;
+    }
+
+    if (pud_leaf(*pud)) {
+        wuwa_debug("Address 0x%lx maps to a PUD-level huge page (leaf), no PTE exists\n", va);
+        goto out;
+    }
+
+    pmd = pmd_offset(pud, va);
+    if (pmd_none(*pmd) || pmd_bad(*pmd)) {
+        wuwa_warn("PMD entry for address 0x%lx not found or bad\n", va);
+        goto out;
+    }
+
+    if (pmd_leaf(*pmd)) {
+        wuwa_debug("Address 0x%lx maps to a PMD-level huge page (leaf), no PTE exists\n", va);
+        goto out;
+    }
+
+    ptep = pte_offset_map(pmd, va);
+    if (!ptep) {
+        wuwa_warn("Failed to map PTE for address 0x%lx\n", va);
+        goto out;
+    }
+out:
+    MM_READ_UNLOCK(mm);
+
+    return ptep;
+}
+
+phys_addr_t vaddr_to_phy_addr(struct mm_struct *mm, uintptr_t va) {
+    if (!mm) {
+        wuwa_warn("mm_struct is NULL, cannot perform translation\n");
+        return 0;
+    }
+
+    pte_t *ptep = page_from_virt_user(mm, va);
+    if (!ptep) {
+        wuwa_err("failed to get PTE for virtual address 0x%lx\n", va);
+        return 0;
+    }
+
+    if (!pte_present(*ptep)) {
+        wuwa_err("PTE not present for virtual address 0x%lx\n", va);
+        return 0;
+    }
+
+    phys_addr_t page_addr = pte_pfn(*ptep) << PAGE_SHIFT;
+
+    return page_addr + (va & PAGE_SIZE - 1);
+}
+
+unsigned long kallsyms_lookup_name(const char *name) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 7, 0)
+    typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
+
+    static kallsyms_lookup_name_t lookup_name = NULL;
+    if (lookup_name == NULL) {
+        struct kprobe kp = {
+            .symbol_name = "kallsyms_lookup_name"
+        };
+
+        if(register_kprobe(&kp) < 0) {
+            return 0;
+        }
+
+        lookup_name = (kallsyms_lookup_name_t) kp.addr;
+        unregister_kprobe(&kp);
+    }
+    return lookup_name(name);
+#else
+    return kallsyms_lookup_name(symbol_name);
+#endif
+}
+
+struct task_struct * get_target_task(pid_t pid) {
+    struct pid* pid_struct = find_get_pid(pid);
+    if (!pid_struct) {
+        return NULL;
+    }
+
+    struct task_struct *task = get_pid_task(pid_struct, PIDTYPE_PID);
+    put_pid(pid_struct);
+    if (!task) {
+        return NULL;
+    }
+
+    return task;
+}
+
+int disable_kprobe_blacklist(void) {
+    struct kprobe_blacklist_entry *ent;
+    struct list_head *kprobe_blacklist = (struct list_head *) kallsyms_lookup_name("kprobe_blacklist");
+    if (!kprobe_blacklist) {
+        wuwa_err("kprobe_blacklist not found\n");
+        return -ENOENT;
+    }
+
+    int count = 0;
+    list_for_each_entry(ent, kprobe_blacklist, list) {
+        if (!ent || ent->start_addr == 0 || ent->end_addr == 0) {
+            continue;
+        }
+        count++;
+        ent->start_addr = 0;
+        ent->end_addr = 0;
+    }
+
+    ovo_info("Disabled %d kprobe blacklist entries\n", count);
+
+    return 0;
+}
+
+void compare_pt_regs(struct pt_regs *regs1, struct pt_regs *regs2) {
+#if CONFIG_COMPARE_PT_REGS == 1
+    ovo_info("==> Comparing pt_regs:\n");
+
+    for (int i = 0; i < 31; ++i) {
+        if (regs1->regs[i] != regs2->regs[i]) {
+            ovo_info("reg[%d] changed from %llx to %llx\n", i, regs1->regs[i], regs2->regs[i]);
+        }
+    }
+
+    if (regs1->sp != regs2->sp) {
+        ovo_info("sp changed from %llx to %llx\n", regs1->sp, regs2->sp);
+    }
+
+    if (regs1->pc != regs2->pc) {
+        ovo_info("pc changed from %llx to %llx\n", regs1->pc, regs2->pc);
+    }
+
+    if (regs1->pstate != regs2->pstate) {
+        ovo_info("pstate changed from %llx to %llx\n", regs1->pstate, regs2->pstate);
+    }
+
+    if (regs1->sdei_ttbr1 != regs2->sdei_ttbr1) {
+        ovo_info("sdei_ttbr1 changed from %llx to %llx\n", regs1->sdei_ttbr1, regs2->sdei_ttbr1);
+    }
+
+    if (regs1->pmr_save != regs2->pmr_save) {
+        ovo_info("pmr_save changed from %llx to %llx\n", regs1->pmr_save, regs2->pmr_save);
+    }
+
+    if (regs1->stackframe[0] != regs2->stackframe[0] ||
+        regs1->stackframe[1] != regs2->stackframe[1]) {
+        ovo_info("stackframe changed from [%llx, %llx] to [%llx, %llx]\n",
+                 regs1->stackframe[0], regs1->stackframe[1],
+                 regs2->stackframe[0], regs2->stackframe[1]);
+    }
+#endif
+}
+
+void compare_task_struct(struct task_struct *task1, struct task_struct *task2) {
+#if CONFIG_COMPARE_TASK == 1
+    ovo_info("==> Comparing task_struct:\n");
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+    if (task1->thread_info.flags != task2->thread_info.flags) {
+        ovo_info("thread_info.flags changed from %lx to %lx\n", task1->thread_info.flags, task2->thread_info.flags);
+    }
+
+    if (task1->thread_info.cpu != task2->thread_info.cpu) {
+        ovo_info("thread_info.cpu changed from %d to %d\n", task1->thread_info.cpu, task2->thread_info.cpu);
+    }
+#endif
+
+    if (task1->__state != task2->__state) {
+        ovo_info("__state changed from %u to %u\n", task1->__state, task2->__state);
+    }
+
+    if (task1->stack != task2->stack) {
+        ovo_info("stack pointer changed from %p to %p\n", task1->stack, task2->stack);
+    }
+
+    if (task1->flags != task2->flags) {
+        ovo_info("flags changed from %u to %u\n", task1->flags, task2->flags);
+    }
+
+    if (task1->ptrace != task2->ptrace) {
+        ovo_info("ptrace changed from %u to %u\n", task1->ptrace, task2->ptrace);
+    }
+
+    if (task1->pid != task2->pid) {
+        ovo_info("pid changed from %d to %d\n", task1->pid, task2->pid);
+    }
+
+    if (task1->tgid != task2->tgid) {
+        ovo_info("tgid changed from %d to %d\n", task1->tgid, task2->tgid);
+    }
+#endif
+}
+
+#define W_PHYS_PFN(x)	((unsigned long)((x) >> PAGE_SHIFT))
+#define	wuwa_phys_to_pfn(paddr)	W_PHYS_PFN(paddr)
+
+struct page* vaddr_to_page(struct mm_struct *mm, uintptr_t va) {
+#if !defined(pfn_to_page)
+#error "vaddr_to_page failed: pfn_to_page not found"
+#endif
+    return pfn_to_page(wuwa_phys_to_pfn(vaddr_to_phy_addr(mm, va)));
+}
+
+struct karray_list * arraylist_create(size_t initial_capacity) {
+    struct karray_list *list = kmalloc(sizeof(*list), GFP_KERNEL);
+    if (!list) return NULL;
+
+    if (initial_capacity < ARRAYLIST_DEFAULT_CAPACITY)
+        initial_capacity = ARRAYLIST_DEFAULT_CAPACITY;
+
+    list->data = kmalloc_array(initial_capacity, sizeof(void *), GFP_KERNEL);
+    if (!list->data) {
+        kfree(list);
+        return NULL;
+    }
+
+    list->size = 0;
+    list->capacity = initial_capacity;
+    return list;
+}
+
+static int ensure_capacity(struct karray_list *list, size_t min_capacity) {
+    if (min_capacity <= list->capacity) return 0;
+
+    size_t new_capacity = list->capacity + (list->capacity >> 1);
+    if (new_capacity < min_capacity) new_capacity = min_capacity;
+
+    void **new_data = krealloc_array(list->data, new_capacity, sizeof(void *), GFP_KERNEL);
+    if (!new_data) return -ENOMEM;
+
+    list->data = new_data;
+    list->capacity = new_capacity;
+    return 0;
+}
+
+int arraylist_add(struct karray_list *list, void *element) {
+    int ret = 0;
+
+    if (ensure_capacity(list, list->size + 1)) {
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    list->data[list->size++] = element;
+
+    out:
+    return ret;
+}
+
+void *arraylist_get(struct karray_list *list, size_t index) {
+    void *element = NULL;
+
+    if (index < list->size)
+        element = list->data[index];
+    return element;
+}
+
+void *arraylist_remove(struct karray_list *list, size_t index) {
+    void *element = NULL;
+
+    if (index >= list->size) goto out;
+
+    element = list->data[index];
+    memmove(&list->data[index], &list->data[index+1],
+            (list->size - index - 1) * sizeof(void *));
+    list->size--;
+
+    out:
+    return element;
+}
+
+void arraylist_destroy(struct karray_list *list) {
+    if (list->data)
+        kfree(list->data);
+    kfree(list);
+}
+
+```
+
+`wuwa_utils.h`:
+
+```h
+#ifndef WUWA_UTILS_H
+#define WUWA_UTILS_H
+
+#include <linux/mm.h>
+#include <linux/types.h>
+#include <linux/version.h>
+#include <linux/mm_types.h>
+#include "wuwa_common.h"
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 8, 0))
+#include <linux/mmap_lock.h>
+#define MM_READ_LOCK(mm) mmap_read_lock(mm);
+#define MM_READ_UNLOCK(mm) mmap_read_unlock(mm);
+#define MM_WRITE_LOCK(mm) mmap_write_lock(mm);
+#define MM_WRITE_UNLOCK(mm) mmap_write_unlock(mm);
+#else
+#include <linux/rwsem.h>
+#define MM_READ_LOCK(mm) down_read(&(mm)->mmap_sem);
+#define MM_READ_UNLOCK(mm) up_read(&(mm)->mmap_sem);
+#define MM_WRITE_LOCK(mm) down_write(&(mm)->mmap_sem);
+#define MM_WRITE_UNLOCK(mm) up_write(&(mm)->mmap_sem);
+#endif
+
+pte_t *page_from_virt_user(struct mm_struct *mm, uintptr_t va);
+
+phys_addr_t vaddr_to_phy_addr(struct mm_struct *mm, uintptr_t va);
+
+struct page* vaddr_to_page(struct mm_struct *mm, uintptr_t va);
+
+unsigned long kallsyms_lookup_name(const char* symbol_name);
+
+struct task_struct *get_target_task(pid_t pid);
+
+int disable_kprobe_blacklist(void);
+
+void compare_pt_regs(struct pt_regs* regs1, struct pt_regs* regs2);
+void compare_task_struct(struct task_struct *task1, struct task_struct *task2);
+
+static __always_inline void set_current(struct task_struct *tsk)
+{
+    unsigned long tmp = (unsigned long)tsk;
+
+    asm volatile("msr sp_el0, %0"
+             :
+             : "r"(tmp)
+             : "memory");
+}
+
+
+#define ARRAYLIST_DEFAULT_CAPACITY 16
+
+struct karray_list {
+    void **data;
+    size_t size;
+    size_t capacity;
+};
+
+struct karray_list *arraylist_create(size_t initial_capacity);
+void arraylist_destroy(struct karray_list *list);
+void *arraylist_remove(struct karray_list *list, size_t index);
+void *arraylist_get(struct karray_list *list, size_t index);
+int arraylist_add(struct karray_list *list, void *element);
+
+#endif //WUWA_UTILS_H
+
+```
