@@ -1,0 +1,1612 @@
+Project Path: arc_gmh5225_window_hijack__9ppvodi
+
+Source Tree:
+
+```txt
+arc_gmh5225_window_hijack__9ppvodi
+├── README.md
+├── window_hijack
+│   ├── includes
+│   │   ├── defs
+│   │   │   ├── drv.hpp
+│   │   │   ├── nt.hpp
+│   │   │   └── smart.hpp
+│   │   ├── dispatch
+│   │   │   ├── control.cpp
+│   │   │   ├── control.hpp
+│   │   │   └── filler.hpp
+│   │   ├── modules
+│   │   │   ├── data_getter.cpp
+│   │   │   ├── data_getter.hpp
+│   │   │   ├── export_getter.cpp
+│   │   │   └── export_getter.hpp
+│   │   └── utils
+│   │       ├── drv_utils.cpp
+│   │       └── drv_utils.hpp
+│   ├── sources
+│   │   └── drv_main.cpp
+│   ├── window_hijack.vcxproj
+│   └── window_hijack.vcxproj.filters
+├── window_hijack.sln
+└── window_hijack_cli
+    ├── includes
+    │   ├── defs
+    │   │   └── cli.hpp
+    │   ├── interface
+    │   │   ├── driver.cpp
+    │   │   ├── driver.hpp
+    │   │   └── driver_defs.hpp
+    │   └── renderer
+    │       └── dx_renderer.hpp
+    ├── sources
+    │   └── cli_main.cpp
+    ├── window_hijack_cli.vcxproj
+    └── window_hijack_cli.vcxproj.filters
+
+```
+
+`README.md`:
+
+```md
+# Window Hijack
+Rendering on external windows via hijacking thread contexts.
+You can read a full write-up at: https://secret.club/2020/05/12/abusing-compositions.html
+
+## Changes
+Added notes to what is necessary for this to work inside of a manually mapped driver, and describes why it only works in the IOCTL handler.
+
+The notes can be located in window_hijack\includes\dispatch\control.cpp.
+
+## Usage
+To use the project as-is:
+
+1. Enable test-signing mode
+2. Compile in Release x64
+3. Load the driver using any traditional driver loader
+4. Start window_hijack_cli using the following pattern: `window_hijack_cli.exe [window_class_name]`
+
+## Credits
+paracord (yousif), IChooseYou
+
+```
+
+`window_hijack.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29920.165
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "window_hijack", "window_hijack\window_hijack.vcxproj", "{E9213425-AF56-42EB-B7E4-30B080193B60}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "window_hijack_cli", "window_hijack_cli\window_hijack_cli.vcxproj", "{BE89522F-B203-468B-B84E-505417733286}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x64.ActiveCfg = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x64.Build.0 = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x64.Deploy.0 = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x86.ActiveCfg = Debug|Win32
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x86.Build.0 = Debug|Win32
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Debug|x86.Deploy.0 = Debug|Win32
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x64.ActiveCfg = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x64.Build.0 = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x64.Deploy.0 = Release|x64
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x86.ActiveCfg = Release|Win32
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x86.Build.0 = Release|Win32
+		{E9213425-AF56-42EB-B7E4-30B080193B60}.Release|x86.Deploy.0 = Release|Win32
+		{BE89522F-B203-468B-B84E-505417733286}.Debug|x64.ActiveCfg = Debug|x64
+		{BE89522F-B203-468B-B84E-505417733286}.Debug|x64.Build.0 = Debug|x64
+		{BE89522F-B203-468B-B84E-505417733286}.Debug|x86.ActiveCfg = Debug|Win32
+		{BE89522F-B203-468B-B84E-505417733286}.Debug|x86.Build.0 = Debug|Win32
+		{BE89522F-B203-468B-B84E-505417733286}.Release|x64.ActiveCfg = Release|x64
+		{BE89522F-B203-468B-B84E-505417733286}.Release|x64.Build.0 = Release|x64
+		{BE89522F-B203-468B-B84E-505417733286}.Release|x86.ActiveCfg = Release|Win32
+		{BE89522F-B203-468B-B84E-505417733286}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6021637A-C474-4840-8B20-3E7D560B1220}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`window_hijack/includes/defs/drv.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_DRIVER_DEFS_HPP
+#define WNDHIJACK_DRIVER_DEFS_HPP
+
+#include <ntifs.h>
+#include <stdint.h>
+
+namespace wnd_hjk
+{
+	struct image_data_t
+	{
+		uint64_t base_address;
+		uint32_t image_size;
+	};
+
+	constexpr uint32_t pool_tag = static_cast< uint32_t >( 'Secr' );
+
+	constexpr const wchar_t* device_name = L"\\Device\\secret_club";
+	constexpr const wchar_t* dos_device_name = L"\\DosDevices\\secret_club";
+
+	inline PDRIVER_OBJECT driver_object = nullptr;
+	inline PDEVICE_OBJECT device_object = nullptr;
+}
+
+#define DBG(s, ...) DbgPrintEx(77,0,s,##__VA_ARGS__)
+
+#endif
+```
+
+`window_hijack/includes/defs/nt.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_WINDOWS_DEFS_HPP
+#define WNDHIJACK_WINDOWS_DEFS_HPP
+
+#include <ntifs.h>
+#include <stdint.h>
+
+namespace nt
+{
+	// NT/Rtl structures
+	struct rtl_module_info
+	{
+		HANDLE section;
+		uint64_t mapped_base;
+		uint64_t image_base;
+		uint32_t image_size;
+		uint32_t image_flags;
+		uint16_t load_order_idx;
+		uint16_t init_order_idx;
+		uint16_t load_count;
+		uint16_t file_name_offset;
+		uint8_t full_path[ 256 ];
+	};
+
+	struct rtl_modules
+	{
+		uint32_t count;
+		rtl_module_info modules[ 1 ];
+	};
+
+	// PE structures
+	struct image_file_header
+	{
+		uint16_t machine;
+		uint16_t number_of_sections;
+		uint32_t time_date_stamp;
+		uint32_t pointer_to_symbol_table;
+		uint32_t number_of_symbols;
+		uint16_t size_of_optional_header;
+		uint16_t characteristics;
+	};
+
+	struct image_data_directory
+	{
+		uint32_t virtual_address;
+		uint32_t size;
+	};
+
+	struct image_optional_header
+	{
+		uint16_t magic;
+		uint8_t major_linker_version;
+		uint8_t minor_linker_version;
+		uint32_t size_of_code;
+		uint32_t size_of_initialized_data;
+		uint32_t size_of_uninitialized_data;
+		uint32_t address_of_entry_point;
+		uint32_t base_of_code;
+		uint64_t image_base;
+		uint32_t section_alignment;
+		uint32_t file_alignment;
+		uint16_t major_operating_system_version;
+		uint16_t minor_operating_system_version;
+		uint16_t major_image_version;
+		uint16_t minor_image_version;
+		uint16_t major_subsystem_version;
+		uint16_t minor_subsystem_version;
+		uint32_t win32_version_value;
+		uint32_t size_of_image;
+		uint32_t size_of_headers;
+		uint32_t check_sum;
+		uint16_t subsystem;
+		uint16_t dll_characteristics;
+		uint64_t size_of_stack_reserve;
+		uint64_t size_of_stack_commit;
+		uint64_t size_of_heap_reserve;
+		uint64_t size_of_heap_commit;
+		uint32_t loader_flags;
+		uint32_t number_of_rva_and_sizes;
+		image_data_directory data_directory[ 16 ];
+	};
+
+	struct image_nt_headers
+	{
+		uint32_t signature;
+		image_file_header file_header;
+		image_optional_header optional_header;
+	};
+
+	struct image_dos_header
+	{
+		uint16_t e_magic;
+		uint16_t e_cblp;
+		uint16_t e_cp;
+		uint16_t e_crlc;
+		uint16_t e_cparhdr;
+		uint16_t e_minalloc;
+		uint16_t e_maxalloc;
+		uint16_t e_ss;
+		uint16_t e_sp;
+		uint16_t e_csum;
+		uint16_t e_ip;
+		uint16_t e_cs;
+		uint16_t e_lfarlc;
+		uint16_t e_ovno;
+		uint16_t e_res[ 4 ];
+		uint16_t e_oemid;
+		uint16_t e_oeminfo;
+		uint16_t e_res2[ 10 ];
+		int32_t e_lfanew;
+	};
+
+	// Win32k structures
+	struct tag_thread_info
+	{
+		PETHREAD owning_thread;
+	};
+
+	struct tag_wnd
+	{
+		char pad_0[ 0x10 ];
+		tag_thread_info* thread_info;
+	};
+}
+
+#endif
+```
+
+`window_hijack/includes/defs/smart.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_SMART_DEFS_HPP
+#define WNDHIJACK_SMART_DEFS_HPP
+
+#include "drv.hpp"
+#include <memory>
+
+namespace smart
+{
+	struct object_deleter
+	{
+		void operator( )( void* arg ) const
+		{
+			if ( arg )
+				ObfDereferenceObject( arg );
+		}
+	};
+
+	template <typename T>
+	using object = std::unique_ptr<std::remove_pointer_t<T>, object_deleter>;
+
+	struct alloc_deleter
+	{
+		void operator( )( void* arg ) const
+		{
+			if ( arg )
+				ExFreePoolWithTag( arg, 0 );
+		}
+	};
+
+	using alloc = std::unique_ptr<void, alloc_deleter>;
+}
+
+#endif
+```
+
+`window_hijack/includes/dispatch/control.cpp`:
+
+```cpp
+#include "control.hpp"
+
+NTSTATUS wnd_hjk::control_handler( PDEVICE_OBJECT, PIRP request_packet )
+{
+	const auto curr_stack = request_packet->Tail.Overlay.CurrentStackLocation;
+
+	if ( !curr_stack )
+		return STATUS_INVALID_PARAMETER;
+
+	// works because of the control handler being attached to the current process that called
+	// the current process will have win32kbase mapped in physical memory
+	// the System process will not, its aids but its how Windows works...
+	static const auto ValidateHwnd = reinterpret_cast< nt::tag_wnd*( * )( uint64_t ) >(
+		find_export( "win32kbase.sys", "ValidateHwnd" )
+	);
+
+	if ( !ValidateHwnd ) // should not happen unless call comes from outside of user-mode process
+	{
+		DBG( "[!] Can't find ValidateHwnd export, catastrophic error\n" );
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	SIZE_T bytes_operated = 0;
+	NTSTATUS operation_status = STATUS_SUCCESS;
+	
+	// in order to call ValidateHwnd you must have a win32 version of your current thread
+	// PsSetThreadWin32Thread & PsGetThreadWin32Thread can handle this, example:
+	
+	/*
+	void* get_win32() {
+		return PsGetThreadWin32Thread(ethr);
+	}
+	
+	void set_win32(void* new_, void* buffer) {
+		void* current = get_win32();
+		PsSetThreadWin32Thread(ethr, NULL, current); // reset win32
+		PsSetThreadWin32Thread(ethr, new_, NULL); // modify win32
+
+		if (buffer && current)
+			*reinterpret_cast<void**>(buffer) = current;
+	}
+	
+	void* o_win32 = NULL;
+	set_win32(process_thread.get_win32(), &o_win32);
+	*/
+	
+	// a hard notice though, you must have a current system thread, or thread hijack one, or hook KeGetCurrentThread, for this to work
+	// you can verify you get a system thread (or have one) by verifying if KeGetCurrentThread is NULL
+	
+	// so now to explain why this call works here, but no where else in this driver or other drivers
+	// since it is in process context, and deviceiocontrol does a shit ton of thread movement and copying
+	// it gives this the win32 thread of the process, where system threads dont have a win32 equivalent, process threads do
+	// and this gets a process threads win32, now that you know that you can see why the example is necessary
+
+	// btw the function actually returns a _WND*, the structure has changed a lot over the years so some self analysis is heavily required
+	// i might post a more up to date version of the structure here but that is not a guarantee
+	
+	switch ( curr_stack->Parameters.DeviceIoControl.IoControlCode )
+	{
+	case IOCTL_GET_WINDOW_THREAD_CTX:
+	{
+		const auto curr_request = reinterpret_cast< generic_thread_ctx_t* >( request_packet->AssociatedIrp.SystemBuffer );
+
+		if ( !curr_request )
+		{
+			DBG( "[!] Corrupt request sent to the dispatcher\n" );
+			break;
+		}
+
+		const auto window_instance = ValidateHwnd( curr_request->window_handle );
+
+		if ( !window_instance
+			 || !window_instance->thread_info )
+		{
+			DBG( "[!] ValidateHwnd call failed\n" );
+			break;
+		}
+
+		curr_request->thread_pointer = reinterpret_cast< uint64_t >( window_instance->thread_info->owning_thread );
+
+		bytes_operated = sizeof( generic_thread_ctx_t );
+		break;
+	}
+	case IOCTL_SET_WINDOW_THREAD_CTX:
+	{
+		const auto curr_request = reinterpret_cast< generic_thread_ctx_t* >( request_packet->AssociatedIrp.SystemBuffer );
+
+		if ( !curr_request )
+		{
+			DBG( "[!] Corrupt request sent to the dispatcher\n" );
+			break;
+		}
+
+		const auto window_instance = ValidateHwnd( curr_request->window_handle );
+
+		if ( !window_instance 
+			 || !window_instance->thread_info )
+		{
+			DBG( "[!] ValidateHwnd call failed\n" );
+			break;
+		}
+
+		window_instance->thread_info->owning_thread = reinterpret_cast< PETHREAD >( curr_request->thread_pointer );
+
+		bytes_operated = sizeof( generic_thread_ctx_t );
+		break;
+	}
+	default:break;
+	}
+
+	request_packet->IoStatus.Information = static_cast< uint32_t >( bytes_operated );
+	request_packet->IoStatus.Status = operation_status;
+
+	IoCompleteRequest( request_packet, FALSE );
+
+	return operation_status;
+}
+
+```
+
+`window_hijack/includes/dispatch/control.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_CONTROL_MJ_HPP
+#define WNDHIJACK_CONTROL_MJ_HPP
+
+#include <modules/export_getter.hpp>
+#include <defs/drv.hpp>
+#include <defs/nt.hpp>
+
+#define IOCTL_GET_WINDOW_THREAD_CTX CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1337, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_SET_WINDOW_THREAD_CTX CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1338, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+namespace wnd_hjk
+{
+	struct generic_thread_ctx_t
+	{
+		uint64_t window_handle;
+		uint64_t thread_pointer;
+	};
+
+	NTSTATUS control_handler( PDEVICE_OBJECT device_object, PIRP request_packet );
+}
+
+#endif
+```
+
+`window_hijack/includes/dispatch/filler.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_FILLER_MJ_HPP
+#define WNDHIJACK_FILLER_MJ_HPP
+
+#include <defs/drv.hpp>
+
+namespace wnd_hjk
+{
+	inline NTSTATUS filler_handler( PDEVICE_OBJECT, PIRP )
+	{
+		return STATUS_SUCCESS;
+	}
+}
+
+#endif
+```
+
+`window_hijack/includes/modules/data_getter.cpp`:
+
+```cpp
+#include "data_getter.hpp"
+
+#include <modules/data_getter.hpp>
+
+wnd_hjk::image_data_t wnd_hjk::find_module( const char* module_name )
+{
+	// allocate an initial buffer with 0x2000 bytes, this probably won't be enough for ZwQuerySystemInformation
+	uint32_t buffer_bytes_sz = 0x2000;
+	smart::alloc buffer_bytes{ ExAllocatePoolWithTag( PagedPool, buffer_bytes_sz, pool_tag ) };
+
+	if ( !buffer_bytes )
+		return {};
+
+	// 11 is the enum for SystemModuleInformation
+	auto last_status = ZwQuerySystemInformation( 11, buffer_bytes.get( ), buffer_bytes_sz, reinterpret_cast< PULONG >( &buffer_bytes_sz ) );
+
+	// if the status returned indicates that the buffer was too small, keep reallocating until we have a buffer big enough to store the data
+	while ( last_status == STATUS_INFO_LENGTH_MISMATCH )
+	{
+		buffer_bytes.reset( ExAllocatePoolWithTag( PagedPool, buffer_bytes_sz, pool_tag ) );
+
+		if ( !buffer_bytes )
+			return {};
+
+		last_status = ZwQuerySystemInformation( 11, buffer_bytes.get( ), buffer_bytes_sz, reinterpret_cast< PULONG >( &buffer_bytes_sz ) );
+	}
+
+	if ( !NT_SUCCESS( last_status ) )
+	{
+		DBG( "[!] ZwQuerySystemInformation failed at line %lu in %s with status 0x%x\n", __LINE__, __FILE__, last_status );
+		return {};
+	}
+
+	// now iterate through the data
+	const auto module_list = reinterpret_cast< nt::rtl_modules* >( buffer_bytes.get( ) );
+
+	for ( auto i = 0u; i < module_list->count; i++ )
+	{
+		const auto curr_module = &module_list->modules[ i ];
+
+		// get the file name from the full file path, we could also just avoid this and do strstr instead of strcmp
+		const auto curr_module_name = reinterpret_cast< char* >( curr_module->full_path ) + curr_module->file_name_offset;
+
+		// return value of strcmp is 0 incase there's full collision, otherwise it's the first character that mismatches
+		if ( strcmp( curr_module_name, module_name ) != 0 )
+			continue;
+
+		return { curr_module->image_base, curr_module->image_size };
+	}
+
+	return {};
+}
+```
+
+`window_hijack/includes/modules/data_getter.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_MODULE_GETTER_HPP
+#define WNDHIJACK_MODULE_GETTER_HPP
+
+#include <defs/nt.hpp>
+#include <defs/smart.hpp>
+
+namespace wnd_hjk
+{
+	extern "C" NTSYSAPI NTSTATUS NTAPI ZwQuerySystemInformation( ULONG, PVOID, ULONG, PULONG );
+
+	image_data_t find_module( const char* module_name );
+}
+
+#endif
+```
+
+`window_hijack/includes/modules/export_getter.cpp`:
+
+```cpp
+#include "export_getter.hpp"
+
+#include <modules/export_getter.hpp>
+
+uint8_t* wnd_hjk::find_export( const uint64_t module_addr, const char* export_name )
+{
+	if ( !module_addr )
+		return nullptr;
+
+	// imo it's better to use this function than manually parse exports yourself
+	return reinterpret_cast< uint8_t* >(
+		RtlFindExportedRoutineByName( reinterpret_cast< void* >( module_addr ), export_name ) );
+}
+
+uint8_t* wnd_hjk::find_export( const char* module_name, const char* export_name )
+{
+	return find_export( find_module( module_name ).base_address, export_name );
+}
+```
+
+`window_hijack/includes/modules/export_getter.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_EXPORT_GETTER_HPP
+#define WNDHIJACK_EXPORT_GETTER_HPP
+
+#include <defs/nt.hpp>
+#include <defs/smart.hpp>
+
+#include "data_getter.hpp"
+
+namespace wnd_hjk
+{
+	extern "C" NTSYSAPI PVOID NTAPI RtlFindExportedRoutineByName( PVOID, PCCH );
+
+	uint8_t* find_export( const char* module_name, const char* export_name );
+	uint8_t* find_export( const uint64_t module_address, const char* export_name );
+}
+
+#endif
+```
+
+`window_hijack/includes/utils/drv_utils.cpp`:
+
+```cpp
+#include "drv_utils.hpp"
+
+UNICODE_STRING wnd_hjk::make_ustr( const wchar_t* str )
+{
+	UNICODE_STRING string{};
+
+	string.Buffer = const_cast< wchar_t* >( str );
+
+	auto str_len = wcslen( str ) * 2;
+
+	if ( str_len >= 0xfffe )
+		str_len = 0xfffc;
+
+	string.Length = static_cast< USHORT >( str_len );
+	string.MaximumLength = static_cast< USHORT >( str_len + 2 );
+
+	return string;
+}
+```
+
+`window_hijack/includes/utils/drv_utils.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_DRV_UTILS_HPP
+#define WNDHIJACK_DRV_UTILS_HPP
+
+#include <defs/drv.hpp>
+
+namespace wnd_hjk
+{
+	UNICODE_STRING make_ustr( const wchar_t* str );
+}
+
+#define USTR(s) ::wnd_hjk::make_ustr(s)
+
+#endif
+```
+
+`window_hijack/sources/drv_main.cpp`:
+
+```cpp
+#include <utils/drv_utils.hpp>
+
+#include <dispatch/filler.hpp>
+#include <dispatch/control.hpp>
+
+void DriverUnload( PDRIVER_OBJECT driver_object )
+{
+	auto dos_device_ustr = USTR( wnd_hjk::dos_device_name );
+
+	IoDeleteSymbolicLink( &dos_device_ustr );
+	IoDeleteDevice( driver_object->DeviceObject );
+}
+
+NTSTATUS DriverEntry( PDRIVER_OBJECT driver_object, PUNICODE_STRING )
+{
+	DBG( "[+] entry point called\n" );
+
+	auto dos_device_ustr = USTR( wnd_hjk::dos_device_name );
+	auto device_ustr = USTR( wnd_hjk::device_name );
+
+	if ( !NT_SUCCESS( IoCreateDevice( driver_object,
+		 0,
+		 &device_ustr,
+		 FILE_DEVICE_UNKNOWN,
+		 FILE_DEVICE_SECURE_OPEN,
+		 FALSE,
+		 &wnd_hjk::device_object ) ) )
+	{
+		DBG( "[!] failed to create device object\n" );
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	if ( !NT_SUCCESS( IoCreateSymbolicLink( &dos_device_ustr,
+		 &device_ustr ) ) )
+	{
+		DBG( "[!] failed to create symbolic link\n" );
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	for ( auto i = 0u; i < IRP_MJ_MAXIMUM_FUNCTION; i++ )
+		driver_object->MajorFunction[ i ] = wnd_hjk::filler_handler;
+
+	driver_object->MajorFunction[ IRP_MJ_DEVICE_CONTROL ] = wnd_hjk::control_handler;
+	driver_object->DriverUnload = DriverUnload;
+
+	wnd_hjk::device_object->Flags |= DO_DIRECT_IO;
+	wnd_hjk::device_object->Flags &= ~DO_DEVICE_INITIALIZING;
+
+	DBG( "[!] initialized driver!\n" );
+
+	return STATUS_SUCCESS;
+}
+```
+
+`window_hijack/window_hijack.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM">
+      <Configuration>Release</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{E9213425-AF56-42EB-B7E4-30B080193B60}</ProjectGuid>
+    <TemplateGuid>{1bc93793-694f-48fe-9372-81e2b05556fd}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">Win32</Platform>
+    <RootNamespace>window_hijack</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <EnableInf2cat>false</EnableInf2cat>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>
+    <EnableInf2cat>false</EnableInf2cat>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)/includes;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <UseFullPaths>false</UseFullPaths>
+      <ControlFlowGuard>false</ControlFlowGuard>
+    </ClCompile>
+    <Link>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)/includes;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <TreatWChar_tAsBuiltInType>true</TreatWChar_tAsBuiltInType>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <CompileAs>CompileAsCpp</CompileAs>
+      <UseFullPaths>false</UseFullPaths>
+      <ControlFlowGuard>false</ControlFlowGuard>
+    </ClCompile>
+    <Link>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <FilesToPackage Include="$(TargetPath)" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="includes\dispatch\control.cpp" />
+    <ClCompile Include="includes\modules\data_getter.cpp" />
+    <ClCompile Include="includes\modules\export_getter.cpp" />
+    <ClCompile Include="includes\utils\drv_utils.cpp" />
+    <ClCompile Include="sources\drv_main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\defs\drv.hpp" />
+    <ClInclude Include="includes\defs\nt.hpp" />
+    <ClInclude Include="includes\defs\smart.hpp" />
+    <ClInclude Include="includes\dispatch\control.hpp" />
+    <ClInclude Include="includes\dispatch\filler.hpp" />
+    <ClInclude Include="includes\modules\data_getter.hpp" />
+    <ClInclude Include="includes\modules\export_getter.hpp" />
+    <ClInclude Include="includes\utils\drv_utils.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`window_hijack/window_hijack.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="sources\drv_main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="includes\modules\data_getter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="includes\modules\export_getter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="includes\dispatch\control.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="includes\utils\drv_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\defs\nt.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\defs\smart.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\defs\drv.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\modules\data_getter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\modules\export_getter.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\dispatch\control.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\dispatch\filler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\utils\drv_utils.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
+
+`window_hijack_cli/includes/defs/cli.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_CLIENT_DEFS_HPP
+#define WNDHIJACK_CLIENT_DEFS_HPP
+
+#include <stdint.h>
+#include <algorithm>
+
+namespace wnd_hjk
+{
+	using vec2_t = std::pair<float, float>;
+
+	inline vec2_t screen_resolution{};
+}
+
+#endif
+```
+
+`window_hijack_cli/includes/interface/driver.cpp`:
+
+```cpp
+#include "driver.hpp"
+
+bool drv_interface::initialize( )
+{
+	driver_handle = {
+		CreateFileW( driver_name, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, INVALID_HANDLE_VALUE ),
+		&CloseHandle
+	};
+
+	if ( driver_handle.get( ) == INVALID_HANDLE_VALUE )
+	{
+		printf( "[-] driver isn't loaded\n" );
+		return false;
+	}
+
+	printf( "[+] opened driver handle : 0x%p\n", driver_handle.get( ) );
+	return true;
+}
+
+void drv_interface::get_thread( HWND window_handle, uint64_t* thread_context )
+{
+	generic_thread_ctx_t request{};
+
+	request.window_handle = reinterpret_cast< uint64_t >( window_handle );
+	request.thread_pointer = 0;
+
+	if ( !DeviceIoControl(
+		driver_handle.get( ),
+		IOCTL_GET_WINDOW_THREAD_CTX,
+		&request,
+		sizeof( request ),
+		&request,
+		sizeof( request ),
+		nullptr,
+		nullptr ) )
+		return;
+
+	*thread_context = request.thread_pointer;
+}
+
+void drv_interface::set_thread( HWND window_handle, uint64_t thread_context )
+{
+	generic_thread_ctx_t request{};
+
+	request.window_handle = reinterpret_cast< uint64_t >( window_handle );
+	request.thread_pointer = thread_context;
+	request.thread_alternative = thread_context;
+
+	if ( !DeviceIoControl(
+		driver_handle.get( ),
+		IOCTL_SET_WINDOW_THREAD_CTX,
+		&request,
+		sizeof( request ),
+		&request,
+		sizeof( request ),
+		nullptr,
+		nullptr ) )
+		return;
+}
+```
+
+`window_hijack_cli/includes/interface/driver.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_DRIVER_INTERFACE_HPP
+#define WNDHIJACK_DRIVER_INTERFACE_HPP
+
+#include <windows.h>
+#include <stdint.h>
+
+#include <memory>
+
+#include "driver_defs.hpp"
+
+namespace drv_interface
+{
+	constexpr const wchar_t* driver_name = L"\\\\.\\secret_club";
+	inline std::unique_ptr<void, decltype( &CloseHandle )> driver_handle = { nullptr, nullptr };
+
+	bool initialize( );
+
+	void get_thread( HWND window_handle, uint64_t* thread_context );
+	void set_thread( HWND window_handle, uint64_t thread_context );
+}
+
+#endif
+```
+
+`window_hijack_cli/includes/interface/driver_defs.hpp`:
+
+```hpp
+#ifndef WNDHIJACK_DRIVER_DEFS_HPP
+#define WNDHIJACK_DRIVER_DEFS_HPP
+
+#include <windows.h>
+#include <stdint.h>
+
+#define IOCTL_GET_WINDOW_THREAD_CTX CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1337, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+#define IOCTL_SET_WINDOW_THREAD_CTX CTL_CODE(FILE_DEVICE_UNKNOWN, 0x1338, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
+
+namespace drv_interface
+{
+	struct generic_thread_ctx_t
+	{
+		uint64_t window_handle;
+		uint64_t thread_pointer;
+		uint64_t thread_alternative;
+	};
+}
+
+#endif
+```
+
+`window_hijack_cli/includes/renderer/dx_renderer.hpp`:
+
+```hpp
+#pragma once
+#include <algorithm>
+#include <random>
+#include <d3d11_2.h>
+#include <d2d1_3helper.h>
+#include <dwrite_3.h>
+#include <dcomp.h>
+#include <wrl.h>
+#include <iterator>
+#include <interface/driver.hpp>
+#include <defs/cli.hpp>
+
+#pragma comment( lib, "dxgi" )
+#pragma comment( lib, "d2d1" )
+#pragma comment( lib, "d3d11" )
+#pragma comment( lib, "dcomp" )
+#pragma comment( lib, "dwrite" )
+
+#define RET_CHK(x) if ( x != S_OK ) return
+#define RET_CHK2(x) if ( x != S_OK ) { drv_interface::set_thread( remote_window, remote_thread ); return; }
+
+class d2d_window_t
+{
+public:
+	d2d_window_t( )
+	{
+		_name.reserve( 16u );
+		std::generate_n( std::back_inserter( _name ), 16u, [ ]
+						 {
+							 thread_local std::mt19937_64 mersenne_engine( std::random_device{}( ) );
+							 const std::uniform_int_distribution<> distribution( 97, 122 ); // 'a', 'z'
+							 return static_cast< uint8_t >( distribution( mersenne_engine ) );
+						 } );
+
+		WNDCLASSA window_class
+		{
+			0,
+			[ ]( const HWND window, const UINT message, const WPARAM wparam, const LPARAM lparam ) -> LRESULT
+			{
+				return DefWindowProcA( window, message, wparam, lparam );
+			},
+			0,
+			0,
+			GetModuleHandleW( nullptr ),
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			_name.c_str( )
+		};
+
+		RegisterClassA( &window_class );
+
+		_handle = CreateWindowExA( 0, _name.c_str( ), "", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, window_class.hInstance, nullptr );
+
+	}
+
+	~d2d_window_t( )
+	{
+
+		DestroyWindow( _handle );
+		UnregisterClassA( _name.c_str( ), GetModuleHandleW( nullptr ) );
+	}
+
+	HWND _handle;
+	std::string _name;
+};
+
+template <typename T>
+using ComPtr = Microsoft::WRL::ComPtr<T>;
+
+class d2d_renderer_t
+{
+public:
+	d2d_renderer_t( const HWND local_window_handle, const HWND process_window_handle ) : remote_window( process_window_handle ), is_destroyed( false )
+	{
+		ComPtr<ID3D11Device> d3d_device;
+		RET_CHK( D3D11CreateDevice( nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &d3d_device, nullptr, nullptr ) );
+
+		printf( "[+] d3d11 device : 0x%p\n", d3d_device.Get( ) );
+
+		ComPtr<IDXGIDevice> dxgi_device;
+		RET_CHK( d3d_device.As( &dxgi_device ) );
+
+		printf( "[+] dxgi device : 0x%p\n", dxgi_device.Get( ) );
+
+		ComPtr<IDXGIFactory2> dxgi_factory;
+		RET_CHK( CreateDXGIFactory2( 0, __uuidof( IDXGIFactory2 ), reinterpret_cast< void** >( dxgi_factory.GetAddressOf( ) ) ) );
+
+		printf( "[+] dxgi factory : 0x%p\n", dxgi_factory.Get( ) );
+
+		DXGI_SWAP_CHAIN_DESC1 description{ };
+		description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		description.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+		description.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+		description.BufferCount = 2;
+		description.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
+		description.SampleDesc.Count = 1;
+
+		RECT rect;
+		if ( !GetClientRect( remote_window, &rect ) )
+			return;
+
+		// fucking compiler warnings
+
+		description.Width = static_cast< UINT >( rect.right - rect.left );
+		description.Height = static_cast< UINT >( rect.bottom - rect.top );
+
+		wnd_hjk::screen_resolution.first = static_cast< float >( description.Width );
+		wnd_hjk::screen_resolution.second = static_cast< float >( description.Height );
+
+		RET_CHK( dxgi_factory->CreateSwapChainForComposition( dxgi_device.Get( ), &description, nullptr, dxgi_chain.GetAddressOf( ) ) );
+
+		printf( "[+] dxgi swap chain : 0x%p\n", dxgi_chain.Get( ) );
+
+		const D2D1_FACTORY_OPTIONS factory_options = { D2D1_DEBUG_LEVEL_NONE };
+
+		ComPtr<ID2D1Factory2> d2d_factory;
+		RET_CHK( D2D1CreateFactory( D2D1_FACTORY_TYPE_SINGLE_THREADED, factory_options, d2d_factory.GetAddressOf( ) ) );
+
+		printf( "[+] d2d1 factory : 0x%p\n", d2d_factory.Get( ) );
+
+		ComPtr<ID2D1Device1> d2d_device;
+		RET_CHK( d2d_factory->CreateDevice( dxgi_device.Get( ), d2d_device.GetAddressOf( ) ) );
+
+		printf( "[+] d2d1 device : 0x%p\n", d2d_device.Get( ) );
+
+		RET_CHK( d2d_device->CreateDeviceContext( D2D1_DEVICE_CONTEXT_OPTIONS_ENABLE_MULTITHREADED_OPTIMIZATIONS, d2d_context.GetAddressOf( ) ) );
+
+		printf( "[+] d2d1 context : 0x%p\n", d2d_context.Get( ) );
+
+		ComPtr<IDXGISurface2> dxgi_surface;
+		RET_CHK( dxgi_chain->GetBuffer( 0, __uuidof( IDXGISurface2 ), reinterpret_cast< void** >( dxgi_surface.GetAddressOf( ) ) ) );
+
+		printf( "[+] dxgi surface : 0x%p\n", dxgi_surface.Get( ) );
+
+		D2D1_BITMAP_PROPERTIES1 bitmap_properties = { };
+		bitmap_properties.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
+		bitmap_properties.pixelFormat.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		bitmap_properties.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
+
+		ComPtr<ID2D1Bitmap1> d2d_bitmap;
+		RET_CHK( d2d_context->CreateBitmapFromDxgiSurface( dxgi_surface.Get( ), bitmap_properties, d2d_bitmap.GetAddressOf( ) ) );
+
+		printf( "[+] d2d1 bitmap : 0x%p\n", d2d_bitmap.Get( ) );
+
+		d2d_context->SetTarget( d2d_bitmap.Get( ) );
+
+		RET_CHK( d2d_context->CreateSolidColorBrush( D2D1::ColorF( D2D1::ColorF::Red ), d2d_brush.GetAddressOf( ) ) );
+
+		printf( "[+] d2d1 brush : 0x%p\n", d2d_brush.Get( ) );
+			
+		drv_interface::get_thread( local_window_handle, &local_thread );
+		drv_interface::get_thread( remote_window, &remote_thread );
+
+		printf( "[+] local window thread: 0x%llX\n[+] remote window thread: 0x%llX\n", local_thread, remote_thread );
+
+		printf( "[+] composing on window...\n" );
+
+		drv_interface::set_thread( remote_window, local_thread );
+
+		RET_CHK2( DCompositionCreateDevice( dxgi_device.Get( ), __uuidof( IDCompositionDevice ), reinterpret_cast< void** >( composition_device.GetAddressOf( ) ) ) )
+		RET_CHK2( composition_device->CreateTargetForHwnd( remote_window, TRUE, composition_target.GetAddressOf( ) ) )
+		RET_CHK2( composition_device->CreateVisual( composition_visual.GetAddressOf( ) ) )
+		RET_CHK2( composition_visual->SetContent( dxgi_chain.Get( ) ) )
+		RET_CHK2( composition_target->SetRoot( composition_visual.Get( ) ) )
+		RET_CHK2( composition_device->Commit( ) )
+		RET_CHK2( composition_device->WaitForCommitCompletion( ) )
+
+		drv_interface::set_thread( remote_window, remote_thread );
+
+		printf( "[+] window composed\n" );
+	}
+
+	void begin_scene( )
+	{
+		d2d_context->BeginDraw( );
+		d2d_context->Clear( );
+	}
+
+	void end_scene( )
+	{
+		d2d_context->EndDraw( );
+		dxgi_chain->Present( 0, 0 );
+	}
+
+	void draw_rectangle( const wnd_hjk::vec2_t& pos, const wnd_hjk::vec2_t& size )
+	{
+		const auto rectangle = D2D1::RectF( pos.first, pos.second, pos.first + size.second, pos.second + size.second );
+
+		d2d_context->FillRectangle( rectangle, d2d_brush.Get( ) );
+	}
+
+	void manual_destruct( )
+	{
+		if ( is_destroyed )
+			return;
+
+		is_destroyed = true;
+
+		drv_interface::set_thread( remote_window, local_thread );
+
+		composition_visual->SetContent( nullptr );
+		composition_visual->Release( );
+
+		composition_target->SetRoot( nullptr );
+		composition_target->Release( );
+
+		composition_device->Release( );
+
+		drv_interface::set_thread( remote_window, remote_thread );
+	}
+
+	~d2d_renderer_t( )
+	{
+		if ( is_destroyed )
+			return;
+
+		this->manual_destruct( );
+	}
+private:
+	ComPtr<IDXGISwapChain1> dxgi_chain;
+	ComPtr<ID2D1DeviceContext> d2d_context;
+
+	ComPtr<IDCompositionDevice> composition_device;
+	ComPtr<IDCompositionTarget> composition_target;
+	ComPtr<IDCompositionVisual> composition_visual;
+	ComPtr<ID2D1SolidColorBrush> d2d_brush;
+
+	uint64_t local_thread;
+	uint64_t remote_thread;
+
+	HWND remote_window;
+
+	bool is_destroyed;
+};
+```
+
+`window_hijack_cli/sources/cli_main.cpp`:
+
+```cpp
+#include <interface/driver.hpp>
+#include <renderer/dx_renderer.hpp>
+
+#include <thread>
+#include <chrono>
+
+int wmain( int argc, wchar_t** argv )
+{
+	if ( argc < 2 )
+	{
+		printf( "[!] invalid usage, proper: window_hijack_cli.exe [window_class_name]\n" );
+		return 0;
+	}
+
+	if ( !drv_interface::initialize( ) )
+		return 0;
+
+	const auto exterior_window_handle = FindWindowW( argv[ 1 ], nullptr );
+
+	if ( !exterior_window_handle )
+	{
+		printf( "[!] can't get exterior window's handle\n" );
+		return 0;
+	}
+
+	printf( "[+] found window : 0x%p\n", exterior_window_handle );
+
+	d2d_window_t window{ };
+	d2d_renderer_t renderer{ window._handle, exterior_window_handle };
+
+	namespace thread = std::this_thread;
+	using ms = std::chrono::milliseconds;
+
+	while ( !GetAsyncKeyState( VK_END ) )
+	{
+		static const auto center = wnd_hjk::vec2_t{ wnd_hjk::screen_resolution.first * 0.5f, wnd_hjk::screen_resolution.second * 0.5f };
+
+		renderer.begin_scene( );
+		renderer.draw_rectangle( center, { 150.f, 150.f } );
+		renderer.end_scene( );
+
+		thread::sleep_for( ms( 1 ) );
+	}
+
+	return 1;
+}
+```
+
+`window_hijack_cli/window_hijack_cli.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <ProjectGuid>{BE89522F-B203-468B-B84E-505417733286}</ProjectGuid>
+    <RootNamespace>windowhijackcli</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v142</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)includes</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)includes</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="includes\interface\driver.cpp" />
+    <ClCompile Include="sources\cli_main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\defs\cli.hpp" />
+    <ClInclude Include="includes\interface\driver.hpp" />
+    <ClInclude Include="includes\interface\driver_defs.hpp" />
+    <ClInclude Include="includes\renderer\dx_renderer.hpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`window_hijack_cli/window_hijack_cli.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="sources\cli_main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="includes\interface\driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\interface\driver.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\interface\driver_defs.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\renderer\dx_renderer.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="includes\defs\cli.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
+```
