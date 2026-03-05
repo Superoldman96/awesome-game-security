@@ -1,0 +1,1004 @@
+Project Path: arc_gmh5225_OpenLumina_xnsq8yg4
+
+Source Tree:
+
+```txt
+arc_gmh5225_OpenLumina_xnsq8yg4
+├── LICENSE
+├── OpenLumina
+│   ├── OpenLumina.cpp
+│   ├── OpenLumina.vcxproj
+│   ├── OpenLumina.vcxproj.filters
+│   ├── PropertySheet.props
+│   ├── dllmain.cpp
+│   ├── framework.h
+│   ├── pch.cpp
+│   ├── pch.h
+│   └── plugin_ctx.h
+├── OpenLumina.sln
+├── README.md
+└── lumina_ca
+    ├── README.md
+    ├── commands.cmd
+    ├── commands.sh
+    ├── openssl_intermediate.cnf
+    ├── openssl_lumina.cnf
+    └── openssl_root.cnf
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2024 TOM_RUS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`OpenLumina.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.10.34707.107
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OpenLumina", "OpenLumina\OpenLumina.vcxproj", "{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		ida32 Debug|x64 = ida32 Debug|x64
+		ida32 Release|x64 = ida32 Release|x64
+		ida64 Debug|x64 = ida64 Debug|x64
+		ida64 Release|x64 = ida64 Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida32 Debug|x64.ActiveCfg = ida32 Debug|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida32 Debug|x64.Build.0 = ida32 Debug|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida32 Release|x64.ActiveCfg = ida32 Release|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida32 Release|x64.Build.0 = ida32 Release|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida64 Debug|x64.ActiveCfg = ida64 Debug|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida64 Debug|x64.Build.0 = ida64 Debug|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida64 Release|x64.ActiveCfg = ida64 Release|x64
+		{0C1F1447-DAE4-4FA1-BB44-CD3FEE29462F}.ida64 Release|x64.Build.0 = ida64 Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {643F44C8-D40B-411D-996F-F5211E79422E}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`OpenLumina/OpenLumina.cpp`:
+
+```cpp
+#include "pch.h"
+
+#define PLUGIN_NAME		"OpenLumina"
+#define PLUGIN_DESC		"Allows IDA to connect to third party Lumina servers"
+#define PLUGIN_PREFIX	"OpenLumina: "
+
+bool load_and_decode_certificate(bytevec_t* buffer, const char* certFilePath)
+{
+    auto certFile = fopenRT(certFilePath);
+
+    if (certFile != nullptr)
+    {
+        qstring cert;
+        qstring line;
+
+        if (qgetline(&line, certFile) >= 0)
+        {
+            do
+            {
+                if (strcmp(line.c_str(), "-----BEGIN CERTIFICATE-----"))
+                {
+                    if (!strcmp(line.c_str(), "-----END CERTIFICATE-----"))
+                        break;
+
+                    if (line.length())
+                        cert += line;
+                }
+            } while (qgetline(&line, certFile) >= 0);
+        }
+
+        qfclose(certFile);
+
+        if ((debug & IDA_DEBUG_LUMINA) != 0)
+            msg(PLUGIN_PREFIX "cert read: %s\n", cert.c_str());
+
+        return base64_decode(buffer, cert.c_str(), cert.length());
+    }
+    return false;
+}
+
+static plugin_ctx_t* s_plugin_ctx = nullptr;
+
+static BOOL(WINAPI* TrueCertAddEncodedCertificateToStore)(HCERTSTORE hCertStore, DWORD dwCertEncodingType, const BYTE* pbCertEncoded, DWORD cbCertEncoded, DWORD dwAddDisposition, PCCERT_CONTEXT* ppCertContext) = CertAddEncodedCertificateToStore;
+
+static BOOL WINAPI HookedCertAddEncodedCertificateToStore(HCERTSTORE hCertStore, DWORD dwCertEncodingType, const BYTE* pbCertEncoded, DWORD cbCertEncoded, DWORD dwAddDisposition, PCCERT_CONTEXT* ppCertContext)
+{
+    if ((debug & IDA_DEBUG_LUMINA) != 0)
+        msg(PLUGIN_PREFIX "HookedCertAddEncodedCertificateToStore called\n");
+
+    if (s_plugin_ctx != nullptr && s_plugin_ctx->decodedCert.size() != 0)
+    {
+        // inject our root certificate to certificate store
+        if (!TrueCertAddEncodedCertificateToStore(hCertStore, X509_ASN_ENCODING, &s_plugin_ctx->decodedCert[0], s_plugin_ctx->decodedCert.size(), CERT_STORE_ADD_USE_EXISTING, nullptr))
+        {
+            msg(PLUGIN_PREFIX "failed to add our root certificate to certificate store!\n");
+        }
+        else
+        {
+            if ((debug & IDA_DEBUG_LUMINA) != 0)
+                msg(PLUGIN_PREFIX "added our root certificate to certificate store\n");
+        }
+    }
+
+    // continue adding official root certificate to certificate store 
+    return TrueCertAddEncodedCertificateToStore(hCertStore, dwCertEncodingType, pbCertEncoded, cbCertEncoded, dwAddDisposition, ppCertContext);
+}
+
+bool idaapi plugin_ctx_t::run(size_t arg)
+{
+    msg(PLUGIN_PREFIX "plugin run called\n");
+    return true;
+}
+
+bool plugin_ctx_t::init_hook()
+{
+    char fileNameBuffer[MAX_PATH];
+
+    auto certFileName = getsysfile(fileNameBuffer, sizeof(fileNameBuffer), "hexrays.crt", nullptr);
+
+    if (certFileName == nullptr)
+    {
+        msg(PLUGIN_PREFIX "can't find hexrays.crt file in your IDA folder!\n");
+        return false;
+    }
+
+    if ((debug & IDA_DEBUG_LUMINA) != 0)
+        msg(PLUGIN_PREFIX "using certificate file \"%s\"\n", certFileName);
+
+    if (!load_and_decode_certificate(&decodedCert, certFileName))
+    {
+        msg(PLUGIN_PREFIX "failed to decode certificate file!\n");
+        return false;
+    }
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach(&(PVOID&)TrueCertAddEncodedCertificateToStore, HookedCertAddEncodedCertificateToStore);
+    DetourTransactionCommit();
+
+    if ((debug & IDA_DEBUG_LUMINA) != 0)
+        msg(PLUGIN_PREFIX "certificate hook applied\n");
+
+    return true;
+}
+
+plugin_ctx_t::~plugin_ctx_t()
+{
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourDetach(&(PVOID&)TrueCertAddEncodedCertificateToStore, HookedCertAddEncodedCertificateToStore);
+    DetourTransactionCommit();
+}
+
+static plugmod_t* idaapi init()
+{
+    auto ctx = new plugin_ctx_t;
+
+    if (ctx == nullptr)
+    {
+        msg(PLUGIN_PREFIX "plugin ctx create failed!\n");
+        return nullptr;
+    }
+
+    if (!ctx->init_hook())
+    {
+        msg(PLUGIN_PREFIX "plugin init_hook failed!\n");
+        delete ctx;
+        return nullptr;
+    }
+
+    s_plugin_ctx = ctx;
+
+    return ctx;
+}
+
+plugin_t PLUGIN =
+{
+    IDP_INTERFACE_VERSION,
+    // PLUGIN_HIDE - Plugin should not appear in the Edit, Plugins menu.
+    // PLUGIN_FIX - Load plugin when IDA starts and keep it in the memory until IDA stops
+    // PLUGIN_MULTI - The plugin can work with multiple idbs in parallel
+    PLUGIN_HIDE | PLUGIN_FIX | PLUGIN_MULTI,	// Plugin flags
+    init,										// Initialize plugin
+    nullptr,									// Terminate plugin
+    nullptr,									// Invoke plugin
+    PLUGIN_DESC,								// Long comment about the plugin
+    nullptr,									// Multiline help about the plugin
+    PLUGIN_NAME,								// Preferred short name of the plugin
+    nullptr,									// Preferred hotkey to run the plugin
+};
+
+```
+
+`OpenLumina/OpenLumina.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="ida32 Debug|x64">
+      <Configuration>ida32 Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ida32 Release|x64">
+      <Configuration>ida32 Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ida64 Debug|x64">
+      <Configuration>ida64 Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ida64 Release|x64">
+      <Configuration>ida64 Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{0c1f1447-dae4-4fa1-bb44-cd3fee29462f}</ProjectGuid>
+    <RootNamespace>OpenLumina</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>openlumina</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="PropertySheet.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ida32 Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ida32 Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(IDADIR)\plugins\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(IDADIR)\plugins\</OutDir>
+    <TargetName>$(ProjectName)64</TargetName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(IDADIR)\plugins\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(IDADIR)\plugins\</OutDir>
+    <TargetName>$(ProjectName)64</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;OPENLUMINA_EXPORTS;_WINDOWS;_USRDLL;__NT__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(IDASDK)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/EXPORT:PLUGIN %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ida.lib;version.lib;crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(IDASDK)\lib\x64_win_vc_32;$(IDASDK)\lib\x64_win_vc_32_pro</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;OPENLUMINA_EXPORTS;_WINDOWS;_USRDLL;__NT__;__EA64__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(IDASDK)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/EXPORT:PLUGIN %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ida.lib;version.lib;crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(IDASDK)\lib\x64_win_vc_64;$(IDASDK)\lib\x64_win_vc_64_pro</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ida32 Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;OPENLUMINA_EXPORTS;_WINDOWS;_USRDLL;__NT__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(IDASDK)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/EXPORT:PLUGIN %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ida.lib;version.lib;crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(IDASDK)\lib\x64_win_vc_32;$(IDASDK)\lib\x64_win_vc_32_pro</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ida64 Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>false</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;OPENLUMINA_EXPORTS;_WINDOWS;_USRDLL;__NT__;__EA64__;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <AdditionalIncludeDirectories>$(IDASDK)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExceptionHandling>false</ExceptionHandling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+      <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/EXPORT:PLUGIN %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>ida.lib;version.lib;crypt32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(IDASDK)\lib\x64_win_vc_64;$(IDASDK)\lib\x64_win_vc_64_pro</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="plugin_ctx.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="OpenLumina.cpp" />
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ida32 Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ida64 Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ida32 Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ida64 Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`OpenLumina/OpenLumina.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="framework.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OpenLumina.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
+```
+
+`OpenLumina/PropertySheet.props`:
+
+```props
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <IDADIR>..\$(Platform)\$(Configuration)</IDADIR>
+    <IDASDK>e:\ida77\idasdk77</IDASDK>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemDefinitionGroup />
+  <ItemGroup>
+    <BuildMacro Include="IDADIR">
+      <Value>$(IDADIR)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="IDASDK">
+      <Value>$(IDASDK)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+  </ItemGroup>
+</Project>
+```
+
+`OpenLumina/dllmain.cpp`:
+
+```cpp
+// dllmain.cpp : Defines the entry point for the DLL application.
+#include "pch.h"
+
+BOOL APIENTRY DllMain( HMODULE hModule,
+                       DWORD  ul_reason_for_call,
+                       LPVOID lpReserved
+                     )
+{
+    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+    {
+        char mutexName[32] = "";
+        sprintf_s(mutexName, "openlumina_v1_%X", GetCurrentProcessId());
+        return CreateMutexA(nullptr, FALSE, mutexName) && GetLastError() != ERROR_ALREADY_EXISTS;
+    }
+    return TRUE;
+}
+
+```
+
+`OpenLumina/framework.h`:
+
+```h
+#pragma once
+
+#define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
+// Windows Header Files
+#include <windows.h>
+#include <Wincrypt.h>
+
+```
+
+`OpenLumina/pch.cpp`:
+
+```cpp
+// pch.cpp: source file corresponding to the pre-compiled header
+
+#include "pch.h"
+
+// When you are using pre-compiled headers, this source file is necessary for compilation to succeed.
+
+```
+
+`OpenLumina/pch.h`:
+
+```h
+// pch.h: This is a precompiled header file.
+// Files listed below are compiled only once, improving build performance for future builds.
+// This also affects IntelliSense performance, including code completion and many code browsing features.
+// However, files listed here are ALL re-compiled if any one of them is updated between builds.
+// Do not add files here that you will be updating frequently as this negates the performance advantage.
+
+#ifndef PCH_H
+#define PCH_H
+
+// add headers that you want to pre-compile here
+#include "framework.h"
+
+#include <cstdio>
+
+#include <ida.hpp>
+#include <idp.hpp>
+#include <loader.hpp>
+#include <kernwin.hpp>
+#include <diskio.hpp>
+
+#include "detours/detours.h"
+
+#include "plugin_ctx.h"
+
+#endif //PCH_H
+
+```
+
+`OpenLumina/plugin_ctx.h`:
+
+```h
+#pragma once
+
+#include "pch.h"
+
+struct plugin_ctx_t : public plugmod_t
+{
+	bytevec_t decodedCert;
+	bool idaapi run(size_t arg) override;
+	bool init_hook();
+	~plugin_ctx_t() override;
+};
+
+```
+
+`README.md`:
+
+```md
+OpenLumina
+
+IDA plugin that allows connecting to third party Lumina servers.
+
+## Getting started
+
+1. Build or download precompiled version of the plugin and put it into your IDA\plugins directory
+2. Copy hexrays.crt certificate file provided by Lumina server owner to your IDA install directory
+
+## Building plugin
+
+1. Visual Studio 2022 is required for building plugin
+2. vcpkg package manager required if you don't want to configure dependencies yourself manually
+3. Install Microsoft Detours package through vcpkg `vcpkg install detours`
+4. Configure paths to your extracted IDA SDK directory and optionally your IDA install directory in PropertySheet.props file
+5. Open OpenLumina.sln in Visual Studio 2022 and build the plugin
+6. Copy compiled plugin binaries to your IDA\plugins directory if you haven't configured your IDA install directory in step 4 above
+
+## Generating TLS certificates for your own Lumina server
+
+See scripts in lumina_ca folder. Generating certificates requires OpenSSL 3.x to be installed and be on the PATH environment variable.
+
+## Troubleshooting
+
+Run IDA with "-z 00800000" command line switch (it must be in quotes) to see additional debug messages printed into "Output" window
+
+```
+
+`lumina_ca/README.md`:
+
+```md
+# Requirements
+Install OpenSSL 3.x or newer and make sure it's on the PATH environment variable before running those scripts
+
+# Generating TLS certificates
+Run commands.cmd (on Windows) or commands.sh (on Linux) to generate TLS certificates for your Lumina server and client
+
+Generated certificates will be copied to "out" directory
+
+# Using generated TLS certificates
+
+### Official private Lumina server
+Use "lumina.crt" and "lumina.key" on your official [private Lumina server](https://hex-rays.com/lumina/) (if you have a copy of it ofc)
+
+### Lumen server
+Use "lumen.p12" on your [Lumen server](https://github.com/naim94a/lumen)
+
+If you are hosting Lumen server on Windows OS, also install "intermediate.crt" to "Current User" certificate store under "Intermediate Certificate Authorities" -> "Certificates" category (it is automatically selected if you don't choose manually)
+
+Installing intermediate certificate is required to workaround Windows bug where server is not sending full certificate chain from "lumen.p12" certificate file to client
+
+### IDA clients
+Use "hexrays.crt" root certificate on your IDA clients
+
+```
+
+`lumina_ca/commands.cmd`:
+
+```cmd
+chcp 65001
+mkdir rootCA\certs
+mkdir rootCA\crl
+mkdir rootCA\newcerts
+mkdir rootCA\private
+mkdir rootCA\csr
+mkdir intermediateCA\certs
+mkdir intermediateCA\crl
+mkdir intermediateCA\newcerts
+mkdir intermediateCA\private
+mkdir intermediateCA\csr
+echo 01 > ./rootCA/serial
+echo 01 > ./intermediateCA/serial
+echo 01 > ./rootCA/crlnumber
+echo 01 > ./intermediateCA/crlnumber
+type NUL > ./rootCA/index.txt
+type NUL > ./intermediateCA/index.txt
+openssl genrsa -out ./rootCA/private/ca.key.pem 4096
+rem chmod 400 ./rootCA/private/ca.key.pem
+rem openssl rsa -noout -text -in ./rootCA/private/ca.key.pem
+openssl req -config openssl_root.cnf -key ./rootCA/private/ca.key.pem -utf8 -new -x509 -days 7300 -sha512 -extensions v3_ca -out ./rootCA/certs/ca.cert.pem -batch
+rem chmod 444 ./rootCA/certs/ca.cert.pem
+rem openssl x509 -noout -text -in ./rootCA/certs/ca.cert.pem
+openssl genrsa -out ./intermediateCA/private/intermediate.key.pem 4096
+rem chmod 400 ./intermediateCA/private/intermediate.key.pem
+openssl req -config openssl_intermediate.cnf -key ./intermediateCA/private/intermediate.key.pem -utf8 -new -sha512 -out ./intermediateCA/certs/intermediate.csr.pem -batch
+openssl ca -config openssl_root.cnf -extensions v3_intermediate_ca -days 3650 -utf8 -notext -md sha512 -in ./intermediateCA/certs/intermediate.csr.pem -out ./intermediateCA/certs/intermediate.cert.pem -batch
+rem chmod 444 ./intermediateCA/certs/intermediate.cert.pem
+rem openssl x509 -noout -text -in ./intermediateCA/certs/intermediate.cert.pem
+openssl verify -CAfile ./rootCA/certs/ca.cert.pem ./intermediateCA/certs/intermediate.cert.pem
+copy /b intermediateCA\certs\intermediate.cert.pem + rootCA\certs\ca.cert.pem intermediateCA\certs\ca-chain.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/intermediate.cert.pem
+openssl ecparam -name prime256v1 -genkey -out ./intermediateCA/private/vault.hex-rays.com.key.pem
+openssl req -config openssl_lumina.cnf -key ./intermediateCA/private/vault.hex-rays.com.key.pem -utf8 -new -sha256 -out ./intermediateCA/csr/vault.hex-rays.com.csr.pem -batch
+openssl ca -config openssl_intermediate.cnf -extensions server_cert -days 1825 -utf8 -notext -md sha256 -in ./intermediateCA/csr/vault.hex-rays.com.csr.pem -out ./intermediateCA/certs/vault.hex-rays.com.cert.pem -batch
+rem openssl x509 -noout -text -in ./intermediateCA/certs/vault.hex-rays.com.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/vault.hex-rays.com.cert.pem
+copy /b intermediateCA\certs\vault.hex-rays.com.cert.pem + intermediateCA\certs\intermediate.cert.pem intermediateCA\certs\vault.hex-rays.com.chain.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem
+mkdir out
+copy rootCA\certs\ca.cert.pem out\hexrays.crt
+copy intermediateCA\certs\intermediate.cert.pem out\intermediate.crt
+copy intermediateCA\certs\vault.hex-rays.com.chain.cert.pem out\lumina.crt
+copy intermediateCA\private\vault.hex-rays.com.key.pem out\lumina.key
+openssl pkcs12 -export -inkey ./intermediateCA/private/vault.hex-rays.com.key.pem -in ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem -out out/lumen.p12
+
+```
+
+`lumina_ca/commands.sh`:
+
+```sh
+mkdir -p ./rootCA/{certs,crl,newcerts,private,csr}
+mkdir -p ./intermediateCA/{certs,crl,newcerts,private,csr}
+echo 01 > ./rootCA/serial
+echo 01 > ./intermediateCA/serial
+echo 01 > ./rootCA/crlnumber
+echo 01 > ./intermediateCA/crlnumber
+touch ./rootCA/index.txt
+touch ./intermediateCA/index.txt
+openssl genrsa -out ./rootCA/private/ca.key.pem 4096
+chmod 400 ./rootCA/private/ca.key.pem
+#openssl rsa -noout -text -in ./rootCA/private/ca.key.pem
+openssl req -config openssl_root.cnf -key ./rootCA/private/ca.key.pem -utf8 -new -x509 -days 7300 -sha512 -extensions v3_ca -out ./rootCA/certs/ca.cert.pem -batch
+chmod 444 ./rootCA/certs/ca.cert.pem
+#openssl x509 -noout -text -in ./rootCA/certs/ca.cert.pem
+openssl genrsa -out ./intermediateCA/private/intermediate.key.pem 4096
+chmod 400 ./intermediateCA/private/intermediate.key.pem
+openssl req -config openssl_intermediate.cnf -key ./intermediateCA/private/intermediate.key.pem -utf8 -new -sha512 -out ./intermediateCA/certs/intermediate.csr.pem -batch
+openssl ca -config openssl_root.cnf -extensions v3_intermediate_ca -days 3650 -utf8 -notext -md sha512 -in ./intermediateCA/certs/intermediate.csr.pem -out ./intermediateCA/certs/intermediate.cert.pem -batch
+chmod 444 ./intermediateCA/certs/intermediate.cert.pem
+#openssl x509 -noout -text -in ./intermediateCA/certs/intermediate.cert.pem
+openssl verify -CAfile ./rootCA/certs/ca.cert.pem ./intermediateCA/certs/intermediate.cert.pem
+cat ./intermediateCA/certs/intermediate.cert.pem ./rootCA/certs/ca.cert.pem > ./intermediateCA/certs/ca-chain.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/intermediate.cert.pem
+openssl ecparam -name prime256v1 -genkey -out ./intermediateCA/private/vault.hex-rays.com.key.pem
+openssl req -config openssl_lumina.cnf -key ./intermediateCA/private/vault.hex-rays.com.key.pem -utf8 -new -sha256 -out ./intermediateCA/csr/vault.hex-rays.com.csr.pem -batch
+openssl ca -config openssl_intermediate.cnf -extensions server_cert -days 1825 -utf8 -notext -md sha256 -in ./intermediateCA/csr/vault.hex-rays.com.csr.pem -out ./intermediateCA/certs/vault.hex-rays.com.cert.pem -batch
+#openssl x509 -noout -text -in ./intermediateCA/certs/vault.hex-rays.com.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/vault.hex-rays.com.cert.pem
+cat ./intermediateCA/certs/vault.hex-rays.com.cert.pem ./intermediateCA/certs/intermediate.cert.pem > ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem
+openssl verify -CAfile ./intermediateCA/certs/ca-chain.cert.pem ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem
+mkdir out
+cp ./rootCA/certs/ca.cert.pem out/hexrays.crt
+cp ./intermediateCA/certs/intermediate.cert.pem out/intermediate.crt
+cp ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem out/lumina.crt
+cp ./intermediateCA/private/vault.hex-rays.com.key.pem out/lumina.key
+openssl pkcs12 -export -inkey ./intermediateCA/private/vault.hex-rays.com.key.pem -in ./intermediateCA/certs/vault.hex-rays.com.chain.cert.pem -out out/lumen.p12
+
+```
+
+`lumina_ca/openssl_intermediate.cnf`:
+
+```cnf
+[ ca ]                           # The default CA section
+default_ca = CA_default          # The default CA name
+
+[ CA_default ]                                           # Default settings for the intermediate CA
+dir               = ./intermediateCA                     # Intermediate CA directory
+certs             = $dir/certs                           # Certificates directory
+crl_dir           = $dir/crl                             # CRL directory
+new_certs_dir     = $dir/newcerts                        # New certificates directory
+database          = $dir/index.txt                       # Certificate index file
+serial            = $dir/serial                          # Serial number file
+RANDFILE          = $dir/private/.rand                   # Random number file
+private_key       = $dir/private/intermediate.key.pem    # Intermediate CA private key
+certificate       = $dir/certs/intermediate.cert.pem     # Intermediate CA certificate
+crl               = $dir/crl/intermediate.crl.pem        # Intermediate CA CRL
+crlnumber         = $dir/crlnumber                       # Intermediate CA CRL number
+crl_extensions    = crl_ext                              # CRL extensions
+default_crl_days  = 30                                   # Default CRL validity days
+default_md        = sha512                               # Default message digest
+preserve          = no                                   # Preserve existing extensions
+email_in_dn       = no                                   # Exclude email from the DN
+name_opt          = ca_default                           # Formatting options for names
+cert_opt          = ca_default                           # Certificate output options
+policy            = policy_loose                         # Certificate policy
+unique_subject    = no                                   # Allow multiple certs with the same DN
+x509_extensions   = v3_intermediate_ca                 # Extensions for intermediate CA certificate
+
+[ policy_loose ]                                         # Policy for less strict validation
+countryName             = optional                       # Country is optional
+stateOrProvinceName     = optional                       # State or province is optional
+localityName            = optional                       # Locality is optional
+organizationName        = optional                       # Organization is optional
+organizationalUnitName  = optional                       # Organizational unit is optional
+commonName              = supplied                       # Must provide a common name
+emailAddress            = optional                       # Email address is optional
+
+[ req ]                                                  # Request settings
+default_bits        = 4096                               # Default key size
+distinguished_name  = req_distinguished_name             # Default DN template
+string_mask         = utf8only                           # UTF-8 encoding
+default_md          = sha512                             # Default message digest
+prompt              = no                                 # Non-interactive mode
+x509_extensions     = v3_intermediate_ca                 # Extensions for intermediate CA certificate
+
+[ req_distinguished_name ]                               # Template for the DN in the CSR
+countryName                     = BE
+#stateOrProvinceName             = State or Province Name
+localityName                    = Liège
+0.organizationName              = Hex-Rays SA.
+#organizationalUnitName          = Organizational Unit Name
+commonName                      = Hex-Rays SA. Intermediate CA 2
+#emailAddress                    = Email Address
+
+[ v3_intermediate_ca ]                                      # Intermediate CA certificate extensions
+#subjectKeyIdentifier = hash                                 # Subject key identifier
+authorityKeyIdentifier = keyid:always                       # Authority key identifier
+basicConstraints = critical, CA:true, pathlen:0             # Basic constraints for a CA
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign # Key usage for a CA
+crlDistributionPoints = crldp1_section
+
+[crldp1_section]
+fullname = URI:http://crl.hex-rays.com/intermediate_ca_2.crl
+
+[ crl_ext ]                                                 # CRL extensions
+authorityKeyIdentifier=keyid:always                         # Authority key identifier
+
+[ server_cert ]                                             # Server certificate extensions
+#nsCertType = server                                         # Server certificate type
+#keyUsage = critical, digitalSignature, keyEncipherment      # Key usage for a server cert
+extendedKeyUsage = critical, serverAuth                     # Extended key usage for server authentication purposes (e.g., TLS/SSL servers).
+basicConstraints = critical, CA:FALSE                       # Not a CA certificate
+authorityKeyIdentifier = keyid                              # Authority key identifier linking the certificate to the issuer's public key.
+subjectKeyIdentifier = none                                 # Subject key identifier
+
+```
+
+`lumina_ca/openssl_lumina.cnf`:
+
+```cnf
+[ ca ]                           # The default CA section
+default_ca = CA_default          # The default CA name
+
+[ CA_default ]                                           # Default settings for the intermediate CA
+dir               = ./intermediateCA                     # Intermediate CA directory
+certs             = $dir/certs                           # Certificates directory
+crl_dir           = $dir/crl                             # CRL directory
+new_certs_dir     = $dir/newcerts                        # New certificates directory
+database          = $dir/index.txt                       # Certificate index file
+serial            = $dir/serial                          # Serial number file
+RANDFILE          = $dir/private/.rand                   # Random number file
+private_key       = $dir/private/intermediate.key.pem    # Intermediate CA private key
+certificate       = $dir/certs/intermediate.cert.pem     # Intermediate CA certificate
+crl               = $dir/crl/intermediate.crl.pem        # Intermediate CA CRL
+crlnumber         = $dir/crlnumber                       # Intermediate CA CRL number
+crl_extensions    = crl_ext                              # CRL extensions
+default_crl_days  = 30                                   # Default CRL validity days
+default_md        = sha512                               # Default message digest
+preserve          = no                                   # Preserve existing extensions
+email_in_dn       = no                                   # Exclude email from the DN
+name_opt          = ca_default                           # Formatting options for names
+cert_opt          = ca_default                           # Certificate output options
+policy            = policy_loose                         # Certificate policy
+unique_subject    = no                                   # Allow multiple certs with the same DN
+x509_extensions   = v3_intermediate_ca                 # Extensions for intermediate CA certificate
+
+[ policy_loose ]                                         # Policy for less strict validation
+countryName             = optional                       # Country is optional
+stateOrProvinceName     = optional                       # State or province is optional
+localityName            = optional                       # Locality is optional
+organizationName        = optional                       # Organization is optional
+organizationalUnitName  = optional                       # Organizational unit is optional
+commonName              = supplied                       # Must provide a common name
+emailAddress            = optional                       # Email address is optional
+
+[ req ]                                                  # Request settings
+default_bits        = 4096                               # Default key size
+distinguished_name  = req_distinguished_name             # Default DN template
+string_mask         = utf8only                           # UTF-8 encoding
+default_md          = sha512                             # Default message digest
+prompt              = no                                 # Non-interactive mode
+x509_extensions     = v3_intermediate_ca                 # Extensions for intermediate CA certificate
+
+[ req_distinguished_name ]                               # Template for the DN in the CSR
+countryName                     = BE
+#stateOrProvinceName             = State or Province Name
+localityName                    = Liège
+0.organizationName              = Hex-Rays SA.
+#organizationalUnitName          = Organizational Unit Name
+commonName                      = vault.hex-rays.com
+#emailAddress                    = Email Address
+
+[ v3_intermediate_ca ]                                      # Intermediate CA certificate extensions
+#subjectKeyIdentifier = hash                                 # Subject key identifier
+authorityKeyIdentifier = keyid:always                       # Authority key identifier
+basicConstraints = critical, CA:true, pathlen:0             # Basic constraints for a CA
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign # Key usage for a CA
+crlDistributionPoints = crldp1_section
+
+[crldp1_section]
+fullname = URI:http://crl.hex-rays.com/intermediate_ca_2.crl
+
+[ crl_ext ]                                                 # CRL extensions
+authorityKeyIdentifier=keyid:always                         # Authority key identifier
+
+[ server_cert ]                                             # Server certificate extensions
+#nsCertType = server                                         # Server certificate type
+#keyUsage = critical, digitalSignature, keyEncipherment      # Key usage for a server cert
+extendedKeyUsage = critical, serverAuth                     # Extended key usage for server authentication purposes (e.g., TLS/SSL servers).
+basicConstraints = critical, CA:FALSE                       # Not a CA certificate
+authorityKeyIdentifier = keyid                              # Authority key identifier linking the certificate to the issuer's public key.
+subjectKeyIdentifier = none                                 # Subject key identifier
+
+```
+
+`lumina_ca/openssl_root.cnf`:
+
+```cnf
+[ ca ]                                                   # The default CA section
+default_ca = CA_default                                  # The default CA name
+
+[ CA_default ]                                           # Default settings for the CA
+dir               = ./rootCA                             # CA directory
+certs             = $dir/certs                           # Certificates directory
+crl_dir           = $dir/crl                             # CRL directory
+new_certs_dir     = $dir/newcerts                        # New certificates directory
+database          = $dir/index.txt                       # Certificate index file
+serial            = $dir/serial                          # Serial number file
+RANDFILE          = $dir/private/.rand                   # Random number file
+private_key       = $dir/private/ca.key.pem              # Root CA private key
+certificate       = $dir/certs/ca.cert.pem               # Root CA certificate
+crl               = $dir/crl/ca.crl.pem                  # Root CA CRL
+crlnumber         = $dir/crlnumber                       # Root CA CRL number
+crl_extensions    = crl_ext                              # CRL extensions
+default_crl_days  = 30                                   # Default CRL validity days
+default_md        = sha512                               # Default message digest
+preserve          = no                                   # Preserve existing extensions
+email_in_dn       = no                                   # Exclude email from the DN
+name_opt          = ca_default                           # Formatting options for names
+cert_opt          = ca_default                           # Certificate output options
+policy            = policy_strict                        # Certificate policy
+unique_subject    = no                                   # Allow multiple certs with the same DN
+
+[ policy_strict ]                                        # Policy for stricter validation
+countryName             = match                          # Must match the issuer's country
+stateOrProvinceName     = optional                       # State or Province is optional
+localityName            = match
+organizationName        = match                          # Must match the issuer's organization
+organizationalUnitName  = optional                       # Organizational unit is optional
+commonName              = supplied                       # Must provide a common name
+emailAddress            = optional                       # Email address is optional
+
+[ req ]                                                  # Request settings
+default_bits        = 4096                               # Default key size
+distinguished_name  = req_distinguished_name             # Default DN template
+string_mask         = utf8only                           # UTF-8 encoding
+default_md          = sha512                             # Default message digest
+prompt              = no                                 # Non-interactive mode
+x509_extensions     = v3_ca
+
+[ req_distinguished_name ]                               # Template for the DN in the CSR
+countryName                     = BE
+#stateOrProvinceName             = State or Province Name (full name)
+localityName                    = Liège
+0.organizationName              = Hex-Rays SA.
+#organizationalUnitName          = Organizational Unit Name (section)
+commonName                      = Hex-Rays SA. Root CA
+#emailAddress                    = Email Address
+
+[ v3_ca ]                                           # Root CA certificate extensions
+subjectKeyIdentifier = hash                         # Subject key identifier
+authorityKeyIdentifier = keyid:always,issuer        # Authority key identifier
+basicConstraints = critical, CA:true                # Basic constraints for a CA
+keyUsage = critical, digitalSignature, keyCertSign, cRLSign # Key usage for a CA
+crlDistributionPoints = crldp1_section
+
+[ crl_ext ]                                         # CRL extensions
+authorityKeyIdentifier = keyid:always,issuer        # Authority key identifier
+
+[ v3_intermediate_ca ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+basicConstraints = critical, CA:true, pathlen:0
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+crlDistributionPoints = crldp2_section
+
+[crldp1_section]
+fullname = URI:http://crl.hex-rays.com/root_ca.crl
+
+[crldp2_section]
+fullname = URI:http://crl.hex-rays.com/intermediate_ca_2.crl
+
+```
