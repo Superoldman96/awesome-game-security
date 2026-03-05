@@ -1,0 +1,287 @@
+Project Path: arc_gmh5225_SSL-bypass_vruuhjv7
+
+Source Tree:
+
+```txt
+arc_gmh5225_SSL-bypass_vruuhjv7
+├── README.md
+├── images
+│   └── bypass_output.png
+└── root_bypass.js
+
+```
+
+`README.md`:
+
+```md
+# Root Detection & SSL Bypass Script
+
+This repository contains a Frida script for bypassing root detection and SSL certificate pinning in Android applications.
+
+## Technical Implementation
+
+The script utilizes Frida's powerful JavaScript injection capabilities to bypass both root detection and SSL certificate pinning in Android applications. It works by intercepting and modifying the application's root detection methods and SSL/TLS certificate validation logic at runtime. The implementation hooks into key Java classes responsible for root detection (Runtime.exec, File operations, PackageManager) and SSL certificate validation (SSLContext, TrustManager).
+
+When the application attempts to detect root access, the script intercepts these attempts through various methods:
+- Blocking common root binary path checks
+- Intercepting shell commands that check for root
+- Preventing detection of root-related packages
+- Implementing caching for better performance
+
+## Prerequisites
+
+- Frida installed on your system
+- Rooted Android device or emulator
+- Burp Suite for SSL interception
+- ADB (Android Debug Bridge)
+
+## Setup Instructions
+
+### 1. SSL Certificate Setup
+
+1. Export Burp Suite's CA certificate:
+   - Open Burp Suite
+   - Go to `Proxy` -> `Options` -> `TLS`
+   - Click on `Export CA certificate`
+   - Choose `Certificate in DER format` 
+   - Save it as `burp.crt`
+
+   Alternative certificate formats and conversions:
+   ```bash
+   # Convert PEM to DER format
+   openssl x509 -in certificate.pem -outform DER -out burp.crt
+
+   # Convert CER to DER format
+   openssl x509 -in certificate.cer -outform DER -out burp.crt
+
+   # Convert P12 to DER format
+   openssl pkcs12 -in certificate.p12 -nodes -out temp.pem
+   openssl x509 -in temp.pem -outform DER -out burp.crt
+   rm temp.pem
+   ```
+
+2. Verify the certificate format:
+   ```bash
+   # Check certificate information
+   openssl x509 -in burp.crt -inform DER -text -noout
+   ```
+
+3. Push the certificate to the device:
+   ```bash
+   adb push burp.crt /data/local/tmp/burp.crt
+   adb shell "chmod 644 /data/local/tmp/burp.crt"
+   ```
+
+   Note: The certificate should be in DER format and have the following characteristics:
+   - File extension: `.crt`
+   - Format: X.509
+   - Encoding: DER (binary)
+   - Location on device: `/data/local/tmp/burp.crt`
+   - Permissions: 644 (readable by all)
+
+### 2. Frida Setup
+
+1. Install Frida on your host machine:
+   ```bash
+   pip install frida-tools
+   ```
+
+2. Push frida-server to your device:
+   ```bash
+   # Download appropriate frida-server version from GitHub
+   adb push frida-server /data/local/tmp/
+   adb shell "chmod 755 /data/local/tmp/frida-server"
+   ```
+
+3. Start frida-server on device:
+   ```bash
+   adb shell "/data/local/tmp/frida-server &"
+   ```
+
+### 3. Running the Script
+
+1. Save the script as `root_bypass.js`
+
+2. Run the script with Frida:
+   ```bash
+   frida -U -l root_bypass.js -f com.target.application
+   ```
+   Replace `com.target.application` with your target app's package name.
+
+## Features
+
+The script provides comprehensive bypass functionality:
+- Root Detection Bypass:
+  - Blocks su binary checks
+  - Prevents root package detection
+  - Intercepts shell commands
+  - Caches results for better performance
+- SSL Pinning Bypass:
+  - Implements custom TrustManager
+  - Allows Burp Suite to intercept HTTPS traffic
+  - Handles certificate validation
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. Check if Frida server is running:
+   ```bash
+   adb shell ps | grep frida
+   ```
+
+2. Verify certificate placement:
+   ```bash
+   adb shell "ls -l /data/local/tmp/burp.crt"
+   ```
+
+3. Check logcat for any error messages:
+   ```bash
+   adb logcat | grep frida
+   ```
+
+## Example Output
+
+When the script is running successfully, you should see output similar to this:
+
+![Image](https://github.com/user-attachments/assets/47b11cce-b2b5-454a-9668-30e09e18a03d)
+
+This output indicates:
+- Successful SSL certificate setup with PortSwigger CA
+- Root detection bypass implementation
+- Multiple SSL Context hooks and custom TrustManager initializations
+- Blocked attempts to detect root access through file checks and commands
+
+## Security Notice
+
+This tool is designed strictly for legitimate security research, penetration testing, and vulnerability assessment purposes. Using this tool to bypass root detection or SSL pinning without explicit authorization may violate applicable laws, terms of service, or privacy regulations. Security researchers should obtain proper permission before testing any application and respect responsible disclosure practices. The ability to bypass security controls carries significant ethical responsibilities. Never use this tool on applications or systems without proper authorization from the system owner. The authors of this tool are not responsible for any misuse or damage caused by using this bypass script. Always ensure compliance with relevant laws, regulations, and ethical guidelines when conducting security research. 
+
+```
+
+`root_bypass.js`:
+
+```js
+setTimeout(function() {
+    Java.perform(function() {
+        console.log("[.] Starting Advanced Root Detection & SSL Bypass");
+
+        const ROOT_FILES = [
+            "/system/app/Superuser.apk",
+            "/system/xbin/su",
+            "/system/bin/su",
+            "/sbin/su",
+            "/system/su",
+            "/system/bin/.ext/.su",
+            "/system/xbin/mu"
+        ];
+
+        const ROOT_PACKAGES = [
+            "com.noshufou.android.su",
+            "com.thirdparty.superuser",
+            "eu.chainfire.supersu",
+            "com.topjohnwu.magisk"
+        ];
+
+        const execCommandCache = new Set();
+        const filePathCache = new Set();
+
+        const JavaClasses = {
+            CertificateFactory: Java.use("java.security.cert.CertificateFactory"),
+            FileInputStream: Java.use("java.io.FileInputStream"),
+            BufferedInputStream: Java.use("java.io.BufferedInputStream"),
+            X509Certificate: Java.use("java.security.cert.X509Certificate"),
+            KeyStore: Java.use("java.security.KeyStore"),
+            TrustManagerFactory: Java.use("javax.net.ssl.TrustManagerFactory"),
+            SSLContext: Java.use("javax.net.ssl.SSLContext"),
+            Runtime: Java.use("java.lang.Runtime"),
+            File: Java.use("java.io.File"),
+            PackageManager: Java.use("android.app.ApplicationPackageManager"),
+            NameNotFoundException: Java.use("android.content.pm.PackageManager$NameNotFoundException")
+        };
+
+        try {
+            function setupSSLBypass() {
+                console.log("[+] Setting up SSL bypass...");
+                
+                const cf = JavaClasses.CertificateFactory.getInstance("X.509");
+                const fileInputStream = JavaClasses.FileInputStream.$new("/data/local/tmp/burp.crt");
+                const bufferedInputStream = JavaClasses.BufferedInputStream.$new(fileInputStream);
+                const ca = cf.generateCertificate(bufferedInputStream);
+                bufferedInputStream.close();
+
+                const certInfo = Java.cast(ca, JavaClasses.X509Certificate);
+                console.log("[o] CA Info: " + certInfo.getSubjectDN());
+
+                const keyStoreType = JavaClasses.KeyStore.getDefaultType();
+                const keyStore = JavaClasses.KeyStore.getInstance(keyStoreType);
+                keyStore.load(null, null);
+                keyStore.setCertificateEntry("ca", ca);
+
+                const tmfAlgorithm = JavaClasses.TrustManagerFactory.getDefaultAlgorithm();
+                const tmf = JavaClasses.TrustManagerFactory.getInstance(tmfAlgorithm);
+                tmf.init(keyStore);
+
+                JavaClasses.SSLContext.init.overload(
+                    "[Ljavax.net.ssl.KeyManager;", 
+                    "[Ljavax.net.ssl.TrustManager;", 
+                    "java.security.SecureRandom"
+                ).implementation = function(a, b, c) {
+                    console.log("[o] SSLContext.init() hooked");
+                    this.init.call(this, a, tmf.getTrustManagers(), c);
+                    console.log("[+] SSLContext initialized with custom TrustManager");
+                };
+            }
+
+            function setupRootBypass() {
+                console.log("[+] Setting up root detection bypass...");
+                
+                JavaClasses.Runtime.exec.overload('java.lang.String').implementation = function(cmd) {
+                    if (execCommandCache.has(cmd)) {
+                        console.log("[+] Cache hit: " + cmd);
+                        return null;
+                    }
+                    
+                    if (cmd.includes("su") || cmd.includes("which") || cmd.includes("busybox")) {
+                        execCommandCache.add(cmd);
+                        console.log("[+] Blocked root check command: " + cmd);
+                        return null;
+                    }
+                    return this.exec(cmd);
+                };
+
+                JavaClasses.File.exists.implementation = function() {
+                    const path = this.getAbsolutePath();
+                    
+                    if (filePathCache.has(path)) {
+                        return false;
+                    }
+
+                    if (ROOT_FILES.some(rootPath => path.includes(rootPath))) {
+                        filePathCache.add(path);
+                        console.log("[+] Blocked root file check: " + path);
+                        return false;
+                    }
+                    return this.exists();
+                };
+
+                JavaClasses.PackageManager.getPackageInfo.overload('java.lang.String', 'int')
+                    .implementation = function(packageName, flags) {
+                    if (ROOT_PACKAGES.includes(packageName)) {
+                        console.log("[+] Blocked root package check: " + packageName);
+                        throw JavaClasses.NameNotFoundException.$new();
+                    }
+                    return this.getPackageInfo(packageName, flags);
+                };
+            }
+
+            setupSSLBypass();
+            setupRootBypass();
+            console.log("[+] All bypasses successfully implemented");
+
+        } catch(err) {
+            console.error("[!] Setup failed:");
+            console.error(err.stack);
+        }
+    });
+}, 0); 
+```

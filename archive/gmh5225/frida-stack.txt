@@ -1,0 +1,348 @@
+Project Path: arc_gmh5225_frida-stack_y_jddbvu
+
+Source Tree:
+
+```txt
+arc_gmh5225_frida-stack_y_jddbvu
+├── README.md
+├── lib
+│   └── index.ts
+├── package-lock.json
+├── package.json
+└── tsconfig.json
+
+```
+
+`README.md`:
+
+```md
+# frida-stack
+
+Small frida module for ensuring you get the stack information you wanted.
+
+## What?
+
+Often when using [Frida](https://github.com/frida/frida), I would run into issues
+with wanting specific stack traces. Then I realized I didn't have a specific context
+window, or the stack traces didn't contain the correct shared libraries in them. This
+resulted in me re-writing the same functions all the time.
+
+In other instances, mostly when reverse engineering heavily obfuscated or packed code,
+I would have discovered functions or places in memory which had been created without any
+exports available. This would lead to questions like, what process/library owned this? Where
+am I inside those libraries?
+
+To answer the above questions, I wrapped some of the standard `Thread.Backtrace` functions
+and added some scanning of the `Process` memory ranges.
+
+## Installing
+
+```sh
+$ npm install frida-extended-stack
+```
+
+## Usage
+
+```typescript
+
+import { Stack } from 'frida-stack'
+
+function hook_exit() {
+  const _exitPtr = Module.findExportByName('libc.so', '_exit');
+
+  if (_exitPtr) {
+    const _exit = new NativeFunction(_exitPtr, 'int', ['int']);
+
+    Interceptor.replace(
+      _exitPtr,
+      new NativeCallback(
+        function (status) {
+          console.log(`[+] _exit : ${status} from ${Stack.getModuleInfo(this.context.pc)}`);
+	        console.log(Stack.native(this.context)
+          return _exit(status);
+        },
+        'int',
+        ['int'],
+      ),
+    );
+  }
+}
+```
+
+Output:
+```
+[Pixel 4::com.example.package ]-> [+] _exit : 0 from 0x7713d25000 libexamplesharedlib.so:0x1aae8
+0x7713d25000 libexamplesharedlib.so:0x1aae8
+```
+
+Now you have a library and the exact offset into the library for reversing.
+
+
+## License
+
+```
+Copyright 2020-2024 Tim 'diff' Strazzere <diff@protonmail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+```
+
+`lib/index.ts`:
+
+```ts
+/**
+ * Copyright (C) 2024 Red Naga, LLC - Tim Strazzere <diff@protonmail.com>
+ *
+ * Helper class for getting stack traces and backtraces while debugging with
+ * Frida, primarily used for Android.
+ *
+ */
+export class Stack {
+    private threadObj!: Java.Wrapper<object>;
+
+    constructor() {
+      if (!Java.available) {
+        throw new Error(`Unable to initialize a Java stacktrace object when Java is unavailable`);
+      }
+
+      Java.perform(() => {
+        const ThreadDef = Java.use('java.lang.Thread');
+        this.threadObj = ThreadDef.$new();
+      });
+    }
+
+    /**
+     * @returns {string} a java stack trace of where this was called
+     */
+    java(): string {
+      if (!this.threadObj) {
+        throw new Error(`No java stack available as no thread object available`);
+      }
+      let stackString = '';
+      this.threadObj
+        .currentThread()
+        .getStackTrace()
+        .map((stackLayer: string, index: number) => {
+          // Ignore our own creations on the stack (getStackStrace/getThreadStackTrace)
+          if (index > 1) {
+            stackString = stackString.concat(`${index - 1} => ${stackLayer.toString()}\n`);
+          }
+        });
+
+      return stackString;
+    }
+
+    /**
+     * @param context in which to get a native backtrace
+     * @returns string of backtrace
+     */
+    static native(context: CpuContext) {
+      return (
+        Thread.backtrace(context, Backtracer.ACCURATE)
+            .map(this.getModuleInfo)
+            .join('\n') + '\n'
+      );
+    }
+
+    /**
+     * Return a decorated string, similar to DebugSymbol.fromAddress
+     * and Process.getModuleFromAddress, however if those fail we
+     * will forcefully look up the address association via the mappings.
+     *
+     * For some reason, DebugSymbol.fromAddress doesn't always work,
+     * nor does Process.getModuleFromAddress, so utilize enumerating the
+     * addresses manually to figure out what the module is and the local
+     * offset inside it.
+     *
+     * @param address Address to look up details for.
+     * @returns string of relevant data `0x7713d25000 libsharedlib.so:0x1aae8`
+     */
+    static getModuleInfo(address: NativePointer) {
+      const debugSymbol = DebugSymbol.fromAddress(address);
+
+      if (debugSymbol.moduleName) {
+        // Add local offset?
+        return debugSymbol.toString();
+      }
+
+      // When hooking we might get something interesting like the following;
+      //  [
+      //    {
+      //      "base": "0x76fa7000",    <==== [anon:dalvik-free list large object space]
+      //      "protection": "rw-",           we don't actually care about this
+      //      "size": 536870912
+      //    },
+      //    {
+      //      "base": "0x771e939000", <==== this isn't the actual base, we need to refind that
+      //      "file": {
+      //        "offset": 663552,
+      //         "path": "/apex/com.android.runtime/lib64/bionic/libc.so",
+      //         "size": 0
+      //      },
+      //     "protection": "rwx",
+      //     "size": 4096
+      //   }
+      // ]
+
+      const builtSymbol = {
+        base: ptr(0x0),
+        moduleName: '',
+        path: '',
+        size: 0,
+      };
+
+      let ranges = Process.enumerateRanges('').filter(
+        (range) => range.base <= address && range.base.add(range.size) >= address,
+      );
+
+      ranges.forEach((range) => {
+        if (range.file) {
+          builtSymbol.path = range.file.path;
+          const moduleNameChunks = range.file.path.split('/');
+          builtSymbol.moduleName = moduleNameChunks[moduleNameChunks.length - 1];
+
+          builtSymbol.base = range.base.sub(range.file.offset);
+        }
+      });
+
+      ranges = Process.enumerateRanges('').filter(
+        (range) => range.base <= builtSymbol.base && range.base.add(range.size) >= builtSymbol.base,
+      );
+
+      ranges.forEach((range) => {
+        if (builtSymbol.base === ptr(0x0) || builtSymbol.base < range.base) {
+          builtSymbol.base = range.base;
+        }
+        builtSymbol.size += range.size;
+      });
+
+      return `${builtSymbol.base} ${builtSymbol.moduleName}:${address.sub(builtSymbol.base)}`;
+    }
+  }
+```
+
+`package-lock.json`:
+
+```json
+{
+  "name": "frida-stacks",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "frida-stacks",
+      "version": "1.0.0",
+      "devDependencies": {
+        "@types/frida-gum": "^18.5.1",
+        "@types/node": "^18.19.3",
+        "typescript": "^5.3.3"
+      }
+    },
+    "node_modules/@types/frida-gum": {
+      "version": "18.7.0",
+      "resolved": "https://registry.npmjs.org/@types/frida-gum/-/frida-gum-18.7.0.tgz",
+      "integrity": "sha512-HhBomXE23fLDAWXEKi3BjJLrlH9wAv9IEQNfO/PaYHQNNbh0Bi06gx6JbXTspVpbqlbVqkWAuU7n6HaS9B6yXA==",
+      "dev": true
+    },
+    "node_modules/@types/node": {
+      "version": "18.19.34",
+      "resolved": "https://registry.npmjs.org/@types/node/-/node-18.19.34.tgz",
+      "integrity": "sha512-eXF4pfBNV5DAMKGbI02NnDtWrQ40hAN558/2vvS4gMpMIxaf6JmD7YjnZbq0Q9TDSSkKBamime8ewRoomHdt4g==",
+      "dev": true,
+      "dependencies": {
+        "undici-types": "~5.26.4"
+      }
+    },
+    "node_modules/typescript": {
+      "version": "5.4.5",
+      "resolved": "https://registry.npmjs.org/typescript/-/typescript-5.4.5.tgz",
+      "integrity": "sha512-vcI4UpRgg81oIRUFwR0WSIHKt11nJ7SAVlYNIu+QpqeyXP+gpQJy/Z4+F0aGxSE4MqwjyXvW/TzgkLAx2AGHwQ==",
+      "dev": true,
+      "bin": {
+        "tsc": "bin/tsc",
+        "tsserver": "bin/tsserver"
+      },
+      "engines": {
+        "node": ">=14.17"
+      }
+    },
+    "node_modules/undici-types": {
+      "version": "5.26.5",
+      "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-5.26.5.tgz",
+      "integrity": "sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==",
+      "dev": true
+    }
+  }
+}
+
+```
+
+`package.json`:
+
+```json
+{
+  "name": "frida-stack",
+  "version": "1.0.0",
+  "description": "Getting better stacks and backtraces in Frida",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "/dist/**/*.js",
+    "/dist/**/*.d.ts"
+  ],
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rednaga/frida-stack.git"
+  },
+  "author": "Tim Strazzere <diff@protonmail.com>",
+  "keywords": [
+    "frida",
+    "stacks",
+    "reverse-engineering"
+  ],
+  "license": "Apache-2.0",
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "@types/frida-gum": "^18.5.1",
+    "@types/node": "^18.19.3",
+    "typescript": "^5.3.3"
+  }
+}
+
+```
+
+`tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "lib": ["es2020"],
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "declaration": true,
+    "outDir": "./dist"
+  },
+  "include": [
+    "lib/**/*"
+  ]
+}
+
+```
