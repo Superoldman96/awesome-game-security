@@ -1,0 +1,1939 @@
+Project Path: arc_gmh5225_kernel-hook-framework_45yt9_0u
+
+Source Tree:
+
+```txt
+arc_gmh5225_kernel-hook-framework_45yt9_0u
+├── make_hook_frame.sh
+├── readme.md
+├── sample
+│   ├── Makefile
+│   ├── aftvermagic.sh
+│   ├── hook_vfs_read.c
+│   ├── include
+│   │   ├── common_data.h
+│   │   ├── hijack_arm.h
+│   │   ├── hijack_arm64.h
+│   │   └── hook_framework.h
+│   ├── module.c
+│   ├── prevermagic.sh
+│   └── replace_vfs_open.c
+└── src
+    ├── Makefile
+    ├── aftvermagic.sh
+    ├── arch
+    │   ├── arm
+    │   │   ├── hijack_arm.c
+    │   │   └── hijack_arm.h
+    │   └── arm64
+    │       ├── hijack_arm64.c
+    │       └── hijack_arm64.h
+    ├── framework
+    │   ├── hijack_operation.c
+    │   ├── module.c
+    │   ├── proc_interface.c
+    │   ├── stack_safety_check.c
+    │   ├── symbol_resolver.c
+    │   ├── write_map_page.c
+    │   └── write_page.c
+    ├── include
+    │   └── common_data.h
+    └── prevermagic.sh
+
+```
+
+`make_hook_frame.sh`:
+
+```sh
+if [ $# -ne 4 ] && [ $# -ne 5 ]; then
+    echo "Usage: <FRAME_SRC_DIR> <SOURCE_DIR> <CROSS-COMPILE-PREFIX> <SET_ENV> <MAGIC_NUM>"
+    echo "type: arm32 arm64"
+    exit 1
+fi
+
+set_build_env=$(readlink -f $4)
+if [ -f $set_build_env ];then
+  echo $set_build_env
+  source $set_build_env
+fi
+
+if [ $# -eq 4 ]; then
+  cd $1
+  make arm64 KDIR=$2 CROSS_COMPILE=$3
+  exit 0
+fi
+
+if [ $# -eq 5 ]; then
+  cd $1
+  make arm64 KDIR=$2 CROSS_COMPILE=$3 vermagic=$5
+  exit 0
+fi
+
+```
+
+`readme.md`:
+
+```md
+# Overview #
+
+## Introduction ##
+
+Usually we want to hack a kernel function, 
+
+1) to insert customized code before or after a certain kernel function been called, or 
+
+2) to totally replace a function with new one. 
+
+How can we manage that? Well it's time to bring inline hook technique to kernel space. By replacing the first few instructions of a specific function to conditionless jump, and store the original instructions to a trampoline function, we can customizing the functions calling, and do whatever we want do in the hook function. Isn't is exciting?
+
+## Usage ##
+
+#### Dev #####
+
+There will be 2 kernel modules:
+
+1) src/: The hook framework itself. In normal cases, you needn't modify its code, unless you are trying to fix bug, because we want to keep it as simple and independent to any customization. After compile, you will get hookFrame.ko.
+
+2) sample/: The customized hook/replacement functions. Write your code here, and you can take hook_vfs_read.c, replace_vfs_open.c as reference when writing your own function. Also in module.c, you can  get a general view of how to register your function to hook framework. After compile, hookFrameTest.ko will be generated.
+
+Sometimes you will find the vermagic of hookFrame.ko and hookFrameTest.ko different from your target kernel. You can pass the target kernel's vermagic string to make:
+
+```
+# For example:
+$ sudo apt-get install bbe      # install bbe to modify vermagic string within .ko
+$ make arm64 KDIR=/opt/linux-4.14.98 CROSS_COMPILE=aarch64-linux-android- vermagic="4.14.98 SMP preempt mod_unload modversions aarch64"
+```
+
+#### Runtime #####
+Insert hookFrame.ko first, then insert hookFrameTest.ko. If success, you can see list of currently reading files, and strings as "in replaced vfs_open", which indicating the original kernel vfs_open and vfs_read has been hooked.
+
+you can rmmod hookFrameTest.ko, to restore the original state. Also you can find a file: /proc/hook_targets. When cat the file, you can view the currently hooked functions list, and it's status(0 disabled, 1 enabled). You can also call the following command to change hook targets status:
+
+```
+$ echo "vfs_read 0" > /proc/hook_targets # disable vfs_read hooking
+$ echo "vfs_read 1" > /proc/hook_targets # enable vfs_read hooking
+```
+
+If you find "find_symbol_in_section 1" in hook_targets, don't worry, that means you can directly use all kernel symbols found by kallsyms_lookup_name, not limited to those EXPORT_SYMBOL symbols. If it's useless to you, simply turn it off.
+
+## Limits ##
+The hook framework currently support arm32 and arm64, mainly tested on linux 4.14.98, should working on 4.x and 3.x, but 5.x has not been tested.
+
+In addition, in order to make hook framework work properly, target kernel's configuration CONFIG_KALLSYMS is a must, CONFIG_STACKTRACE is optional, but highly recommented for stability.
+
+## Bugs ##
+Please report any bugs to me: liutgnu@gmail.com, also any contributions are welcomed.
+
+## Happy Hacking !!! ##
+
+```
+
+`sample/Makefile`:
+
+```
+obj-m += hookFrameTest.o
+
+hookFrameTest-y += module.o
+hookFrameTest-y += hook_vfs_read.o
+hookFrameTest-y += replace_vfs_open.o
+
+PWD := $(shell pwd)
+
+default:
+	@echo "make TARGET KDIR=/path/to/kernel CROSS_COMPILE= vermagic="
+	@echo
+	@echo "Supported targets:"
+	@echo "test-arm64	Linux, ARM"
+	@echo "test-arm32	Linux, ARM"
+	@echo
+
+test-arm64:
+ifndef KDIR
+	@echo "Must provide KDIR!"
+	@exit 1
+endif
+ifndef CROSS_COMPILE
+	@echo "Must provide CROSS_COMPILE!"
+	@exit 1
+endif
+ifndef vermagic
+	$(call compile,arm64,-D_ARCH_ARM64_)
+else
+	@bash prevermagic.sh $(KDIR) "$(vermagic)"
+	$(call compile,arm64,-D_ARCH_ARM64_)
+	@bash aftvermagic.sh $(KDIR) "$(vermagic)" hookFrameTest
+endif
+
+test-arm32:
+ifndef KDIR
+	@echo "Must provide KDIR!"
+	@exit 1
+endif
+ifndef CROSS_COMPILE
+	@echo "Must provide CROSS_COMPILE!"
+	@exit 1
+endif
+ifndef vermagic
+	$(call compile,arm,-D_ARCH_ARM_)
+else
+	@bash prevermagic.sh $(KDIR) "$(vermagic)"
+	$(call compile,arm,-D_ARCH_ARM_)
+	@bash aftvermagic.sh $(KDIR) "$(vermagic)" hookFrame
+endif
+
+compile = $(MAKE) ARCH=$(1) CROSS_COMPILE=$(CROSS_COMPILE) EXTRA_CFLAGS="$(2) -I$(PWD)/include -fno-pic" -C $(KDIR) M=$(PWD) modules
+
+clean:
+	find ./ -regextype posix-extended -regex ".*\.(ko|o|mod.c|order|symvers|d|cmd|mod)" | xargs rm -f
+
+```
+
+`sample/aftvermagic.sh`:
+
+```sh
+#!/bin/bash
+
+RELATE_UTSRELEASE="include/generated/utsrelease.h"
+UTSRELEASE=$1/$RELATE_UTSRELEASE
+
+if [ ! -e $UTSRELEASE ]; then
+    echo "error! $UTSRELEASE not exist"
+    exit 1
+fi
+
+if [ ! -e $3.ko ]; then
+    echo "$3.ko not found!"
+    exit 1
+fi
+
+esp_str=`echo "${2}"|sed 's/ /\\\\x20/g'`
+bbe -b "/vermagic=/:/\x00/" -e "r 0 vermagic=$esp_str\0" $3.ko > $3.ko.bak
+mv $3.ko.bak $3.ko
+mv $UTSRELEASE.bak $UTSRELEASE
+echo "modified $3 vermagic to:$2"
+```
+
+`sample/hook_vfs_read.c`:
+
+```c
+#include "include/common_data.h"
+#include "hook_framework.h"
+#include <linux/path.h>
+#include <linux/fs.h>
+#include <linux/printk.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+
+HOOK_FUNC_TEMPLATE(vfs_read);
+ssize_t hook_vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+{
+    char *path_buffer = NULL;
+    char *result = NULL;
+    char *origin_vfs_read = GET_CODESPACE_ADDERSS(vfs_read);
+
+    path_buffer = kmalloc(512, GFP_KERNEL);
+    if (!path_buffer) {
+        goto out;
+    }
+
+    result = d_path(&file->f_path, path_buffer, 512);
+    if (!IS_ERR(result)) {
+        if (!strnstr(result, "/dev/kmsg", 512 - (result - path_buffer)) && 
+        !strnstr(result, "[timerfd]", 512 - (result - path_buffer)) &&
+        !strnstr(result, "/proc/kmsg", 512 - (result - path_buffer))
+        )
+            printk(KERN_ALERT"reading %s\n", result);
+    }
+    kfree(path_buffer);
+out:
+    return ((ssize_t (*)(struct file *file, char __user *buf, size_t count, loff_t *pos))origin_vfs_read)(file, buf, count, pos);
+}
+```
+
+`sample/include/common_data.h`:
+
+```h
+#ifndef _COMMON_DATA_H_
+#define _COMMON_DATA_H_
+
+#ifdef _ARCH_ARM64_
+#include "hijack_arm64.h"
+#endif
+
+#ifdef _ARCH_ARM_
+#include "hijack_arm.h"
+#endif
+
+#endif
+```
+
+`sample/include/hijack_arm.h`:
+
+```h
+#ifndef _HOOK_ARM_H_
+#define _HOOK_ARM_H_
+
+#define HOOK_FUNC_TEMPLATE(s)  \
+extern void hook_##s##_template(void);  \
+asm (  \
+    ".globl hook_"#s"_template\n\t" \
+    "hook_"#s"_template:\n\t"  \
+    "b hook_"#s"\n\t"  \
+  \
+    ".globl "#s"_code_space\n\t"  \
+    #s"_code_space:\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+);
+
+#define GET_TEMPLATE_ADDERSS(s) \
+({  \
+    void *template; \
+    __asm__ volatile ("ldr %0, =hook_"#s"_template\n\t":"=r"(template)); \
+    template;  \
+})
+
+#define GET_CODESPACE_ADDERSS(s) \
+({  \
+    void *codespace; \
+    __asm__ volatile ("ldr %0, ="#s"_code_space\n\t":"=r"(codespace)); \
+    codespace;  \
+})
+
+#define INSTRUCTION_SIZE 4
+#define HIJACK_INST_NUM 2
+#define HIJACK_SIZE (INSTRUCTION_SIZE * HIJACK_INST_NUM)
+#endif
+```
+
+`sample/include/hijack_arm64.h`:
+
+```h
+#ifndef _HOOK_ARM64_H_
+#define _HOOK_ARM64_H_
+
+#define HOOK_FUNC_TEMPLATE(s)  \
+extern void hook_##s##_template(void);  \
+asm (  \
+    ".globl hook_"#s"_template\n\t"  \
+    "hook_"#s"_template:\n\t"  \
+    "ldp x1, x0, [sp], #0x20\n\t" \
+    "b hook_"#s"\n\t"  \
+  \
+    ".globl "#s"_code_space\n\t"  \
+    #s"_code_space:\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+);
+
+#define GET_TEMPLATE_ADDERSS(s) \
+({  \
+    void *template; \
+    __asm__ volatile ("ldr %0, =hook_"#s"_template\n\t":"=r"(template)); \
+    template;  \
+})
+
+#define GET_CODESPACE_ADDERSS(s) \
+({  \
+    void *codespace; \
+    __asm__ volatile ("ldr %0, ="#s"_code_space\n\t":"=r"(codespace)); \
+    codespace;  \
+})
+
+#define INSTRUCTION_SIZE 4
+#define HIJACK_INST_NUM 6
+#define HIJACK_SIZE (INSTRUCTION_SIZE * HIJACK_INST_NUM)
+#endif
+```
+
+`sample/include/hook_framework.h`:
+
+```h
+#ifndef _HOOK_FRAMEWORK_H_
+#define _HOOK_FRAMEWORK_H_
+
+#include <linux/types.h>
+
+extern int hijack_target_prepare (void *target, void *hook_dest, void *hook_template_code_space);
+extern int hijack_target_enable(void *target);
+extern int hijack_target_disable(void *target, bool need_remove);
+extern void hijack_target_disable_all(bool need_remove);
+
+#endif
+```
+
+`sample/module.c`:
+
+```c
+#include <linux/module.h>
+#include <linux/printk.h>
+#include <linux/kallsyms.h>
+#include <uapi/asm-generic/errno-base.h>
+#include <linux/err.h>
+#include <linux/path.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#include "include/common_data.h"
+#include "include/hook_framework.h"
+
+MODULE_AUTHOR("Liu Tao <taobliu@thoughtworks.com>");
+MODULE_LICENSE("GPL");
+
+int (*do_dentry_open_fn)(struct file *f,
+			  struct inode *inode,
+			  int (*open)(struct inode *, struct file *)) = NULL;
+
+extern ssize_t hook_vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos);
+extern int hook_vfs_open(const struct path *path, struct file *file);
+
+static inline void *find_func(const char *name)
+{
+	void *ret = NULL;
+	ret = (void *)kallsyms_lookup_name(name);
+	if (!ret) {
+		printk(KERN_ALERT"Symbol %s not found!\n", name);
+	}
+	return ret;
+}
+
+static int __init test_hookframe_init(void)
+{
+    int ret = -EFAULT;
+    void *vfs_read_fn;
+    void *vfs_open_fn; 
+
+    /*later be used by hook_vfs_open*/
+    do_dentry_open_fn = (int (*)(struct file *f,
+			  struct inode *inode,
+			  int (*open)(struct inode *, struct file *)))find_func("do_dentry_open");
+
+    vfs_read_fn = (void *)find_func("vfs_read"); 
+    vfs_open_fn = (void *)find_func("vfs_open");
+
+    if (!(do_dentry_open_fn && vfs_read_fn && vfs_open_fn)) {
+        goto out;
+    }
+
+    /*
+    * template address is the trampoline where kernel function been hijacked to,
+    * codespace address is the original kernel function which been hijacked and repositioned to resume.
+    * If you want to replace the whole function, then leave the 3rd parameter of "hijack_target_prepare"
+    * to NULL.
+    * If you only want to insert your hook before or after a certain function, then leave it to be
+    * "GET_CODESPACE_ADDERSS(xx_func)"
+    */
+	if (hijack_target_prepare(vfs_read_fn, GET_TEMPLATE_ADDERSS(vfs_read), GET_CODESPACE_ADDERSS(vfs_read))) {
+        printk(KERN_ALERT"vfs_read prepare error!\n");
+		goto out;
+	}
+	if (hijack_target_enable(vfs_read_fn)) {
+        printk(KERN_ALERT"vfs_read enable error!\n");
+		goto out;
+	}
+
+	if (hijack_target_prepare(vfs_open_fn, GET_TEMPLATE_ADDERSS(vfs_open), NULL)) {
+        printk(KERN_ALERT"vfs_open prepare error!\n");
+		goto out;
+	}
+	if (hijack_target_enable(vfs_open_fn)) {
+        printk(KERN_ALERT"vfs_open enable error!\n");
+		goto out;
+	}
+    return 0;
+
+out:
+    return ret;
+}
+
+static void __exit test_hookframe_exit(void)
+{
+    hijack_target_disable_all(true);
+    printk(KERN_ALERT"unload hook framework test!\n");
+}
+
+module_init(test_hookframe_init);
+module_exit(test_hookframe_exit);
+```
+
+`sample/prevermagic.sh`:
+
+```sh
+#!/bin/bash
+
+RELATE_UTSRELEASE="include/generated/utsrelease.h"
+UTSRELEASE=$1/$RELATE_UTSRELEASE
+
+if [ ! -e $UTSRELEASE ]; then
+    echo "error! $UTSRELEASE not exist"
+    exit 1
+fi
+
+str_len=${#2}
+padding=""
+
+for (( i=0; i<=$str_len; i++ ))
+do
+    padding="X"$padding
+done
+
+line=`wc -l $UTSRELEASE | awk -F ' ' '{print $1}'`
+
+cp $UTSRELEASE $UTSRELEASE.bak
+cat $UTSRELEASE.bak | awk -v pad=$padding -v line=$line -F '"' \
+    '{if(NR==line){printf("%s \"%s%s\"", $1, pad, $2)}else{print $0}}' > $UTSRELEASE
+
+```
+
+`sample/replace_vfs_open.c`:
+
+```c
+#include "include/common_data.h"
+#include "hook_framework.h"
+#include <linux/path.h>
+#include <linux/fs.h>
+#include <linux/printk.h>
+#include <linux/dcache.h>
+
+extern struct inode *d_backing_inode(const struct dentry *upper);
+
+extern int (*do_dentry_open_fn)(struct file *f,
+			  struct inode *inode,
+			  int (*open)(struct inode *, struct file *));
+
+HOOK_FUNC_TEMPLATE(vfs_open);
+int hook_vfs_open(const struct path *path, struct file *file)
+{
+    printk(KERN_ALERT"in replaced vfs_open\n");
+	file->f_path = *path;
+	return (*do_dentry_open_fn)(file, d_backing_inode(path->dentry), NULL);
+}
+```
+
+`src/Makefile`:
+
+```
+obj-m += hookFrame.o
+
+hookFrame-y += framework/module.o
+hookFrame-y += framework/hijack_operation.o
+hookFrame-y += framework/stack_safety_check.o
+hookFrame-y += framework/symbol_resolver.o
+hookFrame-y += framework/write_map_page.o
+hookFrame-y += framework/proc_interface.o
+ifeq ($(ARCH), arm64)
+hookFrame-y += arch/arm64/hijack_arm64.o
+endif
+ifeq ($(ARCH), arm)
+hookFrame-y += arch/arm/hijack_arm.o
+endif
+
+PWD := $(shell pwd)
+default:
+	@echo "make TARGET KDIR=/path/to/kernel CROSS_COMPILE= vermagic="
+	@echo
+	@echo "Supported targets:"
+	@echo "arm64	Linux, ARM"
+	@echo "arm	Linux, ARM"
+	@echo
+
+arm64:
+ifndef KDIR
+	@echo "Must provide KDIR!"
+	@exit 1
+endif
+ifndef CROSS_COMPILE
+	@echo "Must provide CROSS_COMPILE!"
+	@exit 1
+endif
+ifndef vermagic
+	$(call compile,arm64,-D_ARCH_ARM64_)
+else
+	@bash prevermagic.sh $(KDIR) "$(vermagic)"
+	$(call compile,arm64,-D_ARCH_ARM64_)
+	@bash aftvermagic.sh $(KDIR) "$(vermagic)" hookFrame
+endif
+
+arm:
+ifndef KDIR
+	@echo "Must provide KDIR!"
+	@exit 1
+endif
+ifndef CROSS_COMPILE
+	@echo "Must provide CROSS_COMPILE!"
+	@exit 1
+endif
+ifndef vermagic
+	$(call compile,arm,-D_ARCH_ARM_)
+else
+	@bash prevermagic.sh $(KDIR) "$(vermagic)"
+	$(call compile,arm,-D_ARCH_ARM_)
+	@bash aftvermagic.sh $(KDIR) "$(vermagic)" hookFrame
+endif
+
+define compile
+	$(MAKE) ARCH=$(1) CROSS_COMPILE=$(CROSS_COMPILE) EXTRA_CFLAGS="$(2) -I$(PWD) -I$(PWD)/arch/$(1) -fno-pic -fno-stack-protector" -C $(KDIR) M=$(PWD) modules
+endef
+
+clean:
+	find ./ -regextype posix-extended -regex ".*\.(ko|o|mod.c|order|symvers|d|cmd|mod)" | xargs rm -f
+
+```
+
+`src/aftvermagic.sh`:
+
+```sh
+#!/bin/bash
+
+RELATE_UTSRELEASE="include/generated/utsrelease.h"
+UTSRELEASE=$1/$RELATE_UTSRELEASE
+
+if [ ! -e $UTSRELEASE ]; then
+    echo "error! $UTSRELEASE not exist"
+    exit 1
+fi
+
+if [ ! -e $3.ko ]; then
+    echo "$3.ko not found!"
+    exit 1
+fi
+
+esp_str=`echo "${2}"|sed 's/ /\\\\x20/g'`
+bbe -b "/vermagic=/:/\x00/" -e "r 0 vermagic=$esp_str\0" $3.ko > $3.ko.bak
+mv $3.ko.bak $3.ko
+mv $UTSRELEASE.bak $UTSRELEASE
+echo "modified $3 vermagic to:$2"
+```
+
+`src/arch/arm/hijack_arm.c`:
+
+```c
+#include "hijack_arm.h"
+#include <asm/cacheflush.h>
+
+//There MUST be 4
+/*
+    ldr pc, [pc, #-0x4]
+    .addr
+*/
+const char long_jmp_code[4]="\x04\xf0\x1f\xe5";
+
+inline void fill_long_jmp(void *fill_dest, void *hijack_to_func)
+{
+    memcpy(fill_dest, long_jmp_code, sizeof(long_jmp_code));
+    memcpy(fill_dest + sizeof(long_jmp_code), &hijack_to_func, sizeof(void *));
+}
+
+/*
+* Refer to http://engold.ui.ac.ir/~nikmehr/Appendix_B2.pdf
+*/
+bool check_instruction_can_hijack(uint32_t instruction)
+{
+	bool ret = true;
+
+    //todo: we want to fix these instructions
+	switch (instruction & 0xfe000000u) {
+		case 0xfa000000u:  // blx
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0f000000u) {
+		case 0x0a000000u:  // b
+		case 0x0b000000u:  // bl
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0xff000ffu) {
+		case 0x0120001fu:  // bx
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0f00f010u) {
+		case 0x0000f000u:  // and eor sub rsb add adc sbs rsc to PC
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0f00f090u) {
+		case 0x0000f010u:  // and eor sub rsb add adc sbs rsc to PC
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0fe0f000u) {
+		case 0x01a0f000u:  // mov to PC
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0e5ff000u) {
+		case 0x041ff000u:  // ldr to PC
+		ret = false;
+		goto out;
+	}
+
+	switch (instruction & 0x0ffff000u) {
+		case 0x028ff000u:  // adr to PC
+		case 0x024ff000u:
+		ret = false;
+		goto out;
+	}
+
+out:
+    if (!ret) {
+        printk(KERN_ALERT"instruction %x cannot be hijacked!\n", instruction);
+    }
+    return ret;
+}
+
+bool check_target_can_hijack(void *target)
+{
+    int offset = 0;
+    for (; offset < HIJACK_SIZE; offset += INSTRUCTION_SIZE) {
+        if (!check_instruction_can_hijack(*(uint32_t *)(target + offset)))
+            return false;
+    }
+    return true;
+}
+```
+
+`src/arch/arm/hijack_arm.h`:
+
+```h
+#ifndef _HOOK_ARM_H_
+#define _HOOK_ARM_H_
+
+#define HOOK_FUNC_TEMPLATE(s)  \
+extern void hook_##s##_template(void);  \
+asm (  \
+    ".globl hook_"#s"_template\n\t" \
+    "hook_"#s"_template:\n\t"  \
+    "b hook_"#s"\n\t"  \
+  \
+    ".globl "#s"_code_space\n\t"  \
+    #s"_code_space:\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+);
+
+#define GET_TEMPLATE_ADDERSS(s) \
+({  \
+    void *template; \
+    __asm__ volatile ("ldr %0, =hook_"#s"_template\n\t":"=r"(template)); \
+    template;  \
+})
+
+#define GET_CODESPACE_ADDERSS(s) \
+({  \
+    void *codespace; \
+    __asm__ volatile ("ldr %0, ="#s"_code_space\n\t":"=r"(codespace)); \
+    codespace;  \
+})
+
+#define INSTRUCTION_SIZE 4
+#define HIJACK_INST_NUM 2
+#define HIJACK_SIZE (INSTRUCTION_SIZE * HIJACK_INST_NUM)
+#endif
+```
+
+`src/arch/arm64/hijack_arm64.c`:
+
+```c
+#include "hijack_arm64.h"
+#include <asm/cacheflush.h>
+
+/*
+    stp x1, x0, [sp, #-0x20]!
+    ldr x0, 8
+    br x0
+    .addr(low)
+    .addr(high)
+    ldp x1, x0, [sp], #0x20
+*/
+const char long_jmp_code[24]="\xe1\x03\xbe\xa9\x40\x00\x00\x58\x00\x00\x1f\xd6\x00\x00\x00\x00\x00\x00\x00\x00\xe1\x03\xc2\xa8";
+
+inline void fill_long_jmp(void *fill_dest, void *hijack_to_func)
+{
+    memcpy(fill_dest, long_jmp_code, sizeof(long_jmp_code));
+    memcpy(fill_dest + 3 * INSTRUCTION_SIZE, &hijack_to_func, sizeof(void *));
+}
+
+/*
+* Refer to https://github.com/CAS-Atlantic/AArch64-Encoding
+*/
+
+bool check_instruction_can_hijack(uint32_t instruction)
+{
+    bool ret = true;
+
+    //todo: we want to fix these instructions
+    switch(instruction & 0x9f000000u) {
+        case 0x10000000u:  //adr  
+        case 0x90000000u:  //adrp
+            ret = false;
+            goto out;
+    }
+    switch(instruction & 0xfc000000u) {
+        case 0x14000000u:  //b  
+        case 0x94000000u:  //bl
+            ret = false;
+            goto out;
+    }
+    switch(instruction & 0xff000000u) {
+        case 0x54000000u:  //b.c  
+            ret = false;
+            goto out;
+    }    
+    switch(instruction & 0x7e000000u) {
+        case 0x34000000u:  //cbz cbnz
+        case 0x36000000u:  //tbz tbnz
+            ret = false;
+            goto out;
+    }
+    switch(instruction & 0xbf000000u) {
+        case 0x18000000u:  //ldr
+            ret = false;
+            goto out;
+    }
+    switch(instruction & 0x3f000000u) {
+        case 0x1c000000u:  //ldrv
+            ret = false;
+            goto out;
+    }
+    switch(instruction & 0xff000000u) {
+        case 0x98000000u:  //ldrsw
+            ret = false;
+            goto out;
+    }
+
+out:
+    if (!ret) {
+        printk(KERN_ALERT"instruction %x cannot be hijacked!\n", instruction);
+    }
+    return ret;
+}
+
+bool check_target_can_hijack(void *target)
+{
+    int offset = 0;
+    for (; offset < HIJACK_SIZE; offset += INSTRUCTION_SIZE) {
+        if (!check_instruction_can_hijack(*(uint32_t *)(target + offset)))
+            return false;
+    }
+    return true;
+}
+```
+
+`src/arch/arm64/hijack_arm64.h`:
+
+```h
+#ifndef _HOOK_ARM64_H_
+#define _HOOK_ARM64_H_
+
+#define HOOK_FUNC_TEMPLATE(s)  \
+extern void hook_##s##_template(void);  \
+asm (  \
+    ".globl hook_"#s"_template\n\t"  \
+    "hook_"#s"_template:\n\t"  \
+    "ldp x1, x0, [sp], #0x20\n\t" \
+    "b hook_"#s"\n\t"  \
+  \
+    ".globl "#s"_code_space\n\t"  \
+    #s"_code_space:\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+    ".word 0\n\t"  \
+);
+
+#define GET_TEMPLATE_ADDERSS(s) \
+({  \
+    void *template; \
+    __asm__ volatile ("ldr %0, =hook_"#s"_template\n\t":"=r"(template)); \
+    template;  \
+})
+
+#define GET_CODESPACE_ADDERSS(s) \
+({  \
+    void *codespace; \
+    __asm__ volatile ("ldr %0, ="#s"_code_space\n\t":"=r"(codespace)); \
+    codespace;  \
+})
+
+#define INSTRUCTION_SIZE 4
+#define HIJACK_INST_NUM 6
+#define HIJACK_SIZE (INSTRUCTION_SIZE * HIJACK_INST_NUM)
+#endif
+```
+
+`src/framework/hijack_operation.c`:
+
+```c
+#include <linux/kernel.h>
+#include <linux/stop_machine.h>
+#include <linux/slab.h>
+#include <linux/delay.h>
+#include <linux/seq_file.h>
+#include <linux/rwsem.h>
+#include <linux/stacktrace.h>
+#include "include/common_data.h"
+
+extern int hook_write_range(void *, void *, int, bool);
+extern int stack_activeness_safety_check(unsigned long);
+extern void fill_long_jmp(void *, void *);
+extern bool check_target_can_hijack(void *);
+extern void (*save_stack_trace_tsk_ptr)(struct task_struct *,
+    struct stack_trace *);
+
+DEFINE_HASHTABLE(all_hijack_targets, DEFAULT_HASH_BUCKET_BITS);
+static DECLARE_RWSEM(hijack_targets_hashtable_lock);
+unsigned long (*get_symbol_pos_addr)
+    (unsigned long, unsigned long *, unsigned long *) = NULL;
+
+inline int fill_hook_template_code_space(void *hook_template_code_space, 
+    void *target_code, void *return_addr)
+{
+    unsigned char tmp_code[HIJACK_SIZE * 2] = {0};
+    memcpy(tmp_code, target_code, HIJACK_SIZE);
+    fill_long_jmp(tmp_code + HIJACK_SIZE, return_addr);
+    return hook_write_range(hook_template_code_space, tmp_code, sizeof(tmp_code), false);
+}
+
+struct do_hijack_struct {
+    void *dest;
+    void *source;
+};
+
+int do_hijack_target(void *data)
+{
+    void *dest = ((struct do_hijack_struct *)data)->dest;
+    void *source = ((struct do_hijack_struct *)data)->source;
+    int ret = 0;
+
+    /*if CONFIG_STACKTRACE not enabled, skip stack safety check*/
+    if (!save_stack_trace_tsk_ptr) {
+        return hook_write_range(dest, source, HIJACK_SIZE, true);
+    }
+
+    if (!(ret = stack_activeness_safety_check((unsigned long)dest))) {  //no problem
+        ret = hook_write_range(dest, source, HIJACK_SIZE, true);
+    }
+    return ret;
+}
+
+bool check_function_length_enough(void *target)
+{
+    unsigned long symbolsize, offset;
+    unsigned long pos;
+    pos = (*get_symbol_pos_addr)((unsigned long)target, &symbolsize, &offset);
+    if (pos && !offset && symbolsize >= HIJACK_SIZE) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+int show_all_hook_targets(struct seq_file *p, void *v)
+{
+    int bkt;
+    struct sym_hook *sa = NULL;
+    struct hlist_node *tmp;
+
+    down_read(&hijack_targets_hashtable_lock);
+    hash_for_each_safe(all_hijack_targets, bkt, tmp, sa, node) {
+        memset(p->private, 0, MAX_KSYM_NAME_LEN);
+        sprint_symbol_no_offset((char *)(p->private), (unsigned long)(sa->target));
+        seq_printf(p, "%s %d\n", (char *)(p->private), sa->enabled);
+    }
+    up_read(&hijack_targets_hashtable_lock);
+    return 0;  
+}
+
+int hijack_target_prepare (void *target, void *hook_dest, void *hook_template_code_space)
+{
+    struct sym_hook *sa = NULL;
+    uint32_t ptr_hash = jhash_pointer(target);
+    int ret = 0;
+
+    /*first, target function should longer than HIJACK_SIZE*/
+    if (!check_function_length_enough(target)) {
+        printk(KERN_ALERT"%p short than hijack_size %d, cannot hijack...\n", target, HIJACK_SIZE);
+        ret = -1;
+        goto out;
+    }
+
+    /*second, not contain unhookable instructions*/
+    if (hook_template_code_space && !check_target_can_hijack(target)) {
+        printk(KERN_ALERT"%p contains instruction which cannot hijack...\n", target);
+        ret = -1;
+        goto out;
+    }
+
+    /*third, target cannot repeat*/
+    down_read(&hijack_targets_hashtable_lock);
+    hash_for_each_possible(all_hijack_targets, sa, node, ptr_hash) {
+        if (target == sa->target) {
+            up_read(&hijack_targets_hashtable_lock);
+            printk(KERN_ALERT"%p has been prepared, skip...\n", target);
+            ret = -1;
+            goto out;
+        }
+    }
+    up_read(&hijack_targets_hashtable_lock);
+
+    /*check passed, now to allocation*/
+    sa = kmalloc(sizeof(*sa), GFP_KERNEL);
+    if (!sa) {
+        printk(KERN_ALERT"No enough memory to hijack %p\n", target);
+        ret = -1;
+        goto out;
+    }
+
+    sa->target = target;
+    memcpy(sa->target_code, target, HIJACK_SIZE);
+    sa->hook_dest = hook_dest;
+    sa->hook_template_code_space = hook_template_code_space;
+    sa->template_return_addr = target + HIJACK_SIZE
+#ifdef _ARCH_ARM64_
+    - 1 * INSTRUCTION_SIZE;
+#endif
+
+#ifdef _ARCH_ARM_
+    ;
+#endif
+    sa->enabled = false;
+
+    down_write(&hijack_targets_hashtable_lock);
+    hash_add(all_hijack_targets, &sa->node, ptr_hash);
+    up_write(&hijack_targets_hashtable_lock);
+
+out:
+    return ret;
+}
+EXPORT_SYMBOL(hijack_target_prepare);
+
+int hijack_target_enable(void *target)
+{
+    struct sym_hook *sa;
+    struct hlist_node *tmp;
+    uint32_t ptr_hash = jhash_pointer(target);
+    int ret = -1;
+    unsigned char source_code[HIJACK_SIZE] = {0};
+    struct do_hijack_struct do_hijack_struct = {
+        .dest = target,
+        .source = source_code,
+    };
+
+    down_write(&hijack_targets_hashtable_lock);
+    hash_for_each_possible_safe(all_hijack_targets, sa, tmp, node, ptr_hash) {
+        if (sa->target == target) {
+            if (sa->enabled == false) {
+                if (sa->hook_template_code_space && fill_hook_template_code_space(
+                    sa->hook_template_code_space, sa->target_code, sa->template_return_addr)) {
+                    goto out;
+                }
+                fill_long_jmp(source_code, sa->hook_dest);
+                if (!(ret = stop_machine(do_hijack_target, &do_hijack_struct, NULL))) {
+                    sa->enabled = true;
+                }
+            } else {
+                printk(KERN_ALERT"%p has been hijacked, skip...\n", sa->target);
+                ret = 0;
+            }
+            goto out;
+        }
+    }
+    printk(KERN_ALERT"%p not been prepared, skip...\n", target);
+out:
+    up_write(&hijack_targets_hashtable_lock);
+
+    return ret;
+}
+EXPORT_SYMBOL(hijack_target_enable);
+
+int hijack_target_disable(void *target, bool need_remove)
+{
+    struct sym_hook *sa;
+    struct hlist_node *tmp;
+    uint32_t ptr_hash = jhash_pointer(target);
+    int ret = -1;
+    struct do_hijack_struct do_hijack_struct = {
+        .dest = target
+    };    
+
+    down_write(&hijack_targets_hashtable_lock);
+    hash_for_each_possible_safe(all_hijack_targets, sa, tmp, node, ptr_hash) {
+        if (sa->target == target) {
+            if (sa->enabled == true) {
+                do_hijack_struct.source = sa->target_code;
+                if (!(ret = stop_machine(do_hijack_target, &do_hijack_struct, NULL)))
+                    sa->enabled = false;
+            } else {
+                printk(KERN_ALERT"%p has been disabled\n", sa->target);
+                ret = 0;
+            }
+
+            if (need_remove && !ret) {
+                printk(KERN_ALERT"remove hijack target %p\n", target);
+                hash_del(&sa->node);
+                kfree(sa);
+            }
+            goto out;
+        }
+    }
+    printk(KERN_ALERT"%p not been prepared, skip...\n", target);
+out:
+    up_write(&hijack_targets_hashtable_lock);
+
+    return ret;
+}
+EXPORT_SYMBOL(hijack_target_disable);
+
+void hijack_target_disable_all(bool need_remove)
+{
+    struct sym_hook *sa;
+    struct hlist_node *tmp;
+    int bkt;
+    bool retry;
+    struct do_hijack_struct do_hijack_struct;
+
+    do {
+        retry = false;
+        down_write(&hijack_targets_hashtable_lock);
+        hash_for_each_safe(all_hijack_targets, bkt, tmp, sa, node) {
+            if (sa->enabled == true) {
+                do_hijack_struct.dest = sa->target;
+                do_hijack_struct.source = sa->target_code;
+                if (stop_machine(do_hijack_target, &do_hijack_struct, NULL)) {
+                    retry = true;
+                    continue;
+                }
+                sa->enabled = false;
+            }
+            if (need_remove) {
+                hash_del(&sa->node);
+                kfree(sa);
+            }
+        }
+        up_write(&hijack_targets_hashtable_lock);
+    } while(retry && (msleep(1000), true));
+
+    printk(KERN_ALERT"all hijacked target disabled%s\n", need_remove ?" and removed":"");
+    return;
+}
+EXPORT_SYMBOL(hijack_target_disable_all);
+
+/************************************************************************************/
+
+int init_hijack_operation(void)
+{
+    get_symbol_pos_addr = find_func("get_symbol_pos");
+    if (get_symbol_pos_addr) {
+        return 0;
+    } else {
+        return -14;
+    }
+}
+```
+
+`src/framework/module.c`:
+
+```c
+#include <linux/module.h>
+
+MODULE_AUTHOR("Liu Tao <taobliu@thoughtworks.com>");
+MODULE_LICENSE("GPL");
+
+extern int init_symbol_resolver(void);
+extern void init_stack_safety_check(void);
+extern int init_hijack_operation(void);
+extern int init_write_map_page(void);
+extern int init_proc_interface(void);
+extern void remove_proc_interface(void);
+extern void hijack_target_disable_all(bool);
+
+static int __init hook_framework_init(void)
+{
+    int ret = 0;
+    ret = init_write_map_page();
+    if (ret) {
+        goto out;
+    }
+    init_stack_safety_check();
+    ret = init_hijack_operation();
+    if (ret) {
+        goto out;
+    }
+    ret = init_proc_interface();
+    if (ret) {
+        goto out;
+    }
+    ret = init_symbol_resolver();
+    if (ret) {
+        goto out;
+    }
+    printk(KERN_ALERT"load hook framework success!\n");
+    return ret;
+out:
+    printk(KERN_ALERT"load hook framework fail!\n");
+    return ret;
+}
+
+static void __exit hook_framework_exit(void)
+{
+    printk(KERN_ALERT"unload hook framework!\n");
+    hijack_target_disable_all(true);
+    remove_proc_interface();
+}
+
+module_init(hook_framework_init);
+module_exit(hook_framework_exit);
+```
+
+`src/framework/proc_interface.c`:
+
+```c
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/proc_fs.h>
+#include <linux/sched.h>
+#include <asm/uaccess.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/init.h>
+#include <linux/kernel_stat.h>
+#include <linux/seq_file.h>
+#include <linux/uaccess.h>
+#include "include/common_data.h"
+
+extern int hijack_target_enable(void *);
+extern int hijack_target_disable(void *, bool);
+
+static ssize_t hook_targets_write(struct file *file, const char __user *buf, size_t count, loff_t *offp)
+{
+    char *string_start, *sep, *val_start;
+    long val;
+    void *target;
+    int ret;
+    char *buffer = ((struct seq_file *)file->private_data)->private;
+
+    memset(buffer, 0, MAX_KSYM_NAME_LEN);
+    if (copy_from_user(buffer, buf, 
+        count > MAX_KSYM_NAME_LEN ? MAX_KSYM_NAME_LEN : count)) {
+        return -EFAULT;
+    }
+    string_start = strim(buffer);
+    if (!(sep = strnchr(string_start, MAX_KSYM_NAME_LEN, ' '))) {
+        return -EFAULT;
+    }
+    *sep++ = '\0';
+    val_start = strim(sep);
+    if (kstrtol(val_start, 10, &val) < 0) {
+        return -EFAULT;
+    }
+
+    if (!(target = (void *)kallsyms_lookup_name(string_start))) {
+        return -EFAULT;
+    }
+
+    switch (val) {
+    case 0:
+        ret = hijack_target_disable(target, false);
+        break;
+    case 1:
+        ret = hijack_target_enable(target);
+        break;
+    default:
+        return -EFAULT;
+    }
+    
+    return ret < 0 ? -EFAULT : count;
+}
+
+extern int show_all_hook_targets(struct seq_file *, void *);
+
+static int hook_targets_open(struct inode *inode, struct file *file)
+{
+    void *buffer = kzalloc(MAX_KSYM_NAME_LEN, GFP_KERNEL);
+    if (!buffer) {
+        return -ENOMEM;
+    }
+	return single_open(file, show_all_hook_targets, buffer);
+}
+
+static int hook_targets_release(struct inode *inode, struct file *file)
+{
+    struct seq_file *sqf= (struct seq_file *)file->private_data;
+    kfree(sqf->private);
+    sqf->private = NULL;
+    return single_release(inode, file);
+}
+
+static const struct file_operations proc_operations = {
+	.open		= hook_targets_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= hook_targets_release,
+	.write 		= hook_targets_write,
+};
+
+int init_proc_interface(void)
+{
+    if (!proc_create("hook_targets", 0600, NULL, &proc_operations))
+        return -1;
+    return 0;
+}
+
+void remove_proc_interface(void)
+{
+    remove_proc_entry("hook_targets", NULL);
+}
+
+```
+
+`src/framework/stack_safety_check.c`:
+
+```c
+#ifndef CONFIG_STACKTRACE
+#define CONFIG_STACKTRACE
+#endif
+#include<linux/stacktrace.h>
+#include<linux/kernel.h>
+#include<linux/sched.h>
+#include<linux/sched/signal.h>
+#include "include/common_data.h"
+
+#define MAC_STACK_TRACE_DEPTH 64
+void (*save_stack_trace_tsk_ptr)(struct task_struct *,
+    struct stack_trace *) = NULL;
+
+static unsigned long stack_entries[MAC_STACK_TRACE_DEPTH];
+static struct stack_trace trace = {
+    .max_entries = ARRAY_SIZE(stack_entries),
+    .entries = &stack_entries[0],
+};
+
+inline int check_address_in_stack(unsigned long addr, unsigned long stack_addr)
+{
+    if (stack_addr >= addr && stack_addr < addr + HIJACK_SIZE) {
+        return -16; //EBUSY
+    }
+    return 0;
+}
+
+/*
+* referenced from https://github.com/dynup/kpatch/blob/master/kmod/core/core.c
+*/
+int stack_activeness_safety_check(unsigned long addr)
+{
+    struct task_struct *g, *t;
+    int ret = 0;
+    int i;
+    do_each_thread(g, t) {
+        trace.nr_entries = 0;
+        (*save_stack_trace_tsk_ptr)(t, &trace);
+        if (trace.nr_entries >= trace.max_entries) {
+            ret = -16; //EBUSY
+            printk(KERN_ALERT"More than %d max trace entries!\n", trace.max_entries);
+            goto out;
+        }
+
+        for (i = 0; i < trace.nr_entries; i++) {
+            if (trace.entries[i] == ULONG_MAX)
+                break;
+            ret = check_address_in_stack(addr, trace.entries[i]);
+            if (ret)
+                goto out;
+        }
+    } while_each_thread(g, t);
+
+out:
+    if (ret) {
+        printk(KERN_ALERT"PID: %d Comm: %.20s\n", t->pid, t->comm);
+        for (i = 0; i < trace.nr_entries; i++) {
+            if (trace.entries[i] == ULONG_MAX)
+                break;
+            printk(KERN_ALERT"  [<%pK>] %pB\n", (void *)trace.entries[i], (void *)trace.entries[i]);
+        }
+    }
+    return ret;
+}
+
+void init_stack_safety_check(void)
+{
+    save_stack_trace_tsk_ptr = find_func("save_stack_trace_tsk");
+    if (!save_stack_trace_tsk_ptr) {
+        printk(KERN_ALERT"CONFIG_STACKTRACE may not be enabled, skip stack safety check and use as your risk!!!\n");
+    }
+}
+
+```
+
+`src/framework/symbol_resolver.c`:
+
+```c
+#include "include/common_data.h"
+#include <linux/export.h>
+#include <linux/mutex.h>
+#include <linux/slab.h>
+#include <uapi/linux/elf.h>
+#include <asm-generic/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+#include <linux/err.h>
+#include <linux/module.h>
+#include <linux/bsearch.h>
+#include <linux/string.h>
+
+#ifndef CONFIG_MODVERSIONS
+#define symversion(base, idx) NULL
+#else
+#define symversion(base, idx) ((base != NULL) ? ((base) + (idx)) : NULL)
+#endif
+
+static DEFINE_HASHTABLE(ksyms_cache_hashtable, DEFAULT_HASH_BUCKET_BITS);
+static rwlock_t ksyms_cache_hashtable_lock;
+
+extern int hijack_target_prepare (void *, void *, void *);
+extern int hijack_target_enable(void *);
+
+void operate_ksyms_cache(uint32_t status)
+{
+	int bkt;
+	struct hlist_node *tmp;
+	struct ksym_cache *ca;
+
+	if (status & SHOW_KSYM_CACHE) {
+		read_lock(&ksyms_cache_hashtable_lock);
+		hash_for_each_safe(ksyms_cache_hashtable, bkt, tmp, ca, node) {
+			printk(KERN_ALERT"ksyms_cache: %s, %p\n", ca->ksym_name, ca->ksym_addr);
+		}
+		read_unlock(&ksyms_cache_hashtable_lock);
+	}
+	
+	if (status & CLEAN_ALL_KSYM_CACHE) {
+		write_lock(&ksyms_cache_hashtable_lock);
+		hash_for_each_safe(ksyms_cache_hashtable, bkt, tmp, ca, node) {
+			hash_del(&ca->node);
+			kfree(ca);
+		}
+		write_unlock(&ksyms_cache_hashtable_lock);
+	}
+}
+
+struct kernel_symbol *resolve_kallsyms_symbol(const char *name)
+{
+    struct kernel_symbol *sym = NULL;
+	void *sym_addr = NULL;
+    struct ksym_cache *ca = NULL;
+    uint32_t name_hash = jhash_string(name);
+
+	//first, we lookup the cached hashtable
+	read_lock(&ksyms_cache_hashtable_lock);
+	hash_for_each_possible(ksyms_cache_hashtable, ca, node, name_hash) {
+        if (!strncmp(name, ca->ksym_name, sizeof(ca->ksym_name))) {
+            sym = (struct kernel_symbol *)ca;
+			read_unlock(&ksyms_cache_hashtable_lock);
+			goto out;
+        }
+    }
+	read_unlock(&ksyms_cache_hashtable_lock);
+
+	//second, we lookup the kallsyms
+    sym_addr = (void *)kallsyms_lookup_name(name);
+    if (!sym_addr)
+        goto out;
+    
+    ca = (struct ksym_cache *)kzalloc(sizeof(struct ksym_cache), GFP_ATOMIC);
+    if (!ca) {
+		printk(KERN_ALERT"No memory cache allocated for %s\n", name);
+        goto out;
+	}
+
+	ca->ksym_addr = sym_addr;
+	strncpy(ca->ksym_name, name, sizeof(ca->ksym_name));
+#ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS    
+    ca->value_offset = (int)((unsigned long)sym_addr - (unsigned long)&ca->value_offset);
+	ca->name_offset = (int)((unsigned long)ca->ksym_name - (unsigned long)&ca->name_offset);
+#else
+	ca->value = (unsigned long)sym_addr;
+	ca->name = ca->ksym_name;
+#endif
+    
+	//third, we insert the new cache into hashtable
+	write_lock(&ksyms_cache_hashtable_lock);
+	hash_add(ksyms_cache_hashtable, &ca->node, name_hash);
+	write_unlock(&ksyms_cache_hashtable_lock);
+	sym = (struct kernel_symbol *)ca;
+
+	// operate_ksyms_cache(SHOW_KSYM_CACHE);
+out:
+	return sym;
+}
+
+/*******************************************************************************/
+
+struct find_symbol_arg {
+	/* Input */
+	const char *name;
+	bool gplok;
+	bool warn;
+
+	/* Output */
+	struct module *owner;
+	const unsigned long *crc;
+	const struct kernel_symbol *sym;
+};
+
+static bool check_symbol(const struct symsearch *syms,
+				 struct module *owner,
+				 unsigned int symnum, void *data)
+{
+	struct find_symbol_arg *fsa = data;
+
+	if (!fsa->gplok) {
+		if (syms->licence == GPL_ONLY)
+			return false;
+		if (syms->licence == WILL_BE_GPL_ONLY && fsa->warn) {
+			pr_warn("Symbol %s is being used by a non-GPL module, "
+				"which will not be allowed in the future\n",
+				fsa->name);
+		}
+	}
+
+#ifdef CONFIG_UNUSED_SYMBOLS
+	if (syms->unused && fsa->warn) {
+		pr_warn("Symbol %s is marked as UNUSED, however this module is "
+			"using it.\n", fsa->name);
+		pr_warn("This symbol will go away in the future.\n");
+		pr_warn("Please evalute if this is the right api to use and if "
+			"it really is, submit a report the linux kernel "
+			"mailinglist together with submitting your code for "
+			"inclusion.\n");
+	}
+#endif
+
+	fsa->owner = owner;
+	fsa->crc = (unsigned long *)symversion(syms->crcs, symnum);
+	fsa->sym = &syms->start[symnum];
+	return true;
+}
+
+static int cmp_name(const void *va, const void *vb)
+{
+	const char *a;
+	const struct kernel_symbol *b;
+	a = va; b = vb;
+	return strcmp(a, b->name);
+}
+
+bool hook_find_symbol_in_section(const struct symsearch *syms,
+				   struct module *owner,
+				   void *data)
+{
+	struct find_symbol_arg *fsa = data;
+	struct kernel_symbol *sym;
+
+	if (!owner) {
+		sym = resolve_kallsyms_symbol(fsa->name);
+		if (sym) {
+			fsa->sym = sym;
+			fsa->owner = NULL;
+			fsa->crc = NULL;
+			return true;
+		}
+	}
+
+	sym = bsearch(fsa->name, syms->start, syms->stop - syms->start,
+			sizeof(struct kernel_symbol), cmp_name);
+
+	if (sym != NULL && check_symbol(syms, owner, sym - syms->start, data))
+		return true;
+
+	return false;
+}
+HOOK_FUNC_TEMPLATE(find_symbol_in_section);
+
+/*************************************************************************************/
+
+int init_symbol_resolver(void)
+{
+	int ret = -14;  // EFAULT
+	void *find_symbol_in_section_addr = NULL;
+	void *template = NULL;
+
+	rwlock_init(&ksyms_cache_hashtable_lock);
+	find_symbol_in_section_addr = (void *)find_func("find_symbol_in_section");
+
+	if (!find_symbol_in_section_addr) {
+		goto out;
+	} 
+
+	template = GET_TEMPLATE_ADDERSS(find_symbol_in_section);
+	if (hijack_target_prepare(find_symbol_in_section_addr, template, NULL)) {
+		goto out;
+	}
+	if (hijack_target_enable(find_symbol_in_section_addr)) {
+		goto out;
+	}
+	ret = 0;
+out:
+	return ret;
+}
+```
+
+`src/framework/write_map_page.c`:
+
+```c
+#include "include/common_data.h"
+#include <linux/uaccess.h>
+#include <linux/kernel.h>
+#include <asm/memory.h>
+#include <linux/vmalloc.h>
+#include <asm/pgtable.h>
+#include <asm/cacheflush.h>
+#include <asm/page.h>
+#include <linux/mm.h>
+
+void *_stext_ptr = NULL, *_etext_ptr = NULL, 
+    *_sinittext_ptr = NULL, *_einittext_ptr = NULL;
+
+int init_kernel_text(unsigned long addr)
+{
+	if (addr >= (unsigned long)_sinittext_ptr &&
+	    addr < (unsigned long)_einittext_ptr)
+		return 1;
+	return 0;
+}
+
+int core_kernel_text(unsigned long addr)
+{
+	if (addr >= (unsigned long)_stext_ptr &&
+	    addr < (unsigned long)_etext_ptr)
+		return 1;
+
+	if (system_state < SYSTEM_RUNNING &&
+	    init_kernel_text(addr))
+		return 1;
+	return 0;
+}
+
+/*
+* Since we are inserting jump instrcutions, if we insert in kernel area(to jump out of kernel),
+* we should use phys_to_page(__pa(target)), if we insert in kernel_module(to jump back to kernel), 
+* we should use vmalloc_to_page(target) instead
+*/
+int remap_write_range(void *target, void *source, int size, bool operate_on_kernel)
+{
+    struct page *page = NULL;
+    void *new_target = NULL;
+
+    if ((((unsigned long)target + size) ^ (unsigned long)target) & PAGE_MASK) {
+        printk(KERN_ALERT"Try to write word across page boundary %p\n", target);
+        return -EFAULT;
+    }
+
+    if (operate_on_kernel && !core_kernel_text((unsigned long)target)) {
+        printk(KERN_ALERT"Try to write to non kernel address %p\n", target);
+        return -EFAULT;
+    }
+
+    if (operate_on_kernel) {
+        page = phys_to_page(__pa(target));
+    } else {
+        page = vmalloc_to_page(target);
+    }
+
+    if (!page) {
+        printk(KERN_ALERT"Cannot get page of address %p\n", target);
+        return -EFAULT;
+    }
+
+    new_target = vm_map_ram(&page, 1, -1, PAGE_KERNEL_EXEC);
+    if (!new_target) {
+        printk(KERN_ALERT"Remap address %p failed\n", target);
+        return -EFAULT;
+    } else {
+        memcpy(new_target + ((unsigned long)target & (~ PAGE_MASK)), source, size);
+        vm_unmap_ram(new_target, 1);
+        flush_icache_range((unsigned long)target, (unsigned long)target + size);
+        return 0;
+    }
+}
+
+int hook_write_range(void *target, void *source, int size, bool operate_on_kernel)
+{
+    long ret = 0;
+ 
+    if (!!(ret = probe_kernel_write(target, source, size))) {
+        ret = remap_write_range(target, source, size, operate_on_kernel);
+    }
+    return (int)ret; 
+}
+
+int init_write_map_page(void)
+{
+    _stext_ptr = (void *)find_func("_stext");
+    _etext_ptr = (void *)find_func("_etext");
+    _sinittext_ptr = (void *)find_func("_sinittext");
+    _einittext_ptr = (void *)find_func("_einittext");
+    
+    if (_stext_ptr && _etext_ptr && _sinittext_ptr && _einittext_ptr) {
+        return 0;
+    }
+    return -1;
+}
+```
+
+`src/framework/write_page.c`:
+
+```c
+#include "include/klog.h"
+#include "include/common_data.h"
+#include <linux/mm.h>
+#include <asm/pgtable.h>
+#include <asm/tlbflush.h>
+#include <linux/mmdebug.h>
+
+struct mm_struct *mm = NULL;
+
+asm (
+        "__cpu_flush_kern_tlb_range:\n\t"
+        "dsb     sy\n\t"
+        "lsr     x0, x0, #12\n\t"                  // align address
+        "lsr     x1, x1, #12\n\t"
+"1:      tlbi    vaae1is, x0\n\t"                     // TLB invalidate by address
+        "add     x0, x0, #1\n\t"
+        "cmp     x0, x1\n\t"
+        "b.lo    1b\n\t"
+        "dsb     sy\n\t"
+        "isb\n\t"
+        "ret\n\t"
+);
+
+#define pte_valid(pte)		(!!(pte_val(pte) & PTE_VALID))
+static inline pte_t clear_pte_bit(pte_t pte, pgprot_t prot)
+{
+	pte_val(pte) &= ~pgprot_val(prot);
+	return pte;
+}
+
+static inline pte_t set_pte_bit(pte_t pte, pgprot_t prot)
+{
+	pte_val(pte) |= pgprot_val(prot);
+	return pte;
+}
+
+static pte_t *get_pte(unsigned long addr)
+{
+	pgd_t *pgdp = NULL;
+	pud_t *pudp = NULL;
+	pmd_t *pmdp = NULL;
+    pte_t *ptep = NULL;
+
+    struct mm_struct init_mm = {0};
+
+    if (!mm) {
+        mm = (struct mm_struct *)find_func("init_mm");
+    }
+    init_mm = *mm;
+
+	pgdp = pgd_offset_k(addr);
+	if (pgd_none(*pgdp)) {
+		logerror("failed get pgdp for %p\n", (void *)addr);
+		return NULL;
+	}
+	
+	pudp = pud_offset(pgdp, addr);
+	if (pud_none(*pudp)) {
+        logerror("failed get pudp for %p\n", (void *)addr);
+		return NULL;
+	}
+	
+	pmdp = pmd_offset(pudp, addr);
+	if (pmd_none(*pmdp)) {
+		logerror("failed get pmdp for %p\n", (void *)addr);
+		return NULL;
+	}
+	
+	ptep = pte_offset_kernel(pmdp, addr);
+	if (!pte_valid(*ptep)) {
+		logerror("failed get pte for %p\n", (void *)addr);
+		return NULL;
+	}
+    return ptep;
+}
+
+#define pte_user_exec(pte)	(!(pte_val(pte) & PTE_UXN))
+
+static inline void set_pte_aatt(struct mm_struct *mm, unsigned long addr,
+			      pte_t *ptep, pte_t pte)
+{
+	pte_t old_pte;
+    void (*__sync_icache_dcache_ptr)(pte_t pteval) = find_func("__sync_icache_dcache");
+
+	if (pte_present(pte) && pte_user_exec(pte) && !pte_special(pte))
+		(*__sync_icache_dcache_ptr)(pte);
+
+	/*
+	 * If the existing pte is valid, check for potential race with
+	 * hardware updates of the pte (ptep_set_access_flags safely changes
+	 * valid ptes without going through an invalid entry).
+	 */
+	old_pte = (*ptep);
+	// if (IS_ENABLED(CONFIG_DEBUG_VM) && pte_valid(old_pte) && pte_valid(pte) &&
+	//    (mm == current->active_mm || atomic_read(&mm->mm_users) > 1)) {
+	// 	VM_WARN_ONCE(!pte_young(pte),
+	// 		     "%s: racy access flag clearing: 0x%016llx -> 0x%016llx",
+	// 		     __func__, pte_val(old_pte), pte_val(pte));
+	// 	VM_WARN_ONCE(pte_write(old_pte) && !pte_dirty(pte),
+	// 		     "%s: racy dirty state clearing: 0x%016llx -> 0x%016llx",
+	// 		     __func__, pte_val(old_pte), pte_val(pte));
+	// }
+
+	set_pte(ptep, pte);
+}
+
+int hook_write_word(void *addr, uint32_t word)
+{
+    pte_t origin_pte, pte, *ptep = NULL;
+
+    ptep = get_pte((unsigned long)addr);
+    if (!ptep)
+        return -1;
+    origin_pte = (pte = *ptep);
+
+	pte = clear_pte_bit(pte, __pgprot(PTE_RDONLY));
+	pte = set_pte_bit(pte, __pgprot(PTE_WRITE));
+    set_pte_aatt(mm, (unsigned long)addr, ptep, pte);
+    // flush_tlb_kernel_range((unsigned long)addr, (unsigned long)(addr + PAGE_SIZE));
+
+    memcpy(addr, &word, sizeof(uint32_t));
+    
+    set_pte_aatt(mm, (unsigned long)addr, ptep, origin_pte);
+    // flush_tlb_kernel_range((unsigned long)addr, (unsigned long)(addr + PAGE_SIZE));
+    return 0;
+}
+```
+
+`src/include/common_data.h`:
+
+```h
+#ifndef _COMMON_DATA_H_
+#define _COMMON_DATA_H_
+
+#include <linux/hashtable.h>
+#include <linux/jhash.h>
+#include <linux/kallsyms.h>
+#include <linux/types.h>
+
+#ifdef _ARCH_ARM64_
+#include "hijack_arm64.h"
+#endif
+
+#ifdef _ARCH_ARM_
+#include "hijack_arm.h"
+#endif
+
+#define DEFAULT_HASH_BUCKET_BITS   17
+#define MAX_KSYM_NAME_LEN 64
+
+#define jhash_pointer(pointer)       jhash((&pointer), sizeof(pointer), 0x95279527)
+#define jhash_string(str)            jhash((str), strlen(str), 0x12345678)
+
+struct ksym_cache {
+//Warning!!! don't put any thing here, we want to hack kernel_symbol, so that
+//struct kernel_symbol *sym_addr = (struct kernel_symbol *)ksym_cache_addr;
+#ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS    
+    int value_offset;
+	int name_offset;
+#else
+	unsigned long value;
+	char *name;
+#endif
+    struct hlist_node node;
+    void *ksym_addr;
+    char ksym_name[MAX_KSYM_NAME_LEN];
+};
+
+struct sym_hook {
+    void *target;
+    void *hook_dest;
+    void *template_return_addr;
+    void *hook_template_code_space;
+    bool enabled;
+    struct hlist_node node;
+    unsigned char target_code[HIJACK_SIZE];
+};
+
+static inline void *find_func(const char *name)
+{
+	void *ret = NULL;
+	ret = (void *)kallsyms_lookup_name(name);
+	if (!ret) {
+		printk(KERN_ALERT"Symbol %s not found!\n", name);
+	}
+	return ret;
+}
+
+#define SHOW_KSYM_CACHE 1
+#define CLEAN_ALL_KSYM_CACHE (1 << 1)
+#endif
+```
+
+`src/prevermagic.sh`:
+
+```sh
+#!/bin/bash
+
+RELATE_UTSRELEASE="include/generated/utsrelease.h"
+UTSRELEASE=$1/$RELATE_UTSRELEASE
+
+if [ ! -e $UTSRELEASE ]; then
+    echo "error! $UTSRELEASE not exist"
+    exit 1
+fi
+
+str_len=${#2}
+padding=""
+
+for (( i=0; i<=$str_len; i++ ))
+do
+    padding="X"$padding
+done
+
+line=`wc -l $UTSRELEASE | awk -F ' ' '{print $1}'`
+
+cp $UTSRELEASE $UTSRELEASE.bak
+cat $UTSRELEASE.bak | awk -v pad=$padding -v line=$line -F '"' \
+    '{if(NR==line){printf("%s \"%s%s\"", $1, pad, $2)}else{print $0}}' > $UTSRELEASE
+
+```
