@@ -1,0 +1,1259 @@
+Project Path: arc_gmh5225_unxorer_dm3zupst
+
+Source Tree:
+
+```txt
+arc_gmh5225_unxorer_dm3zupst
+├── CMakeLists.txt
+├── CMakePresets.json
+├── Folder.DotSettings
+├── README.md
+├── assets
+│   ├── demo.gif
+│   ├── menu.png
+│   ├── progress.png
+│   └── results.png
+├── src
+│   ├── console.cpp
+│   ├── console.hpp
+│   ├── emulator.cpp
+│   ├── emulator.hpp
+│   ├── global.hpp
+│   ├── logger.hpp
+│   ├── plugin.cpp
+│   ├── results.cpp
+│   ├── results.hpp
+│   └── strings.hpp
+└── vcpkg.json
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.12)
+project(unxorer LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+if(NOT DEFINED ENV{IDASDK} OR "$ENV{IDASDK}" STREQUAL "")
+    message(FATAL_ERROR "IDASDK environment variable is not set. \
+Set it to the root of your IDA SDK (e.g. C:/idasdk or /opt/idasdk).")
+endif()
+
+set(IDASDK_ROOT "$ENV{IDASDK}" CACHE PATH "Root of the IDA SDK")
+
+if(NOT EXISTS "${IDASDK_ROOT}/include/ida.hpp")
+    message(FATAL_ERROR "IDASDK_ROOT='${IDASDK_ROOT}' does not look like an IDA SDK (missing include/ida.hpp).")
+endif()
+
+message(STATUS "Using IDA SDK at: ${IDASDK_ROOT}")
+
+string(TIMESTAMP BUILD_DATE "%Y-%m-%d %H:%M:%S")
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short=8 HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+else()
+    set(GIT_HASH "nogit")
+endif()
+
+message(STATUS "Build date: ${BUILD_DATE}, Git hash: ${GIT_HASH}")
+
+find_package(fmt CONFIG REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(UNICORN REQUIRED IMPORTED_TARGET unicorn)
+
+add_library(unxorer SHARED "src/plugin.cpp" "src/emulator.cpp" "src/console.cpp" "src/results.cpp")
+target_link_libraries(unxorer PRIVATE fmt::fmt PkgConfig::UNICORN)
+
+target_include_directories(unxorer PRIVATE "${IDASDK_ROOT}/include")
+target_compile_definitions(unxorer PRIVATE __IDP__ __PLUGIN__ __EA64__
+    BUILD_DATE=\"${BUILD_DATE}\"
+    GIT_HASH=\"${GIT_HASH}\"
+)
+
+if(WIN32)
+    set(IDA_LIB_DIR "${IDASDK_ROOT}/lib/x64_win_vc_64_home")
+    target_link_libraries(unxorer PRIVATE "${IDA_LIB_DIR}/ida.lib")
+    set_target_properties(unxorer PROPERTIES SUFFIX ".dll")
+else()
+    set(IDA_LIB_DIR "${IDASDK_ROOT}/lib/x64_linux_gcc_64_home")
+    find_library(IDAAPI idaapi PATHS "${IDA_LIB_DIR}" NO_DEFAULT_PATH)
+    target_link_libraries(unxorer PRIVATE "${IDAAPI}")
+    set_target_properties(unxorer PROPERTIES SUFFIX ".so")
+endif()
+
+set_target_properties(unxorer PROPERTIES PREFIX "")
+
+set_target_properties(unxorer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins")
+
+```
+
+`CMakePresets.json`:
+
+```json
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "debug-x64",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md",
+        "VCPKG_MANIFEST_MODE": "ON"
+      }
+    },
+    {
+      "name": "release-x64",
+      "inherits": "debug-x64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MSVC_DEBUG_INFORMATION_FORMAT": "ProgramDatabase",
+        "CMAKE_EXE_LINKER_FLAGS_RELEASE": "/DEBUG",
+        "CMAKE_SHARED_LINKER_FLAGS_RELEASE": "/DEBUG"
+      }
+    }
+  ]
+}
+
+```
+
+`Folder.DotSettings`:
+
+```DotSettings
+<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Fields/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Fields/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Functions/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Functions/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Non_002DType_0020Template_0020Parameters/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Non_002DType_0020Template_0020Parameters/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Types/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Types/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Variables/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Variables/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Class_0020and_0020struct_0020fields/@EntryIndexedValue">&lt;NamingElement Priority="11"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="class field" /&gt;&lt;type Name="struct field" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="_" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Class_0020and_0020struct_0020methods/@EntryIndexedValue">&lt;NamingElement Priority="10"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="member function" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Class_0020and_0020struct_0020public_0020fields/@EntryIndexedValue">&lt;NamingElement Priority="12"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="PUBLIC"&gt;&lt;type Name="class field" /&gt;&lt;type Name="struct field" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Classes_0020and_0020structs/@EntryIndexedValue">&lt;NamingElement Priority="1"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="__interface" /&gt;&lt;type Name="class" /&gt;&lt;type Name="struct" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Concepts/@EntryIndexedValue">&lt;NamingElement Priority="2"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="concept" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Enumerators/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Enumerators/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Enums/@EntryIndexedValue">&lt;NamingElement Priority="3"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="enum" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Events/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Events/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Global_0020constants/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Global_0020constants/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Global_0020functions/@EntryIndexedValue">&lt;NamingElement Priority="9"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="global function" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Global_0020variables/@EntryIndexedValue">&lt;NamingElement Priority="8"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="global variable" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Local_0020variables/@EntryIndexedValue">&lt;NamingElement Priority="7"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="local variable" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Macros/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Macros/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Namespaces/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Namespaces/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Other_0020constants/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Other_0020constants/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Parameters/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Parameters/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Properties/@EntryIndexedValue"></s:String>
+	<s:Boolean x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Properties/@EntryIndexRemoved">True</s:Boolean>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Template_0020parameters/@EntryIndexedValue">&lt;NamingElement Priority="5"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="non-type template parameter" /&gt;&lt;type Name="type template parameter" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="AaBb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Typedefs/@EntryIndexedValue">&lt;NamingElement Priority="18"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="type alias" /&gt;&lt;type Name="typedef" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Union_0020members/@EntryIndexedValue">&lt;NamingElement Priority="13"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="union member" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String>
+	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Unions/@EntryIndexedValue">&lt;NamingElement Priority="4"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="union" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" WarnAboutPrefixesAndSuffixes="False" Prefix="" Suffix="" Style="aa_bb" /&gt;&lt;/NamingElement&gt;</s:String></wpf:ResourceDictionary>
+```
+
+`README.md`:
+
+```md
+# unxorer
+Yet another plugin for deobfuscating stack strings.
+
+![demo](/assets/demo.gif)
+
+## Concept
+You can specify one or more starting addresses (e.g. entry point, cursor location, or all functions in the database), from which the plugin will emulate every feasible execution path using [Unicorn](https://www.unicorn-engine.org/). Conditional jumps are forced to branch, and emulation states are saved and restored as needed. Throughout this process, the stack is scanned for strings. When it encounters calls to unknown memory regions (typically imports) or unsupported instructions, it attempts to skip over them so that as many paths as possible can be emulated.
+
+## Installation
+1. Download the latest release from the [releases page](https://github.com/SamuelTulach/unxorer/releases) or compile it yourself (see **Compiling** below).  
+2. Copy the plugin file into your IDA “plugins” directory:
+   - **Windows:** `C:\Program Files\IDA <version>\plugins`
+   - **Linux/macOS:** `~/ida/plugins`
+3. Restart IDA if it is running.
+4. Confirm that the plugin has loaded by opening the **Edit -> Plugins** menu in IDA.
+
+## Usage
+1. Load binary or memory blob into IDA.
+1. Open the **Edit -> Plugins -> unxorer** menu. Configure options as needed. Click **Ok** to start.
+   
+   ![menu](/assets/menu.png)
+1. Wait for the emulation to complete.
+   
+   ![progress](/assets/progress.png)
+1. List of found strings will be displayed, search in it with Ctrl+F, double-click to jump to where it was found.
+   
+   ![results](/assets/results.png)
+
+## Compiling
+This plugin is targetting IDA Home SDK 9.1 and Windows, but in theory should work on any platform and hopefully future IDA versions as well. Those instructions are Windows specific.
+1. Download and install [Visual Studio 2022](https://visualstudio.microsoft.com/) with [C++ development tools and CMake](https://learn.microsoft.com/en-us/cpp/build/vscpp-step-0-installation?view=msvc-170).
+1. Download the [IDA SDK](https://cpp.docs.hex-rays.com/) and extract it to a directory, e.g. `C:\ida-sdk`.
+1. Set `IDASDK` environment variable to the path of the extracted IDA SDK, e.g. `C:\ida-sdk`.
+   - You can do this by searching for "Environment Variables" in the Start menu and adding a new variable.
+1. Setup vcpkg by following [the setup instructions](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-powershell).
+1. Open the `CMakeLists.txt` file in Visual Studio.
+1. Select desired build configuration (**release-x64** or **debug-x64**).
+1. Build the project (Ctrl+Shift+B).
+1. The plugin will be compiled into `out\build\plugins\unxorer.dll`.
+
+## Limitations
+- The branching algorithm is *very* basic, it might get stuck in infinite loop sometimes or skip actual loops.
+- All of the limitations of [Unicorn](https://www.unicorn-engine.org/) apply, such as:
+  - It does not support all instructions (e.g. [some AVX instructions](https://github.com/unicorn-engine/unicorn/issues/1879)).
+  - It fails to emulate heavilly obfuscated or virtualized code.
+```
+
+`src/console.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <iostream>
+#include "console.hpp"
+
+void console::init()
+{
+    AllocConsole();
+    freopen_s(reinterpret_cast<FILE**>(stdin), "CONIN$", "r", stdin);
+    freopen_s(reinterpret_cast<FILE**>(stdout), "CONOUT$", "w", stdout);
+}
+
+void console::print(const std::string& message)
+{
+    std::cout << message;
+}
+
+```
+
+`src/console.hpp`:
+
+```hpp
+#pragma once
+
+namespace console
+{
+    void init();
+    void print(const std::string& message);
+}
+```
+
+`src/emulator.cpp`:
+
+```cpp
+#include "global.hpp"
+
+void emulator::overwrite_all_registers(const uint64_t value)
+{
+    if (uc_reg_write(engine, UC_X86_REG_RAX, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RBX, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RCX, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RDX, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RSI, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RDI, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RBP, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_RSP, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R8, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R9, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R10, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R11, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R12, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R13, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R14, &value) != UC_ERR_OK ||
+        uc_reg_write(engine, UC_X86_REG_R15, &value) != UC_ERR_OK)
+    {
+        logger::print("failed to overwrite registers");
+    }
+}
+
+void emulator::print_disasm(const ea_t& address)
+{
+    qstring line;
+    generate_disasm_line(&line, address, GENDSM_REMOVE_TAGS);
+    tag_remove(&line);
+    logger::print("{0:x}: {1}", address, line.c_str());
+}
+
+void emulator::push_string(const uint64_t rip, const uint64_t rsp, const std::string& str)
+{
+    if (str.empty())
+        return;
+
+    std::string escaped;
+    escaped.reserve(str.size());
+
+    for (const unsigned char c : str)
+    {
+        switch (c)
+        {
+        case '\n':
+            escaped += "\\n";
+            break;
+        case '\r':
+            escaped += "\\r";
+            break;
+        case '\t':
+            escaped += "\\t";
+            break;
+        case '\v':
+            escaped += "\\v";
+            break;
+        case '\f':
+            escaped += "\\f";
+            break;
+        case '\a':
+            escaped += "\\a";
+            break;
+        case '\b':
+            escaped += "\\b";
+            break;
+        default:
+            escaped += static_cast<char>(c);
+        }
+    }
+
+    strings::left_trim(escaped);
+    strings::right_trim(escaped);
+
+    found_string_t found_string;
+    found_string.rip = rip;
+    found_string.rsp = rsp;
+    found_string.data = std::move(escaped);
+
+    string_list.emplace(found_string);
+}
+
+void emulator::dump_stack_strings()
+{
+    uint64_t rsp = 0;
+    uc_reg_read(engine, UC_X86_REG_RSP, &rsp);
+
+    uint64_t rip = 0;
+    uc_reg_read(engine, UC_X86_REG_RIP, &rip);
+
+    // logger::print("dumping stack strings with rsp {0:x}...", rsp);
+
+    if (rsp < stack_base - stack_size || rsp >= stack_base)
+    {
+        logger::print("rsp {0:x} is out of stack bounds ({1:x} - {2:x})", rsp, stack_base - stack_size, stack_base);
+        return;
+    }
+
+    size_t scan_sz = stack_base - rsp;
+    const size_t max_scan = 0x20000;
+    scan_sz = min(scan_sz, max_scan);
+
+    std::vector<uint8_t> buf(scan_sz);
+    if (uc_mem_read(engine, rsp, buf.data(), scan_sz) != UC_ERR_OK)
+    {
+        logger::print("failed to read stack memory at {0:x} with size {1:x}", rsp, scan_sz);
+        return;
+    }
+
+    for (size_t i = 0; i < scan_sz;)
+    {
+        if (strings::is_ascii_printable(buf[i]))
+        {
+            size_t j = i;
+            while (j < scan_sz && strings::is_ascii_printable(buf[j]))
+                ++j;
+
+            if (j - i >= 4 && j < scan_sz && buf[j] == 0)
+            {
+                std::string s(reinterpret_cast<char*>(&buf[i]), j - i);
+                push_string(rip, rsp - (i + 1), s);
+            }
+
+            i = j + 1;
+            continue;
+        }
+
+        if (i + 3 < scan_sz && strings::is_utf16_printable(*reinterpret_cast<const uint16_t*>(&buf[i])))
+        {
+            size_t j = i;
+            while (j + 1 < scan_sz && strings::is_utf16_printable(*reinterpret_cast<const uint16_t*>(&buf[j])))
+                j += 2;
+
+            if ((j - i) / 2 >= 4 && j + 1 < scan_sz && buf[j] == 0 && buf[j + 1] == 0)
+            {
+                std::string s = strings::utf16le_to_ascii(&buf[i], (j - i) / 2);
+                push_string(rip, rsp - (i + 2), s);
+            }
+
+            i = j + 2;
+            continue;
+        }
+
+        ++i;
+    }
+}
+
+bool emulator::is_conditional(const insn_t& insn)
+{
+    static const std::unordered_set<int> jcc = {
+        NN_ja,  NN_jae,  NN_jb,  NN_jbe,  NN_jc,  NN_je,  NN_jz,  NN_jg,   NN_jge,  NN_jl,    NN_jle,
+        NN_jna, NN_jnae, NN_jnb, NN_jnbe, NN_jnc, NN_jne, NN_jng, NN_jnge, NN_jnl,  NN_jnle,  NN_jno,
+        NN_jnp, NN_jns,  NN_jnz, NN_jo,   NN_jp,  NN_jpe, NN_jpo, NN_js,   NN_jcxz, NN_jecxz, NN_jrcxz};
+    return jcc.contains(insn.itype);
+}
+
+bool emulator::should_dump(const insn_t& insn)
+{
+    static const std::unordered_set<int> ignored = {NN_mov, NN_xor, NN_push, NN_pop};
+    return !ignored.contains(insn.itype);
+}
+
+bool emulator::should_skip(const insn_t& insn)
+{
+    static const std::unordered_set<int> skip = {
+        NN_int3,    NN_hlt,     NN_ud2,    NN_syscall, NN_sysret, NN_vmcall, NN_vmclear, NN_vmlaunch, NN_vmresume,
+        NN_vmptrld, NN_vmptrst, NN_vmread, NN_vmwrite, NN_vmxoff, NN_vmxon,  NN_clgi,    NN_invlpga,  NN_skinit,
+        NN_stgi,    NN_vmexit,  NN_vmload, NN_vmmcall, NN_vmrun,  NN_vmsave, NN_invept,  NN_invvpid};
+    return skip.contains(insn.itype);
+}
+
+void emulator::force_branch(uc_engine* uc, const insn_t& insn)
+{
+    constexpr uint64_t f_cf = 0x00000001ull;
+    constexpr uint64_t f_pf = 0x00000004ull;
+    constexpr uint64_t f_zf = 0x00000040ull;
+    constexpr uint64_t f_sf = 0x00000080ull;
+    constexpr uint64_t f_of = 0x00000800ull;
+
+    uint64_t eflags = 0;
+    uc_reg_read(uc, UC_X86_REG_EFLAGS, &eflags);
+
+    auto set = [&](const uint64_t mask) { eflags |= mask; };
+    auto clear = [&](const uint64_t mask) { eflags &= ~mask; };
+
+    switch (insn.itype)
+    {
+    case NN_jz:
+    case NN_je:
+        set(f_zf);
+        break;
+    case NN_jnz:
+    case NN_jne:
+        clear(f_zf);
+        break;
+
+    case NN_jc:
+    case NN_jb:
+    case NN_jnae:
+        set(f_cf);
+        break;
+    case NN_jnc:
+    case NN_jnb:
+    case NN_jae:
+        clear(f_cf);
+        break;
+
+    case NN_js:
+        set(f_sf);
+        break;
+    case NN_jns:
+        clear(f_sf);
+        break;
+
+    case NN_jo:
+        set(f_of);
+        break;
+    case NN_jno:
+        clear(f_of);
+        break;
+
+    case NN_jp:
+    case NN_jpe:
+        set(f_pf);
+        break;
+    case NN_jnp:
+    case NN_jpo:
+        clear(f_pf);
+        break;
+
+    case NN_ja:
+    case NN_jnbe:
+        clear(f_cf | f_zf);
+        break;
+    case NN_jbe:
+    case NN_jna:
+        set(f_cf);
+        break;
+
+    case NN_jg:
+    case NN_jnle:
+        clear(f_zf | f_sf | f_of);
+        break;
+    case NN_jge:
+    case NN_jnl:
+        clear(f_sf | f_of);
+        break;
+    case NN_jl:
+    case NN_jnge:
+        set(f_sf);
+        clear(f_of);
+        break;
+    case NN_jle:
+    case NN_jng:
+        set(f_zf);
+        break;
+
+    case NN_jcxz:
+    case NN_jecxz:
+    case NN_jrcxz: {
+        const uint64_t rcx = 0;
+        uc_reg_write(uc, UC_X86_REG_RCX, &rcx);
+    }
+    break;
+
+    default:
+        break;
+    }
+
+    uc_reg_write(uc, UC_X86_REG_EFLAGS, &eflags);
+}
+
+bool emulator::is_external_thunk(ea_t ea)
+{
+    insn_t jmp;
+    if (!decode_insn(&jmp, ea))
+        return false;
+
+    constexpr int jmp_types[] = {NN_jmp, NN_jmpfi, NN_jmpni};
+    if (std::find(std::begin(jmp_types), std::end(jmp_types), jmp.itype) == std::end(jmp_types))
+        return false;
+
+    ea_t img_min = inf_get_min_ea();
+    ea_t img_max = inf_get_max_ea();
+
+    uint64_t final = 0;
+    bool have_final = false;
+
+    switch (jmp.Op1.type)
+    {
+    case o_near:
+    case o_far:
+        final = jmp.Op1.addr;
+        have_final = true;
+        break;
+
+    case o_mem:
+    case o_displ:
+        if (uc_mem_read(engine, jmp.Op1.addr, &final, sizeof(final)) == UC_ERR_OK)
+            have_final = true;
+        break;
+
+    default:
+        break;
+    }
+
+    return have_final && (final < img_min || final >= img_max);
+}
+
+bool emulator::handle_call(uc_engine* uc, uint64_t address, uint32_t size, insn_t insn)
+{
+    if (insn.itype != NN_call && insn.itype != NN_callfi && insn.itype != NN_callni)
+        return false;
+
+    const ea_t img_min = inf_get_min_ea();
+    const ea_t img_max = inf_get_max_ea();
+
+    uint64_t dest = 0;
+    bool have_dest = false;
+
+    switch (insn.Op1.type)
+    {
+    case o_near:
+    case o_far:
+        dest = insn.Op1.addr;
+        have_dest = true;
+        break;
+
+    case o_mem:
+    case o_displ: {
+        const uint64_t ptr_addr = insn.Op1.addr;
+        if (uc_mem_read(uc, ptr_addr, &dest, sizeof(dest)) == UC_ERR_OK)
+            have_dest = true;
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    bool external = have_dest && (dest < img_min || dest >= img_max);
+    if (!external && have_dest && is_external_thunk(dest))
+    {
+        ++counters::import_thunks;
+        external = true;
+    }
+
+    if (!external)
+        return false;
+
+    const uint64_t new_rip = address + size;
+    uc_reg_write(uc, UC_X86_REG_RIP, &new_rip);
+
+    constexpr uint64_t zero = 0;
+    uc_reg_write(uc, UC_X86_REG_RAX, &zero);
+
+    ++counters::external_calls;
+    return true;
+}
+
+void emulator::hook_code(uc_engine* uc, uint64_t address, uint32_t size, void* user_data)
+{
+    insn_t insn;
+    if (!decode_insn(&insn, address))
+        return;
+
+#ifndef NDEBUG
+    print_disasm(address);
+#endif
+
+    ++counters::instructions_executed;
+
+    if (should_update_dialog)
+        replace_wait_box("Emulating at 0x%a, executed %zu instructions", address, counters::instructions_executed);
+
+    if (should_skip(insn))
+    {
+        uint64_t rip = 0;
+        uc_reg_read(uc, UC_X86_REG_RIP, &rip);
+        rip += size;
+        uc_reg_write(uc, UC_X86_REG_RIP, &rip);
+
+        ++counters::skipped;
+        return;
+    }
+
+    if (should_dump(insn))
+        dump_stack_strings();
+
+    if (handle_call(uc, address, size, insn))
+        return;
+
+    if (!is_conditional(insn))
+        return;
+
+    const uint64_t taken = insn.Op1.addr;
+    const uint64_t fallthrough = address + size;
+
+    if (!visited.contains(fallthrough))
+    {
+        branch_state_t st;
+        uc_context_alloc(uc, &st.ctx);
+        uc_context_save(uc, st.ctx);
+        st.pc = fallthrough;
+        pending.push_back(std::move(st));
+        ++counters::branched;
+    }
+    else
+    {
+        ++counters::already_visited;
+    }
+
+    visited.insert(fallthrough);
+
+    if (taken > address)
+        force_branch(engine, insn);
+}
+
+bool emulator::hook_mem(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data)
+{
+    constexpr uint64_t page_mask = ~0xFFFULL;
+    const uint64_t page = address & page_mask;
+
+    if (uc_mem_map(uc, page, 0x1000, UC_PROT_ALL) != UC_ERR_OK)
+        return false;
+
+    uint64_t rip = 0;
+    uc_reg_read(uc, UC_X86_REG_RIP, &rip);
+
+    logger::print("mapped missing page {0:x} for {1:x}, resuming...", page, rip);
+    return true;
+}
+
+void emulator::reset()
+{
+    pending.clear();
+    visited.clear();
+    string_list.clear();
+
+    counters::start_time.reset();
+    counters::instructions_executed = 0;
+    counters::branched = 0;
+    counters::already_visited = 0;
+    counters::skipped = 0;
+    counters::external_calls = 0;
+    counters::import_thunks = 0;
+
+    should_update_dialog = true;
+}
+
+uc_err emulator::safe_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t timeout, size_t count)
+{
+    __try
+    {
+        return uc_emu_start(uc, begin, until, timeout, count);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        logger::print("exception thrown during emulation: {0:x}", GetExceptionCode());
+        return UC_ERR_EXCEPTION;
+    }
+}
+
+void emulator::run(ea_t start, uint64_t max_time_ms, uint64_t max_instr_branch)
+{
+    logger::print("starting emulation from {0:x}...", start);
+
+    if (!counters::start_time.has_value())
+        counters::start_time = std::chrono::high_resolution_clock::now();
+
+    uc_err err = uc_open(UC_ARCH_X86, UC_MODE_64, &engine);
+    if (err != UC_ERR_OK)
+    {
+        logger::print("failed to initialize engine: {0}", uc_strerror(err));
+        return;
+    }
+
+    overwrite_all_registers(0x2000);
+
+    constexpr uint64_t page_size = 0x1000;
+    constexpr uint64_t page_mask = ~(page_size - 1);
+
+    const ea_t img_min = inf_get_min_ea();
+    const ea_t img_max = inf_get_max_ea();
+
+    const uint64_t map_start = img_min & page_mask;
+    const uint64_t map_end = (img_max + page_size - 1) & page_mask;
+    const size_t map_size = map_end - map_start;
+
+    err = uc_mem_map(engine, map_start, map_size, UC_PROT_ALL);
+    if (err != UC_ERR_OK)
+    {
+        logger::print("failed to map memory range {0:x} to {1:x}: {2}", img_min, img_max, uc_strerror(err));
+        uc_close(engine);
+        return;
+    }
+
+    const size_t size = img_max - img_min;
+    std::vector<uint8_t> buffer(size);
+    const ssize_t got = get_bytes(buffer.data(), size, img_min, GMB_READALL);
+    if (got <= 0)
+    {
+        logger::print("failed to read memory from {0:x} to {1:x}: {2}", img_min, img_max, got);
+        uc_close(engine);
+        return;
+    }
+
+    err = uc_mem_write(engine, img_min, buffer.data(), size);
+    if (err != UC_ERR_OK)
+    {
+        logger::print("failed to write memory from {0:x} with size {1:x}: {2}", img_min, size, uc_strerror(err));
+        uc_close(engine);
+        return;
+    }
+
+    err = uc_mem_map(engine, stack_base - stack_size, stack_size, UC_PROT_READ | UC_PROT_WRITE);
+    if (err != UC_ERR_OK)
+    {
+        logger::print("failed to map stack: {0}", uc_strerror(err));
+        uc_close(engine);
+        return;
+    }
+
+    uc_reg_write(engine, UC_X86_REG_RSP, &stack_base);
+
+    uc_hook_add(engine, &code_hook, UC_HOOK_CODE, hook_code, nullptr, 1, 0);
+    uc_hook_add(engine, &mem_hook, UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED, hook_mem, nullptr, 1, 0);
+
+    uint64_t entry = start;
+
+    for (;;)
+    {
+        uc_reg_write(engine, UC_X86_REG_RIP, &entry);
+
+        err = safe_start(engine, entry, 0, max_time_ms * 1000, max_instr_branch);
+        if (err != UC_ERR_OK)
+            logger::print("emulation failure: {0}", uc_strerror(err));
+
+        if (pending.empty())
+            break;
+
+        const branch_state_t st = std::move(pending.back());
+        pending.pop_back();
+
+        uc_context_restore(engine, st.ctx);
+        entry = st.pc;
+    }
+
+    uc_close(engine);
+}
+
+```
+
+`src/emulator.hpp`:
+
+```hpp
+#pragma once
+
+namespace emulator
+{
+    constexpr ea_t stack_base = 0x00007FFF0000ULL;
+    constexpr size_t stack_size = 0x100000;
+
+    inline uc_engine* engine = nullptr;
+    inline uc_hook code_hook = 0;
+    inline uc_hook mem_hook = 0;
+    inline uc_hook fetch_hook = 0;
+
+    inline bool should_update_dialog = true;
+
+    struct branch_state_t
+    {
+        uc_context* ctx = nullptr;
+        uint64_t pc = 0;
+
+        branch_state_t() = default;
+        branch_state_t(const branch_state_t&) = delete;
+        branch_state_t& operator=(const branch_state_t&) = delete;
+
+        branch_state_t(branch_state_t&& o) noexcept : ctx(o.ctx), pc(o.pc)
+        {
+            o.ctx = nullptr;
+        }
+
+        ~branch_state_t()
+        {
+            if (ctx)
+                uc_context_free(ctx);
+        }
+    };
+
+    inline std::vector<branch_state_t> pending;
+    inline std::unordered_set<uint64_t> visited;
+
+    namespace counters
+    {
+        inline size_t instructions_executed = 0;
+        inline size_t branched = 0;
+        inline size_t already_visited = 0;
+        inline size_t skipped = 0;
+        inline size_t external_calls = 0;
+        inline size_t import_thunks = 0;
+        inline std::optional<std::chrono::high_resolution_clock::time_point> start_time;
+    }
+
+    void overwrite_all_registers(uint64_t value);
+
+    struct found_string_t
+    {
+        uint64_t rip = 0;
+        uint64_t rsp = 0;
+        std::string data = {};
+
+        bool operator==(const found_string_t& other) const noexcept
+        {
+            return data == other.data;
+        }
+    };
+
+    struct found_string_hash
+    {
+        size_t operator()(const found_string_t& input) const noexcept
+        {
+            return std::hash<std::string>{}(input.data);
+        }
+    };
+
+    inline std::unordered_set<found_string_t, found_string_hash> string_list;
+    void print_disasm(const ea_t& address);
+    void push_string(const uint64_t rip, const uint64_t rsp, const std::string& str);
+    void dump_stack_strings();
+
+    bool is_conditional(const insn_t& insn);
+    bool should_dump(const insn_t& insn);
+    bool should_skip(const insn_t& insn);
+
+    void force_branch(uc_engine* uc, const insn_t& insn);
+    bool is_external_thunk(ea_t ea);
+    bool handle_call(uc_engine* uc, uint64_t address, uint32_t size, insn_t insn);
+
+    void hook_code(uc_engine* uc, uint64_t address, uint32_t size, void* user_data);
+    bool hook_mem(uc_engine* uc, uc_mem_type type, uint64_t address, int size, int64_t value, void* user_data);
+
+    void reset();
+    uc_err safe_start(uc_engine* uc, uint64_t begin, uint64_t until, uint64_t timeout, size_t count);
+    void run(ea_t start, uint64_t max_time_ms, uint64_t max_instr_branch);
+}
+```
+
+`src/global.hpp`:
+
+```hpp
+#pragma once
+
+#include <fmt/format.h>
+#include <vector>
+#include <unordered_set>
+#include <chrono>
+
+#pragma warning(push, 0)
+#include <ida.hpp>
+#include <idp.hpp>
+#include <loader.hpp>
+#include <kernwin.hpp>
+#include <gdl.hpp>
+#include <allins.hpp>
+#include <pro.h>
+#pragma warning(pop)
+
+#include <unicorn/unicorn.h>
+
+#include "console.hpp"
+#include "logger.hpp"
+#include "emulator.hpp"
+#include "strings.hpp"
+#include "results.hpp"
+```
+
+`src/logger.hpp`:
+
+```hpp
+#pragma once
+#include "console.hpp"
+
+namespace logger
+{
+    constexpr const char* prefix = "[unxorer]";
+
+    template <typename... Args> inline void print(fmt::format_string<Args...> fmtstr, Args&&... args)
+    {
+        auto line = fmt::format("{} {}\n", prefix, fmt::format(fmtstr, std::forward<Args>(args)...));
+        msg("%s", line.c_str());
+        console::print(line);
+    }
+
+    inline void title()
+    {
+        msg("        %s\n", R"( __ _____ __ _____  _______ ____)");
+        msg("        %s\n", R"(/ // / _ \\ \ / _ \/ __/ -_) __/)");
+        msg("        %s\n", R"(\_,_/_//_/_\_\\___/_/  \__/_/   )");
+
+        msg("   %s\n", fmt::format("build on {0} from {1}", BUILD_DATE, GIT_HASH).c_str());
+    }
+}
+```
+
+`src/plugin.cpp`:
+
+```cpp
+#include "global.hpp"
+
+static plugmod_t* idaapi init()
+{
+#ifndef NDEBUG
+    console::init();
+#endif
+    logger::title();
+    return PLUGIN_OK;
+}
+
+static void idaapi term()
+{
+    /**/
+}
+
+static bool idaapi run(size_t)
+{
+    if (PH.id != PLFM_386 || !inf_is_64bit())
+    {
+        warning("CPU is not x86_64");
+        return false;
+    }
+
+    emulator::reset();
+
+    enum scope
+    {
+        S_FUNC = 0,
+        S_EVERY_FUNC,
+        S_CUR,
+        S_ENTRY
+    };
+
+    static const char form[] = "unxorer\n"
+                               "Start from:\n"
+                               "<#Current function:R>\n"
+                               "<#Every function (very slow!):R>\n"
+                               "<#Current cursor location:R>\n"
+                               "<#Entry point:R>>\n"
+                               "\n"
+                               "Limits (per branch):\n"
+                               "<Max time (ms):\t      D:20:10::>\n"
+                               "<Max instructions:\t   D:20:10::>\n";
+
+    uval_t max_time = 10000;
+    uval_t max_instr_count = 3000;
+    int scope = S_FUNC;
+    if (!ask_form(form, &scope, &max_time, &max_instr_count))
+        return false;
+
+    show_wait_box("Initializing");
+
+    switch (scope)
+    {
+    case S_FUNC: {
+        const func_t* func = get_func(get_screen_ea());
+        if (!func)
+        {
+            warning("No function under cursor");
+            break;
+        }
+
+        emulator::run(func->start_ea, max_time, max_instr_count);
+        results::display(emulator::string_list);
+        break;
+    }
+    case S_EVERY_FUNC: {
+        const size_t total = get_func_qty();
+        if (total == 0)
+        {
+            warning("No functions in the database");
+            break;
+        }
+
+        logger::print("running on {0} functions in database", total);
+
+        emulator::should_update_dialog = false;
+
+        for (size_t i = 0; i < total; i++)
+        {
+            const ea_t start = getn_func(i)->start_ea;
+            replace_wait_box("Emulating function %zu/%zu at 0x%a", i + 1, total, start);
+
+            emulator::run(start, max_time, max_instr_count);
+
+            if (user_cancelled())
+                break;
+        }
+
+        results::display(emulator::string_list);
+        break;
+    }
+    case S_CUR: {
+        emulator::run(get_screen_ea(), max_time, max_instr_count);
+        results::display(emulator::string_list);
+        break;
+    }
+    case S_ENTRY:
+        emulator::run(inf_get_start_ea(), max_time, max_instr_count);
+        results::display(emulator::string_list);
+        break;
+    }
+
+    hide_wait_box();
+    return true;
+}
+
+plugin_t PLUGIN = {IDP_INTERFACE_VERSION, 0, init, term, run, "", "", "unxorer", ""};
+```
+
+`src/results.cpp`:
+
+```cpp
+#include "global.hpp"
+
+class results_chooser_t : public chooser_t
+{
+  protected:
+    static const int results_widths_[];
+    static const char* const results_headers_[];
+
+  private:
+    std::unordered_set<emulator::found_string_t, emulator::found_string_hash> list_;
+
+  public:
+    results_chooser_t(const char* desired_title,
+                      const std::unordered_set<emulator::found_string_t, emulator::found_string_hash>& list)
+        : chooser_t(0, 3, results_widths_, results_headers_, desired_title)
+    {
+        list_ = list;
+    }
+
+    virtual const void* get_obj_id(size_t* len) const
+    {
+        *len = strlen(title);
+        return title;
+    }
+
+    virtual size_t idaapi get_count() const
+    {
+        return list_.size();
+    }
+
+    virtual void idaapi get_row(qstrvec_t* cols, int* icon_, chooser_item_attrs_t* attrs, size_t n) const
+    {
+        if (n >= list_.size())
+            return;
+
+        const auto it = std::next(list_.begin(), n);
+        const emulator::found_string_t& item = *it;
+
+        (*cols)[0].sprnt("%016" PRIX64, item.rip);
+        (*cols)[1].sprnt("%016" PRIX64, item.rsp);
+        (*cols)[2].sprnt("%s", item.data.c_str());
+    }
+
+    virtual cbret_t idaapi enter(size_t n)
+    {
+        if (n >= list_.size())
+            return false;
+
+        const auto it = std::next(list_.begin(), n);
+        jumpto(it->rip);
+
+        return false;
+    }
+};
+
+const int results_chooser_t::results_widths_[] = {16, 16, 32};
+const char* const results_chooser_t::results_headers_[] = {"rip", "rsp", "string"};
+
+void results::display(const std::unordered_set<emulator::found_string_t, emulator::found_string_hash>& string_list)
+{
+    const auto duration = std::chrono::high_resolution_clock::now() -
+                          emulator::counters::start_time.value_or(std::chrono::high_resolution_clock::now());
+
+    logger::print("stats:");
+    logger::print(" - instructions:    {0}", emulator::counters::instructions_executed);
+    logger::print(" - time:            {0}", strings::format_duration(duration));
+
+    logger::print("finished, found {0} unique strings", string_list.size());
+
+    const auto results = new results_chooser_t("unxorer", string_list);
+    results->choose();
+}
+```
+
+`src/results.hpp`:
+
+```hpp
+#pragma once
+
+namespace results
+{
+    void display(const std::unordered_set<emulator::found_string_t, emulator::found_string_hash>& string_list);
+}
+```
+
+`src/strings.hpp`:
+
+```hpp
+#pragma once
+
+namespace strings
+{
+    inline bool is_ascii_printable(const uint8_t c) noexcept
+    {
+        return (c >= 0x20 && c <= 0x7E) || c == 0x09 || c == 0x0A || c == 0x0D;
+    }
+
+    inline bool is_utf16_printable(const uint16_t w) noexcept
+    {
+        return (w >= 0x20 && w <= 0x7E) || w == 0x09 || w == 0x0A || w == 0x0D;
+    }
+
+    inline std::string utf16le_to_ascii(const uint8_t* buf, const size_t chars)
+    {
+        std::string out;
+        out.reserve(chars);
+
+        for (size_t i = 0; i < chars; ++i)
+            out.push_back(static_cast<char>(buf[i * 2]));
+
+        return out;
+    }
+
+    inline void left_trim(std::string& s)
+    {
+        s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](const unsigned char ch) { return !std::isspace(ch); }));
+    }
+
+    inline void right_trim(std::string& s)
+    {
+        s.erase(std::find_if(s.rbegin(), s.rend(), [](const unsigned char ch) { return !std::isspace(ch); }).base(),
+                s.end());
+    }
+
+    inline std::string format_duration(const std::chrono::nanoseconds duration)
+    {
+        using namespace std::chrono;
+
+        const auto ms_total = duration_cast<milliseconds>(duration).count();
+        const auto hours = ms_total / (1000 * 60 * 60);
+        const auto minutes = (ms_total / (1000 * 60)) % 60;
+        const auto seconds = (ms_total / 1000) % 60;
+        const auto millis = ms_total % 1000;
+
+        std::ostringstream oss;
+        oss << std::setfill('0') << std::setw(2) << hours << ":" << std::setw(2) << minutes << ":" << std::setw(2)
+            << seconds << "." << std::setw(3) << millis;
+        return oss.str();
+    }
+}
+
+```
+
+`vcpkg.json`:
+
+```json
+{
+  "name": "unxorer",
+  "builtin-baseline": "f2bf7d935af722c0cd8219c1f6e30d5ae3d666f2",
+  "dependencies": [
+    "fmt",
+    "pkgconf",
+    "unicorn"
+  ]
+}
+```

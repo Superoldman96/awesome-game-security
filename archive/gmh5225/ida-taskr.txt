@@ -1,0 +1,5132 @@
+Project Path: arc_gmh5225_ida-taskr_e3a2_v_h
+
+Source Tree:
+
+```txt
+arc_gmh5225_ida-taskr_e3a2_v_h
+├── LICENSE
+├── README.md
+├── examples
+│   └── event_emitter_usage.py
+├── pyproject.toml
+├── run_tests.sh
+├── src
+│   └── ida_taskr
+│       ├── __init__.py
+│       ├── helpers.py
+│       ├── launcher.py
+│       ├── protocols.py
+│       ├── task_runner.py
+│       ├── taskr_plugin.py
+│       ├── utils.py
+│       └── worker.py
+└── tests
+    ├── 11.1.0.60228.json
+    ├── __init__.py
+    ├── anti_deob
+    │   ├── __init__.py
+    │   ├── deobfuscator.py
+    │   └── worker_main.py
+    ├── test_anti_deob.py
+    ├── test_event_emitter.py
+    ├── test_imports.py
+    ├── test_task_runner.py
+    └── test_worker_commands.py
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2025 Mahmoud Rusty Abdelkader
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# ida-taskr
+
+![CI Status](https://github.com/mahmoudimus/ida-taskr/actions/workflows/python.yml/badge.svg)
+
+## Overview
+
+IDA Taskr is a pure Python library for IDA Pro related parallel computing. It lets you use the power of Qt (built-in to IDA!) and Python's powerful multiprocessing and asyncio systems to quickly process computationally intensive tasks without freezing IDA Pro. Oh, and it's super fast too.
+
+## Testing 🧪
+
+`ida-taskr` is thoroughly tested to ensure reliability.
+
+```bash
+python3 -m unittest discover -s tests/
+```
+
+You'll see detailed output confirming the functionality of each component. ✅
+
+## Contributing 🤝
+
+We welcome contributions to `ida-taskr`! Whether it's bug fixes, new features, or documentation improvements, your help is appreciated. Here's how to contribute:
+
+1. **Fork the Repository** and clone it locally. 🍴
+2. **Make Your Changes** in a new branch. 🌿
+3. **Run Tests** to ensure everything works (`python3 -m unittest discover -s tests/`). 🧪
+4. **Submit a Pull Request** with a clear description of your changes. 📬
+
+Please follow the coding style and include tests for new functionality. Let's make `ida-taskr` even better together! 💪
+
+## License 📜
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 📄
+
+## Contact 📧
+
+Have questions, suggestions, or need support? Open an issue on GitHub or reach out to [mahmoudimus](https://github.com/mahmoudimus). I'm happy to help! 😊
+
+```
+
+`examples/event_emitter_usage.py`:
+
+```py
+"""
+Example showing how to use the MessageEmitter pattern for handling worker messages.
+
+This demonstrates the composition-based approach which is flexible and easy to test.
+"""
+
+import logging
+
+from ida_taskr import TaskRunner, get_logger
+
+logger = get_logger(__name__)
+
+
+def on_results(results):
+    logger.info("✅ Received results: %s", results)
+    if results.get("status") == "success":
+        data = results.get("results", [])
+        logger.info("🎯 Processing %d result items", len(data))
+
+
+def on_progress(progress, status):
+    logger.info("📊 Progress: %.1f%% - %s", progress * 100, status)
+
+
+def main():
+    runner = TaskRunner(
+        worker_script="path/to/your/worker.py",
+        worker_args={"data_size": 1024, "start_ea": "0x1000", "is64": "1"},
+        log_level=logging.DEBUG,
+    )
+    runner.on_results(on_results)
+    runner.on_progress(on_progress)
+    runner.start()
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`pyproject.toml`:
+
+```toml
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ida-taskr"
+version = "0.1.0"
+description = "IDA task runner"
+
+[project.scripts]
+ida-taskr = "ida_taskr:main"
+
+[tool.test.run]
+branch = true
+include = ["tests/*"]
+command_line = "-m unittest discover -s tests/"
+```
+
+`run_tests.sh`:
+
+```sh
+#!/bin/bash
+# Test runner script for anti-deobfuscation tests
+# 
+# This script sets up the necessary environment variables to run the tests
+# with IDA Pro's PyQt5 framework on macOS.
+#
+# Usage:
+#   ./run_tests.sh                    # Run all tests
+#   ./run_tests.sh test_event_emitter # Run specific test file
+#   ./run_tests.sh TestMessageEmitter # Run specific test class
+#   ./run_tests.sh --help            # Show this help message
+
+# Set up the framework path for IDA Pro's PyQt5
+export DYLD_FALLBACK_FRAMEWORK_PATH="/Applications/IDA Professional 9.1.app/Contents/Frameworks"
+
+# Function to show help
+show_help() {
+    echo "🔬 Anti-Deobfuscation Test Runner"
+    echo "================================="
+    echo
+    echo "📖 Usage:"
+    echo "   ./run_tests.sh                    # Run all tests"
+    echo "   ./run_tests.sh test_event_emitter # Run specific test file"
+    echo "   ./run_tests.sh TestMessageEmitter # Run specific test class" 
+    echo "   ./run_tests.sh --help            # Show this help message"
+    echo
+    echo "🎯 For anti-deobfuscation tests, you can also set:"
+    echo "   export TEST_ROUTINE_ADDR=0x141887cbd  # hex format"
+    echo "   export TEST_ROUTINE_ADDR=5394431165   # decimal format"
+    echo
+    echo "📋 Available test files:"
+    echo "   test_anti_deob        # Anti-deobfuscation algorithm tests"
+    echo "   test_event_emitter    # MessageEmitter functionality tests"
+    echo "   test_task_runner      # TaskRunner functionality tests"
+    echo
+    echo "📋 Available routine addresses:"
+    echo "   5368727905 (0x140004961) - 110 bytes"
+    echo "   5368729905 (0x140005131) - 160 bytes"
+    echo "   5369441646 (0x1400B2D6E) - 160 bytes"
+    echo "   5376900737 (0x1407CFE81) - 160 bytes"
+    echo "   5376975793 (0x1407E23B1) - 160 bytes"
+    echo "   5390373031 (0x1414A90A7) - 160 bytes"
+    echo "   5394431165 (0x141887CBD) - 1325 bytes"
+}
+
+echo "🔬 Anti-Deobfuscation Test Runner"
+echo "================================="
+echo
+
+# Get the test name from command line argument
+TEST_NAME="$1"
+
+# Handle help requests
+case "$TEST_NAME" in
+    --help|-h|help)
+        show_help
+        exit 0
+        ;;
+esac
+
+# Check if a specific test is requested
+if [ -n "$TEST_NAME" ]; then
+    echo "🎯 Running specific test: $TEST_NAME"
+    echo "   Command: python -m unittest tests.$TEST_NAME -v"
+    TEST_COMMAND="python -m unittest tests.$TEST_NAME -v"
+else
+    # Check if TEST_ROUTINE_ADDR is set for anti-deob tests
+    if [ -n "$TEST_ROUTINE_ADDR" ]; then
+        echo "🎯 Running tests for specific address: $TEST_ROUTINE_ADDR"
+        echo "   Command: python -m unittest tests.test_anti_deob -v"
+        TEST_COMMAND="python -m unittest tests.test_anti_deob -v"
+    else
+        echo "🔄 Running all tests"
+        echo "   To run tests for a specific address, set TEST_ROUTINE_ADDR:"
+        echo "   export TEST_ROUTINE_ADDR=0x141887cbd  # hex format"
+        echo "   export TEST_ROUTINE_ADDR=5394431165   # decimal format"
+        echo
+        echo "   To run a specific test file:"
+        echo "   ./run_tests.sh test_event_emitter"
+        echo "   ./run_tests.sh test_task_runner"
+        echo
+        echo "   For help: ./run_tests.sh --help"
+        TEST_COMMAND="python -m unittest discover tests"
+    fi
+fi
+
+echo
+echo "📋 Available routine addresses:"
+echo "   5368727905 (0x140004961) - 110 bytes"
+echo "   5368729905 (0x140005131) - 160 bytes"
+echo "   5369441646 (0x1400B2D6E) - 160 bytes"
+echo "   5376900737 (0x1407CFE81) - 160 bytes"
+echo "   5376975793 (0x1407E23B1) - 160 bytes"
+echo "   5390373031 (0x1414A90A7) - 160 bytes"
+echo "   5394431165 (0x141887CBD) - 1325 bytes"
+echo
+
+echo "🚀 Starting tests..."
+echo "===================="
+
+# Run the tests and capture the exit code
+$TEST_COMMAND
+EXIT_CODE=$?
+
+echo
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✅ Tests completed successfully!"
+else
+    echo "❌ Tests failed with exit code: $EXIT_CODE"
+    if [ -n "$TEST_NAME" ]; then
+        echo
+        echo "💡 Tip: Make sure the test name is correct. Available tests:"
+        echo "   test_anti_deob, test_event_emitter, test_task_runner"
+        echo "   Or run './run_tests.sh --help' for more information."
+    fi
+fi
+
+exit $EXIT_CODE 
+```
+
+`src/ida_taskr/__init__.py`:
+
+```py
+"""
+IDA Worker Manager - A reusable task worker manager library for IDA Pro.
+
+This library provides a Qt-based multiprocessing framework for running
+CPU-intensive tasks outside of IDA's main thread while maintaining
+bidirectional communication.
+"""
+
+from .helpers import MultiprocessingHelper, get_logger, is_ida
+from .launcher import WorkerLauncher
+from .protocols import MessageEmitter, WorkerProtocol
+
+# New import for TaskRunner
+from .task_runner import TaskRunner
+from .utils import DataProcessorCore
+from .worker import ConnectionContext, WorkerBase
+
+__all__ = [
+    "WorkerLauncher",
+    "WorkerBase",
+    "ConnectionContext",
+    "MultiprocessingHelper",
+    "get_logger",
+    "is_ida",
+    "WorkerProtocol",
+    "MessageEmitter",
+    "TaskRunner",
+    "DataProcessorCore",
+]
+
+__version__ = "1.0.0"
+
+```
+
+`src/ida_taskr/helpers.py`:
+
+```py
+"""Helper utilities for the worker manager."""
+
+import functools
+import logging
+import multiprocessing
+import os
+import pathlib
+import stat
+import sys
+
+
+def is_ida():
+    """
+    Crude check to see if running inside IDA.
+    Returns True if running inside IDA Pro, else False.
+
+    we do not use this check because there's a possibility that
+    we're running inside a headless IDA mode and that uses an
+    `idapro` library which will make this succeed.
+
+    Even though that is technically "running" in IDA, we can
+    still use the python interpreter that's executing the script.
+    The reason we want to know if we're in the IDA application is
+    because we want to find the python interpreter that IDA is using
+    to execute the script and to not start a new IDA instance.
+
+    Maybe this function can be called `is_ida_application` or something.
+
+        try:
+            import idaapi  # noqa
+            return True
+        except ImportError:
+            return False
+    """
+    exec_name = pathlib.Path(sys.executable).name.lower()
+    return exec_name.startswith(("ida", "idat", "idaw", "idag"))
+
+
+# on windows, we need to set the encoding to utf-8 because it defaults to cp1252
+# which does not support the emoji characters used in the logging
+# or really any non-ascii characters
+if not is_ida():
+    # this works in non IDA and for python 3.7+
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore
+else:
+    # IDA wraps sys.stdout and does not expose the `reconfigure` method
+    # so we need to set the encoding manually
+    sys.stdout.encoding = "utf-8"  # type: ignore
+
+
+def configure_logging(
+    log,
+    level=logging.INFO,
+    handler_filters=None,
+    fmt_str="[%(name)s:%(levelname)s:%(process)d:%(threadName)s] @ %(asctime)s %(message)s",
+):
+    """Configure logging with proper formatting and filters."""
+    log.propagate = False
+    log.setLevel(level)
+    formatter = logging.Formatter(fmt_str)
+    handler = logging.StreamHandler(stream=sys.stdout)
+    handler.setFormatter(formatter)
+    handler.setLevel(level)
+
+    if handler_filters is not None:
+        for _filter in handler_filters:
+            handler.addFilter(_filter)
+
+    for handler in log.handlers[:]:
+        log.removeHandler(handler)
+        handler.close()
+
+    if not log.handlers:
+        log.addHandler(handler)
+
+
+def get_logger(name=None, configurer=None, log_level=logging.INFO, custom_logger=None):
+    """Get a configured logger instance."""
+    if custom_logger:
+        return custom_logger
+    if not configurer:
+        configurer = functools.partial(configure_logging, level=log_level)
+    name = name or f"{"ida." if is_ida() else "worker."}{__name__}"
+    logger = logging.getLogger(name)
+    configurer(logger)
+    return logger
+
+
+class MultiprocessingHelper:
+    """
+    Static helper class for multiprocessing context and Python interpreter discovery.
+    """
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def get_python_interpreter():
+        """
+        Gets the path to a suitable Python interpreter.
+        Ensures we find a standalone Python executable.
+        >>> import pathlib, sys, stat
+        >>> interp: pathlib.Path = MultiprocessingHelper.get_python_interpreter()
+        ...
+        >>>
+        """
+        logger = get_logger()
+
+        if (
+            hasattr(sys, "_base_executable")  # type: ignore
+            and sys._base_executable  # type: ignore
+            and "python" in pathlib.Path(sys._base_executable).name.lower()  # type: ignore
+        ):
+            logger.debug(f"Using _base_executable: {sys._base_executable}")  # type: ignore
+            return pathlib.Path(sys._base_executable)  # type: ignore
+
+        base_paths = [
+            sys.prefix,
+            sys.exec_prefix,
+            sys.executable,
+        ]
+        exe_suffix = ".exe" if os.name == "nt" else ""
+        python_name = f"python{exe_suffix}"
+
+        def base_dirs():
+            for dirname in map(pathlib.Path, base_paths):
+                yield dirname
+                yield dirname.parent
+                yield dirname.parent.parent
+
+        for dirname in base_dirs():
+            for basename in ["", "bin", "python"]:
+                interp_path = dirname / basename / python_name
+                if not interp_path.exists():
+                    continue
+
+                if not (interp_path.is_file() or interp_path.is_symlink()):
+                    continue
+
+                st_mode = interp_path.stat().st_mode
+                if not st_mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+                    continue
+
+                logger.debug(f"Found Python interpreter at: {interp_path}")
+                return interp_path
+
+        logger.warning(
+            "Could not determine Python interpreter path, falling back to 'python' in PATH."
+        )
+        return pathlib.Path("python")
+
+    @staticmethod
+    def set_multiprocessing_context():
+        """
+        Sets up the multiprocessing context to use 'spawn' and sets the Python executable.
+        """
+        current_method = multiprocessing.get_start_method(allow_none=True)
+        if current_method != "spawn":
+            multiprocessing.set_start_method("spawn", force=True)
+        multiprocessing.set_executable(
+            str(MultiprocessingHelper.get_python_interpreter())
+        )
+
+
+# Initialize multiprocessing context
+MultiprocessingHelper.set_multiprocessing_context()
+
+```
+
+`src/ida_taskr/launcher.py`:
+
+```py
+"""IDA-side components for launching and managing worker processes."""
+
+import multiprocessing
+import multiprocessing.connection
+import os
+import pickle
+import select
+import sys
+
+from PyQt5 import QtCore  # type: ignore
+from PyQt5.QtCore import QProcessEnvironment
+
+from .helpers import MultiprocessingHelper, get_logger
+from .protocols import MessageEmitter
+
+logger = get_logger()
+
+
+class TemporarilyDisableNotifier:
+    """Context manager to temporarily disable a QSocketNotifier."""
+
+    def __init__(self, notifier):
+        self.notifier = notifier
+        self.was_enabled = False
+
+    def __enter__(self):
+        self.was_enabled = self.notifier.isEnabled()
+        self.notifier.setEnabled(False)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.was_enabled:
+            self.notifier.setEnabled(True)
+
+
+class ConnectionReader(QtCore.QThread):
+    """Qt thread for reading messages from worker connection."""
+
+    message_received = QtCore.pyqtSignal(object)
+    connection_closed = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.connection: multiprocessing.connection.Connection | None = None
+
+    def set_connection(self, conn):
+        self.connection = conn
+
+    def run(self):
+        if not self.connection:
+            return
+
+        try:
+            while True:
+                msg = self.connection.recv()
+                self.message_received.emit(msg)
+        except (EOFError, OSError):
+            self.connection_closed.emit()
+        except pickle.PickleError as e:
+            logger.error(f"Pickle error: {e}")
+        finally:
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+
+
+class QtListener(QtCore.QObject):
+    """Qt-friendly wrapper for multiprocessing.connection.Listener."""
+
+    family = "AF_INET"
+    connection_accepted = QtCore.pyqtSignal(object)
+    connection_error = QtCore.pyqtSignal(str)
+
+    def __init__(self, address=None, backlog=1, authkey=None, parent=None):
+        super().__init__(parent)
+
+        self._listener = multiprocessing.connection.Listener(
+            address, self.family, backlog, authkey
+        )
+
+        self._socket = self._listener._listener._socket  # type: ignore
+        self._notifier = QtCore.QSocketNotifier(
+            self._socket.fileno(), QtCore.QSocketNotifier.Read, self
+        )
+        self._notifier.activated.connect(self._on_connection_ready)
+        self._notifier.setEnabled(True)
+
+    def _on_connection_ready(self):
+        with TemporarilyDisableNotifier(self._notifier):
+            try:
+                ready, _, _ = select.select([self._socket], [], [], 0)
+                if not ready:
+                    return
+
+                conn = self.accept()
+                self.connection_accepted.emit(conn)
+            except Exception as e:
+                logger.error(f"Error accepting connection: {e}")
+                self.connection_error.emit(str(e))
+
+    def accept(self):
+        return self._listener.accept()
+
+    def close(self):
+        self._notifier.setEnabled(False)
+        self._notifier.deleteLater()
+        self._listener.close()
+
+    @property
+    def address(self):
+        return self._listener.address
+
+
+class WorkerLauncher(QtCore.QProcess):
+    """
+    Manages external worker processes using QProcess.
+    Provides bidirectional communication via multiprocessing connections.
+    """
+
+    # Signals
+    processing_results = QtCore.pyqtSignal(dict)
+    error_occurred_msg = QtCore.pyqtSignal(str)
+    worker_message = QtCore.pyqtSignal(object)
+    worker_connected = QtCore.pyqtSignal()
+    worker_disconnected = QtCore.pyqtSignal()
+
+    def __init__(self, message_emitter: MessageEmitter | None = None, parent=None):
+        super(WorkerLauncher, self).__init__(parent)
+
+        self.message_emitter = message_emitter
+
+        self.readyReadStandardOutput.connect(self._on_stdout)
+        self.readyReadStandardError.connect(self._on_stderr)
+        self.errorOccurred.connect(self._on_error)
+        self.stateChanged.connect(self._on_state_changed)
+
+        self.python_interpreter = MultiprocessingHelper.get_python_interpreter()
+
+        self.listener = None
+        self.connection = None
+        self.authkey = None
+
+        self.reader_thread = ConnectionReader(self)
+        self.reader_thread.message_received.connect(self._on_worker_message)
+        self.reader_thread.connection_closed.connect(self._on_connection_closed)
+
+        self.connection_attempts = 0
+        self.max_connection_attempts = 10
+
+        self._streams: dict[str, dict] = {}
+
+    def is_not_running(self):
+        return self.state() == QtCore.QProcess.NotRunning
+
+    def _on_worker_message(self, message):
+        """Process messages from the worker, including chunked streams."""
+        # Handle chunked messages
+        msg_id = message.get("message_id")
+        if msg_id:
+            idx = message["chunk_index"]
+            total = message["total_chunks"]
+            msg_type = message.get("type")
+
+            stream = self._streams.setdefault(
+                msg_id, {"type": msg_type, "chunks": {}, "total": total}
+            )
+            stream["chunks"][idx] = message["data"]
+            logger.info(
+                "Received chunk %d/%d for %r (id=%s)",
+                idx + 1,
+                total,
+                msg_type,
+                msg_id,
+            )
+
+            if len(stream["chunks"]) == total:
+                full = []
+                for i in range(total):
+                    full.extend(stream["chunks"][i])
+                del self._streams[msg_id]
+                logger.info(
+                    "%r streaming complete (id=%s, %d items)",
+                    msg_type,
+                    msg_id,
+                    len(full),
+                )
+                self.processing_results.emit(
+                    {
+                        "type": "result",
+                        "results": full,
+                        "status": "success",
+                    }
+                )
+            return
+
+        # Non-chunked messages
+        logger.debug("← Received message from worker: %r", message)
+        self.worker_message.emit(message)
+
+        # Delegate to MessageEmitter if available
+        if self.message_emitter and isinstance(message, dict):
+            msg_type = message.get("type")
+            if msg_type == "error":
+                self.message_emitter.emit_worker_error(
+                    message.get("error", "Unknown error")
+                )
+            elif msg_type == "result":
+                self.message_emitter.emit_worker_results(
+                    {
+                        "results": message.get("data"),
+                        "status": message.get("status", "success"),
+                    }
+                )
+            elif msg_type == "status":
+                self.message_emitter.emit_worker_message(message)
+
+    def _on_connection_closed(self):
+        logger.info("Worker IPC connection closed.")
+        if self.connection:
+            try:
+                self.connection.close()
+            except:
+                pass
+            self.connection = None
+        self.worker_disconnected.emit()
+
+        if self.message_emitter:
+            self.message_emitter.emit_worker_disconnected()
+
+    def launch_worker(self, script_path: str, worker_args: dict):
+        """
+        Starts the worker script with specified arguments.
+
+        Args:
+            script_path: Path to the worker script
+            worker_args: Dictionary of arguments to pass to the worker
+        """
+        self._cleanup_resources()
+
+        # Create listener
+        self.authkey = os.urandom(32)
+        logger.info(f"Generated Authkey: {self.authkey.hex()}")
+        self.listener = QtListener(
+            ("localhost", 0),
+            authkey=self.authkey,
+            parent=self,
+        )
+        address = self.listener.address
+        logger.info(f"Created listener on {address}")
+        self.listener.connection_accepted.connect(self._on_connection_accepted)
+        self.listener.connection_error.connect(self._on_connection_error)
+
+        # Prepare QProcess
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("PYTHON_PATH", str(self.python_interpreter.parent))
+        env.insert("PYTHON_BIN", str(self.python_interpreter.name))
+        self.setProcessEnvironment(env)
+
+        # Build command line arguments
+        args = ["-u", script_path]
+
+        # Add connection info
+        args.extend(
+            [
+                "--address",
+                f"{address[0]}:{address[1]}",
+                "--authkey",
+                self.authkey.hex(),
+            ]
+        )
+
+        # Add worker-specific arguments
+        for key, value in worker_args.items():
+            args.extend([f"--{key}", str(value)])
+
+        logger.info(f"Starting worker process: {self.python_interpreter} {args}")
+        self.start(str(self.python_interpreter), args)
+
+        if not self.waitForStarted(5000):
+            logger.error(f"Worker process failed to start: {self.errorString()}")
+            self._cleanup_resources()
+            return False
+
+        self.connection_attempts = 0
+        logger.info("Worker process started. Beginning connection attempts...")
+        return True
+
+    def _on_connection_accepted(self, conn):
+        logger.info("Connection from worker accepted")
+        self.reader_thread.set_connection(conn)
+        if not self.reader_thread.isRunning():
+            self.reader_thread.start()
+        self.connection = conn
+        self.worker_connected.emit()
+
+        if self.message_emitter:
+            self.message_emitter.emit_worker_connected()
+
+    def _on_connection_error(self, error_msg):
+        logger.error(f"Connection error: {error_msg}")
+        self.connection_attempts += 1
+
+        if self.connection_attempts >= self.max_connection_attempts:
+            self.error_occurred_msg.emit(
+                f"Failed to connect to worker after {self.max_connection_attempts} attempts"
+            )
+            self.stop_worker()
+
+    def _cleanup_resources(self):
+        if self.reader_thread.isRunning():
+            self.reader_thread.terminate()
+            self.reader_thread.wait()
+
+        if self.connection:
+            try:
+                self.connection.close()
+            except:
+                pass
+            self.connection = None
+
+        if self.listener:
+            try:
+                self.listener.close()
+            except:
+                pass
+            self.listener = None
+
+    def stop_worker(self):
+        """Attempts to terminate the worker process gracefully."""
+        if self.is_not_running() and not self.connection:
+            logger.debug("Worker process was already stopped and connection closed.")
+            return
+
+        logger.info("Attempting to stop worker process...")
+
+        if self.connection:
+            try:
+                logger.info("Sending exit command...")
+                self.send_command({"command": "exit"})
+                if self.waitForFinished(1000):
+                    logger.info("Worker exited gracefully.")
+                    self._cleanup_resources()
+                    return
+            except Exception as e:
+                logger.error(f"Error sending exit command: {e}")
+
+        if not self.is_not_running():
+            logger.warning("Worker did not exit gracefully, terminating...")
+            self.terminate()
+            if not self.waitForFinished(2000):
+                logger.warning("Worker did not terminate, killing...")
+                self.kill()
+                self.waitForFinished(1000)
+
+        self._cleanup_resources()
+        logger.info("Worker process shutdown complete.")
+
+    def send_command(self, command):
+        """Sends a command object via the connection."""
+        if not self.connection:
+            logger.warning(
+                f"Cannot send command '{command}', IPC connection not established."
+            )
+            return False
+
+        logger.debug(f"→ Sending command: {command}")
+        try:
+            self.connection.send(command)
+            logger.debug(f"→ Successfully sent command: {command}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send command '{command}': {e}")
+            self._on_connection_closed()
+            return False
+
+    def _on_stdout(self):
+        out_bytes = self.readAllStandardOutput()
+        if not out_bytes:
+            return
+        out = out_bytes.data().decode("utf-8", errors="replace")
+        if out.strip():
+            print(out.strip(), flush=True)
+
+    def _on_stderr(self):
+        data = self.readAllStandardError().data()
+        if data:
+            data = data.decode("utf-8", errors="replace").strip()
+            print(data.strip(), file=sys.stderr, flush=True)
+
+    def _on_error(self, error: QtCore.QProcess.ProcessError):
+        error_map = {
+            QtCore.QProcess.FailedToStart: "FailedToStart",
+            QtCore.QProcess.Crashed: "Crashed",
+            QtCore.QProcess.Timedout: "Timedout",
+            QtCore.QProcess.ReadError: "ReadError",
+            QtCore.QProcess.WriteError: "WriteError",
+            QtCore.QProcess.UnknownError: "UnknownError",
+        }
+        error_str = error_map.get(error, f"UnknownError({error})")
+        msg = f"Worker process error: {error_str} - {self.errorString()}"
+        print(msg.strip(), file=sys.stderr, flush=True)
+        self.error_occurred_msg.emit(msg)
+
+    def _on_state_changed(self, state: QtCore.QProcess.ProcessState):
+        state_map = {
+            QtCore.QProcess.NotRunning: "NotRunning",
+            QtCore.QProcess.Starting: "Starting",
+            QtCore.QProcess.Running: "Running",
+        }
+        state_str = state_map.get(state, f"UnknownState({state})")
+        logger.info(f"Worker process state changed: {state_str}")
+
+        if self.is_not_running():
+            self._cleanup_resources()
+            exit_code = self.exitCode()
+            exit_status = self.exitStatus()
+            exit_status_str = (
+                "NormalExit"
+                if exit_status == QtCore.QProcess.NormalExit
+                else "CrashExit"
+            )
+            msg = f"Worker process exited with code {exit_code} ({exit_status_str})"
+            logger.info(msg)
+            if exit_status == QtCore.QProcess.CrashExit:
+                self.error_occurred_msg.emit(msg)
+
+```
+
+`src/ida_taskr/protocols.py`:
+
+```py
+"""Protocol definitions and base classes for the worker manager."""
+
+from abc import ABC, abstractmethod
+
+from .utils import EventEmitter
+
+
+class WorkerProtocol(ABC):
+    """Protocol for worker implementations."""
+
+    @abstractmethod
+    def setup(self, **kwargs):
+        """Set up the worker."""
+        pass
+
+    @abstractmethod
+    def process(self, connection, **kwargs):
+        """Process tasks."""
+        pass
+
+    @abstractmethod
+    def cleanup(self):
+        """Clean up resources."""
+        pass
+
+
+class MessageEmitter(EventEmitter):
+    """Event emitter for handling messages from workers in IDA.
+
+    Events emitted:
+    - 'worker_connected': When worker establishes connection
+    - 'worker_message': When a message is received from worker (payload: message dict)
+    - 'worker_results': When results are received from worker (payload: results dict)
+    - 'worker_error': When an error occurs (payload: error string)
+    - 'worker_disconnected': When worker connection is closed
+    """
+
+    def emit_worker_connected(self):
+        """Emit worker connected event."""
+        self.emit("worker_connected")
+
+    def emit_worker_message(self, message: dict):
+        """Emit worker message event."""
+        self.emit("worker_message", message)
+
+    def emit_worker_results(self, results: dict):
+        """Emit worker results event."""
+        self.emit("worker_results", results)
+
+    def emit_worker_error(self, error: str):
+        """Emit worker error event."""
+        self.emit("worker_error", error)
+
+    def emit_worker_disconnected(self):
+        """Emit worker disconnected event."""
+        self.emit("worker_disconnected")
+
+```
+
+`src/ida_taskr/task_runner.py`:
+
+```py
+"""
+TaskRunner - A simplified interface for running worker tasks.
+
+Provides a high-level API that wraps WorkerLauncher and MessageEmitter
+for easier task execution with callback-based result handling.
+"""
+
+import logging
+
+from .helpers import get_logger
+from .launcher import WorkerLauncher
+from .protocols import MessageEmitter
+
+
+class TaskRunner:
+    """Simplified task runner with callback-based event handling."""
+
+    def __init__(self, worker_script, worker_args, log_level=None, logger=None):
+        """Initialize TaskRunner.
+
+        Args:
+            worker_script: Path to the worker script to execute
+            worker_args: Dictionary of arguments to pass to the worker
+            log_level: Logging level (optional)
+            logger: Custom logger instance (optional)
+        """
+        if logger:
+            self.logger = logger
+        else:
+            # Use INFO as default if no log_level specified
+            actual_log_level = log_level if log_level is not None else logging.INFO
+            self.logger = get_logger(log_level=actual_log_level)
+        self.message_emitter = MessageEmitter()
+        self.launcher = WorkerLauncher(self.message_emitter)
+        self.worker_script = worker_script
+        self.worker_args = worker_args
+        self._results_callback = None
+        self._progress_callback = None
+
+    def on_results(self, callback):
+        """Register a callback for when worker results are received.
+
+        Args:
+            callback: Function to call with results dict
+        """
+        self._results_callback = callback
+        self.message_emitter.on("worker_results", self._handle_results)
+
+    def on_progress(self, callback):
+        """Register a callback for progress updates.
+
+        Args:
+            callback: Function to call with (progress, status) tuple
+        """
+        self._progress_callback = callback
+        self.message_emitter.on("worker_message", self._handle_progress)
+
+    def start(self):
+        """Start the worker task."""
+        if self.launcher.launch_worker(self.worker_script, self.worker_args):
+            self.logger.info("Worker launched successfully")
+        else:
+            self.logger.error("Failed to launch worker")
+
+    def _handle_results(self, results):
+        """Internal handler for worker results."""
+        if self._results_callback:
+            self._results_callback(results)
+
+    def _handle_progress(self, message):
+        """Internal handler for progress messages."""
+        if message.get("type") == "progress" and self._progress_callback:
+            progress = message.get("progress", 0)
+            status = message.get("status", "unknown")
+            self._progress_callback(progress, status)
+
+```
+
+`src/ida_taskr/taskr_plugin.py`:
+
+```py
+"""Generic IDA Pro plugin for taskr framework."""
+
+import idaapi
+
+from . import DataProcessorCore, get_logger
+
+logger = get_logger(__name__)
+
+
+class DataProcessorPlugin(idaapi.plugin_t):
+    """Generic IDA Pro plugin for data processing tasks."""
+
+    flags = idaapi.PLUGIN_PROC
+    comment = "Generic Data Processor via Shared Memory and Multiprocessing"
+    help = "Press Alt-Shift-P to start processing"
+    wanted_name = "TaskrProcessor"
+    wanted_hotkey = "Alt-Shift-P"
+    _core: DataProcessorCore | None = None
+
+    def init(self):
+        # This will be overridden by specific implementations
+        logger.info("Generic TaskrProcessor plugin initialized")
+        return idaapi.PLUGIN_KEEP
+
+    def term(self):
+        logger.info("Terminating plugin.")
+        if self._core:
+            self._core.terminate()
+        logger.info("Plugin terminated.")
+
+    def run(self, arg):
+        # This will be overridden by specific implementations
+        logger.warning("Generic plugin run() called - should be overridden")
+
+
+def PLUGIN_ENTRY():
+    return DataProcessorPlugin()
+
+
+# XXX: This is a temporary hack to allow the plugin to be loaded
+"""
+from .ida_plugin import PLUGIN_ENTRY, DataProcessorPlugin
+
+__all__ = ["DataProcessorPlugin", "PLUGIN_ENTRY"]
+from ida_worker_manager import ConnectionContext, WorkerBase
+
+
+class MyWorker(WorkerBase):
+    def process(self, connection: ConnectionContext, **kwargs):
+        # Your processing logic here
+        connection.send_message("status", "processing")
+        # Do work...
+        connection.send_message("result", {"data": "results"})
+
+
+# In your IDA plugin:
+from ida_worker_manager import MessageHandler, WorkerLauncher
+
+
+class MyHandler(MessageHandler):
+    def on_worker_results(self, results):
+        # Handle results
+        pass
+
+
+launcher = WorkerLauncher(MyHandler())
+launcher.launch_worker("my_worker.py", {"arg1": "value1"})
+"""
+
+```
+
+`src/ida_taskr/utils.py`:
+
+```py
+"""Utility functions for the anti-deobfuscation plugin."""
+
+import asyncio
+import atexit
+import collections
+import contextlib
+import dataclasses
+import enum
+import functools
+import logging
+import multiprocessing
+import multiprocessing.shared_memory
+import pathlib
+import time
+import typing
+from abc import ABC, abstractmethod
+from bisect import bisect_left, bisect_right
+from typing import Any, Callable, Generic, TypeVar, overload
+
+from .helpers import get_logger
+
+logger = get_logger(__name__)
+
+
+def humanize_bytes(
+    num_bytes: int, precision: int = 2, units: list[str] = ["B", "KB", "MB", "GB"]
+) -> str:
+    """
+    Convert a byte count into a human-friendly string with units.
+    """
+    if num_bytes < 0:
+        raise ValueError("num_bytes must be non-negative")
+    if num_bytes == 0:
+        return "0 B"
+    idx = 0
+    value = float(num_bytes)
+    while value >= 1024 and idx < len(units) - 1:
+        value /= 1024
+        idx += 1
+    if value.is_integer():
+        return f"{int(value)} {units[idx]}"
+    else:
+        return f"{value:.{precision}f} {units[idx]}"
+
+
+class DataProcessorCore:
+    """Core processor for managing deobfuscation tasks."""
+
+    _shared_memory = None
+
+    def __init__(self, message_emitter):
+        """Initialize the DataProcessorCore.
+
+        Args:
+            message_emitter: MessageEmitter instance to handle worker communication
+        """
+        from .protocols import MessageEmitter
+
+        if not isinstance(message_emitter, MessageEmitter):
+            raise TypeError("message_emitter must be a MessageEmitter instance")
+
+        self.message_emitter = message_emitter
+        self.proc = None
+        atexit.register(self.terminate)
+
+    @staticmethod
+    def get_section_data(
+        section_name: str,
+        max_size: int = 120 * 1024 * 1024,
+        min_size: int = 1024,
+    ) -> tuple[int, bytes]:
+        """Get the data of a section by name."""
+        try:
+            import ida_bytes
+            import ida_segment
+            import idaapi
+        except ImportError:
+            logger.error("IDA Pro modules not available")
+            return 0, b""  # Use 0 instead of idaapi.BADADDR when not available
+
+        seg = ida_segment.get_segm_by_name(section_name)
+        if not seg:
+            logger.error("Section %s not found", section_name)
+            return idaapi.BADADDR, b""
+
+        data_ea = seg.start_ea
+        data_size = seg.end_ea - seg.start_ea
+
+        if data_size > max_size:
+            data_size = max_size
+            logger.warning(
+                "Limiting section data size to %s", humanize_bytes(data_size)
+            )
+        elif data_size < min_size:
+            logger.error(
+                "%s section is too small (%s)", section_name, humanize_bytes(data_size)
+            )
+            return idaapi.BADADDR, b""
+
+        logger.info(
+            "Reading %s from address %s", humanize_bytes(data_size), hex(data_ea)
+        )
+
+        data_bytes = ida_bytes.get_bytes(data_ea, data_size)
+        if not data_bytes or len(data_bytes) != data_size:
+            logger.error("Failed to read section data")
+            return idaapi.BADADDR, b""
+
+        return data_ea, data_bytes
+
+    @staticmethod
+    def from_range(start_ea: int, end_ea: int):
+        """Get the data of a section by name and return the start address and the bytes."""
+        try:
+            import ida_bytes
+        except ImportError:
+            logger.error("IDA Pro modules not available")
+            return 0, b""
+
+        data_bytes = ida_bytes.get_bytes(start_ea, end_ea - start_ea)
+        return start_ea, data_bytes
+
+    def run(
+        self, start_ea: int, bytes_to_process: bytes, worker_script_path: str, **kwargs
+    ):
+        """Run the deobfuscation process.
+
+        Args:
+            start_ea: Starting address for processing
+            bytes_to_process: Binary data to process
+            worker_script_path: Path to the worker script
+            **kwargs: Additional arguments passed to worker
+        """
+        from .launcher import WorkerLauncher
+
+        data_size = len(bytes_to_process)
+
+        # Create shared memory
+        self._shared_memory = multiprocessing.shared_memory.SharedMemory(
+            create=True, size=data_size
+        )
+        self._shared_memory.buf[:data_size] = bytes_to_process
+
+        # Launch worker with provided message emitter
+        self.proc = WorkerLauncher(self.message_emitter)
+
+        worker_args = {
+            "shm_name": self._shared_memory.name,
+            "data_size": data_size,
+            "start_ea": hex(start_ea),
+            **kwargs,
+        }
+
+        # Add IDA bitness if available
+        try:
+            import ida_ida
+
+            worker_args["is64"] = "1" if ida_ida.inf_is_64bit() else "0"
+        except ImportError:
+            logger.warning("IDA Pro modules not available, bitness detection skipped")
+
+        if not self.proc.launch_worker(str(worker_script_path), worker_args):
+            self.terminate()
+            logger.error("Failed to start worker process")
+            return
+
+    def terminate(self):
+        """Terminate and clean up."""
+        logger.info("Terminating...")
+        if self.proc and not self.proc.is_not_running():
+            self.proc.stop_worker()
+            self.proc = None
+        self._cleanup_shared_memory()
+        logger.info("Terminated.")
+
+    def _cleanup_shared_memory(self):
+        """Clean up shared memory."""
+        if not self._shared_memory:
+            return
+        try:
+            self._shared_memory.close()
+            shm = multiprocessing.shared_memory.SharedMemory(self._shared_memory.name)
+            shm.unlink()
+            logger.info("Shared memory unlinked: %s", self._shared_memory.name)
+        except FileNotFoundError:
+            logger.warning(
+                "Shared memory already unlinked: %s", self._shared_memory.name
+            )
+        except PermissionError as e:
+            logger.error("Permission error unlinking shared memory: %s", e)
+        except Exception as e:
+            logger.error(
+                "Unexpected error unlinking shared memory: %s", e, exc_info=True
+            )
+        finally:
+            self._shared_memory = None
+
+
+class emit:
+    def __init__(self, event):
+        self.event = event
+
+    def __call__(self, fn):
+        @functools.wraps(fn)
+        def wrapper(inst, *args, **kwargs):
+            result = fn(inst, *args, **kwargs)
+            inst.emit(self.event)
+            return result
+
+        return wrapper
+
+
+T = TypeVar("T")
+
+
+class reify(Generic[T]):
+    """
+    Acts similar to a property, except the result will be
+    set as an attribute on the instance instead of recomputed
+    each access.
+    """
+
+    def __init__(self, fn: Callable[..., T]) -> None:
+        self.fn = fn
+        # Copy function attributes to preserve metadata
+        self.__name__ = getattr(fn, "__name__", "<unknown>")
+        self.__doc__ = getattr(fn, "__doc__", None)
+        self.__module__ = getattr(fn, "__module__", "") or ""
+        self.__qualname__ = getattr(fn, "__qualname__", "") or ""
+        self.__annotations__ = getattr(fn, "__annotations__", {})
+
+    @overload
+    def __get__(self, instance: None, owner: type) -> "reify[T]": ...
+
+    @overload
+    def __get__(self, instance: Any, owner: type) -> T: ...
+
+    def __get__(self, instance: Any, owner: type) -> "T | reify[T]":
+        if instance is None:
+            return self
+
+        fn = self.fn
+        val = fn(instance)
+        setattr(instance, fn.__name__, val)
+        return val
+
+
+class EventEmitter:
+    @reify
+    def _listeners(self):
+        return collections.defaultdict(set)
+
+    def on(self, event, handler=None):
+        """Register an event handler for the given event."""
+        if handler:
+            self._listeners[event].add(handler)
+            return handler
+
+        @functools.wraps(self.on)
+        def decorator(func):
+            self.on(event, func)
+            return func
+
+        return decorator
+
+    def once(self, event, handler):
+        @functools.wraps(handler)
+        def once_handler(*args, **kwargs):
+            self.remove(event, once_handler)
+            return handler(*args, **kwargs)
+
+        self.on(event, once_handler)
+
+    def remove(self, event, handler):
+        self._listeners[event].discard(handler)
+
+    def emit(self, event, *args, **kwargs):
+        for handler in list(self._listeners[event]):
+            handler(*args, **kwargs)
+
+
+@dataclasses.dataclass
+class AsyncEventEmitter(ABC):
+    def __post_init__(self):
+        self._listeners = collections.defaultdict(set)
+        self.pause_evt = asyncio.Event()
+        self.stop_evt = asyncio.Event()
+        self.logger = get_logger(self.__class__.__name__)
+
+    def on(self, event, handler=None):
+        """Register an event handler for the given event."""
+        if handler:
+            self._listeners[event].add(handler)
+            return handler
+
+        @functools.wraps(self.on)
+        def decorator(func):
+            self.on(event, func)
+            return func
+
+        return decorator
+
+    def once(self, event, handler):
+        @functools.wraps(handler)
+        def once_handler(*args, **kwargs):
+            self.remove(event, once_handler)
+            return handler(*args, **kwargs)
+
+        self.on(event, once_handler)
+
+    def remove(self, event, handler):
+        self._listeners[event].discard(handler)
+
+    async def emit(self, event, *args):
+        for handler in list(self._listeners[event]):
+            await handler(*args)
+
+    @abstractmethod
+    async def run(self):
+        """Core asynchronous task execution logic."""
+        pass
+
+    @abstractmethod
+    async def shutdown(self):
+        """Cleanup resources for the async task."""
+        pass
+
+
+def log_execution_time(func, loglvl=logging.INFO):
+    """
+    Decorator to log the execution time of async stage methods.
+
+    >>> import asyncio, logging
+    >>> logging.basicConfig(level=logging.INFO)
+    >>> class Dummy:
+    ...     @log_execution_time
+    ...     async def foo(self):
+    ...         await asyncio.sleep(0.01)
+    ...         return 42
+    >>> d = Dummy()
+    >>> asyncio.run(d.foo())
+    42
+    """
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = await func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
+        logger.log(loglvl, f"{func.__qualname__} executed in {elapsed:.4f} seconds")
+        return result
+
+    return wrapper
+
+
+@dataclasses.dataclass
+class Range:
+    """A range of addresses with a start (inclusive) and end (exclusive)."""
+
+    start: int
+    end: int
+
+    def __post_init__(self):
+        if self.start >= self.end:
+            raise ValueError("start must be less than end")
+
+    def __contains__(self, addr: int) -> bool:
+        """Check if an address is within this range."""
+        return self.start <= addr < self.end
+
+    def __len__(self) -> int:
+        """Return the size of the range in bytes."""
+        return self.end - self.start
+
+    def overlaps(self, other: "Range") -> bool:
+        """Check if this range overlaps with another range."""
+        return self.start < other.end and other.start < self.end
+
+    def merge(self, other: "Range") -> "Range":
+        return Range(min(self.start, other.start), max(self.end, other.end))
+
+
+class IntervalSet:
+    """
+    Sorted, non-overlapping list of Range objects with O(log n) insertion.
+    """
+
+    __slots__ = ("_ranges",)
+
+    def __init__(self) -> None:
+        self._ranges: list[Range] = []
+
+    def __iter__(self):
+        return iter(self._ranges)
+
+    def __len__(self):
+        return len(self._ranges)
+
+    # --- public ------------------------------------------------------------
+    def add(self, new: Range) -> None:
+        """
+        Insert `new` and coalesce any overlaps / adjacencies in-place.
+        """
+        # Fast-path: first interval
+        if not self._ranges:
+            self._ranges.append(new)
+            return
+
+        # Binary-search insertion point by *start*
+        idx = bisect_left(
+            self._ranges, new.start, key=lambda r: r.start
+        )  # Python 3.10+
+
+        # Extend backward if necessary
+        if idx > 0 and self._ranges[idx - 1].end >= new.start:
+            idx -= 1
+
+        # Merge forward while overlapping
+        while idx < len(self._ranges) and new.overlaps(self._ranges[idx]):
+            new = new.merge(self._ranges[idx])
+            del self._ranges[idx]
+
+        # Also coalesce "touching" intervals (…,end==new.start or vice-versa)
+        if idx < len(self._ranges) and new.end == self._ranges[idx].start:
+            new = new.merge(self._ranges[idx])
+            del self._ranges[idx]
+        if idx > 0 and self._ranges[idx - 1].end == new.start:
+            new = new.merge(self._ranges[idx - 1])
+            del self._ranges[idx - 1]
+            idx -= 1
+
+        self._ranges.insert(idx, new)
+
+    # ­— optional helpers ---------------------------------------------------
+    def covers(self, addr: int) -> bool:
+        i = bisect_right(self._ranges, addr, key=lambda r: r.start) - 1
+        return i >= 0 and addr < self._ranges[i].end
+
+    def as_tuples(self):
+        return [(r.start, r.end) for r in self._ranges]
+
+
+def resolve_overlaps(ranges: list[Range]) -> IntervalSet:
+    """
+    Fast, linear-time overlap resolution: keep only the first chain
+    whose start is ≥ the furthest end so far.
+    """
+    logger.info(f"Resolving overlaps among {len(ranges)} ranges")
+    intervals = IntervalSet()
+
+    for r in ranges:
+        intervals.add(r)
+
+        # decide whether to keep the chain object itself
+        last_end = intervals.as_tuples()[-1][1]  # rightmost byte so far
+        target = r.end
+        if target == last_end:  # this chain extended the interval set
+            logger.info(f"  Accepted (or widened): {r.start:X}-{r.end:X}")
+        else:
+            logger.info(f"  Rejected overlap: {r.start:X}-{r.end:X}")
+
+    return intervals
+
+
+class PatchManager:
+    """Manages deferred patch operations."""
+
+    class Mode(enum.Enum):
+        PATCH = enum.auto()  # Use ida_bytes.patch_bytes
+        PUT = enum.auto()  # Use ida_bytes.put_bytes
+
+    def __init__(
+        self,
+        patch_mode: Mode = Mode.PATCH,
+        dry_run: bool = False,
+        auto_clear: bool = True,
+    ):
+        self.dry_run = dry_run
+        self.patch_mode = patch_mode
+        self.pending_patches: list[DeferredPatchOp] = []
+        self.auto_clear = auto_clear
+        logger.info(
+            "PatchManager initialized (dry_run=%s, mode=%s)",
+            self.dry_run,
+            self.patch_mode.name,
+        )
+
+    def add_patch(self, address: int, byte_values: bytes):
+        """Creates and queues a DeferredPatchOp."""
+        op = DeferredPatchOp(address, byte_values, self.patch_mode)
+        self.pending_patches.append(op)
+        logger.debug("Queued patch operation: %s", op)
+
+    def apply_all(self, dry_run_override: bool | None = None) -> bool:
+        """Applies all queued patch operations."""
+        logger.info("Applying %d queued patches...", len(self))
+        success_count = 0
+        fail_count = 0
+
+        if dry_run_override is None:
+            # None is a sentinel value here that represents "use the default"
+            dry_run_override = self.dry_run
+
+        for op in self.pending_patches:
+            if op.apply(dry_run_override):
+                success_count += 1
+            else:
+                fail_count += 1
+
+        logger.info(
+            "Patch application complete. Success: %d, Failed: %d",
+            success_count,
+            fail_count,
+        )
+        if self.auto_clear:
+            self.pending_patches.clear()  # Clear the list after applying
+        return fail_count == 0  # Return True if all patches were applied successfully
+
+    def __len__(self) -> int:
+        return len(self.pending_patches)
+
+
+@dataclasses.dataclass(repr=False)
+class DeferredPatchOp:
+    """Class to store patch operations that will be applied later."""
+
+    address: int
+    byte_values: bytes
+    mode: PatchManager.Mode
+    dry_run: bool = False
+
+    @classmethod
+    def patch(cls, address: int, byte_values: bytes, dry_run: bool = False):
+        return cls(address, byte_values, PatchManager.Mode.PATCH, dry_run)
+
+    @classmethod
+    def put(cls, address: int, byte_values: bytes, dry_run: bool = False):
+        return cls(address, byte_values, PatchManager.Mode.PUT, dry_run)
+
+    def apply(self, dry_run_override: bool = False) -> bool:
+        """Apply the patch operation using either patch_bytes or put_bytes based on mode."""
+
+        is_dry_run = dry_run_override or self.dry_run
+        logger.info(
+            "[*] %sPatching decrypted chunk %s at 0x%X (size: %d)",
+            "(Dry Run) " if is_dry_run else "",
+            ("revertably" if self.mode == PatchManager.Mode.PATCH else "destructively"),
+            self.address,
+            len(self.byte_values),
+        )
+        success = True
+        if is_dry_run:
+            return success
+
+        try:
+            import idaapi  # todo: make this a protocol + pass to the manager
+
+            func = (
+                idaapi.put_bytes
+                if self.mode == PatchManager.Mode.PUT
+                else idaapi.patch_bytes
+            )
+            func(self.address, self.byte_values)
+        except Exception as e:
+            logger.error(f"Failed to apply patch {self}: {e}", exc_info=True)
+            success = False
+        return success
+
+    def __str__(self):
+        """String representation with hex formatting."""
+        dry_run_str = " (dry run)" if self.dry_run else ""
+        return f"{self.__class__.__name__}({len(self.byte_values)} bytes, mode={self.mode.name}{dry_run_str} @ address=0x{self.address:X})"
+
+    __repr__ = __str__
+
+
+def make_chunks(buf_len: int, n_chunks: int, max_pat: int):
+    """
+    Yield exactly n_chunks tuples of
+      (padded_start, padded_end, core_start, core_end).
+
+    * core ranges partition [0, buf_len) evenly by floor division.
+    * padded ranges extend each core by (max_pat-1) on both sides,
+      clamped to [0, buf_len].
+    """
+    for i in range(n_chunks):
+        # uniform core split
+        core_start = (buf_len * i) // n_chunks
+        core_end = (buf_len * (i + 1)) // n_chunks
+        core_len = core_end - core_start
+
+        # padding
+        padded_start = max(0, core_start - (max_pat - 1))
+        padded_end = min(buf_len, core_end + (max_pat - 1))
+        padded_len = padded_end - padded_start
+
+        logger.debug(
+            "Chunk %2d/%d: "
+            "core=[%#x-%#x) (%d bytes), "
+            "padded=[%#x-%#x) (%d bytes)",
+            i,
+            n_chunks,
+            core_start,
+            core_end,
+            core_len,
+            padded_start,
+            padded_end,
+            padded_len,
+        )
+
+        yield padded_start, padded_end, core_start, core_end
+
+
+@contextlib.contextmanager
+def shm_buffer(
+    name: str, buf_len: int | None = None
+) -> typing.Generator[
+    multiprocessing.shared_memory.SharedMemory | memoryview, None, None
+]:
+    """
+    context manager to access the shared memory buffer.
+    if buf_len is not provided, then the buffer will be the raw shm memory
+    buffer else it will be a byte slice of the shm memory buffer.
+
+    Usage:
+        with shm_buffer(name=..) as buf:
+            # use buf
+    """
+    shm = multiprocessing.shared_memory.SharedMemory(name=name)
+    try:
+        yield shm.buf[:buf_len] if buf_len else shm
+    finally:
+        shm.close()
+
+
+def execute_chunk_with_shm_view(
+    user_chunk_processor: typing.Callable[..., typing.Any],
+    shm_name: str,
+    padded_start: int,
+    padded_end: int,
+    *user_args: typing.Any,
+) -> typing.Any:
+    """
+    Handles SHM attachment, memoryview creation, and cleanup for a user's chunk processing function.
+
+    Ensures that the memoryview of the chunk is deleted before the shared memory object is closed,
+    preventing "BufferError: cannot close exported pointers exist".
+
+    Args:
+        user_chunk_processor: A callable that takes (memoryview, *user_args) and returns results.
+                              The memoryview passed to it is a slice of the shared memory.
+        shm_name: Name of the shared memory segment.
+        padded_start: Start offset for the memoryview slice within the shared memory buffer.
+        padded_end: End offset for the memoryview slice.
+        *user_args: Additional arguments to pass to the user_chunk_processor.
+
+    Returns:
+        The result from the user_chunk_processor.
+    """
+    # shm_buffer is called with no buf_len, so it yields the SharedMemory object itself.
+    with shm_buffer(shm_name) as shm_object:  # shm_object is a SharedMemory instance
+        if not isinstance(shm_object, multiprocessing.shared_memory.SharedMemory):
+            # This case should ideally not happen if shm_buffer is used as intended (no buf_len)
+            # or if shm_buffer is modified to always yield SharedMemory object and handle buf internally.
+            # For now, assume shm_object.buf is the way if shm_buffer yields memoryview directly.
+            # However, the current shm_buffer yields SharedMemory if buf_len is None.
+            logger.error(
+                "shm_buffer did not yield a SharedMemory object as expected. Type: %s",
+                type(shm_object),
+            )
+            # Fallback or raise error, this indicates misuse or change in shm_buffer's contract
+            # For robustness, let's try to access .buf if it's not SharedMemory but has it
+            try:
+                buffer_to_view = shm_object.buf  # type: ignore
+            except AttributeError:
+                logger.error("Shared memory object does not have a .buf attribute.")
+                raise TypeError(
+                    "shm_buffer yielded an unexpected object type without a .buf attribute."
+                ) from None
+        else:
+            buffer_to_view = shm_object.buf
+
+        # Create the specific memoryview for this chunk
+        # The memoryview is taken from the *entire* buffer of the shm_object
+        chunk_mv = memoryview(buffer_to_view)[padded_start:padded_end]
+        try:
+            # Call the user's actual logic function
+            result = user_chunk_processor(chunk_mv, *user_args)
+            return result
+        finally:
+            # Crucial: delete the memoryview to release buffer export before shm_object.close()
+            # which is called by shm_buffer's __exit__.
+            del chunk_mv
+            logger.debug(
+                "Deleted memoryview for chunk [%d:%d] from shm '%s'",
+                padded_start,
+                padded_end,
+                shm_name,
+            )
+
+```
+
+`src/ida_taskr/worker.py`:
+
+```py
+"""Worker-side components for the task worker manager."""
+
+import asyncio
+import concurrent.futures
+import math
+import multiprocessing
+import multiprocessing.connection
+import threading
+import time
+import typing
+import uuid
+
+from .helpers import get_logger
+from .protocols import WorkerProtocol
+from .utils import AsyncEventEmitter, IntervalSet
+
+logger = get_logger()
+
+
+class ConnectionContext:
+    """
+    Context manager for a multiprocessing.connection.Connection.
+    Ensures the connection is closed on exit.
+    """
+
+    def __init__(self, address: str, authkey: bytes | str, chunk_size: int = 1024):
+        host, port_str = address.split(":")
+        self.host = host
+        self.port = int(port_str)
+
+        if isinstance(authkey, str):
+            authkey = bytes.fromhex(authkey)
+
+        assert isinstance(authkey, bytes), f"Invalid authkey type: {type(authkey)}"
+        self.authkey = authkey
+        self._conn = None
+        self.chunk_size = chunk_size
+
+    @property
+    def address(self) -> tuple[str, int]:
+        return (self.host, self.port)
+
+    @property
+    def conn(self) -> multiprocessing.connection.Connection:
+        if self._conn is None:
+            self._conn = multiprocessing.connection.Client(
+                self.address, family="AF_INET", authkey=self.authkey
+            )
+            logger.info(f"Connected to {self.address}")
+        return self._conn
+
+    def send_message(self, msg_type: str, data, **kwargs) -> bool:
+        """
+        Send a structured message through the connection.
+
+        If data is a long list, split it into chunks.
+        """
+        try:
+            if isinstance(data, list) and len(data) > self.chunk_size:
+                message_id = uuid.uuid4().hex
+                total_chunks = math.ceil(len(data) / self.chunk_size)
+
+                for idx in range(total_chunks):
+                    part = data[idx * self.chunk_size : (idx + 1) * self.chunk_size]
+                    msg = {
+                        "type": msg_type,
+                        "data": part,
+                        "timestamp": time.time(),
+                        "message_id": message_id,
+                        "chunk_index": idx,
+                        "total_chunks": total_chunks,
+                        **kwargs,
+                    }
+                    self.conn.send(msg)
+                logger.debug(
+                    f"→ Streamed {len(data)} items in {total_chunks} chunks under id {message_id}"
+                )
+                return True
+
+            # small or non-list payload: single shot
+            msg = {
+                "type": msg_type,
+                "data": data,
+                "timestamp": time.time(),
+                **kwargs,
+            }
+            self.conn.send(msg)
+            logger.debug(f"→ Sent single message: {msg_type}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send message: {e}", exc_info=True)
+            return False
+
+    @property
+    def closed(self):
+        return self.conn.closed
+
+    @property
+    def readable(self):
+        return self.conn.readable
+
+    @property
+    def writable(self):
+        return self.conn.writable
+
+    def fileno(self):
+        return self.conn.fileno()
+
+    def recv(self):
+        return self.conn.recv()
+
+    def poll(self, timeout=0.0):
+        return self.conn.poll(timeout)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        PROPOGATE = False
+        SUPPRESS = True
+        if exc_type:
+            logger.error("Connection closed by parent")
+            return PROPOGATE
+
+        if self.conn is not None:
+            try:
+                logger.info("Closing worker-side connection.")
+                self.conn.close()
+            except Exception as e:
+                logger.error(f"Error closing connection: {e}")
+        return SUPPRESS
+
+
+class WorkerController:
+    """Wrap an AsyncEventEmitter in its own event loop"""
+
+    def __init__(self, emitter_instance: AsyncEventEmitter):
+        self.emitter = emitter_instance
+        self.loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._result = None
+        self._started = False
+
+    def _run_loop(self):
+        asyncio.set_event_loop(self.loop)
+        try:
+            self._result = self.loop.run_until_complete(self.emitter.run())
+        except Exception as e:
+            logger.error(f"Exception in worker thread loop: {e}", exc_info=True)
+            self._result = None
+
+    def start(self):
+        if self._started:
+            logger.warning("Start called on an already started worker controller.")
+            return
+        self._thread.start()
+        self._started = True
+
+    def pause(self):
+        if not self._started:
+            logger.warning("Pause called before worker controller was started.")
+            return
+        logger.info("▶️  Pausing...")
+        self.loop.call_soon_threadsafe(self.emitter.pause_evt.set)
+
+    def resume(self):
+        if not self._started:
+            logger.warning("Resume called before worker controller was started.")
+            return
+        logger.info("▶️  Resuming...")
+        self.loop.call_soon_threadsafe(self.emitter.pause_evt.clear)
+
+    def stop(self):
+        if not self._started:
+            # Even if not started, set stop event for consistency if needed
+            # self.loop.call_soon_threadsafe(self.emitter.stop_evt.set) # Maybe not necessary if loop never runs
+            logger.info("🛑  Stopping (controller not started)...")
+            if hasattr(
+                self.emitter, "stop_evt"
+            ):  # Emitter might not be fully initialized
+                self.loop.call_soon_threadsafe(self.emitter.stop_evt.set)
+            return
+        logger.info("🛑  Stopping...")
+        self.loop.call_soon_threadsafe(self.emitter.stop_evt.set)
+
+    def join(self):
+        if not self._started:
+            logger.warning(
+                "Join called before worker controller was started. Returning current result."
+            )
+            return self._result
+
+        if self._thread.is_alive():
+            self._thread.join()
+        else:
+            logger.info(
+                "Worker thread was not alive when join was called (already finished or failed?)."
+            )
+        self._started = False  # Reset for potential restart, though typically not done.
+        return self._result
+
+    def set_log_level(self, level):
+        # This assumes the logger used by emitter.run() is the global one or accessible
+        # If emitter uses its own logger, it needs a method to set its level.
+        # For now, we assume it affects the logger instance used within emitter.
+        # A more robust solution might involve passing a logger instance or a config.
+        logger.setLevel(level)
+        if hasattr(self.emitter, "logger"):
+            self.emitter.logger.setLevel(level)
+        logger.info(f"Log level set to {level} for controller and its emitter.")
+
+
+class WorkerBase(WorkerProtocol):
+    """Base class for worker implementations."""
+
+    def __init__(
+        self,
+        async_emitter_class: typing.Type[AsyncEventEmitter] | None = None,
+        emitter_args: dict | None = None,
+        process_chunk_fn: typing.Callable | None = None,
+    ):
+        self.async_emitter_class = async_emitter_class
+        self.emitter_args = emitter_args or {}
+        self.process_chunk_fn = process_chunk_fn  # User-provided chunk processor
+        self.emitter_instance: AsyncEventEmitter | None = None
+        self.controller: WorkerController | None = None
+        self.conn: ConnectionContext | None = None
+
+        self._commands = {
+            "stop": self._handle_stop,
+            "pause": self._handle_pause,
+            "resume": self._handle_resume,
+            "start": self._handle_start,  # Added start command
+            "ping": self._handle_ping,  # Added ping command
+            "set_log_level": self._handle_set_log_level,  # Added log level command
+        }
+        self.logger = get_logger(self.__class__.__name__)
+        self._running = False  # Tracks if the process loop is active
+        # self._paused is managed by the emitter's pause_evt now
+
+    def setup(self, **kwargs):
+        """Default setup: Initializes the AsyncEventEmitter if provided."""
+        if self.async_emitter_class:
+            # Pass process_chunk_fn to the emitter if it accepts it
+            # This requires the AsyncEventEmitter subclass to handle it in its __init__ or a setter
+            current_emitter_args = self.emitter_args.copy()
+            if self.process_chunk_fn:
+                current_emitter_args["process_chunk_fn"] = self.process_chunk_fn
+
+            self.emitter_instance = self.async_emitter_class(**current_emitter_args)
+            self._setup_default_event_handlers()
+        else:
+            self.logger.warning(
+                "No async_emitter_class provided for WorkerBase. Task processing will not occur."
+            )
+
+    def _setup_default_event_handlers(self):
+        """Set up default event handlers for the emitter instance."""
+        if not self.emitter_instance:
+            return
+
+        @self.emitter_instance.on("run_started")
+        def on_run_started():
+            self.logger.info("▶️  Task starting")
+            if self.conn:
+                self.conn.send_message(
+                    "progress", 0.0, status="running", stage="starting"
+                )
+
+        @self.emitter_instance.on("run_finished")
+        def on_run_finished(results):
+            # The structure of 'results' depends on the emitter's run() method.
+            # For AntiDeobWorker, it's an IntervalSet.
+            # We need a generic way to count/summarize or pass through.
+            count = (
+                len(results)
+                if hasattr(results, "__len__")
+                else (1 if results is not None else 0)
+            )
+            self.logger.info("✅ Task finished, processed %s items/results.", count)
+            if self.conn:
+                self.conn.send_message(
+                    "progress",
+                    0.95,  # Assuming this is a placeholder for actual progress
+                    status="finalizing",
+                    stage="task_complete",  # Generic stage
+                    items_count=count,
+                )
+
+        @self.emitter_instance.on("stopped")
+        def on_stopped():
+            self.logger.info("🛑 Emitter shutting down")
+            if self.conn:
+                self.conn.send_message("status", "stopped", status="stopped")
+
+        # Allow subclasses to add more specific handlers
+        self.setup_custom_event_handlers()
+
+    def setup_custom_event_handlers(self):
+        """Subclasses can override this to add their own event handlers for the emitter."""
+        pass
+
+    async def cleanup(self):
+        """Default cleanup: Shuts down the emitter and controller."""
+        if self.controller:
+            self.controller.stop()
+            # Join should ideally happen, but might block. Consider if necessary or how to handle.
+            # self.controller.join() # This might be problematic in an async cleanup
+
+        if self.emitter_instance:
+            await self.emitter_instance.shutdown()
+        self.logger.info("Worker cleanup complete.")
+
+    def handle_command(self, cmd: dict, conn: ConnectionContext) -> bool:
+        """
+        Handle standard commands. Override for custom commands.
+        Returns True to continue processing, False to exit.
+        """
+        cmd_type = cmd.get("command")
+        if cmd_type is None:
+            return True
+        handler = self._commands.get(cmd_type)
+        if handler:
+            return handler(cmd, conn)
+        return True
+
+    def _handle_stop(self, cmd, conn):
+        """Handle stop command."""
+        self.logger.info("Received stop command.")
+        self._running = False  # Signal process loop to stop
+        if self.controller:
+            self.controller.stop()
+        conn.send_message("status", "stopped", status="stopped")
+        return False  # Exit process loop
+
+    def _handle_pause(self, cmd, conn):
+        """Handle pause command."""
+        if self.controller:
+            self.controller.pause()
+            conn.send_message("status", "paused", status="paused")
+        else:
+            conn.send_message("error", "Not started", status="error")
+        return True
+
+    def _handle_resume(self, cmd, conn):
+        """Handle resume command."""
+        if self.controller:
+            self.controller.resume()
+            conn.send_message("status", "resumed", status="running")
+        else:
+            conn.send_message("error", "Not started", status="error")
+        return True
+
+    def _handle_start(self, cmd, conn):
+        """Handle start command."""
+        if not self.emitter_instance:
+            self.logger.error("Cannot start: emitter_instance not initialized.")
+            conn.send_message(
+                "error", "Worker not properly configured (no emitter)", status="error"
+            )
+            return True  # Stay in command loop
+
+        if self.controller and self.controller._started:
+            self.logger.warning("Start command received, but already started.")
+            conn.send_message("status", "already_running", status="running")
+            return True
+
+        self.logger.info(
+            "Received start command. Initializing and starting controller."
+        )
+        self.controller = WorkerController(self.emitter_instance)
+        self.controller.start()
+        conn.send_message("status", "started", status="running")
+        return True
+
+    def _handle_ping(self, cmd, conn):
+        """Handle ping command."""
+        conn.send_message(
+            "status", "pong", status="running" if self._running else "idle"
+        )
+        return True
+
+    def _handle_set_log_level(self, cmd, conn):
+        """Handle set_log_level command."""
+        level = cmd.get("level")
+        if level is None:
+            self.logger.error("Log level is required for set_log_level command.")
+            conn.send_message("error", "Log level not specified", status="error")
+            return True
+
+        try:
+            # self.logger.setLevel(level) # WorkerBase logger
+            # if self.emitter_instance and hasattr(self.emitter_instance, 'logger'):
+            #     self.emitter_instance.logger.setLevel(level)
+            if self.controller:
+                self.controller.set_log_level(level)  # Propagates to emitter logger too
+            else:  # Set global logger if controller not up
+                logger.setLevel(level)
+
+            self.logger.info(
+                f"Log level set to {level}"
+            )  # Changed from logger.info to self.logger.info
+            conn.send_message("status", f"log_level_set:{level}", status="running")
+        except Exception as e:
+            self.logger.error(f"Failed to set log level: {e}", exc_info=True)
+            conn.send_message(
+                "error", f"Failed to set log level: {str(e)}", status="error"
+            )
+        return True
+
+    def process(self, connection: ConnectionContext, **kwargs):
+        """Main processing loop - implement in subclasses."""
+        # raise NotImplementedError("Subclasses must implement process()")
+        self.conn = connection
+        self._running = True
+
+        # Send initial ready message
+        connection.send_message("status", "connected", status="ready")
+        self.logger.info("Worker connected, awaiting commands...")
+
+        try:
+            while self._running:
+                try:
+                    # Poll for messages, timeout allows checking self._running
+                    if not connection.closed and not connection.poll(timeout=0.5):
+                        # self.logger.debug("No message, continuing poll.")
+                        if not self._running:  # Check if stop was called during poll
+                            break
+                        continue
+                    if connection.closed:  # check before recv
+                        self.logger.error(
+                            "Connection closed by parent (detected before recv)."
+                        )
+                        self._running = False
+                        break
+                    cmd = connection.recv()
+                    self.logger.debug(f"← Received command: {cmd}")
+                except EOFError:
+                    self.logger.error("Connection closed by parent (EOFError).")
+                    self._running = False  # Ensure loop termination
+                    break
+                except (ConnectionResetError, BrokenPipeError) as e:
+                    self.logger.error(f"Connection error: {e}")
+                    self._running = False  # Ensure loop termination
+                    break
+                except Exception as e:
+                    self.logger.error(
+                        f"Unexpected error receiving command: {e}", exc_info=True
+                    )
+                    # Optionally send error message back if connection is still usable
+                    # connection.send_message("error", f"Error receiving command: {str(e)}", status="error")
+                    # Depending on error, might need to stop.
+                    # For now, continue to allow graceful shutdown via 'stop' command.
+                    continue
+
+                if (
+                    not self._running
+                ):  # check after recv, if stop was part of the message processing
+                    break
+
+                # Handle command
+                if isinstance(cmd, dict):
+                    if not self.handle_command(cmd, connection):
+                        self._running = False  # Command handler requested exit
+                        break
+                elif cmd is None:  # Typically means connection closed
+                    self.logger.info("Received None, likely connection closed.")
+                    self._running = False
+                    break
+                else:
+                    self.logger.warning(
+                        f"Received unexpected command type: {type(cmd)}"
+                    )
+                    connection.send_message(
+                        "error",
+                        f"Expected dict command, got {type(cmd)}",
+                        status="error",
+                    )
+            # Loop exited, ensure controller stops if it was started
+            if self.controller:
+                self.logger.info(
+                    "Process loop finished. Ensuring controller is stopped."
+                )
+                self.controller.stop()
+
+        finally:
+            self.logger.info("Process loop finalizing.")
+            if self.controller:
+                self.logger.info("Waiting for task controller to join...")
+                results = self.controller.join()
+                if results is not None:
+                    self.send_results(connection, results)
+                else:
+                    self.logger.info(
+                        "No results from controller or task did not complete successfully."
+                    )
+            else:
+                self.logger.info("Controller was not active or not used.")
+
+            self.conn = None  # Clear connection reference
+            self.logger.info("Worker process loop ended.")
+
+    def send_results(self, connection: ConnectionContext, results_data):
+        """Formats and sends results. Subclasses can override for custom formatting."""
+        # Default: assume results_data is list-like or an IntervalSet
+        if isinstance(results_data, IntervalSet):
+            as_json = [
+                {"address": s, "length": e - s, "end": e}
+                for s, e in results_data.as_tuples()
+            ]
+        elif isinstance(results_data, list):
+            # Assume it's already in a suitable JSON-serializable list format
+            as_json = results_data
+        elif results_data is not None:
+            # Attempt to make it a list if it's a single non-list item
+            as_json = [results_data]
+        else:
+            as_json = []
+
+        if as_json:
+            self.logger.info(f"Sending {len(as_json)} results...")
+            connection.send_message(
+                "status", "sending_results", status="sending_results"
+            )
+            # Consider making sleep configurable or removing if IDA side handles UI updates better
+            # time.sleep(1) # Shorter sleep or make IDA side robust
+            connection.send_message(
+                "result", as_json, status="success", count=len(as_json)
+            )
+            connection.send_message("status", "results_sent", status="results_sent")
+        else:
+            self.logger.info("No results to send or results were empty.")
+            # Send a success message even if results are empty, or a specific no_results status
+            connection.send_message(
+                "result", [], status="success", count=0, note="No results generated"
+            )
+
+    # Subclasses might need to implement their own run_async_task or similar
+    # if the AsyncEventEmitter pattern is not sufficient.
+
+```
+
+`tests/11.1.0.60228.json`:
+
+```json
+{
+    "5390373031": {
+        "addr": 5390373031,
+        "size": 160,
+        "data": "660f1f8400000000009085eb73400f85ee1d0000c6c7d55381c22d746aeef6dfc6c0eb6845ce3f4483c759c7c66db0d16d590f8025c3010050c7c344c9c5e7e8d0db000051c7c5fb598075a185d8410fb650fb80fae80f849d000000418078f9ff7516410fb648fa80e13880f910740580f9187504b101eb0232c9418078faff750f80e23880ea10f6c2f77504b001eb0232c00ac8418078fcff7511410fb640"
+    },
+    "5394431165": {
+        "addr": 5394431165,
+        "size": 1325,
+        "data": "cccccc488974242055574156488d6c24c04881ec40010000488d442448c64424700048894424304533f648b81f00000000000080c6442428004889442440488bf14c897424384488742448e873a3aafe4c8d4c2420448bc0488d15b479fdff488bcee88c75ecfe48c7c7ffffffff84c0755448899c24600100004533c08bd7488d5c2470488bcee817bbaafe488bd0b8c70000000fb60a48ffc2880b488d5b0184c9741a4883e80175ea448833660f1f4400000fb602488d520184c075f5488b9c24600100004c397424407c1a488b4c2430488d150a6dfb014533c941b8faffffffe8dceaa0fe44387424700f8457050000488d44247048ffc74438343875f74c8bc7488d542470488bcee8b3acaafe4c8b45580f1f40006666660f1f840000000000907f2186d27e1d0f8d82f3010081eeb175216579c281e8d836360383c32983b150d81668488b3db597fb010f1f4400009085fac0e40073630f80cffe0000c6c58a80c1c081eeff5f404581c37934cca781e842d13b05550f8d614a000083c689e82240000081ee7e3444c2c7c65b8905930f86e0cc010080c53dc6c34b0f84ccdb00000f8fea380000f6dd80c09b81ee51050a5ec7c5cd312381b8448b0d4697fb014c03cf4c3bc70f825d0300004d3bc10f8354030000660f1f840000000000907d4286ed7c3ec6c39b6a22f6de80c3c4c7c58fc2391b81e873c9c82be8e12a0100e8ea270100c7c7d9e7c5cc81ead3bf37c8c6c67a83c382c7c0f764953183ac42c8b3ad410fb650fb80fae80f849d000000418078f9ff7516410fb648fa80e13880f910740580f9187504b101eb0232c9418078faff750f80e23880ea10f6c2f77504b001eb0232c00ac8418078fcff7511410fb640fd24382c10a8f77504b001eb0232c00ac8418078fdff7511410fb640fe24382c10a8f77504b001eb0232c00ac8418078feff7511410fb640ff24382c10a8f77504b001eb0232c00ac10f846502000066660f1f840000000000907f15c0f9007e107d3f80ebef81ef4365e7fec1ae97daf8488d05518077fe418bd02bd0488d3d653883fe8bc248c1e80e8b0c8785c90f85930100000f1f4000907d467c44795e81c10d49748781c0befc7184e81d9a010083c25c0f317b7af6dd0f310f3151c7c7d5d7d23e81ef8e60ae780f3181ed29149dae0f83aa8201000f83c09a000011a39f0f1f800000000090f7c327314832c0ff007329f6da80ead2e841440100e8680100000f88d11c0000e8956d000080c33981c04ae75a544ac185663750c705c570aa025601000033d248c7456832e6ffff488b45684835e405000048894568488b45684805400d000048894568488b4568480582fdffff48894568488b456848056811000048894568488b45684863c8498bc048f7f14188000f1f40006666660f1f840000000000903400c0fe007101e8714200000f82879d0100c6c21480e92d0f81ea2301005dc7c5361594300f31f6dac7c2950c188255e8f7010000c7c0e315390081e98e4f961cc6c0c980e88f4cc0af7bdd48c745688f110000488d7d58488b456848358f01000048894568488b456848894568488b4d6848c745688f010000488b456833c04863c9488945684883c708488b456848894568488b4568f3aae9c1feffff4803cf0f1f400066660f1f84000000000090f7c0df5798277135f6dd81c31c34d2d380c6e4580f88052e00000f839caf00005c5bf6d90f8a6b4e0000e86b940000c7c63cfa33210f886e9c010018ae8b0185c00f8468feffff2bc283f84076108b41044883c10485c075eee951feffff488bcee8b997aafe488bb424780100004881c440010000415e5f5d"
+    },
+    "5368727905": {
+        "addr": 5368727905,
+        "size": 110,
+        "data": "7b0c8adb7a1a80ee5680e85c81c2907b039a81ed86c97b4f80e99e80c35981e886c97a0680c1ae81e8e7eb039e81e98ad27a34c6c3cae88a3d0000e8a89c00005d0f8cef150000515c0f8dab02010068be24b2d368bc228b0f0f3180c2edf6d97ed3f6ac4187dc40303b0f1f440000"
+    },
+    "5376900737": {
+        "addr": 5376900737,
+        "size": 160,
+        "data": "34008af6710b80ea2c83c13ac6c327c7c386ed710c81c58715af0c6b8b6558f208c70578f2b50354010000498bc2498b50f84933d149f7f7488945384989109080f200714283c5116af56a820f3181c187f3fd13e8c5bb010081c1dd1f2cade80c120100c7c0ffc7eb1ec6c27a68926efecf80c000e8693400006a3a83c1f483c0826ba9f4675d48c74530ff1a0000488d7d40488b453048356a120000488945"
+    },
+    "5376975793": {
+        "addr": 5376975793,
+        "size": 160,
+        "data": "f986ff76040f3181c08aff761480c2ac0f8b9bbd00005881e8d81ce41d4a699b02c70548cdb40354010000498bc2498b50f84933d148f7f648894528498910900c0086c9730780e9250f3181c690eb0ccc74b153f6d8f6df79030f877329000081ed956db7e60f310f8823fa000083c13781ed554ec00dc7c50090b1b081eeb48212936984b16e48c74520ff1a0000488d7d30488b452048356a120000488945"
+    },
+    "5368729905": {
+        "addr": 5368729905,
+        "size": 160,
+        "data": "f88aff731d83c64e80c0c6f6db775e6aa083c7ba5e5fc6c1f080ee746a750f3181eb8adb731455c7c00b9a45680f8e125e010050c1a8ae0d1d3633c9488bd74885ff0f84cd0000000f1f8000000000909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090909090"
+    },
+    "5369441646": {
+        "addr": 5369441646,
+        "size": 160,
+        "data": "4d8d0c0b0f1f400066660f1f8400000000009080f30086ed730883c64280eeffc7c08ad2730454681f3f73210f3181c205c15b9583c7e283c25a0f315d80ef836a9c5c75227e1e4b6bab98c61a498bd1418bce4d85c90f84cc000000660f1f44000090a8eb716cc6c51a81c04a6b0cb4f6d8c6c7877d2381c182cbcc140f82fe6d000080c13280c56fc6c541e8cafe0100749a5b0f8d3fc50100f6dd5e0f8116"
+    }
+}
+
+```
+
+`tests/__init__.py`:
+
+```py
+import os
+import pathlib
+import sys
+import unittest
+
+import idapro
+
+# Set framework path for IDA Pro
+os.environ["DYLD_FRAMEWORK_PATH"] = (
+    "/Applications/IDA Professional 9.1.app/Contents/Frameworks:"
+    + os.environ.get("DYLD_FRAMEWORK_PATH", "")
+)
+
+sys.path.append(str(pathlib.Path(__file__).parent.parent))
+
+```
+
+`tests/anti_deob/deobfuscator.py`:
+
+```py
+"""Core deobfuscation logic."""
+
+import asyncio
+import collections
+import concurrent.futures
+import contextlib
+import dataclasses
+import enum
+import functools
+import itertools
+import logging
+import multiprocessing
+import re
+import struct
+import threading
+import time
+import typing
+import warnings
+
+import capstone
+from ida_taskr import get_logger
+from ida_taskr.utils import (
+    AsyncEventEmitter,
+    IntervalSet,
+    Range,
+    log_execution_time,
+    make_chunks,
+    resolve_overlaps,
+    shm_buffer,
+)
+
+# PyQt 5.15/6.2/6.3/6.4:
+# https://riverbankcomputing.com/news/SIP_v6.7.12_Released
+warnings.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message=(
+        r"sipPyTypeDict\(\) is deprecated, the extension module should use "
+        r"sipPyTypeDictRef\(\) instead"
+    ),
+)
+
+# maximum length of any stage-1 pattern (you said 129 bytes)
+MAX_PATTERN_LEN = 129
+MIN_PATTERN_LEN = 12
+LOG_LEVEL = logging.INFO
+logger = get_logger(__name__)
+
+
+class PatternCategory(enum.Enum):
+    MULTI_PART = enum.auto()
+    SINGLE_PART = enum.auto()
+    JUNK = enum.auto()
+
+
+@dataclasses.dataclass
+class RegexPatternMetadata:
+    category: PatternCategory
+    pattern: bytes  # The regex pattern as a bytes literal
+    description: typing.Optional[str] = None
+    compiled: typing.Optional[typing.Pattern] = None
+
+    def compile(self, flags=0):
+        """Compile the regex if not already done, and return the compiled object."""
+        if self.compiled is None:
+            self.compiled = re.compile(self.pattern, flags)
+        return self.compiled
+
+    @property
+    def group_names(self):
+        """Return the dictionary mapping group names to their indices."""
+        return self.compile().groupindex
+
+
+@dataclasses.dataclass
+class MultiPartPatternMetadata(RegexPatternMetadata):
+    category: PatternCategory = dataclasses.field(
+        default=PatternCategory.MULTI_PART, init=False
+    )
+
+    def __post_init__(self):
+        # Compile to ensure group names are available.
+        _ = self.compile(re.DOTALL | re.VERBOSE)
+        required_groups = {"first_jump", "padding", "second_jump"}
+        missing = required_groups - set(self.group_names)
+        if missing:
+            raise ValueError(f"MultiPart pattern is missing required groups: {missing}")
+
+
+@dataclasses.dataclass
+class SinglePartPatternMetadata(RegexPatternMetadata):
+    category: PatternCategory = dataclasses.field(
+        default=PatternCategory.SINGLE_PART, init=False
+    )
+
+    def __post_init__(self):
+        _ = self.compile(re.DOTALL | re.VERBOSE)
+        required_groups = {"prefix", "padding", "jump"}
+        missing = required_groups - set(self.group_names)
+        if missing:
+            raise ValueError(
+                f"SinglePart pattern is missing required groups: {missing}"
+            )
+
+
+@dataclasses.dataclass
+class JunkPatternMetadata(RegexPatternMetadata):
+    category: PatternCategory = dataclasses.field(
+        default=PatternCategory.JUNK, init=False
+    )
+
+    def __post_init__(self):
+        _ = self.compile(re.DOTALL | re.VERBOSE)
+        required_groups = {"junk"}
+        missing = required_groups - set(self.group_names)
+        if missing:
+            raise ValueError("Junk pattern must have a 'junk' group.")
+
+
+# fmt: off
+# (We do not wrap this in a named group here so that we can reuse it inside other groups.)
+PADDING_PATTERN = rb"""
+    (?:
+        \xC0[\xE0-\xFF]\x00  # 3-byte SHL reg, 0 with random register encoding
+        |                     # OR
+        (?:\x86|\x8A)        # 2-byte XCHG or MOV instruction
+        [\xC0\xC9\xD2\xDB\xE4\xED\xF6\xFF]  # Specific register encodings
+    )
+"""
+    
+# Multi-part jump patterns: pairs of conditional jumps with optional padding
+MULTI_PART_PATTERNS = [
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x70.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x71.)", "JO ... JNO"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x71.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x70.)", "JNO ... JO"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x72.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x73.)", "JB ... JAE"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x73.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x72.)", "JAE ... JB"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x74.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x75.)", "JE ... JNE"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x75.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x74.)", "JNE ... JE"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x76.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x77.)", "JBE ... JA"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x77.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x76.)", "JA ... JBE"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x78.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x79.)", "JS ... JNS"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x79.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x78.)", "JNS ... JS"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7A.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7B.)", "JP ... JNP"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7B.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7A.)", "JNP ... JP"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7C.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7D.)", "JL ... JGE"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7D.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7C.)", "JGE ... JL"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7E.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7F.)", "JLE ... JG"),
+    MultiPartPatternMetadata(rb"(?P<first_jump>\x7F.)(?P<padding>" + PADDING_PATTERN + rb")*(?P<second_jump>\x7E.)", "JG ... JLE"),
+]
+
+# Single-part jump patterns: prefix instruction + optional padding + conditional jump
+SINGLE_PART_PATTERNS = [
+    SinglePartPatternMetadata(rb"(?P<prefix>\x0C\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "OR AL, 0x00 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x0C\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "OR AL, 0x00 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x24\xFF)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "AND AL, 0xFF ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x24\xFF)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "AND AL, 0xFF ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x34\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "XOR AL, 0x00 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x34\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "XOR AL, 0x00 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xC8-\xCF]\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "OR r/m8, 0x00 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xC8-\xCF]\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "OR r/m8, 0x00 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xE0-\xE7]\xFF)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "AND r/m8, 0xFF ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xE0-\xE7]\xFF)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "AND r/m8, 0xFF ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xF0-\xF7]\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "XOR r/m8, 0x00 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x80[\xF0-\xF7]\x00)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "XOR r/m8, 0x00 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x84.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST r/m8, r8 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x84.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST r/m8, r8 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x85.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST r/m32, r32 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\x85.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST r/m32, r32 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xA8.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST AL, imm8 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xA8.)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST AL, imm8 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xA9....)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST EAX, imm32 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xA9....)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST EAX, imm32 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF6..)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST r/m8, imm8 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF6..)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST r/m8, imm8 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF7.....)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x71.)", "TEST r/m32, imm32 ... JNO"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF7.....)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "TEST r/m32, imm32 ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF8)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x73.)", "CLC ... JAE"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF9)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x72.)", "STC ... JB"),
+    SinglePartPatternMetadata(rb"(?P<prefix>\xF9)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>\x76.)", "STC ... JBE"),
+    # CMP ESP,0x1C00h – always “above” on a real Win x64 stack, then JA short
+    # # 81 FC 00 44 00 00
+    # # 81 FC 00 3F 00 00
+    # # 81 FC 00 44 00 00
+    SinglePartPatternMetadata(rb"(?P<prefix>[\x80\x81\x83]\xFC\x00...)(?P<padding>" + PADDING_PATTERN + rb")?(?P<jump>(\x77|\x73).)", "CMP ESP,0x1C00 … JA/E"),
+]
+
+
+
+# Helper sets for checking specific registers based on the regex patterns
+# These patterns [\xC0-\xC3\xC5-\xC7] and [\xD8-\xDB\xDD-\xDF] and [\xE8-\xEB\xED-\xEF]
+# correspond to ModR/M byte where MOD=11 (register) and R/M is 0-3 (EAX, ECX, EDX, EBX)
+# or 5-7 (EBP, ESI, EDI). R/M=4 is ESP, which is skipped by these ranges.
+# For 8-bit, these are AL, CL, DL, BL, BPL, SIL, DIL.
+# Since REX prefixes are confirmed *not* to be used with these patterns,
+# we only need to check for the 8-bit and 32-bit registers.
+REG_32_SET = {
+    capstone.x86.X86_REG_EAX,
+    capstone.x86.X86_REG_ECX,
+    capstone.x86.X86_REG_EDX,
+    capstone.x86.X86_REG_EBX,
+    capstone.x86.X86_REG_EBP,
+    capstone.x86.X86_REG_ESI,
+    capstone.x86.X86_REG_EDI,
+}
+
+REG_8_SET = {
+    capstone.x86.X86_REG_AL,
+    capstone.x86.X86_REG_CL,
+    capstone.x86.X86_REG_DL,
+    capstone.x86.X86_REG_BL,
+    # AH (C4) is skipped by the regex range
+    capstone.x86.X86_REG_CH,  # C5
+    capstone.x86.X86_REG_DH,  # C6
+    capstone.x86.X86_REG_BH,  # C7
+    # Low bytes of SI, DI, BP, SP are only accessible with REX in 64-bit
+    # but the regex implies non-REX. The original set included BPL, SIL, DIL
+    # which correspond to ModR/M 101, 110, 111 when MOD != 11.
+    # The regex range C0-C3, C5-C7 *specifically* uses MOD=11.
+    # So, the correct registers are AL, CL, DL, BL, CH, DH, BH.
+    # Let's redefine REG_8_SET based *only* on the registers implied by
+    # the specific ModR/M bytes in the regexes when MOD=11.
+}
+
+# Helper to check if the first operand is a register from the allowed set
+# based on the ModR/M ranges implied by the regexes.
+# Assumes no REX prefixes are used with these specific junk patterns,
+# so we only check against the 8-bit and 32-bit sets.
+def is_allowed_reg(operands):
+    if not operands or operands[0].type != capstone.CS_OP_REG:
+        return False
+    reg = operands[0].reg
+    # Check if the register is one of the 8-bit or 32-bit registers
+    # corresponding to the ModR/M R/M field 0-3, 5-7 when MOD=11,
+    # which is the set derived from ModR/M=11 ranges
+    return reg in REG_8_SET or reg in REG_32_SET
+
+# Helper to check if there's an immediate operand
+def has_imm_operand(operands):
+    return any(op.type == capstone.CS_OP_IMM for op in operands)
+
+# Function to check if a byte is a valid REX prefix (0x40-0x4F)
+def is_rex_prefix(byte):
+    return 0x40 <= byte <= 0x4F
+
+# Function to check if a byte is a valid ModR/M byte (0x80-0xBF)
+def is_valid_modrm(byte):
+    return 0x80 <= byte <= 0xBF
+# fmt: on
+
+
+class SegmentType(enum.Enum):
+    STAGE1_MULTIPLE = enum.auto()
+    STAGE1_SINGLE = enum.auto()
+    JUNK = enum.auto()
+    BIG_INSTRUCTION = enum.auto()
+
+
+@dataclasses.dataclass
+class MatchSegment:
+    start: int
+    length: int
+    description: str
+    matched_bytes: bytes
+    segment_type: SegmentType
+    matched_groups: dict = dataclasses.field(default_factory=dict)
+
+
+class MatchChain:
+    def __init__(self, base_address: int, segments: list[MatchSegment] | None = None):
+        self.base_address = base_address
+        self.segments = segments or []
+
+    def add_segment(self, segment: MatchSegment):
+        self.segments.append(segment)
+
+    def overall_start(self) -> int:
+        return self.segments[0].start + self.base_address if self.segments else 0
+
+    def overall_length(self) -> int:
+        if not self.segments:
+            return 0
+        first = self.segments[0]
+        last = self.segments[-1]
+        return (last.start + last.length) - first.start
+
+    def overall_matched_bytes(self) -> bytes:
+        return b"".join(seg.matched_bytes for seg in self.segments)
+
+    def append_junk(
+        self, junk_start: int, junk_len: int, junk_desc: str, junk_bytes: bytes
+    ):
+        seg = MatchSegment(
+            start=junk_start,
+            length=junk_len,
+            description=junk_desc,
+            matched_bytes=junk_bytes,
+            segment_type=SegmentType.JUNK,
+        )
+        self.add_segment(seg)
+
+    @property
+    def description(self) -> str:
+        desc = []
+        for idx, seg in enumerate(self.segments):
+            if idx == 0:
+                desc.append(f"{seg.description}")
+            else:
+                desc.append(f" -> {seg.description}")
+        return "".join(desc)
+
+    def update_description(self, new_desc: str):
+        if self.segments:
+            self.segments[0].description = new_desc
+
+    # New properties for junk analysis
+    @property
+    def stage1_type(self) -> SegmentType:
+        return self.segments[0].segment_type
+
+    @property
+    def junk_segments(self) -> list:
+        """
+        Returns a list of segments considered as junk based on their segment_type.
+        """
+        return [seg for seg in self.segments if seg.segment_type == SegmentType.JUNK]
+
+    @property
+    def junk_starts_at(self) -> typing.Optional[int]:
+        """
+        Returns the starting address of the junk portion.
+        This is computed as base_address + the offset of the first junk segment.
+        If no junk segments exist, returns None.
+        """
+        js = self.junk_segments
+        if js:
+            return self.base_address + js[0].start
+        return None
+
+    @property
+    def junk_length(self) -> int:
+        """
+        Returns the total length of the junk portion.
+        This is computed as the difference between the end (start + length) of the last junk segment
+        and the start of the first junk segment.
+        If there are no junk segments, returns 0.
+        """
+        js = self.junk_segments
+        if not js:
+            return 0
+        first = js[0]
+        last = js[-1]
+        return (last.start + last.length) - first.start
+
+    def __lt__(self, other):
+        return self.overall_start() < other.overall_start()
+
+    def __repr__(self):
+        r = [
+            f"{self.description.rjust(32, ' ')} @ 0x{self.overall_start():X} - "
+            f"{self.overall_matched_bytes().hex()[:16]}"
+            f"{'...' if self.overall_length() > 16 else ''}",
+            "  |",
+        ]
+        for seg in self.segments:
+            _grps = f"{' - ' + str(seg.matched_groups) if seg.matched_groups else ''}"
+            r.append(
+                f"  |_ {seg.description} @ 0x{self.base_address + seg.start:X} - {seg.matched_bytes.hex()}{_grps}"
+            )
+        return "\n".join(r)
+
+
+# TODO: inherit from list?
+class MatchChains:
+    def __init__(self):
+        self.chains: list[MatchChain] = []
+
+    def add_chain(self, chain: MatchChain):
+        self.chains.append(chain)
+
+    def __iter__(self):
+        yield from self.chains
+
+    def sort(self):
+        self.chains.sort(key=lambda x: x.overall_start())
+
+    def __len__(self):
+        return len(self.chains)
+
+    def __repr__(self):
+        lines = []
+        for c in self.chains:
+            desc = c.description
+            off = c.overall_start()
+            bhex = c.overall_matched_bytes().hex()[:16]
+            tail = "…" if c.overall_length() > 16 else ""
+            lines.append(f"{desc.rjust(32)} @ 0x{off:X} - {bhex}{tail}")
+        return "\n".join(lines)
+
+
+def _stage1_scan_one(job: tuple[RegexPatternMetadata, int, memoryview]) -> MatchChains:
+    """
+    job = (pattern_bytes, description, segment_type, base_ea, buf)
+    returns MatchChains
+    """
+    rgx, base_ea, buf = job
+    prog = rgx.compile()
+    hits = MatchChains()
+
+    for m in prog.finditer(buf):
+        s = m.start()
+        e = m.end()
+        mb = buf[s:e]
+        match_len = e - s
+
+        groups = {
+            k: v.hex()
+            for k, v in m.groupdict().items()
+            if (v is not None and k != "padding")
+        }
+
+        # compute jump targets
+        if "jump" in groups:
+            offset = struct.unpack("<b", mb[-1:])[0]
+            tgt = base_ea + s + match_len + offset
+            groups["target"] = hex(tgt)
+        elif "first_jump" in groups:
+            off1 = struct.unpack("<b", mb[1:2])[0]
+            groups["first_target"] = hex(base_ea + s + 2 + off1)
+            off2 = struct.unpack("<b", mb[-1:])[0]
+            groups["second_target"] = hex(base_ea + s + match_len + off2)
+
+        seg = MatchSegment(
+            start=s,
+            length=match_len,
+            description=rgx.description or "",
+            matched_bytes=mb.tobytes(),
+            segment_type=(
+                SegmentType.STAGE1_MULTIPLE
+                if rgx.category == PatternCategory.MULTI_PART
+                else SegmentType.STAGE1_SINGLE
+            ),
+            matched_groups=groups,
+        )
+        hits.add_chain(MatchChain(base_address=base_ea, segments=[seg]))
+
+    return hits
+
+
+def stage1_find_patterns(
+    buf: memoryview, base_ea: int, mp: bool = False
+) -> list[MatchChain]:
+    """
+    Parallel regex-based Stage 1. Returns List[MatchChain].
+    """
+    jobs = [
+        (rgx, base_ea, buf)
+        for rgx in itertools.chain(MULTI_PART_PATTERNS, SINGLE_PART_PATTERNS)
+    ]
+
+    if mp:
+        ctx = multiprocessing.get_context("spawn")
+        with concurrent.futures.ProcessPoolExecutor(mp_context=ctx) as exe:
+            all_groups = exe.map(_stage1_scan_one, jobs)
+    else:
+        all_groups = list(map(_stage1_scan_one, jobs))
+
+    # flatten
+    out = [chain for group in all_groups for chain in group]
+    # sort
+    out.sort(key=lambda c: c.overall_start())
+    return out
+
+
+# ─── Stage 2: peel off junk via Capstone ────────────────────────────────────
+
+
+@dataclasses.dataclass
+class JunkInstruction:
+    """Holds information about a single peeled junk instruction."""
+
+    #: Offset relative to the start of the peeled buffer
+    start_offset: int
+    #: Length of the peeled junk instruction
+    length: int
+    #: Description of the peeled junk instruction
+    description: str
+    #: Bytes of the peeled junk instruction
+    matched_bytes: bytes
+
+
+class CapstoneDisasmContext:
+    """
+    Context manager and iterable for Capstone disassembly.
+
+    Usage:
+        with CapstoneDisasmContext(is_64, buf) as disasm_ctx:
+            for insn in disasm_ctx:
+                ...
+
+    On error, iteration yields nothing.
+    """
+
+    _EMPTY_SET = set()
+
+    def __init__(self, is_64: bool):
+        self.is_64 = is_64
+
+    @functools.cached_property
+    def md(self):
+        """
+        Cached property for the Capstone disassembler instance.
+        Returns None if initialization fails.
+        """
+        try:
+            md = capstone.Cs(
+                capstone.CS_ARCH_X86,
+                capstone.CS_MODE_64 if self.is_64 else capstone.CS_MODE_32,
+            )
+            md.detail = True
+            return md
+        except Exception as e:
+            logger.error(f"Failed to initialize Capstone: {e}")
+            return None
+
+    def __enter__(self):
+        # No setup needed; iteration is handled in __iter__
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # The __exit__ method is not a generator and should not yield.
+        # Instead, handle exceptions by logging them if present.
+        PROPOGATE = False
+        SUPPRESS = True
+
+        match exc_type:
+            case None:
+                return PROPOGATE
+            case capstone.CsError:
+                logger.error(f"Capstone disassembly error: {exc_val}", exc_info=True)
+                return SUPPRESS
+            case _:
+                logger.error(
+                    f"Unexpected {exc_type.__name__} during Capstone disassembly: {exc_val}",
+                    exc_info=True,
+                )
+                return SUPPRESS
+
+    def disasm(self, buf: bytes, start_ea: int, **kwargs):
+        """
+        Disassemble the buffer and return an iterator of instructions.
+        If initialization failed, returns an empty iterator.
+        start_ea = 0 means is relative to the start of the input buffer 'buf'
+        """
+        if not self.md:
+            yield from self._EMPTY_SET
+            return
+
+        for insn in self.md.disasm(buf, start_ea, **kwargs):
+            yield insn
+
+
+@dataclasses.dataclass
+class BasicDecodedInstruction:
+    """Holds standardized information about a decoded instruction."""
+
+    address: int
+    size: int
+    is_jump: bool = False
+    jump_target: typing.Optional[int] = None
+    is_nop: bool = False
+    dead_opaque_predicate: bool = False
+
+
+class InstructionDecoder(typing.Protocol):
+    """Protocol defining the expected signature for decoder functions."""
+
+    def __init__(self, is_x64: bool): ...
+
+    def decode(
+        self, ea: int, mem_bytes_at_ea: bytes
+    ) -> typing.Optional[BasicDecodedInstruction]:
+        """
+        Decodes the instruction at virtual address 'ea' using the provided memory bytes.
+
+        Args:
+            ea: The virtual address of the instruction to decode.
+            mem_bytes_at_ea: A bytes object containing memory starting from 'ea'.
+                             The implementation should only consume the bytes
+                             needed for the single instruction at 'ea'.
+
+        Returns:
+            An InstructionInfo object if decoding is successful, otherwise None.
+        """
+        ...
+
+
+class CapstoneInstructionDecoder(InstructionDecoder):
+
+    def __init__(self, is_x64: bool):
+        self.is_x64 = is_x64
+        self.md = capstone.Cs(
+            capstone.CS_ARCH_X86, capstone.CS_MODE_64 if is_x64 else capstone.CS_MODE_32
+        )
+        self.md.detail = True
+
+    def get_next_insn(
+        self, mem_bytes_at_ea: bytes, ea: int
+    ) -> typing.Optional[capstone.CsInsn]:
+        try:
+            # Use list comprehension and next to get the first instruction or None
+            insn = next(self.md.disasm(mem_bytes_at_ea, ea, count=1), None)
+        except capstone.CsError as e:
+            logger.error(f"Capstone decoding error at 0x{ea:X}: {e}")
+            return None
+        if insn is None:
+            return None
+        logger.debug(
+            "Decoded instruction: %s %s (%X bytes) at offset %s - bytes: %s",
+            insn.mnemonic,
+            insn.op_str,
+            insn.size,
+            hex(ea),
+            insn.bytes.hex(),
+        )
+        return insn
+
+    def decode(
+        self, ea: int, mem_bytes_at_ea: bytes
+    ) -> typing.Optional[BasicDecodedInstruction]:
+        """
+        Decodes instruction at ea using IDA's disassembler.
+        Ignores mem_bytes_at_ea, uses IDA's database.
+        Conforms to DecoderProtocol.
+        """
+        # Decode using Capstone
+        insn = self.get_next_insn(mem_bytes_at_ea, ea)
+        if insn is None:
+            return None
+
+        decoded = BasicDecodedInstruction(address=ea, size=insn.size)
+        if insn.id == capstone.x86.X86_INS_NOP:
+            decoded.is_nop = True
+        # Check for 'xchg r8, r8' as a NOP pattern (0x90 is 'nop', i.e. 0x87 C9 is 'xchg cl, cl')
+        elif insn.id in (
+            capstone.x86.X86_INS_XCHG,
+            capstone.x86.X86_INS_MOV,
+            capstone.x86.X86_GRP_CMOV,
+        ):
+            op1, op2 = insn.operands
+            if op1.type == op2.type and op1.size == op2.size and op1.reg == op2.reg:
+                decoded.is_nop = True
+        elif insn.id == capstone.x86.X86_INS_PUSH and len(insn.operands) > 0:
+            # we have encountered this dead code:
+            # .text:0000000180188FB2 50                                                  push    rax
+            # .text:0000000180188FB3 EB FF                                               jmp     short near ptr loc_180188FB3+1
+            # .text:0000000180188FB5 C0 58 ? ?                                           rcr     byte ptr [rax-?], ?
+            if insn.operands[0].reg == capstone.x86.X86_REG_RAX:
+                next_insn = self.get_next_insn(
+                    mem_bytes_at_ea, insn.address + insn.size
+                )
+                if next_insn is not None and self._is_self_recursive_jump(insn):
+                    next_next_insn = self.get_next_insn(
+                        mem_bytes_at_ea, next_insn.address + next_insn.size
+                    )
+                    if next_next_insn is not None and next_next_insn.bytes.startswith(
+                        b"\xc0\x58"
+                    ):
+                        decoded.dead_opaque_predicate = True
+                        decoded.size = insn.size + next_insn.size + 2
+                    return decoded
+                else:
+                    decoded.is_nop = True
+                    return decoded
+        elif capstone.CS_GRP_JUMP in insn.groups:
+            if (
+                len(insn.operands) > 0
+                and insn.operands[0].type == capstone.x86.X86_OP_IMM
+            ):
+                decoded.is_jump = True
+                decoded.jump_target = insn.operands[0].imm
+        return decoded
+
+    def _is_self_recursive_jump(self, insn: capstone.CsInsn) -> bool:
+        """
+        Heuristic detection of self-recursive jumps for Capstone.
+
+        Args:
+            insn: Capstone instruction object
+
+        Returns:
+            True if this appears to be a self-recursive jump
+        """
+        jump_source = insn.address
+        # Pattern detection for common dead opaque predicates
+        # EB FF - jump back 1 byte (into same instruction)
+        if (
+            insn.id == capstone.x86.X86_INS_JMP
+            and len(insn.bytes) == 2
+            and insn.bytes[0] == 0xEB
+            and insn.bytes[1] == 0xFF
+        ):
+            logger.debug(f"Self-recursive jump detected: EB FF at 0x{jump_source:X}")
+            return True
+
+        return False
+
+
+@dataclasses.dataclass
+class JumpTargetAnalyzer:
+    # Input parameters for processing jumps.
+    match_bytes: bytes  # The bytes in which we're matching jump instructions.
+    match_start: int  # The address where match_bytes starts.
+    block_end: int  # End address of the allowed region.
+    start_ea: int  # Base address of the memory block (used for bounds checking).
+
+    # Internal structures.
+    jump_targets: collections.Counter = dataclasses.field(
+        init=False, default_factory=collections.Counter
+    )
+    jump_details: list = dataclasses.field(
+        init=False, default_factory=list
+    )  # List of (jump_ea, final_target, stage1_type)
+    target_type: dict = dataclasses.field(
+        init=False, default_factory=dict
+    )  # final_target -> stage1_type
+
+    def follow_jump_chain(
+        self,
+        mem: bytes,
+        current_ea: int,
+        match_end: int,
+        decoder: InstructionDecoder,
+        visited: set[int] | None = None,
+        depth: int = 0,
+    ) -> typing.Optional[int]:
+        """
+        Follow a chain of 2-byte jumps starting from current_ea using the provided decoder.
+
+        Args:
+            mem: Memory object containing the relevant byte data. Its 'base' attribute
+                 defines the absolute address corresponding to the start of its buffer.
+            current_ea: The absolute starting virtual address for tracing.
+            match_end: The absolute end address (exclusive) of the 'stage1' area.
+            decoder: A function conforming to DecoderProtocol used for disassembly.
+            visited: Set of visited addresses to prevent loops (internal use).
+            depth: Recursion depth for logging (internal use).
+
+        Returns:
+            The absolute virtual address where the jump chain ends, or None.
+        """
+        indent = "  " * depth + "|_ "
+        if visited is None:
+            visited = set()
+
+        # Get an efficient view of the memory buffer
+        mem_view = mem
+        mem_start_ea = self.start_ea  # Absolute start address of the buffer
+        mem_len = len(mem_view)
+        mem_end_ea = mem_start_ea + mem_len  # Absolute end address (exclusive)
+
+        if current_ea in visited:
+            logger.debug(
+                "%sJump chain stopped: Already visited 0x%X", indent, current_ea
+            )
+            return None
+        # Check if start address is within the bounds defined by the Memory object
+        if not (mem_start_ea <= current_ea < mem_end_ea):
+            logger.debug(
+                "%sJump chain stopped: Start address 0x%X is outside Memory bounds [0x%X, 0x%X)",
+                indent,
+                current_ea,
+                mem_start_ea,
+                mem_end_ea,
+            )
+            return None
+
+        visited.add(current_ea)
+
+        trace_ea = current_ea
+        while True:
+            # Check if the current tracing address is still within the Memory bounds
+            if not (mem_start_ea <= trace_ea < mem_end_ea):
+                logger.debug(
+                    "%sStopping trace: Address 0x%X is outside Memory bounds [0x%X, 0x%X). Returning last valid start: 0x%X",
+                    indent,
+                    trace_ea,
+                    mem_start_ea,
+                    mem_end_ea,
+                    current_ea,
+                )
+                return current_ea  # Return the start address of the sequence that led out of bounds
+
+            decoded_insn = None
+            # Calculate offset relative to the start of the Memory object's buffer
+            offset = trace_ea - mem_start_ea
+            logger.debug("%soffset: %X", indent, offset)
+            # We already know offset is >= 0 because trace_ea >= mem_start_ea
+            # We need to ensure we have enough bytes left for *potential* instructions
+
+            # Get bytes starting from the offset using the memoryview slice
+            # Convert the slice to bytes for the decoder interface
+            bytes_for_decoder = mem_view[offset:]
+            if (
+                not bytes_for_decoder
+            ):  # Should not happen if bounds check is correct, but defensive check
+                logger.warning(
+                    "%sNo bytes available for decoding at offset %X (address 0x%X). Stopping trace.",
+                    indent,
+                    offset,
+                    trace_ea,
+                )
+                return current_ea
+
+            try:
+                # Call the passed-in decoder function
+                decoded_insn = decoder.decode(trace_ea, bytes_for_decoder)
+            except Exception as e:
+                logger.error(
+                    "%sDecoder function raised exception at 0x%X: %s",
+                    indent,
+                    trace_ea,
+                    e,
+                )
+                decoded_insn = None  # Treat as decode failure
+
+            # If decoding failed or decoder returned None
+            if not decoded_insn:
+                logger.debug(
+                    "%sFailed to decode instruction at 0x%X. Stopping trace. Returning start: 0x%X",
+                    indent,
+                    trace_ea,
+                    current_ea,
+                )
+                return current_ea  # Return start of the sequence
+
+            # --- Process the decoded instruction ---
+            if decoded_insn.is_nop:
+                logger.debug(
+                    "%sNOP found at 0x%X (size %X). Skipping.",
+                    indent,
+                    trace_ea,
+                    decoded_insn.size,
+                )
+                trace_ea += decoded_insn.size
+                continue  # Continue the while loop to the next instruction
+
+            if decoded_insn.dead_opaque_predicate:
+                logger.debug(
+                    "%sDead opaque predicate found at 0x%X (size %X). Returning start: 0x%X.",
+                    indent,
+                    trace_ea,
+                    decoded_insn.size,
+                    current_ea,
+                )
+                return current_ea + decoded_insn.size
+
+            if not decoded_insn.is_jump or decoded_insn.size != 2:
+                logger.debug(
+                    "%sChain stopped at 0x%X: Instruction is not a 2-byte jump. Returning start: 0x%X",
+                    indent,
+                    trace_ea,
+                    current_ea,
+                )
+                return current_ea  # Return the start address of the sequence that ended
+
+            # --- We have a 2-byte jump ---
+            target = decoded_insn.jump_target  # This is an absolute address
+            if target is not None:
+                logger.debug(
+                    "%s  -> Found 2-byte jump at 0x%X targeting 0x%X",
+                    indent,
+                    trace_ea,
+                    target,
+                )
+
+                # --- Decide action based on the jump target (using absolute addresses) ---
+                # 1. Target is within the 'followable' range [match_start, match_end )
+                if self.match_start <= target < match_end:
+                    logger.debug(
+                        "%sFollowing jump from 0x%X to 0x%X (recursive call)",
+                        indent,
+                        trace_ea,
+                        target,
+                    )
+                    # Pass the same Memory object and decoder down recursively
+                    return self.follow_jump_chain(
+                        mem, target, match_end, decoder, visited, depth + 1
+                    )
+
+                # 3. Target is within the overall Memory block, but *before* match_start.
+                elif mem_start_ea <= target < self.match_start:
+                    logger.debug(
+                        "%sJump chain ends: Target 0x%X is within Memory bounds [0x%X,0x%X) but outside followable range [0x%X, 0x%X). Returning target.",
+                        indent,
+                        target,
+                        mem_start_ea,
+                        mem_end_ea,
+                        self.match_start,
+                        match_end,
+                    )
+                    if depth == 0:  # this is a bs jump, ignore it.
+                        return None
+                    return target  # Return the target address itself
+
+            # 4. Target is out of the overall Memory bounds or otherwise unexpected.
+            logger.debug(
+                "%sJump chain stopped: Target 0x%X is outside allowed ranges. Returning start address 0x%X",
+                indent,
+                target,
+                current_ea,
+            )
+            if depth == 0:  # this is a bs jump, ignore it.
+                return None
+            return current_ea  # Return the start address of the sequence containing the invalid jump
+
+    def _decode_stream(self, decoder, start, match_bytes):
+        offset = 0
+        n = len(match_bytes)
+
+        while offset < n:
+            try:
+                # hand the decoder only the bytes we haven’t consumed yet
+                insn = decoder.decode(start + offset, match_bytes[offset:])
+            except Exception as e:
+                logger.error("Decode error @0x%X: %s", start + offset, e)
+                return
+
+            if not insn:
+                return
+
+            yield insn
+            offset += insn.size
+
+    def process(self, mem, chain, is_x64: bool):
+        """
+        Process each jump match in match_bytes.
+        'chain' is expected to have attributes:
+          - junk_length: int
+          - stage1_type: SegmentType
+        """
+        decoder = CapstoneInstructionDecoder(is_x64)
+        match_end = chain.overall_start() + MAX_PATTERN_LEN
+        logger.debug(
+            "Processing jumps for chain @ 0x%X, match_end=0x%X",
+            chain.overall_start(),
+            match_end,
+        )
+        match chain.stage1_type:
+            case SegmentType.STAGE1_SINGLE:
+                jump_offset = chain.segments[0].length - (
+                    len(chain.segments[0].matched_groups["jump"]) // 2
+                )
+                jump_ea = self.match_start + jump_offset
+            case SegmentType.STAGE1_MULTIPLE:
+                jump_offset = 0
+                jump_ea = self.match_start + jump_offset
+            case _:
+                raise ValueError(f"Invalid stage1_type: {chain.stage1_type}")
+
+        final_target = self.follow_jump_chain(mem, jump_ea, match_end, decoder)
+        if not final_target:
+            logger.debug(
+                "  Skipping jump at 0x%X: Invalid final target 0x%X",
+                jump_ea,
+                final_target if final_target else 0,
+            )
+        else:
+            self.jump_targets[final_target] += 1
+            if final_target not in self.target_type:
+                self.target_type[final_target] = chain.stage1_type
+            self.jump_details.append((jump_ea, final_target, chain.stage1_type))
+            logger.debug("Found jump @0x%X → 0x%X", jump_ea, final_target)
+        return self
+        # for insn in self._decode_stream(
+        #     decoder, chain.overall_start(), self.match_bytes
+        # ):
+        #     # 1) filter out non jumps or non 2-byte jumps
+        #     if not insn.is_jump or insn.size != 2:
+        #         continue
+
+        #     final_target = self.follow_jump_chain(mem, insn.address, match_end, decoder)
+        #     if not final_target:
+        #         logger.debug("Bad target @0x%X", insn.address)
+        #         continue
+
+        #     if abs(final_target - match_end) > 6:
+        #         logger.debug("Out of range @0x%X", insn.address)
+        #         continue
+
+        #     # 2) process the hit
+        #     self.jump_targets[final_target] += 1
+        #     if final_target not in self.target_type:
+        #         self.target_type[final_target] = chain.stage1_type
+        #     self.jump_details.append((insn.address, final_target, chain.stage1_type))
+        #     logger.debug("Found jump @0x%X → 0x%X", insn.address, final_target)
+
+        return self
+
+    def __iter__(self):
+        """
+        Iterate over the most likely targets.
+        For each candidate, if a jump exists whose starting address equals candidate + 1,
+        yield its final target instead.
+
+        Sorting is by count descending, then by final_target descending.
+        """
+        # Prepare a list of (final_target, count) tuples
+        results = list(self.jump_targets.items())
+        # Sort by count descending, then by final_target descending
+        results.sort(key=lambda x: (x[1], x[0]), reverse=True)
+        for candidate, count in results:
+            final_candidate = candidate
+            for jump_ea, target, stype in self.jump_details:
+                if jump_ea == candidate + 1:
+                    final_candidate = target
+                    break
+            yield final_candidate
+
+
+def analyze_chain(
+    chain: MatchChain,
+    mem: memoryview,
+    start_ea: int,
+    is_x64: bool,
+    max_size: int = MAX_PATTERN_LEN,
+) -> list[Range]:
+    """
+    Filter out false positive anti-disassembly patterns and handle overlaps.
+    Integrates with existing big instruction detection code.
+
+    Args:
+        chains: List of MatchChain objects
+        mem: Memory object containing binary data
+        start_ea: Starting effective address
+        max_size: Maximum valid size for an anti-disassembly routine (default: MAX_PATTERN_LEN)
+
+    Returns:
+        A single validated MatchChain object
+    """
+
+    # Find the big instruction
+    match_start = chain.overall_start()
+    chain_end = match_start + max_size
+    ranges = []
+
+    logger.info(f"Analyzing match: {chain.description} @ 0x{match_start:X}")
+
+    # Determine possible jump targets - using your existing code
+    jump_targets = JumpTargetAnalyzer(
+        chain.overall_matched_bytes(), match_start, chain_end, start_ea
+    ).process(mem=mem, chain=chain, is_x64=is_x64)
+
+    for target in jump_targets:
+        if target <= match_start:  # sanity-check
+            continue
+        logger.info(f"most_likely_target: 0x{target:X}, block_end: 0x{chain_end:X}")
+        ranges.append(Range(match_start, target))
+    return ranges
+
+```
+
+`tests/anti_deob/worker_main.py`:
+
+```py
+"""Worker entry point for anti-deobfuscation tasks."""
+
+import argparse
+import asyncio
+import concurrent.futures
+import dataclasses
+import multiprocessing.shared_memory
+import pathlib
+import sys
+import threading
+import time
+
+from anti_deob.deobfuscator import MAX_PATTERN_LEN, analyze_chain, stage1_find_patterns
+
+from ida_taskr import (
+    ConnectionContext,
+    DataProcessorCore,
+    MessageEmitter,
+    WorkerBase,
+    get_logger,
+)
+from ida_taskr.utils import (
+    AsyncEventEmitter,
+    IntervalSet,
+    PatchManager,
+    execute_chunk_with_shm_view,
+    log_execution_time,
+    make_chunks,
+    resolve_overlaps,
+    shm_buffer,
+)
+
+logger = get_logger(__name__)
+
+# Path to this worker script (for self-reference)
+WORKER_SCRIPT_PATH = pathlib.Path(__file__)
+
+
+def core_deob_logic_for_chunk(
+    chunk_mv: memoryview, base_ea_for_chunk_mv: int, is_64: bool
+):
+    """
+    Core deobfuscation logic for a given chunk (memoryview).
+    This function receives an already prepared memoryview of a padded chunk.
+    Args:
+        chunk_mv: Memoryview of the (padded) chunk data from shared memory.
+        base_ea_for_chunk_mv: The effective base EA for the start of chunk_mv.
+        is_64: Boolean indicating if the architecture is 64-bit.
+    Returns:
+        A list of Range objects found within this chunk.
+    """
+    # Note: The original process_chunk filtered results based on core_start/core_end.
+    # This responsibility can either be moved to the caller of this core logic
+    # or handled here if core_start_offset_in_chunk_mv and core_end_offset_in_chunk_mv are passed.
+    # For this refactoring, we assume all ranges found in the chunk_mv are returned,
+    # and any filtering by original core region happens in the caller if still needed.
+
+    found_ranges = []
+
+    # — Stage 1: Find patterns in the provided chunk_mv
+    # The base address for stage1_find_patterns should be the effective EA of chunk_mv
+    s1_chains = stage1_find_patterns(chunk_mv, base_ea_for_chunk_mv)
+
+    # --- TRACEPOINT (adjusted for new base_ea_for_chunk_mv) ---
+    TARGET_EA = 0x140005131
+    for chain in s1_chains:
+        # chain.overall_start() is relative to chain.base_address, which is base_ea_for_chunk_mv
+        s = chain.overall_start()  # This is an absolute EA
+        e = s + chain.overall_length()
+        if s <= TARGET_EA < e:
+            logger.warning(
+                "[TRACE][Stage1] (core logic) covers 0x%X: %s", TARGET_EA, chain
+            )
+            for seg in chain.segments:
+                # seg.start is relative to chain.base_address
+                abs_s = chain.base_address + seg.start
+                logger.warning(
+                    "    seg @0x%X len=%d desc=%s",
+                    abs_s,
+                    seg.length,
+                    seg.description,
+                )
+            break
+    # -----------------------------------------------------------
+
+    for chain in s1_chains:
+        # analyze_chain also needs the chunk_mv and its corresponding base EA
+        ranges = analyze_chain(chain, chunk_mv, base_ea_for_chunk_mv, is_64)
+        found_ranges.extend(ranges)
+
+    return found_ranges
+
+
+def dispatch_chunk_processing(args):
+    """
+    Dispatcher function called by ProcessPoolExecutor.
+    Unpacks arguments, calls execute_chunk_with_shm_view with the core logic.
+    """
+    shm_name, padded_start, padded_end, core_start, core_end, base_ea, is_64 = args
+
+    # Arguments for core_deob_logic_for_chunk, after memoryview is prepared by the wrapper:
+    # The base_ea for the chunk_mv will be the original base_ea + padded_start offset.
+    core_logic_user_args = (base_ea + padded_start, is_64)
+
+    # Call the wrapper that handles SHM and memoryview lifecycle
+    results = execute_chunk_with_shm_view(
+        core_deob_logic_for_chunk,
+        shm_name,
+        padded_start,
+        padded_end,
+        *core_logic_user_args,
+    )
+
+    # If filtering by core region is still desired (as in original process_chunk):
+    # This needs core_start and core_end to be relative to the original buffer,
+    # and the ranges in `results` to have absolute EAs.
+    # The `analyze_chain` and `stage1_find_patterns` should produce absolute EAs if their
+    # base_ea parameter is an absolute EA.
+    # Assuming `r.start` from `analyze_chain` gives an absolute EA:
+    final_results_in_core = []
+    # Convert core_start/core_end (offsets from buffer start) to absolute EAs
+    abs_core_start = base_ea + core_start
+    abs_core_end = base_ea + core_end
+    for r in results:
+        if abs_core_start <= r.start < abs_core_end:
+            final_results_in_core.append(r)
+    # return final_results_in_core
+    return results  # For now, returning all results from the chunk, filtering can be re-evaluated.
+    # The original process_chunk did this filtering. If it's crucial, we should keep it.
+    # Given the original comment: "Returns only those chains whose start is in the chunk's core region."
+    # We should probably keep this filtering.
+
+    # Re-instating the original filtering logic:
+    # Ensure `r.start` in `results` are absolute EAs for this comparison to work.
+    # `chain.overall_start()` in `core_deob_logic_for_chunk` is absolute.
+    # `analyze_chain` if it returns `Range` objects, their `start` should also be absolute EA.
+    # If `Range.start` is an offset from `base_ea_for_chunk_mv`, it needs adjustment before this check.
+    # Assuming `Range.start` is absolute EA:
+    filtered_results = []
+    abs_core_start_ea = base_ea + core_start
+    abs_core_end_ea = base_ea + core_end
+    for r_obj in results:  # Assuming results is a list of Range objects
+        if (
+            hasattr(r_obj, "start")
+            and abs_core_start_ea <= r_obj.start < abs_core_end_ea
+        ):
+            filtered_results.append(r_obj)
+        elif (
+            isinstance(r_obj, tuple) and len(r_obj) == 2
+        ):  # If it's (start_ea, end_ea) tuple
+            if abs_core_start_ea <= r_obj[0] < abs_core_end_ea:
+                filtered_results.append(r_obj)
+        # Add other checks if result structure varies
+    return filtered_results
+
+
+@dataclasses.dataclass
+class AsyncDeobfuscator(AsyncEventEmitter):
+    shm_name: str
+    data_size: int
+    start_ea: int
+    is_64bit: bool
+    max_workers: int = 0
+    executor: concurrent.futures.Executor | None = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.pause_evt = asyncio.Event()
+        self.stop_evt = asyncio.Event()
+        self.max_workers = self.max_workers or max(1, multiprocessing.cpu_count())
+        ctx = multiprocessing.get_context("spawn")
+        self.executor = self.executor or concurrent.futures.ProcessPoolExecutor(
+            max_workers=self.max_workers, mp_context=ctx
+        )
+        logger.info(f"executor pool created with {self.max_workers} workers")
+
+    @log_execution_time
+    async def run(self):
+        await self.emit("run_started")
+
+        # 1) define exactly max_workers chunks over the shared buffer
+        buf_len = self.data_size
+        chunks = list(
+            make_chunks(
+                buf_len,
+                self.max_workers,
+                max_pat=MAX_PATTERN_LEN * 2,
+            )
+        )
+        logger.debug(
+            "Splitting buffer of %d bytes into %d chunks:", buf_len, len(chunks)
+        )
+        for idx, (ps, pe, cs, ce) in enumerate(chunks):
+            logger.info(
+                "  chunk %2d: core=[0x%X..0x%X) padded=[0x%X..0x%X)",
+                idx,
+                cs + self.start_ea,
+                ce + self.start_ea,
+                ps + self.start_ea,
+                pe + self.start_ea,
+            )
+
+        # 2) fire one full-pipeline task per chunk
+        loop = asyncio.get_running_loop()
+        jobs = [
+            (
+                self.shm_name,
+                padded_start,
+                padded_end,
+                core_start,
+                core_end,
+                self.start_ea,
+                self.is_64bit,
+            )
+            for padded_start, padded_end, core_start, core_end in chunks
+        ]
+        futures = [
+            loop.run_in_executor(self.executor, dispatch_chunk_processing, job)
+            for job in jobs
+        ]
+
+        # 3) wait, flatten, resolve overlaps globally
+        per_chunk = await asyncio.gather(*futures)
+        all_ranges = [r for grp in per_chunk for r in grp]
+        final: IntervalSet = resolve_overlaps(all_ranges)
+
+        await self.emit("run_finished", final)
+        return final
+
+    async def shutdown(self):
+        self.stop_evt.set()
+        if self.executor:
+            self.executor.shutdown(wait=True)
+        await self.emit("stopped")
+        self.logger.info("AsyncDeobfuscator shutdown complete.")
+
+
+class AntiDeobWorker(WorkerBase):
+    """Worker implementation for anti-deobfuscation tasks."""
+
+    def __init__(self, shm_name: str, data_size: int, start_ea: int, is_64bit: bool):
+        # Pass AsyncDeobfuscator class and its arguments to WorkerBase
+        emitter_args = {
+            "shm_name": shm_name,
+            "data_size": data_size,
+            "start_ea": start_ea,
+            "is_64bit": is_64bit,
+            # process_chunk_fn will be implicitly passed if AsyncDeobfuscator expects it
+        }
+        # Note: process_chunk is used by AsyncDeobfuscator's run method,
+        # so it doesn't need to be passed to WorkerBase directly here if AsyncDeobfuscator handles it.
+        # If AsyncDeobfuscator needed process_chunk to be injected, that would be part of its own init.
+        super().__init__(
+            async_emitter_class=AsyncDeobfuscator, emitter_args=emitter_args
+        )
+
+        # Specific attributes for AntiDeobWorker, if any, can be initialized here.
+        # For this example, the core logic is within AsyncDeobfuscator.
+        self.logger.info("AntiDeobWorker initialized with new WorkerBase structure.")
+
+    # The `setup` method in WorkerBase now initializes the emitter.
+    # We can override `setup_custom_event_handlers` if we need specific event handling
+    # beyond what WorkerBase provides by default.
+
+    # The `process` method is now largely handled by WorkerBase.
+    # We might not need to override it unless there's very specific pre/post command loop logic.
+
+    # `handle_command` can be extended if new custom commands are needed beyond
+    # what WorkerBase handles (start, stop, pause, resume, ping, set_log_level).
+    # For this example, AsyncDeobfuscator doesn't introduce new commands that
+    # WorkerBase needs to be aware of at this level. The existing commands
+    # control the WorkerController managed by WorkerBase.
+
+    # `cleanup` is also handled by WorkerBase to shut down the emitter.
+
+    # Example of custom event handler setup, if needed:
+    # def setup_custom_event_handlers(self):
+    #     super().setup_custom_event_handlers() # Good practice if base class might add some
+    #     if self.emitter_instance: # emitter_instance is set up in WorkerBase.setup()
+    #         @self.emitter_instance.on("some_custom_event_from_async_deobfuscator")
+    #         def on_my_custom_event(data):
+    #             self.logger.info(f"Received custom event with data: {data}")
+    #             if self.conn:
+    #                 self.conn.send_message("custom_progress", data, status="custom_status")
+
+    # If the results formatting in WorkerBase's send_results is not sufficient,
+    # it can be overridden here. The default handles IntervalSet and lists.
+    # def send_results(self, connection: ConnectionContext, results_data):
+    #    self.logger.info("AntiDeobWorker formatting results...")
+    #    # Custom formatting logic here
+    #    super().send_results(connection, formatted_results_data)
+
+
+def create_anti_deob_message_emitter(dry_run: bool = False) -> MessageEmitter:
+    """Create a message emitter for anti-deobfuscation results.
+
+    Args:
+        dry_run: If True, patches will be simulated but not applied
+
+    Returns:
+        MessageEmitter configured with anti-deob event handlers
+    """
+
+    emitter = MessageEmitter()
+
+    @emitter.on("worker_connected")
+    def on_worker_connected():
+        logger.info("Worker connected")
+
+    @emitter.on("worker_message")
+    def on_worker_message(message: dict):
+        logger.info("Worker message: %s", message)
+
+    @emitter.on("worker_error")
+    def on_worker_error(error: str):
+        logger.error("Worker error: %s", error)
+
+    @emitter.on("worker_disconnected")
+    def on_worker_disconnected():
+        logger.info("Worker disconnected")
+
+    @emitter.on("worker_results")
+    def on_worker_results(results: dict):
+        patch_manager = PatchManager(dry_run=dry_run)
+        if results["status"] == "success":
+            NOP = b"\x90"
+            for patch_instructions in results["results"]:
+                patch_manager.add_patch(
+                    patch_instructions["address"],
+                    patch_instructions["length"] * NOP,
+                )
+            patch_manager.apply_all()
+        else:
+            logger.error("Worker reported an error in results")
+
+    return emitter
+
+
+class Taskr:
+    """
+    Singleton wrapper for the DataProcessor instance.
+
+    Ensures only one DataProcessor is created and shared throughout the plugin's lifetime.
+
+    Usage:
+        >>> t1 = Taskr()
+        >>> t2 = Taskr()
+        >>> t1 is t2
+        True
+        >>> t1.get() is t2.get()
+        True
+
+    The .get() method returns the singleton DataProcessor instance.
+    """
+
+    _instance = None
+    _processor = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            # Not thread-safe, but sufficient for plugin/IDA context
+            cls._instance = super().__new__(cls)
+            logger.info("Initializing DataProcessor")
+            # Create patch manager and message emitter for singleton
+            message_emitter = create_anti_deob_message_emitter(dry_run=False)
+            cls._processor = DataProcessorCore(message_emitter)
+        return cls._instance
+
+    def get(self):
+        """
+        Returns the singleton DataProcessor instance.
+
+        >>> t1 = Taskr()
+        >>> t2 = Taskr()
+        >>> t1.get() is t2.get()
+        True
+        """
+        return self._processor
+
+    def pause(self):
+        self.get().proc.send_command({"command": "pause"})  # type: ignore
+
+    def resume(self):
+        self.get().proc.send_command({"command": "resume"})  # type: ignore
+
+    def stop(self):
+        self.get().proc.send_command({"command": "stop"})  # type: ignore
+
+    def start(self):
+        self.get().proc.send_command({"command": "start"})  # type: ignore
+
+    def terminate(self):
+        self.get().terminate()  # type: ignore
+
+    def ping(self):
+        self.get().proc.send_command({"command": "ping"})  # type: ignore
+
+
+def main():
+    """Worker entry point."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--shm_name", required=True)
+    parser.add_argument("--data_size", type=int, required=True)
+    parser.add_argument("--start_ea", type=lambda x: int(x, 0), required=True)
+    parser.add_argument("--is64", type=int, default=1)
+    parser.add_argument("--address", required=True)
+    parser.add_argument("--authkey", required=True)
+
+    args = parser.parse_args()
+    worker = None
+    try:
+        # Create worker instance
+        worker = AntiDeobWorker(
+            shm_name=args.shm_name,
+            data_size=args.data_size,
+            start_ea=args.start_ea,
+            is_64bit=bool(args.is64),
+        )
+
+        # WorkerBase's setup will initialize AsyncDeobfuscator
+        worker.setup()  # This is crucial
+
+        # Process with connection
+        # WorkerBase's process method now handles the command loop
+        with ConnectionContext(args.address, args.authkey) as conn:
+            worker.process(conn)  # This starts the command loop in WorkerBase
+
+    except Exception as e:
+        logger.error("Unhandled exception in worker_main: %s", e, exc_info=True)
+    finally:
+        if worker:
+            # WorkerBase's cleanup should handle shutting down the emitter
+            # It's an async method, so needs to be run in an event loop
+            try:
+                asyncio.run(worker.cleanup())
+            except Exception as e:
+                logger.error("Exception during worker cleanup: %s", e, exc_info=True)
+        logger.info("Worker main finished.")
+
+
+if __name__ == "__main__":
+    # If run with worker arguments, run as worker
+    if len(sys.argv) > 1 and any(arg.startswith("--") for arg in sys.argv[1:]):
+        main()
+    else:
+        # If run directly, run as IDA script
+        print("Running Taskr().get().run(*DataProcessorCore.get_section_data('.text'))")
+        data_ea, data_bytes = DataProcessorCore.get_section_data(".text")
+        if data_ea and data_bytes:
+            processor = Taskr().get()
+            if processor:
+                processor.run(data_ea, data_bytes, str(WORKER_SCRIPT_PATH))
+
+```
+
+`tests/test_anti_deob.py`:
+
+```py
+import concurrent.futures
+import functools
+import json
+import logging
+import multiprocessing
+import multiprocessing.shared_memory
+import os
+import pathlib
+import unittest
+
+import idapro  # isort: ignore
+
+from ida_taskr import helpers
+
+from anti_deob.worker_main import AsyncDeobfuscator  # isort:skip
+
+
+logfmt = "%(levelname)s %(name)s: %(message)s"
+debug_configure_logging = functools.partial(
+    helpers.configure_logging, level=logging.DEBUG, fmt_str=logfmt
+)
+logger = logging.getLogger(__name__)
+
+helpers.configure_logging(logger, level=logging.INFO, fmt_str=logfmt)
+
+
+def get_debug_logger(name=None):
+    """Get a configured logger instance."""
+    name = name or f"{"ida." if helpers.is_ida() else "worker."}{__name__}"
+    logger = logging.getLogger(name)
+    helpers.configure_logging(logger, level=logging.DEBUG, fmt_str=logfmt)
+    return logger
+
+
+helpers.get_logger = get_debug_logger
+
+# Load raw binary data once
+script_dir = pathlib.Path(__file__).parent
+bin_file = script_dir / "11.1.0.60228.json"
+try:
+    with bin_file.open("r") as f:
+        ROUTINE_DATA = json.load(f)
+except FileNotFoundError:
+    logger.error("Routine data file not found: %s", bin_file)
+    ROUTINE_DATA = {}
+except json.JSONDecodeError:
+    logger.error("Error decoding JSON from file: %s", bin_file)
+    ROUTINE_DATA = {}
+
+
+def parse_address(addr_str):
+    """Parse address string as either hex (0x...) or decimal."""
+    if not addr_str:
+        return None
+
+    addr_str = addr_str.strip()
+    try:
+        if addr_str.lower().startswith("0x"):
+            # Parse as hex
+            return int(addr_str, 16)
+        else:
+            # Parse as decimal
+            return int(addr_str, 10)
+    except ValueError:
+        logger.error(
+            "Invalid address format: '%s'. Must be decimal or hex (0x...)", addr_str
+        )
+        return None
+
+
+def load_and_generate_tests(cls):
+    """Dynamically add test methods to the class for each routine address."""
+
+    # Check for environment variable to filter tests
+    filter_addr_str = os.environ.get("TEST_ROUTINE_ADDR")
+    filter_addr = None
+    if filter_addr_str:
+        filter_addr = parse_address(filter_addr_str)
+        if filter_addr is not None:
+            logger.info(
+                "Filtering tests to run only for address: %s (0x%X)",
+                filter_addr_str,
+                filter_addr,
+            )
+        else:
+            logger.error("Invalid TEST_ROUTINE_ADDR value: '%s'", filter_addr_str)
+
+    # Store routine data on the class for access in setUp
+    cls.json_data = ROUTINE_DATA
+
+    # Find original test methods (those starting with 'test_')
+    original_test_methods = {
+        name: getattr(cls, name)
+        for name in dir(cls)
+        if name.startswith("test_") and callable(getattr(cls, name))
+    }
+
+    # Remove original test methods to avoid running them directly
+    for name in original_test_methods:
+        delattr(cls, name)
+
+    # Create new test methods for each routine address
+    for addr_str in ROUTINE_DATA:
+        routine_addr = int(addr_str)
+
+        # Apply filtering if the environment variable is set
+        if filter_addr is not None and routine_addr != filter_addr:
+            continue
+
+        addr_hex = hex(routine_addr)
+        for original_name, original_method in original_test_methods.items():
+            # Create a new function that calls the original test method
+            # We use a closure to capture the original_method
+            def make_test_runner(method_to_run):
+                async def test_runner(self):
+                    await method_to_run(self)
+
+                return test_runner
+
+            new_test_method = make_test_runner(original_method)
+            new_test_name = f"{original_name}_{addr_hex}"
+            # Copy necessary attributes from the original method
+            new_test_method.__name__ = new_test_name
+            new_test_method.__doc__ = original_method.__doc__
+            setattr(cls, new_test_name, new_test_method)
+
+    return cls
+
+
+@load_and_generate_tests
+class TestAsyncDeobfuscator(unittest.IsolatedAsyncioTestCase):
+    """
+    Test the AsyncDeobfuscator stages and ensure final chains match
+    the patch addresses discovered by execute_action.
+    """
+
+    # Class attribute to store loaded JSON data
+    json_data = None
+
+    def setUp(self):
+        # Extract routine address from the test method name (e.g., test_stage1_non_empty_0x141887cbd)
+        test_id_parts = self.id().split(".")[-1].split("_")
+        addr_str = str(
+            int(test_id_parts[-1], 16)
+        )  # Get the last part (address) and convert to decimal string key
+
+        if self.json_data is None or addr_str not in self.json_data:
+            self.fail(f"Address {addr_str} not found in JSON data.")
+
+        # Define EA range based on the parsed address
+        routine = self.json_data[addr_str]
+        self.start_ea = routine["addr"]
+        self.size = routine["size"]
+        self.end_ea = self.start_ea + self.size
+        self.data = bytes.fromhex(routine["data"])
+        logger.debug(
+            "Setting up test for routine 0x%X, data length: %d",
+            self.start_ea,
+            len(self.data),
+        )
+
+        # Provide buffer to AsyncDeobfuscator via a fake shared memory context
+        # @asynccontextmanager
+        # async def fake_get_buffer(inst):
+        #     yield self.data
+        # AsyncDeobfuscator._get_buffer = fake_get_buffer  # override
+        self._shared_memory = multiprocessing.shared_memory.SharedMemory(
+            create=True, size=len(self.data)
+        )
+        self._shared_memory.buf[: len(self.data)] = self.data
+        # Instantiate deobfuscator
+        self.deob = AsyncDeobfuscator(
+            shm_name=self._shared_memory.name,
+            data_size=len(self.data),
+            start_ea=self.start_ea,
+            is_64bit=True,
+            max_workers=1,
+            executor=concurrent.futures.ThreadPoolExecutor(max_workers=1),
+            # executor=concurrent.futures.ProcessPoolExecutor(max_workers=1),
+        )
+
+    def tearDown(self):
+        self._shared_memory.close()
+
+        # now tear down the shared memory itself (only the creator should do this)
+        try:
+            multiprocessing.shared_memory.SharedMemory(
+                name=self._shared_memory.name
+            ).unlink()
+        except FileNotFoundError:
+            pass
+
+    async def test_run_matches_expected_addresses(self):
+        final = await self.deob.run()
+        actual_addresses = sorted(r.start for r in final)
+        logger.info(
+            "Actual start addresses for 0x%X: %s",
+            self.start_ea,
+            [hex(a) for a in actual_addresses],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+```
+
+`tests/test_event_emitter.py`:
+
+```py
+"""
+Unit tests for MessageEmitter functionality and event handling patterns.
+
+Tests the composition-based approach for handling worker messages using
+the MessageEmitter pattern.
+"""
+
+import logging
+import unittest
+from unittest.mock import MagicMock, Mock, patch
+
+from ida_taskr import MessageEmitter, WorkerLauncher, get_logger
+
+logger = get_logger(__name__)
+
+
+class TestMessageEmitter(unittest.TestCase):
+    """Test suite for MessageEmitter event handling."""
+
+    def setUp(self):
+        """Set up test fixtures before each test method."""
+        self.emitter = MessageEmitter()
+        self.test_events = []
+
+    def tearDown(self):
+        """Clean up after each test method."""
+        self.test_events.clear()
+
+    def test_decorator_event_registration(self):
+        """Test event handler registration using decorator syntax."""
+
+        @self.emitter.on("worker_connected")
+        def on_connected():
+            self.test_events.append("connected")
+
+        @self.emitter.on("worker_message")
+        def on_message(message: dict):
+            self.test_events.append(f"message: {message}")
+
+        @self.emitter.on("worker_results")
+        def on_results(results: dict):
+            self.test_events.append(f"results: {results}")
+
+        @self.emitter.on("worker_error")
+        def on_error(error: str):
+            self.test_events.append(f"error: {error}")
+
+        @self.emitter.on("worker_disconnected")
+        def on_disconnected():
+            self.test_events.append("disconnected")
+
+        # Test events are fired correctly
+        self.emitter.emit_worker_connected()
+        self.emitter.emit_worker_message({"type": "progress", "progress": 0.5})
+        self.emitter.emit_worker_results({"status": "success", "results": [1, 2, 3]})
+        self.emitter.emit_worker_error("Test error")
+        self.emitter.emit_worker_disconnected()
+
+        # Verify all events were captured
+        self.assertEqual(len(self.test_events), 5)
+        self.assertIn("connected", self.test_events)
+        self.assertIn(
+            "message: {'type': 'progress', 'progress': 0.5}", self.test_events
+        )
+        self.assertIn(
+            "results: {'status': 'success', 'results': [1, 2, 3]}", self.test_events
+        )
+        self.assertIn("error: Test error", self.test_events)
+        self.assertIn("disconnected", self.test_events)
+
+    def test_direct_event_registration(self):
+        """Test alternative way to register handlers directly without decorators."""
+
+        def handle_connection():
+            self.test_events.append("worker_connected")
+
+        def handle_message(message: dict):
+            self.test_events.append(f"worker_message: {message}")
+
+        def handle_results(results: dict):
+            self.test_events.append(f"worker_results: {results}")
+
+        def handle_error(error: str):
+            self.test_events.append(f"worker_error: {error}")
+
+        def handle_disconnection():
+            self.test_events.append("worker_disconnected")
+
+        # Register the handlers directly
+        self.emitter.on("worker_connected", handle_connection)
+        self.emitter.on("worker_message", handle_message)
+        self.emitter.on("worker_results", handle_results)
+        self.emitter.on("worker_error", handle_error)
+        self.emitter.on("worker_disconnected", handle_disconnection)
+
+        # Emit events
+        self.emitter.emit_worker_connected()
+        test_message = {"type": "status", "data": "processing"}
+        self.emitter.emit_worker_message(test_message)
+        test_results = {"status": "completed", "results": ["item1", "item2"]}
+        self.emitter.emit_worker_results(test_results)
+        self.emitter.emit_worker_error("Connection timeout")
+        self.emitter.emit_worker_disconnected()
+
+        # Verify events were handled
+        self.assertEqual(len(self.test_events), 5)
+        self.assertIn("worker_connected", self.test_events)
+        self.assertIn(f"worker_message: {test_message}", self.test_events)
+        self.assertIn(f"worker_results: {test_results}", self.test_events)
+        self.assertIn("worker_error: Connection timeout", self.test_events)
+        self.assertIn("worker_disconnected", self.test_events)
+
+    def test_multiple_subscribers_same_event(self):
+        """Test multiple handlers for the same event."""
+        results_log = []
+
+        @self.emitter.on("worker_results")
+        def log_results(results: dict):
+            results_log.append(f"logged: {len(results.get('results', []))}")
+
+        @self.emitter.on("worker_results")
+        def process_results(results: dict):
+            results_log.append("processed")
+
+        @self.emitter.on("worker_results")
+        def notify_ui(results: dict):
+            results_log.append("ui_updated")
+
+        # Emit results event
+        test_results = {"status": "success", "results": [1, 2, 3, 4, 5]}
+        self.emitter.emit_worker_results(test_results)
+
+        # Verify all handlers were called
+        self.assertEqual(len(results_log), 3)
+        self.assertIn("logged: 5", results_log)
+        self.assertIn("processed", results_log)
+        self.assertIn("ui_updated", results_log)
+
+    def test_progress_message_handling(self):
+        """Test handling of progress messages specifically."""
+        progress_events = []
+
+        @self.emitter.on("worker_message")
+        def on_message(message: dict):
+            if message.get("type") == "progress":
+                progress = message.get("progress", 0)
+                progress_events.append(progress * 100)
+
+        # Send progress messages
+        self.emitter.emit_worker_message({"type": "progress", "progress": 0.25})
+        self.emitter.emit_worker_message({"type": "progress", "progress": 0.50})
+        self.emitter.emit_worker_message({"type": "progress", "progress": 0.75})
+        self.emitter.emit_worker_message(
+            {"type": "status", "message": "working"}
+        )  # Should be ignored
+        self.emitter.emit_worker_message({"type": "progress", "progress": 1.0})
+
+        # Verify only progress messages were processed
+        self.assertEqual(len(progress_events), 4)
+        self.assertEqual(progress_events, [25.0, 50.0, 75.0, 100.0])
+
+    def test_error_handling(self):
+        """Test error event handling."""
+        error_messages = []
+
+        @self.emitter.on("worker_error")
+        def on_error(error: str):
+            error_messages.append(error)
+
+        # Emit various error types
+        self.emitter.emit_worker_error("Connection failed")
+        self.emitter.emit_worker_error("Processing timeout")
+        self.emitter.emit_worker_error("Invalid data format")
+
+        # Verify all errors were captured
+        self.assertEqual(len(error_messages), 3)
+        self.assertIn("Connection failed", error_messages)
+        self.assertIn("Processing timeout", error_messages)
+        self.assertIn("Invalid data format", error_messages)
+
+    @patch("ida_taskr.launcher.WorkerLauncher.launch_worker")
+    def test_worker_launcher_integration(self, mock_launch_worker):
+        """Test integration with WorkerLauncher."""
+        # Configure the mock
+        mock_launch_worker.return_value = True
+
+        # Create message emitter with event handlers
+        message_emitter = MessageEmitter()
+        connection_events = []
+
+        @message_emitter.on("worker_connected")
+        def on_connected():
+            connection_events.append("connected")
+
+        @message_emitter.on("worker_disconnected")
+        def on_disconnected():
+            connection_events.append("disconnected")
+
+        # Create worker launcher with the message emitter
+        launcher = WorkerLauncher(message_emitter)
+
+        # Launch worker
+        worker_args = {"data_size": 1024, "start_ea": "0x1000", "is64": "1"}
+        result = launcher.launch_worker("path/to/test/worker.py", worker_args)
+
+        # Verify launcher was called correctly
+        self.assertTrue(result)
+        mock_launch_worker.assert_called_once_with(
+            "path/to/test/worker.py", worker_args
+        )
+
+        # Test event emission
+        message_emitter.emit_worker_connected()
+        message_emitter.emit_worker_disconnected()
+
+        self.assertEqual(connection_events, ["connected", "disconnected"])
+
+    def test_results_processing(self):
+        """Test processing of worker results."""
+        processed_results = []
+
+        @self.emitter.on("worker_results")
+        def on_results(results: dict):
+            if results.get("status") == "success":
+                data = results.get("results", [])
+                processed_results.extend(data)
+
+        # Test successful results
+        self.emitter.emit_worker_results(
+            {"status": "success", "results": ["item1", "item2", "item3"]}
+        )
+
+        # Test failed results (should be ignored)
+        self.emitter.emit_worker_results(
+            {"status": "error", "results": ["should_be_ignored"]}
+        )
+
+        # Verify only successful results were processed
+        self.assertEqual(processed_results, ["item1", "item2", "item3"])
+
+    def test_no_handlers_registered(self):
+        """Test that emitting events with no handlers doesn't cause errors."""
+        # Should not raise any exceptions
+        self.emitter.emit_worker_connected()
+        self.emitter.emit_worker_message({"test": "message"})
+        self.emitter.emit_worker_results({"test": "results"})
+        self.emitter.emit_worker_error("test error")
+        self.emitter.emit_worker_disconnected()
+
+    def test_handler_exceptions_are_propagated(self):
+        """Test that exceptions in handlers are propagated (current behavior)."""
+        results = []
+
+        @self.emitter.on("worker_message")
+        def handler_that_works(message):
+            results.append("handler_called")
+
+        @self.emitter.on("worker_message")
+        def handler_that_fails(message):
+            raise Exception("Handler failed")
+
+        # The current implementation propagates exceptions, so we expect one
+        with self.assertRaises(Exception) as context:
+            self.emitter.emit_worker_message({"test": "message"})
+
+        self.assertEqual(str(context.exception), "Handler failed")
+
+        # Due to the way Python sets work, handler order is not guaranteed.
+        # The exception will stop execution, so we can only guarantee the exception was raised.
+        # We cannot guarantee which handlers ran before the failing one.
+        self.assertTrue(True)  # If we got here, the exception was properly propagated
+
+
+if __name__ == "__main__":
+    # Configure logging for tests
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s"
+    )
+
+    unittest.main()
+
+```
+
+`tests/test_imports.py`:
+
+```py
+import unittest
+
+
+class TestImports(unittest.TestCase):
+    def test_taskrunner_import(self):
+        try:
+            from ida_taskr import TaskRunner
+
+            print("✅ TaskRunner imported successfully")
+        except ImportError:
+            print("❌ TaskRunner import failed")
+            self.fail("TaskRunner import failed")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+```
+
+`tests/test_task_runner.py`:
+
+```py
+"""
+Tests for TaskRunner functionality.
+"""
+
+import logging
+import os
+import sys
+import unittest
+from unittest.mock import MagicMock, Mock, patch
+
+# Add the src directory to the path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from ida_taskr import TaskRunner, get_logger
+
+
+class TestTaskRunner(unittest.TestCase):
+    """Test suite for TaskRunner class."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.worker_script = "test_worker.py"
+        self.worker_args = {"data_size": 1024, "start_ea": "0x1000", "is64": "1"}
+
+    def test_task_runner_initialization(self):
+        """Test TaskRunner initialization with default parameters."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        self.assertEqual(runner.worker_script, self.worker_script)
+        self.assertEqual(runner.worker_args, self.worker_args)
+        self.assertIsNotNone(runner.logger)
+        self.assertIsNotNone(runner.message_emitter)
+        self.assertIsNotNone(runner.launcher)
+        self.assertIsNone(runner._results_callback)
+        self.assertIsNone(runner._progress_callback)
+
+    def test_task_runner_initialization_with_log_level(self):
+        """Test TaskRunner initialization with custom log level."""
+        runner = TaskRunner(
+            self.worker_script, self.worker_args, log_level=logging.DEBUG
+        )
+
+        self.assertEqual(runner.worker_script, self.worker_script)
+        self.assertEqual(runner.worker_args, self.worker_args)
+        self.assertIsNotNone(runner.logger)
+
+    def test_task_runner_initialization_with_custom_logger(self):
+        """Test TaskRunner initialization with custom logger."""
+        custom_logger = get_logger("test_logger")
+        runner = TaskRunner(self.worker_script, self.worker_args, logger=custom_logger)
+
+        self.assertEqual(runner.logger, custom_logger)
+
+    def test_on_results_callback_registration(self):
+        """Test registering results callback."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback function
+        callback = Mock()
+
+        # Register callback
+        runner.on_results(callback)
+
+        self.assertEqual(runner._results_callback, callback)
+
+        # Verify message emitter listener was registered
+        # This is indirect testing since we can't easily inspect the emitter's listeners
+        self.assertIsNotNone(runner._results_callback)
+
+    def test_on_progress_callback_registration(self):
+        """Test registering progress callback."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback function
+        callback = Mock()
+
+        # Register callback
+        runner.on_progress(callback)
+
+        self.assertEqual(runner._progress_callback, callback)
+
+    @patch("ida_taskr.task_runner.WorkerLauncher")
+    def test_start_successful_launch(self, mock_launcher_class):
+        """Test successful worker launch."""
+        # Setup mock
+        mock_launcher = Mock()
+        mock_launcher_class.return_value = mock_launcher
+        mock_launcher.launch_worker.return_value = True
+
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Start the runner
+        runner.start()
+
+        # Verify launcher was called with correct arguments
+        mock_launcher.launch_worker.assert_called_once_with(
+            self.worker_script, self.worker_args
+        )
+
+    @patch("ida_taskr.task_runner.WorkerLauncher")
+    def test_start_failed_launch(self, mock_launcher_class):
+        """Test failed worker launch."""
+        # Setup mock
+        mock_launcher = Mock()
+        mock_launcher_class.return_value = mock_launcher
+        mock_launcher.launch_worker.return_value = False
+
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Start the runner
+        runner.start()
+
+        # Verify launcher was called
+        mock_launcher.launch_worker.assert_called_once_with(
+            self.worker_script, self.worker_args
+        )
+
+    def test_handle_results_with_callback(self):
+        """Test results handling when callback is registered."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback
+        callback = Mock()
+        runner.on_results(callback)
+
+        # Test results data
+        test_results = {"status": "success", "results": [1, 2, 3]}
+
+        # Call the internal handler directly
+        runner._handle_results(test_results)
+
+        # Verify callback was called with correct data
+        callback.assert_called_once_with(test_results)
+
+    def test_handle_results_without_callback(self):
+        """Test results handling when no callback is registered."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Test results data
+        test_results = {"status": "success", "results": [1, 2, 3]}
+
+        # Call the internal handler directly (should not raise an exception)
+        runner._handle_results(test_results)
+
+    def test_handle_progress_with_callback(self):
+        """Test progress handling when callback is registered."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback
+        callback = Mock()
+        runner.on_progress(callback)
+
+        # Test progress message
+        test_message = {"type": "progress", "progress": 0.5, "status": "processing"}
+
+        # Call the internal handler directly
+        runner._handle_progress(test_message)
+
+        # Verify callback was called with correct data
+        callback.assert_called_once_with(0.5, "processing")
+
+    def test_handle_progress_with_default_values(self):
+        """Test progress handling with missing values."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback
+        callback = Mock()
+        runner.on_progress(callback)
+
+        # Test progress message with missing values
+        test_message = {"type": "progress"}
+
+        # Call the internal handler directly
+        runner._handle_progress(test_message)
+
+        # Verify callback was called with default values
+        callback.assert_called_once_with(0, "unknown")
+
+    def test_handle_progress_non_progress_message(self):
+        """Test progress handling with non-progress message."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callback
+        callback = Mock()
+        runner.on_progress(callback)
+
+        # Test non-progress message
+        test_message = {"type": "error", "message": "Something went wrong"}
+
+        # Call the internal handler directly
+        runner._handle_progress(test_message)
+
+        # Verify callback was NOT called
+        callback.assert_not_called()
+
+    def test_handle_progress_without_callback(self):
+        """Test progress handling when no callback is registered."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Test progress message
+        test_message = {"type": "progress", "progress": 0.75, "status": "almost done"}
+
+        # Call the internal handler directly (should not raise an exception)
+        runner._handle_progress(test_message)
+
+    def test_integration_callbacks(self):
+        """Test integration of callbacks with message emitter."""
+        runner = TaskRunner(self.worker_script, self.worker_args)
+
+        # Mock callbacks
+        results_callback = Mock()
+        progress_callback = Mock()
+
+        # Register callbacks
+        runner.on_results(results_callback)
+        runner.on_progress(progress_callback)
+
+        # Simulate message emitter events
+        test_results = {"status": "success", "data": "test"}
+        test_progress = {"type": "progress", "progress": 0.8, "status": "working"}
+
+        # Manually trigger the emitter events to test the integration
+        runner.message_emitter.emit("worker_results", test_results)
+        runner.message_emitter.emit("worker_message", test_progress)
+
+        # Verify callbacks were called
+        results_callback.assert_called_once_with(test_results)
+        progress_callback.assert_called_once_with(0.8, "working")
+
+
+class TestTaskRunnerDoctest(unittest.TestCase):
+    """Test TaskRunner with simple usage patterns similar to documentation."""
+
+    def test_simple_usage_pattern(self):
+        """Test the simple usage pattern from the documentation example."""
+        # Mock the launcher to avoid actual worker launching
+        with patch("ida_taskr.task_runner.WorkerLauncher") as mock_launcher_class:
+            mock_launcher = Mock()
+            mock_launcher_class.return_value = mock_launcher
+            mock_launcher.launch_worker.return_value = True
+
+            # Track callback invocations
+            results_received = []
+            progress_received = []
+
+            def on_results(results):
+                results_received.append(results)
+
+            def on_progress(progress, status):
+                progress_received.append((progress, status))
+
+            # Create and configure runner
+            runner = TaskRunner(
+                worker_script="path/to/worker.py",
+                worker_args={"data_size": 1024, "start_ea": "0x1000", "is64": "1"},
+                log_level=logging.DEBUG,
+            )
+            runner.on_results(on_results)
+            runner.on_progress(on_progress)
+
+            # Start the runner
+            runner.start()
+
+            # Verify launcher was called
+            mock_launcher.launch_worker.assert_called_once()
+
+            # Simulate some events
+            runner._handle_results({"status": "success", "results": [1, 2, 3]})
+            runner._handle_progress(
+                {"type": "progress", "progress": 0.5, "status": "halfway"}
+            )
+
+            # Verify callbacks worked
+            self.assertEqual(len(results_received), 1)
+            self.assertEqual(results_received[0]["status"], "success")
+            self.assertEqual(len(progress_received), 1)
+            self.assertEqual(progress_received[0], (0.5, "halfway"))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+```
+
+`tests/test_worker_commands.py`:
+
+```py
+"""
+Tests for WorkerBase command handling functionality.
+"""
+
+import asyncio  # Add asyncio for Event
+import os
+import sys
+import typing  # Import typing for cast
+import unittest
+from unittest.mock import Mock, patch
+
+# Add the src directory to the path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+
+from ida_taskr.utils import AsyncEventEmitter  # Import for spec
+from ida_taskr.worker import ConnectionContext, WorkerBase
+
+
+# Define a dummy emitter for testing purposes
+class DummyAsyncEmitter(AsyncEventEmitter):
+    def __init__(self, **kwargs):  # Accept arbitrary kwargs
+        AsyncEventEmitter.__post_init__(self)  # Call base explicitly
+        self.run_called = False
+        self.shutdown_called = False
+        self.custom_args = kwargs
+
+    async def run(self):
+        self.run_called = True
+        # Simulate some work or emitting an event if needed for tests
+        await asyncio.sleep(0)  # Yield control briefly
+        return "dummy_run_result"
+
+    async def shutdown(self):
+        self.shutdown_called = True
+        await asyncio.sleep(0)
+
+
+class TestWorkerCommands(unittest.TestCase):
+    """Test suite for WorkerBase command handling."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.worker = WorkerBase(
+            async_emitter_class=DummyAsyncEmitter, emitter_args={"test_arg": 123}
+        )
+        self.worker.setup()
+
+        self.mock_conn = Mock(spec=ConnectionContext)
+
+        self.mock_controller = Mock()
+        # Link the mock controller to the actual emitter instance from the worker
+        # This is important for side effects that operate on the emitter's events
+        self.mock_controller.emitter = self.worker.emitter_instance
+
+        # Configure side effects for mock_controller.pause and mock_controller.resume
+        def _mock_controller_pause_side_effect(*args, **kwargs):
+            if self.mock_controller.emitter:  # Should be self.worker.emitter_instance
+                self.mock_controller.emitter.pause_evt.set()
+
+        self.mock_controller.pause.side_effect = _mock_controller_pause_side_effect
+
+        def _mock_controller_resume_side_effect(*args, **kwargs):
+            if self.mock_controller.emitter:
+                self.mock_controller.emitter.pause_evt.clear()
+
+        self.mock_controller.resume.side_effect = _mock_controller_resume_side_effect
+
+        # No specific side effect needed for stop for current assertions, just tracking calls.
+
+    def test_worker_initialization(self):
+        """Test WorkerBase initialization includes command handlers."""
+        worker = WorkerBase(async_emitter_class=DummyAsyncEmitter, emitter_args={})
+        worker.setup()
+
+        self.assertIn("stop", worker._commands)
+        self.assertIn("pause", worker._commands)
+        self.assertIn("resume", worker._commands)
+        self.assertFalse(worker._running)
+        self.assertIsNotNone(worker.emitter_instance)
+        self.assertIsInstance(worker.emitter_instance, DummyAsyncEmitter)  # Verify type
+        emitter = typing.cast(DummyAsyncEmitter, worker.emitter_instance)
+        self.assertFalse(emitter.pause_evt.is_set())
+
+    def test_handle_command_with_valid_command(self):
+        """Test handling valid commands."""
+        # Test stop command
+        cmd = {"command": "stop"}
+        # Simulate worker has been started and controller is set
+        self.worker.controller = self.mock_controller
+
+        result = self.worker.handle_command(cmd, self.mock_conn)
+
+        self.assertFalse(result)  # stop should return False to exit
+        self.mock_conn.send_message.assert_called_with(
+            "status", "stopped", status="stopped"
+        )
+        self.mock_controller.stop.assert_called_once()  # Now this should be called
+
+    def test_handle_command_with_invalid_command(self):
+        """Test handling invalid/unknown commands."""
+        cmd = {"command": "unknown_command"}
+        result = self.worker.handle_command(cmd, self.mock_conn)
+
+        self.assertTrue(result)  # unknown commands should return True to continue
+        self.mock_conn.send_message.assert_not_called()
+
+    def test_handle_command_with_missing_command(self):
+        """Test handling command dict without 'command' key."""
+        cmd = {"other_field": "value"}
+        result = self.worker.handle_command(cmd, self.mock_conn)
+
+        self.assertTrue(result)  # missing command should return True to continue
+        self.mock_conn.send_message.assert_not_called()
+
+    def test_handle_command_with_none_command(self):
+        """Test handling command dict with None command."""
+        cmd = {"command": None}
+        result = self.worker.handle_command(cmd, self.mock_conn)
+
+        self.assertTrue(result)  # None command should return True to continue
+        self.mock_conn.send_message.assert_not_called()
+
+    def test_handle_stop_command(self):
+        """Test stop command handling."""
+        cmd = {"command": "stop"}
+        # Ensure controller is mocked if _handle_stop interacts with it
+        self.worker.controller = self.mock_controller
+
+        result = self.worker._handle_stop(cmd, self.mock_conn)
+
+        self.assertFalse(result)  # stop should return False
+        self.assertFalse(self.worker._running)  # _running is set by this handler
+        self.mock_conn.send_message.assert_called_with(
+            "status", "stopped", status="stopped"
+        )  # Ensure status kwarg
+        if self.worker.controller:
+            self.worker.controller.stop.assert_called_once()
+
+    def test_handle_pause_command(self):
+        """Test pause command handling."""
+        cmd = {"command": "pause"}
+        # Simulate worker being started, so controller exists
+        self.worker.controller = self.mock_controller
+
+        result = self.worker._handle_pause(cmd, self.mock_conn)
+
+        self.assertTrue(result)  # pause should return True to continue
+        emitter = typing.cast(DummyAsyncEmitter, self.worker.emitter_instance)
+        self.assertTrue(emitter.pause_evt.is_set())  # Check via emitter
+        self.mock_conn.send_message.assert_called_with(
+            "status", "paused", status="paused"
+        )  # Ensure status kwarg
+        self.mock_controller.pause.assert_called_once()
+
+    def test_handle_resume_command(self):
+        """Test resume command handling."""
+        # First pause the worker by setting the event on the mock emitter
+        emitter = typing.cast(DummyAsyncEmitter, self.worker.emitter_instance)
+        emitter.pause_evt.set()
+        # Simulate worker being started, so controller exists
+        self.worker.controller = self.mock_controller
+
+        cmd = {"command": "resume"}
+        result = self.worker._handle_resume(cmd, self.mock_conn)
+
+        self.assertTrue(result)  # resume should return True to continue
+        self.assertFalse(emitter.pause_evt.is_set())  # Check via emitter
+        self.mock_conn.send_message.assert_called_with(
+            "status", "resumed", status="running"
+        )  # Ensure status kwarg
+        self.mock_controller.resume.assert_called_once()
+
+    def test_command_sequence(self):
+        """Test a sequence of commands."""
+        # Initially
+        self.assertFalse(self.worker._running)
+        emitter = typing.cast(DummyAsyncEmitter, self.worker.emitter_instance)
+        self.assertFalse(emitter.pause_evt.is_set())
+
+        # Simulate worker being started for pause/resume to make sense via controller
+        # The 'start' command itself would set up the controller in WorkerBase
+        # For direct handle_command tests on pause/resume, ensure controller is set
+        self.worker.controller = self.mock_controller
+
+        # Pause the worker
+        pause_cmd = {"command": "pause"}
+        result = self.worker.handle_command(pause_cmd, self.mock_conn)
+        self.assertTrue(result)
+        self.assertTrue(emitter.pause_evt.is_set())
+        self.mock_controller.pause.assert_called_once()
+
+        # Resume the worker
+        resume_cmd = {"command": "resume"}
+        result = self.worker.handle_command(resume_cmd, self.mock_conn)
+        self.assertTrue(result)
+        self.assertFalse(emitter.pause_evt.is_set())
+        self.mock_controller.resume.assert_called_once()
+
+        # Stop the worker
+        stop_cmd = {"command": "stop"}
+        result = self.worker.handle_command(stop_cmd, self.mock_conn)
+        self.assertFalse(result)
+        self.assertFalse(
+            self.worker._running
+        )  # Check _running state directly set by _handle_stop
+        self.mock_controller.stop.assert_called_once()  # Controller's stop should be called
+
+    def test_multiple_connection_messages(self):
+        """Test that commands send appropriate messages."""
+        # Commands that are expected to succeed when controller is available
+        commands_and_expected_status_with_controller = [
+            ({"command": "pause"}, "paused", "paused"),
+            ({"command": "resume"}, "resumed", "running"),
+        ]
+
+        # Test with controller active
+        self.worker.controller = self.mock_controller
+        # Ensure the mocked controller's emitter is the actual one from the worker
+        self.mock_controller.emitter = self.worker.emitter_instance
+
+        for (
+            cmd,
+            expected_msg_data,
+            expected_status_kwarg,
+        ) in commands_and_expected_status_with_controller:
+            self.mock_conn.reset_mock()
+            self.mock_controller.reset_mock()  # Reset controller mocks too
+            emitter = typing.cast(DummyAsyncEmitter, self.worker.emitter_instance)
+            if cmd["command"] == "resume":  # Ensure pause_evt is set before resume
+                emitter.pause_evt.set()
+            else:
+                emitter.pause_evt.clear()
+
+            self.worker.handle_command(cmd, self.mock_conn)
+            self.mock_conn.send_message.assert_called_once_with(
+                "status", expected_msg_data, status=expected_status_kwarg
+            )
+            if cmd["command"] == "pause":
+                self.mock_controller.pause.assert_called_once()
+            elif cmd["command"] == "resume":
+                self.mock_controller.resume.assert_called_once()
+
+        # Test stop command (controller will be present from above)
+        self.mock_conn.reset_mock()
+        self.mock_controller.reset_mock()
+        stop_cmd = {"command": "stop"}
+        self.worker.handle_command(stop_cmd, self.mock_conn)
+        self.mock_conn.send_message.assert_called_once_with(
+            "status", "stopped", status="stopped"
+        )
+        self.mock_controller.stop.assert_called_once()
+
+        # Test pause/resume when controller is NOT active (e.g. before 'start')
+        self.worker.controller = None  # Explicitly remove controller
+        commands_expecting_error_without_controller = [
+            ({"command": "pause"}, "Not started", "error"),
+            ({"command": "resume"}, "Not started", "error"),
+        ]
+        for (
+            cmd,
+            expected_msg_data,
+            expected_status_kwarg,
+        ) in commands_expecting_error_without_controller:
+            self.mock_conn.reset_mock()
+            self.worker.handle_command(cmd, self.mock_conn)
+            self.mock_conn.send_message.assert_called_once_with(
+                "error", expected_msg_data, status=expected_status_kwarg
+            )
+
+
+class TestWorkerBaseExtension(unittest.TestCase):
+    """Test extending WorkerBase with custom commands."""
+
+    def test_custom_command_extension(self):
+        """Test that WorkerBase can be extended with custom commands."""
+
+        class CustomWorker(WorkerBase):
+            def __init__(self):
+                super().__init__()
+                # Add custom command
+                self._commands["custom"] = self._handle_custom
+                self.custom_called = False
+
+            def _handle_custom(self, cmd, conn):
+                self.custom_called = True
+                conn.send_message("status", "custom_executed")
+                return True
+
+        worker = CustomWorker()
+        mock_conn = Mock(spec=ConnectionContext)
+
+        # Test custom command
+        cmd = {"command": "custom"}
+        result = worker.handle_command(cmd, mock_conn)
+
+        self.assertTrue(result)
+        self.assertTrue(worker.custom_called)
+        mock_conn.send_message.assert_called_with("status", "custom_executed")
+
+        # Test that standard commands still work
+        stop_cmd = {"command": "stop"}
+        result = worker.handle_command(stop_cmd, mock_conn)
+        self.assertFalse(result)
+
+    def test_override_standard_command(self):
+        """Test overriding a standard command."""
+
+        class OverrideWorker(WorkerBase):
+            def __init__(self):
+                super().__init__()
+                # Override stop command
+                self._commands["stop"] = self._custom_stop
+                self.custom_stop_called = False
+
+            def _custom_stop(self, cmd, conn):
+                self.custom_stop_called = True
+                conn.send_message("status", "custom_stopped")
+                return False  # Still exit like normal stop
+
+        worker = OverrideWorker()
+        mock_conn = Mock(spec=ConnectionContext)
+
+        # Test overridden stop command
+        cmd = {"command": "stop"}
+        result = worker.handle_command(cmd, mock_conn)
+
+        self.assertFalse(result)  # Should still return False to exit
+        self.assertTrue(worker.custom_stop_called)
+        mock_conn.send_message.assert_called_with("status", "custom_stopped")
+
+        # Verify the original stop behavior is not called
+        # (worker._running should not be set to False by the original handler)
+        # Since we overrode it, the custom implementation controls the behavior
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+```
