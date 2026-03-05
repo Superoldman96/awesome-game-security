@@ -1,0 +1,259 @@
+Project Path: arc_gmh5225_vulnerable-driver-scanner_lu8d7xbf
+
+Source Tree:
+
+```txt
+arc_gmh5225_vulnerable-driver-scanner_lu8d7xbf
+├── Driver Exploit Scanner.cpp
+└── README.md
+
+```
+
+`Driver Exploit Scanner.cpp`:
+
+```cpp
+#include <Windows.h>
+#include <iostream>
+#include <vector>
+#include <string>
+#include <Winternl.h>
+#include <Aletheia/pe/pe.h>
+#include <list>
+#include <algorithm>
+#include <fstream>
+#include <map>
+
+using namespace std;
+
+std::vector<BYTE> load_data(const std::wstring& filename)
+{
+	HANDLE hFile = CreateFileW(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (hFile == INVALID_HANDLE_VALUE)
+		return std::vector<BYTE>();
+	LARGE_INTEGER fs;
+	if (!GetFileSizeEx(hFile, &fs))
+		fs.QuadPart = NULL;
+	std::vector<BYTE> data;
+	data.resize(static_cast<size_t>(fs.QuadPart));
+	DWORD dwRead;
+	if (!::ReadFile(hFile, &data[0], static_cast<DWORD>(data.size()), &dwRead, nullptr))
+		data.clear();
+	::CloseHandle(hFile);
+	return data;
+}
+
+bool out_of_bounds(const std::vector<BYTE>& data, LPCVOID ptr, const size_t size = 0)
+{
+	return ((ULONG_PTR)ptr < (ULONG_PTR)data.data()) || ((ULONG_PTR)ptr + size > (ULONG_PTR)data.data() + data.size());
+}
+
+bool match(const BYTE* memory, const BYTE* sig, const char* mask)
+{
+	auto len = strlen(mask);
+	for (size_t j = 0; j < len; j++) {
+		if (memory[j] != sig[j] && mask[j] == 'x')
+			return false;
+	}
+	return true;
+}
+
+bool byte_scan_match(const std::vector<BYTE>& data, const BYTE* sig, const char* mask)
+{
+	auto sig_len = strlen(mask);
+	auto size = data.size();
+	if (size < sig_len)
+		return false;
+	for (size_t i = 0; i < size - (sig_len - 1); i++) {
+		if (match(&data[i], sig, mask))
+			return true;
+	}
+	return false;
+}
+
+bool might_be_exploitable(const std::vector<BYTE>& data)
+{
+	if (data.size() < sizeof(IMAGE_DOS_HEADER))
+		return false;
+	auto pIDH = PIMAGE_DOS_HEADER(data.data());
+	if (pIDH->e_magic != IMAGE_DOS_SIGNATURE) {
+		cout << "Invalid MS-DOS Signature." << endl;
+		return false;
+	}
+	auto pINH = PIMAGE_NT_HEADERS((ULONG_PTR)pIDH + pIDH->e_lfanew);
+	if (out_of_bounds(data, pINH, sizeof(IMAGE_NT_HEADERS))) {
+		cout << "Invalid PE file." << endl;
+		return false;
+	}
+	//IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER || IMAGE_SUBSYSTEM_NATIVE
+	if (pINH->OptionalHeader.Subsystem != IMAGE_SUBSYSTEM_NATIVE) {
+		cout << "Not the pe type we're looking for." << endl;
+		return false;
+	}
+	switch (pINH->FileHeader.Machine) {
+	case IMAGE_FILE_MACHINE_I386:
+#ifdef _WIN64
+		cout << "Unsupported Driver type (x86)" << endl;
+		return false;
+#else
+		cout << "x86 Driver." << endl;
+#endif
+		break;
+#ifdef _WIN64
+	case IMAGE_FILE_MACHINE_IA64:
+		cout << "Intel x64 Driver." << endl;
+		break;
+	case IMAGE_FILE_MACHINE_AMD64:
+		cout << "AMD x64 Driver." << endl;
+		break;
+#else
+	default:
+		cout << "Unsupported x64 Driver." << endl;
+		return false;
+#endif
+	}
+
+	if (pINH->OptionalHeader.AddressOfEntryPoint == NULL) {
+		cout << "Ignored driver with no entry point." << endl;
+		return false;
+	}
+
+	std::list<std::string> imported;
+
+	if (pINH->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size) {
+		for (PIMAGE_IMPORT_DESCRIPTOR pIID = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(pe::ImageRvaToVa(pINH->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress, (ULONG_PTR)pIDH, pINH)); pIID->FirstThunk != NULL; pIID++) {
+			PCHAR name = reinterpret_cast<PCHAR>(pe::ImageRvaToVa(pIID->Name, (ULONG_PTR)pIDH, pINH));
+			
+			PIMAGE_THUNK_DATA thunk = PIMAGE_THUNK_DATA(pe::ImageRvaToVa(pIID->FirstThunk, (ULONG_PTR)pIDH, pINH));
+			while (thunk && thunk->u1.AddressOfData) {
+				if (thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG) {
+					cout << "import by ordinal ignored." << endl;
+				}
+				else {
+					PIMAGE_IMPORT_BY_NAME pIIBN = (PIMAGE_IMPORT_BY_NAME)(pe::ImageRvaToVa(thunk->u1.AddressOfData, (ULONG_PTR)pIDH, pINH));
+					if (pIIBN == nullptr) {
+						thunk++;
+						continue;
+					}
+					std::string ImportName = std::string(name).append("!").append(pIIBN->Name);
+					imported.push_back(ImportName);
+				}
+				thunk++;
+			}
+		}
+	}
+	else {
+		cout << "Driver has no imports." << endl;
+		return false;
+	}
+
+	/*
+	for (auto& Import : imported) {
+		cout << "Import: " << Import << endl;
+	}*/
+
+	std::map<std::string, int> ImportBlacklistTable = { 
+		{"ntoskrnl.exe!MmGetSystemRoutineAddress", 2}, {"ntoskrnl.exe!IoCreateDevice", 15} , //from Capcom.sys, first one probably shouldn't be blacklisted.
+		{"ntoskrnl.exe!ZwOpenSection", 30}, //RTCore64.sys / private vuln driver
+		{"ntoskrnl.exe!MmMapIoSpace", 30} //WinRing0x64.sys (supposedly these are the worst to use)
+	};
+
+
+	int rating = 0;
+
+	int n = 0;
+	for (auto& v : ImportBlacklistTable) {
+		if (std::find_if(imported.begin(), imported.end(), [&v](const std::string& s) { return s == v.first; }) != imported.end()) {
+			cout << "found suspect import: " << v.first << endl;
+			n++;
+			rating += v.second;
+		}
+	}
+	if (n)
+		cout << "found " << n << " suspect imports." << endl;
+
+	if (byte_scan_match(data, (PBYTE)"\x48\x25\xFF\xFF\xEF\xFF\x0F\x22\xE0", "xxxxxxxxx")) { //sig len=9
+		cout << "matched disable SMEP signature" << endl;
+		rating += 100;
+	}
+
+	if (byte_scan_match(data, (PBYTE)"\\Device\\PhysicalMemory", "xxxxxxxxxxxxxxxxxxxxxxx")) { //sig len=22(+1)
+		cout << "matched Physical Memory signature(ascii)" << endl;
+		rating += 100;
+	}
+
+	if (byte_scan_match(data, (PBYTE)L"\\Device\\PhysicalMemory", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")) { //sig len == 44(+2)
+		cout << "matched Physical Memory signature(unicode)" << endl;
+		rating += 100;
+	}
+
+	//disable SMEP:
+	/*
+	and     rax, 0FFFFFFFFFFEFFFFFh
+	mov     cr4, rax
+	*/
+	//48 25 FF FF EF FF 0F 22 E0
+
+	/*
+	full code:
+	cli
+	mov     rax, cr4
+	mov     [rcx], rax
+	and     rax, 0FFFFFFFFFFEFFFFFh
+	mov     cr4, rax
+	retn
+	*/
+
+	/*
+	enable SMEP:
+	mov     rax, [rcx]
+	mov     cr4, rax
+	sti
+	retn
+	*/
+
+	if (rating)
+		cout << "rating: " << rating << endl;
+	return rating > 0;
+}
+
+int wmain(int argc, wchar_t* argv[])
+{
+	if (argc < 2) {
+		cout << "app directory2scan" << endl;
+		return 0;
+	}
+	std::wstring dir = std::wstring(argv[1]).append(L"\\"), search = dir + L"*.sys";
+	wcout << L"Scanning " << dir << " for vulnerabilities" << endl;
+	
+	WIN32_FIND_DATA fnd;
+	HANDLE h = FindFirstFile(search.c_str(), &fnd);
+	if (h != INVALID_HANDLE_VALUE) {
+		do {
+			if (wcscmp(fnd.cFileName, L"..") == 0 || wcscmp(fnd.cFileName, L".") == 0)
+				continue;
+			auto filename = dir + fnd.cFileName;
+			wcout << filename << endl;
+			cout << (might_be_exploitable(load_data(filename)) ? "maybe exploitable" : "probably not exploitable") << endl;
+			cout << "-------" << endl;
+		} while (FindNextFile(h, &fnd));
+			FindClose(h);
+	}
+	else
+		cout << "Unable to search for vuln. drivers" << endl;
+
+    return 0;
+}
+```
+
+`README.md`:
+
+```md
+# vulnerable-driver-scanner
+
+Scans for vulnerable drivers in a directory.
+Usage:
+"Driver Exploit Scanner" C:\Windows\System32\Drivers\ > results.txt
+
+Forum link: https://www.unknowncheats.me/forum/anti-cheat-bypass/253258-vulnerable-driver-scanner.html
+
+```
