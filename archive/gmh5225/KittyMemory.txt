@@ -1,0 +1,2832 @@
+Project Path: arc_gmh5225_KittyMemory_vg4_53ia
+
+Source Tree:
+
+```txt
+arc_gmh5225_KittyMemory_vg4_53ia
+├── Android
+│   ├── README.md
+│   └── test_src
+│       ├── Android.mk
+│       ├── Application.mk
+│       ├── build.bat
+│       ├── clean.bat
+│       ├── logcat.bat
+│       ├── makefile
+│       └── src
+│           ├── KittyMemory
+│           │   ├── KittyArm64.cpp
+│           │   ├── KittyArm64.h
+│           │   ├── KittyMemory.cpp
+│           │   ├── KittyMemory.h
+│           │   ├── KittyScanner.cpp
+│           │   ├── KittyScanner.h
+│           │   ├── KittyUtils.cpp
+│           │   ├── KittyUtils.h
+│           │   ├── MemoryBackup.cpp
+│           │   ├── MemoryBackup.h
+│           │   ├── MemoryPatch.cpp
+│           │   └── MemoryPatch.h
+│           ├── Logger.h
+│           └── main.cpp
+├── IOS
+│   ├── README.md
+│   └── test_src
+│       ├── FWD_Kitty.plist
+│       ├── KittyMemory
+│       │   ├── KittyArm64.cpp
+│       │   ├── KittyArm64.hpp
+│       │   ├── KittyMemory.cpp
+│       │   ├── KittyMemory.hpp
+│       │   ├── KittyScanner.cpp
+│       │   ├── KittyScanner.hpp
+│       │   ├── KittyUtils.cpp
+│       │   ├── KittyUtils.hpp
+│       │   ├── MemoryBackup.cpp
+│       │   ├── MemoryBackup.hpp
+│       │   ├── MemoryPatch.cpp
+│       │   ├── MemoryPatch.hpp
+│       │   ├── writeData.cpp
+│       │   └── writeData.hpp
+│       ├── Makefile
+│       ├── Tweak.xm
+│       └── control
+├── LICENSE
+└── README.md
+
+```
+
+`Android/README.md`:
+
+```md
+# KittyMemory
+runtime memory patch library made specifically for android.<br/>
+```
+
+`Android/test_src/Android.mk`:
+
+```mk
+LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE    := KittyMemory
+
+KITTYMEMORY_SRC = src/KittyMemory/KittyMemory.cpp \
+src/KittyMemory/MemoryPatch.cpp \
+src/KittyMemory/MemoryBackup.cpp \
+src/KittyMemory/KittyUtils.cpp \
+src/KittyMemory/KittyScanner.cpp \
+src/KittyMemory/KittyArm64.cpp
+
+LOCAL_SRC_FILES := src/main.cpp $(KITTYMEMORY_SRC)
+
+
+include $(BUILD_SHARED_LIBRARY)
+```
+
+`Android/test_src/Application.mk`:
+
+```mk
+APP_ABI := armeabi-v7a arm64-v8a x86
+APP_PLATFORM := android-16
+APP_STL := c++_static
+APP_OPTIM := release
+APP_CPPFLAGS := -std=c++14 -fno-rtti
+APP_LDFLAGS := -llog
+
+APP_BUILD_SCRIPT := Android.mk
+```
+
+`Android/test_src/build.bat`:
+
+```bat
+@ECHO off
+make
+pause
+```
+
+`Android/test_src/clean.bat`:
+
+```bat
+@ECHO off
+make clean
+if exist "libs" RMDIR "libs" /S /Q
+if exist "obj" RMDIR "obj" /S /Q
+pause
+```
+
+`Android/test_src/logcat.bat`:
+
+```bat
+@ECHO off
+COLOR 00
+adb logcat -s "KittyMemory"
+```
+
+`Android/test_src/makefile`:
+
+```
+all:
+	  @ndk-build -B\
+	   NDK_PROJECT_PATH=.\
+           NDK_APPLICATION_MK=./Application.mk\
+	   APP_BUILD_SCRIPT=./Android.mk
+
+clean:
+	  @ndk-build clean\
+	   NDK_PROJECT_PATH=.\
+           NDK_APPLICATION_MK=./Application.mk\
+	   APP_BUILD_SCRIPT=./Android.mk
+
+```
+
+`Android/test_src/src/KittyMemory/KittyArm64.cpp`:
+
+```cpp
+#include "KittyArm64.h"
+
+// refs to
+// https://github.com/CAS-Atlantic/AArch64-Encoding
+// https://github.com/bminor/binutils-gdb
+// https://github.com/capstone-engine/capstone
+// https://github.com/qemu/QEMU
+// https://reverseengineering.stackexchange.com/questions/15418/getting-function-address-by-reading-adrp-and-add-instruction-values
+// https://stackoverflow.com/questions/41906688/what-are-the-semantics-of-adrp-and-adrl-instructions-in-arm-assembly
+
+namespace KittyArm64
+{
+
+	int32_t bit_from(uint32_t insn, int pos)
+	{
+		return ((1 << pos) & insn) >> pos;
+	}
+
+	int32_t bits_from(uint32_t insn, int pos, int l)
+	{
+		return (insn >> pos) & ((1 << l) - 1);
+	}
+
+	bool is_insn_adr(uint32_t insn)
+	{
+		return (insn & 0x9F000000) == 0x10000000;
+	}
+
+	bool is_insn_adrp(uint32_t insn)
+	{
+		return (insn & 0x9F000000) == 0x90000000;
+	}
+
+	// decode adr/adrp
+	bool decode_adr_imm(uint32_t insn, int64_t *imm)
+	{
+		if (is_insn_adr(insn) || is_insn_adrp(insn))
+		{
+			// 21-bit imm encoded in adrp.
+			int64_t imm_val = bits_from(insn, 5, 19) << 2; // immhi
+			imm_val |= bits_from(insn, 29, 2);			   // immlo
+
+			if (is_insn_adrp(insn))
+			{
+				// Retrieve msb of 21-bit-signed imm for sign extension.
+				uint64_t msbt = (imm_val >> 20) & 1;
+				
+				// Real value is imm multiplied by 4k. Value now has 33-bit information.
+				imm_val <<= 12;
+
+				// Sign extend to 64-bit by repeating msbt 31 (64-33) times and merge it
+				// with value.
+				*imm = ((((uint64_t)(1) << 32) - msbt) << 33) | imm_val;
+			}
+			else // adr
+			{
+				// Sign-extend the 21-bit immediate.
+				if (imm_val & (1 << (21 - 1)))
+					imm_val |= ~((1LL << 21) - 1);
+
+				*imm = imm_val;
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/*
+	 *  31 30 29 28         23 22 21         10 9   5 4   0
+	 * +--+--+--+-------------+--+-------------+-----+-----+
+	 * |sf|op| S| 1 0 0 0 1 0 |sh|    imm12    |  Rn | Rd  |
+	 * +--+--+--+-------------+--+-------------+-----+-----+
+	 *
+	 *    sf: 0 -> 32bit, 1 -> 64bit
+	 *    op: 0 -> add  , 1 -> sub
+	 *     S: 1 -> set flags
+	 *    sh: 1 -> LSL imm by 12
+	 */
+
+	int32_t decode_addsub_imm(uint32_t insn)
+	{
+		int32_t imm12 = bits_from(insn, 10, 12);
+
+		bool shift = bit_from(insn, 22) == 1;
+
+		if (shift)
+		{
+			imm12 <<= 12;
+		}
+
+		return imm12;
+	}
+
+	bool is_insn_ld(uint32_t insn)
+	{
+		// L bit
+		return bit_from(insn, 22) == 1;
+	}
+
+	bool is_insn_ldst(uint32_t insn)
+	{
+		return (insn & 0x0a000000) == 0x08000000;
+	}
+
+	bool is_insn_ldst_uimm(uint32_t insn)
+	{
+		return (insn & 0x3b000000) == 0x39000000;
+	}
+
+	// decode Load/store unsigned immediate
+	bool decode_ldrstr_uimm(uint32_t insn, int32_t *imm12)
+	{
+		if (is_insn_ldst_uimm(insn))
+		{
+			*imm12 = bits_from(insn, 10, 12);
+			// shift with scale value
+			*imm12 <<= bits_from(insn, 30, 2); // size bits
+
+			return true;
+		}
+
+		return false;
+	}
+
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyArm64.h`:
+
+```h
+#pragma once
+
+#include <cstdio>
+#include <cstdint>
+#include <string>
+
+namespace KittyArm64
+{
+
+	int32_t bit_from(uint32_t insn, int pos);
+
+	int32_t bits_from(uint32_t insn, int pos, int l);
+
+	bool is_insn_adr(uint32_t insn);
+
+	bool is_insn_adrp(uint32_t insn);
+
+	bool decode_adr_imm(uint32_t insn, int64_t *imm);
+
+	int32_t decode_addsub_imm(uint32_t insn);
+
+	bool is_insn_ld(uint32_t insn);
+
+	bool is_insn_ldst(uint32_t insn);
+
+	bool is_insn_ldst_uimm(uint32_t insn);
+
+	bool decode_ldrstr_uimm(uint32_t insn, int32_t *offset);
+
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyMemory.cpp`:
+
+```cpp
+//
+//  KittyMemory.cpp
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#include "KittyMemory.h"
+
+namespace KittyMemory
+{
+
+    struct mapsCache
+    {
+        std::string identifier;
+        ProcMap map;
+    };
+
+    static std::vector<mapsCache> __mapsCache;
+    static ProcMap findMapInCache(std::string id)
+    {
+        ProcMap ret;
+        for (int i = 0; i < __mapsCache.size(); i++)
+        {
+            if (__mapsCache[i].identifier.compare(id) == 0)
+            {
+                ret = __mapsCache[i].map;
+                break;
+            }
+        }
+        return ret;
+    }
+
+    bool ProtectAddr(void *addr, size_t length, int protection)
+    {
+        uintptr_t pageStart = _PAGE_START_OF_(addr);
+        uintptr_t pageLen = _PAGE_LEN_OF_(addr, length);
+        return (
+            mprotect(reinterpret_cast<void *>(pageStart), pageLen, protection) != -1);
+    }
+
+    Memory_Status memWrite(void *addr, const void *buffer, size_t len)
+    {
+        if (addr == NULL)
+            return INV_ADDR;
+
+        if (buffer == NULL)
+            return INV_BUF;
+
+        if (len < 1 || len > INT_MAX)
+            return INV_LEN;
+
+        if (!ProtectAddr(addr, len, _PROT_RWX_))
+            return INV_PROT;
+
+        if (memcpy(addr, buffer, len) != NULL && ProtectAddr(addr, len, _PROT_RX_))
+            return SUCCESS;
+
+        return FAILED;
+    }
+
+    Memory_Status memRead(void *buffer, const void *addr, size_t len)
+    {
+        if (addr == NULL)
+            return INV_ADDR;
+
+        if (buffer == NULL)
+            return INV_BUF;
+
+        if (len < 1 || len > INT_MAX)
+            return INV_LEN;
+
+        if (memcpy(buffer, addr, len) != NULL)
+            return SUCCESS;
+
+        return FAILED;
+    }
+
+    std::string read2HexStr(const void *addr, size_t len)
+    {
+        char temp[len];
+        memset(temp, 0, len);
+
+        const size_t bufferLen = len * 2 + 1;
+        char buffer[bufferLen];
+        memset(buffer, 0, bufferLen);
+
+        std::string ret;
+
+        if (memRead(temp, addr, len) != SUCCESS)
+            return ret;
+
+        for (int i = 0; i < len; i++)
+        {
+            sprintf(&buffer[i * 2], "%02X", (unsigned char)temp[i]);
+        }
+
+        ret += buffer;
+        return ret;
+    }
+
+    ProcMap getLibraryMap(const char *libraryName)
+    {
+        ProcMap retMap;
+        char line[512] = {0};
+
+        FILE *fp = fopen("/proc/self/maps", "rt");
+        if (fp != NULL)
+        {
+            while (fgets(line, sizeof(line), fp))
+            {
+                if (strstr(line, libraryName))
+                {
+                    char tmpPerms[5] = {0}, tmpDev[12] = {0}, tmpPathname[444] = {0};
+                    // parse a line in maps file
+                    // (format) startAddress-endAddress perms offset dev inode pathname
+                    sscanf(line, "%llx-%llx %s %ld %s %d %s",
+                           (long long unsigned *)&retMap.startAddr,
+                           (long long unsigned *)&retMap.endAddr,
+                           tmpPerms, &retMap.offset, tmpDev, &retMap.inode, tmpPathname);
+
+                    retMap.length = (uintptr_t)retMap.endAddr - (uintptr_t)retMap.startAddr;
+                    retMap.perms = tmpPerms;
+                    retMap.dev = tmpDev;
+                    retMap.pathname = tmpPathname;
+
+                    break;
+                }
+            }
+            fclose(fp);
+        }
+        return retMap;
+    }
+
+    uintptr_t getAbsoluteAddress(const char *libraryName, uintptr_t relativeAddr, bool useCache)
+    {
+        ProcMap libMap;
+
+        if (useCache)
+        {
+            libMap = findMapInCache(libraryName);
+            if (libMap.isValid())
+                return (reinterpret_cast<uintptr_t>(libMap.startAddr) + relativeAddr);
+        }
+
+        libMap = getLibraryMap(libraryName);
+        if (!libMap.isValid())
+            return 0;
+
+        if (useCache)
+        {
+            mapsCache cachedMap;
+            cachedMap.identifier = libraryName;
+            cachedMap.map = libMap;
+            __mapsCache.push_back(cachedMap);
+        }
+
+        return (reinterpret_cast<uintptr_t>(libMap.startAddr) + relativeAddr);
+    }
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyMemory.h`:
+
+```h
+//
+//  KittyMemory.hpp
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#pragma once
+
+#include <stdio.h>
+#include <string>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <vector>
+
+#define _SYS_PAGE_SIZE_ (sysconf(_SC_PAGE_SIZE))
+
+#define _PAGE_START_OF_(x) ((uintptr_t)x & ~(uintptr_t)(_SYS_PAGE_SIZE_ - 1))
+#define _PAGE_END_OF_(x, len) (_PAGE_START_OF_((uintptr_t)x + len - 1))
+#define _PAGE_LEN_OF_(x, len) (_PAGE_END_OF_(x, len) - _PAGE_START_OF_(x) + _SYS_PAGE_SIZE_)
+#define _PAGE_OFFSET_OF_(x) ((uintptr_t)x - _PAGE_START_OF_(x))
+
+#define _PROT_RWX_ (PROT_READ | PROT_WRITE | PROT_EXEC)
+#define _PROT_RX_ (PROT_READ | PROT_EXEC)
+
+#define EMPTY_VEC_OFFSET std::vector<int>()
+
+namespace KittyMemory
+{
+
+    typedef enum
+    {
+        FAILED = 0,
+        SUCCESS = 1,
+        INV_ADDR = 2,
+        INV_LEN = 3,
+        INV_BUF = 4,
+        INV_PROT = 5
+    } Memory_Status;
+
+    struct ProcMap
+    {
+        void *startAddr;
+        void *endAddr;
+        size_t length;
+        std::string perms;
+        long offset;
+        std::string dev;
+        int inode;
+        std::string pathname;
+
+        bool isValid() { return (startAddr != NULL && endAddr != NULL && !pathname.empty()); }
+    };
+
+    /*
+     * Changes protection of an address with given length
+     */
+    bool ProtectAddr(void *addr, size_t length, int protection);
+
+    /*
+     * Writes buffer content to an address
+     */
+    Memory_Status memWrite(void *addr, const void *buffer, size_t len);
+
+    /*
+     * Reads an address content into a buffer
+     */
+    Memory_Status memRead(void *buffer, const void *addr, size_t len);
+
+    /*
+     * Reads an address content and returns hex string
+     */
+    std::string read2HexStr(const void *addr, size_t len);
+
+    /*
+     * Wrapper to dereference & get value of a multi level pointer
+     * Make sure to use the correct data type!
+     */
+    template <typename Type>
+    Type readMultiPtr(void *ptr, std::vector<int> offsets)
+    {
+        Type defaultVal = {};
+        if (ptr == NULL)
+            return defaultVal;
+
+        uintptr_t finalPtr = reinterpret_cast<uintptr_t>(ptr);
+        int offsetsSize = offsets.size();
+        if (offsetsSize > 0)
+        {
+            for (int i = 0; finalPtr != 0 && i < offsetsSize; i++)
+            {
+                if (i == (offsetsSize - 1))
+                    return *reinterpret_cast<Type *>(finalPtr + offsets[i]);
+
+                finalPtr = *reinterpret_cast<uintptr_t *>(finalPtr + offsets[i]);
+            }
+        }
+
+        if (finalPtr == 0)
+            return defaultVal;
+
+        return *reinterpret_cast<Type *>(finalPtr);
+    }
+
+    /*
+     * Wrapper to dereference & set value of a multi level pointer
+     * Make sure to use the correct data type!, const objects won't work
+     */
+    template <typename Type>
+    bool writeMultiPtr(void *ptr, std::vector<int> offsets, Type val)
+    {
+        if (ptr == NULL)
+            return false;
+
+        uintptr_t finalPtr = reinterpret_cast<uintptr_t>(ptr);
+        int offsetsSize = offsets.size();
+        if (offsetsSize > 0)
+        {
+            for (int i = 0; finalPtr != 0 && i < offsetsSize; i++)
+            {
+                if (i == (offsetsSize - 1))
+                {
+                    *reinterpret_cast<Type *>(finalPtr + offsets[i]) = val;
+                    return true;
+                }
+
+                finalPtr = *reinterpret_cast<uintptr_t *>(finalPtr + offsets[i]);
+            }
+        }
+
+        if (finalPtr == 0)
+            return false;
+
+        *reinterpret_cast<Type *>(finalPtr) = val;
+        return true;
+    }
+
+    /*
+     * Wrapper to dereference & get value of a pointer
+     * Make sure to use the correct data type!
+     */
+    template <typename Type>
+    Type readPtr(void *ptr)
+    {
+        Type defaultVal = {};
+        if (ptr == NULL)
+            return defaultVal;
+
+        return *reinterpret_cast<Type *>(ptr);
+    }
+
+    /*
+     * Wrapper to dereference & set value of a pointer
+     * Make sure to use the correct data type!, const objects won't work
+     */
+    template <typename Type>
+    bool writePtr(void *ptr, Type val)
+    {
+        if (ptr == NULL)
+            return false;
+
+        *reinterpret_cast<Type *>(ptr) = val;
+        return true;
+    }
+
+    /*
+     * Gets info of a mapped library in self process
+     */
+    ProcMap getLibraryMap(const char *libraryName);
+
+    /*
+     * Expects a relative address in a library
+     * Returns final absolute address
+     */
+    uintptr_t getAbsoluteAddress(const char *libraryName, uintptr_t relativeAddr, bool useCache = false);
+};
+
+```
+
+`Android/test_src/src/KittyMemory/KittyScanner.cpp`:
+
+```cpp
+#include "KittyScanner.h"
+
+#include "KittyMemory.h"
+
+using KittyMemory::ProcMap;
+
+// refs 
+// https://github.com/learn-more/findpattern-bench
+
+namespace KittyScanner
+{
+
+    bool compare(const char *data, const char *pattern, const char *mask)
+    {
+        for (; *mask; ++mask, ++data, ++pattern)
+        {
+            if (*mask == 'x' && *data != *pattern)
+                return false;
+        }
+
+        return !*mask;
+    }
+
+    uintptr_t find(const uintptr_t start, const size_t size, const char *pattern, const char *mask)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            if (!compare(reinterpret_cast<const char *>(start + i), pattern, mask))
+                continue;
+
+            return start + i;
+        }
+        return 0;
+    }
+
+    uintptr_t find_from_lib(const char *name, const char *pattern, const char *mask)
+    {
+        if (!name || !pattern || !mask)
+            return 0;
+
+        ProcMap libMap = KittyMemory::getLibraryMap(name);
+        if(!libMap.isValid()) return 0;
+
+        return find((uintptr_t)libMap.startAddr, (size_t)libMap.length, pattern, mask);
+    }
+
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyScanner.h`:
+
+```h
+#pragma once
+
+#include <string>
+#include <cstdint>
+
+namespace KittyScanner
+{
+
+    bool compare(const char *data, const char *pattern, const char *mask);
+
+    uintptr_t find(const uintptr_t start, const size_t size, const char *pattern, const char *mask);
+
+    uintptr_t find_from_lib(const char *name, const char *pattern, const char *mask);
+
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyUtils.cpp`:
+
+```cpp
+#include "KittyUtils.h"
+
+#include <sstream>
+#include <iomanip>
+
+static void xtrim(std::string &hex)
+{
+    if (hex.compare(0, 2, "0x") == 0)
+    {
+        hex.erase(0, 2);
+    }
+
+    // https://www.techiedelight.com/remove-whitespaces-string-cpp/
+    hex.erase(std::remove_if(hex.begin(), hex.end(), [](char c)
+                             { return (c == ' ' || c == '\n' || c == '\r' ||
+                                       c == '\t' || c == '\v' || c == '\f'); }),
+              hex.end());
+}
+
+namespace KittyUtils
+{
+
+    bool validateHexString(std::string & xstr)
+    {
+        if (xstr.length() < 2)
+            return false;
+        xtrim(xstr); // first remove spaces
+        if (xstr.length() % 2 != 0)
+            return false;
+        for (size_t i = 0; i < xstr.length(); i++)
+        {
+            if (!std::isxdigit((unsigned char)xstr[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // https://tweex.net/post/c-anything-tofrom-a-hex-string/
+
+    // ------------------------------------------------------------------
+    /*!
+        Convert a block of data to a hex string
+    */
+    void toHex(
+        void *const data,        //!< Data to convert
+        const size_t dataLength, //!< Length of the data to convert
+        std::string &dest        //!< Destination string
+    )
+    {
+        unsigned char *byteData = reinterpret_cast<unsigned char *>(data);
+        std::stringstream hexStringStream;
+
+        hexStringStream << std::hex << std::setfill('0');
+        for (size_t index = 0; index < dataLength; ++index)
+            hexStringStream << std::setw(2) << static_cast<int>(byteData[index]);
+        dest = hexStringStream.str();
+    }
+
+    // ------------------------------------------------------------------
+    /*!
+        Convert a hex string to a block of data
+    */
+    void fromHex(
+        const std::string &in, //!< Input hex string
+        void *const data       //!< Data store
+    )
+    {
+        size_t length = in.length();
+        unsigned char *byteData = reinterpret_cast<unsigned char *>(data);
+
+        std::stringstream hexStringStream;
+        hexStringStream >> std::hex;
+        for (size_t strIndex = 0, dataIndex = 0; strIndex < length; ++dataIndex)
+        {
+            // Read out and convert the string two characters at a time
+            const char tmpStr[3] = {in[strIndex++], in[strIndex++], 0};
+
+            // Reset and fill the string stream
+            hexStringStream.clear();
+            hexStringStream.str(tmpStr);
+
+            // Do the conversion
+            int tmpValue = 0;
+            hexStringStream >> tmpValue;
+            byteData[dataIndex] = static_cast<unsigned char>(tmpValue);
+        }
+    }
+}
+```
+
+`Android/test_src/src/KittyMemory/KittyUtils.h`:
+
+```h
+#pragma once
+
+#include <string>
+#include <algorithm>
+
+namespace KittyUtils {
+
+    bool validateHexString(std::string &xstr);
+    void toHex(void *const data, const size_t dataLength, std::string &dest);
+    void fromHex(const std::string &in, void *const data);
+
+}
+```
+
+`Android/test_src/src/KittyMemory/MemoryBackup.cpp`:
+
+```cpp
+//
+//  MemoryBackup.cpp
+//
+//  Created by MJ (Ruit) on 4/19/20.
+//
+
+#include "MemoryBackup.h"
+
+using KittyMemory::Memory_Status;
+using KittyMemory::ProcMap;
+
+MemoryBackup::MemoryBackup()
+{
+  _address = 0;
+  _size = 0;
+  _orig_code.clear();
+}
+
+MemoryBackup::MemoryBackup(const char *libraryName, uintptr_t address, size_t backup_size, bool useMapCache)
+{
+  MemoryBackup();
+
+  if (libraryName == NULL || address == 0 || backup_size < 1)
+    return;
+
+  _address = KittyMemory::getAbsoluteAddress(libraryName, address, useMapCache);
+  if (_address == 0)
+    return;
+
+  _size = backup_size;
+
+  _orig_code.resize(backup_size);
+
+  // backup current content
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), backup_size);
+}
+
+MemoryBackup::MemoryBackup(uintptr_t absolute_address, size_t backup_size)
+{
+  MemoryBackup();
+
+  if (absolute_address == 0 || backup_size < 1)
+    return;
+
+  _address = absolute_address;
+
+  _size = backup_size;
+
+  _orig_code.resize(backup_size);
+
+  // backup current content
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), backup_size);
+}
+
+MemoryBackup::~MemoryBackup()
+{
+  // clean up
+  _orig_code.clear();
+}
+
+bool MemoryBackup::isValid() const
+{
+  return (_address != 0 && _size > 0 && _orig_code.size() == _size);
+}
+
+size_t MemoryBackup::get_BackupSize() const
+{
+  return _size;
+}
+
+uintptr_t MemoryBackup::get_TargetAddress() const
+{
+  return _address;
+}
+
+bool MemoryBackup::Restore()
+{
+  if (!isValid())
+    return false;
+  return KittyMemory::memWrite(reinterpret_cast<void *>(_address), &_orig_code[0], _size) == Memory_Status::SUCCESS;
+}
+
+std::string MemoryBackup::get_CurrBytes()
+{
+  if (!isValid())
+    _hexString = std::string("0xInvalid");
+  else
+    _hexString = KittyMemory::read2HexStr(reinterpret_cast<const void *>(_address), _size);
+
+  return _hexString;
+}
+
+```
+
+`Android/test_src/src/KittyMemory/MemoryBackup.h`:
+
+```h
+//
+//  MemoryBackup.h
+//
+//  Created by MJ (Ruit) on 4/19/20.
+//
+
+#pragma once
+
+#include <vector>
+
+#include "KittyMemory.h"
+
+class MemoryBackup
+{
+private:
+    uintptr_t _address;
+    size_t _size;
+
+    std::vector<uint8_t> _orig_code;
+
+    std::string _hexString;
+
+public:
+    MemoryBackup();
+
+    /*
+     * expects library name and relative address
+     */
+    MemoryBackup(const char *libraryName, uintptr_t address, size_t backup_size, bool useMapCache = true);
+
+    /*
+     * expects absolute address
+     */
+    MemoryBackup(uintptr_t absolute_address, size_t backup_size);
+
+    ~MemoryBackup();
+
+    /*
+     * Validate patch
+     */
+    bool isValid() const;
+
+    size_t get_BackupSize() const;
+
+    /*
+     * Returns pointer to the target address
+     */
+    uintptr_t get_TargetAddress() const;
+
+    /*
+     * Restores backup code
+     */
+    bool Restore();
+
+    /*
+     * Returns current target address bytes as hex string
+     */
+    std::string get_CurrBytes();
+};
+
+```
+
+`Android/test_src/src/KittyMemory/MemoryPatch.cpp`:
+
+```cpp
+//
+//  MemoryPatch.cpp
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#include "MemoryPatch.h"
+
+using KittyMemory::Memory_Status;
+using KittyMemory::ProcMap;
+
+MemoryPatch::MemoryPatch()
+{
+  _address = 0;
+  _size = 0;
+  _orig_code.clear();
+  _patch_code.clear();
+}
+
+MemoryPatch::MemoryPatch(const char *libraryName, uintptr_t address,
+                         const void *patch_code, size_t patch_size, bool useMapCache)
+{
+  MemoryPatch();
+
+  if (libraryName == NULL || address == 0 || patch_code == NULL || patch_size < 1)
+    return;
+
+  _address = KittyMemory::getAbsoluteAddress(libraryName, address, useMapCache);
+  if (_address == 0)
+    return;
+
+  _size = patch_size;
+
+  _orig_code.resize(patch_size);
+  _patch_code.resize(patch_size);
+
+  // initialize patch & backup current content
+  KittyMemory::memRead(&_patch_code[0], patch_code, patch_size);
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), patch_size);
+}
+
+MemoryPatch::MemoryPatch(uintptr_t absolute_address,
+                         const void *patch_code, size_t patch_size)
+{
+  MemoryPatch();
+
+  if (absolute_address == 0 || patch_code == NULL || patch_size < 1)
+    return;
+
+  _address = absolute_address;
+  _size = patch_size;
+
+  _orig_code.resize(patch_size);
+  _patch_code.resize(patch_size);
+
+  // initialize patch & backup current content
+  KittyMemory::memRead(&_patch_code[0], patch_code, patch_size);
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), patch_size);
+}
+
+MemoryPatch::~MemoryPatch()
+{
+  // clean up
+  _orig_code.clear();
+  _patch_code.clear();
+}
+
+MemoryPatch MemoryPatch::createWithHex(const char *libraryName, uintptr_t address,
+                                       std::string hex, bool useMapCache)
+{
+  MemoryPatch patch;
+
+  if (libraryName == NULL || address == 0 || !KittyUtils::validateHexString(hex))
+    return patch;
+
+  patch._address = KittyMemory::getAbsoluteAddress(libraryName, address, useMapCache);
+  if (patch._address == 0)
+    return patch;
+
+  patch._size = hex.length() / 2;
+
+  patch._orig_code.resize(patch._size);
+  patch._patch_code.resize(patch._size);
+
+  // initialize patch
+  KittyUtils::fromHex(hex, &patch._patch_code[0]);
+
+  // backup current content
+  KittyMemory::memRead(&patch._orig_code[0], reinterpret_cast<const void *>(patch._address), patch._size);
+  return patch;
+}
+
+MemoryPatch MemoryPatch::createWithHex(uintptr_t absolute_address, std::string hex)
+{
+  MemoryPatch patch;
+
+  if (absolute_address == 0 || !KittyUtils::validateHexString(hex))
+    return patch;
+
+  patch._address = absolute_address;
+  patch._size = hex.length() / 2;
+
+  patch._orig_code.resize(patch._size);
+  patch._patch_code.resize(patch._size);
+
+  // initialize patch
+  KittyUtils::fromHex(hex, &patch._patch_code[0]);
+
+  // backup current content
+  KittyMemory::memRead(&patch._orig_code[0], reinterpret_cast<const void *>(patch._address), patch._size);
+  return patch;
+}
+
+bool MemoryPatch::isValid() const
+{
+  return (_address != 0 && _size > 0 && _orig_code.size() == _size && _patch_code.size() == _size);
+}
+
+size_t MemoryPatch::get_PatchSize() const
+{
+  return _size;
+}
+
+uintptr_t MemoryPatch::get_TargetAddress() const
+{
+  return _address;
+}
+
+bool MemoryPatch::Restore()
+{
+  if (!isValid())
+    return false;
+  return KittyMemory::memWrite(reinterpret_cast<void *>(_address), &_orig_code[0], _size) == Memory_Status::SUCCESS;
+}
+
+bool MemoryPatch::Modify()
+{
+  if (!isValid())
+    return false;
+  return (KittyMemory::memWrite(reinterpret_cast<void *>(_address), &_patch_code[0], _size) == Memory_Status::SUCCESS);
+}
+
+std::string MemoryPatch::get_CurrBytes()
+{
+  if (!isValid())
+    _hexString = std::string("0xInvalid");
+  else
+    _hexString = KittyMemory::read2HexStr(reinterpret_cast<const void *>(_address), _size);
+
+  return _hexString;
+}
+
+```
+
+`Android/test_src/src/KittyMemory/MemoryPatch.h`:
+
+```h
+//
+//  MemoryPatch.h
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#pragma once
+
+#include <vector>
+
+#include "KittyUtils.h"
+
+#include "KittyMemory.h"
+
+class MemoryPatch
+{
+private:
+    uintptr_t _address;
+    size_t _size;
+
+    std::vector<uint8_t> _orig_code;
+    std::vector<uint8_t> _patch_code;
+
+    std::string _hexString;
+
+public:
+    MemoryPatch();
+
+    /*
+     * expects library name and relative address
+     */
+    MemoryPatch(const char *libraryName, uintptr_t address,
+                const void *patch_code, size_t patch_size, bool useMapCache = true);
+
+    /*
+     * expects absolute address
+     */
+    MemoryPatch(uintptr_t absolute_address,
+                const void *patch_code, size_t patch_size);
+
+    ~MemoryPatch();
+
+    /*
+     * compatible hex format (0xffff & ffff & ff ff)
+     */
+    static MemoryPatch createWithHex(const char *libraryName, uintptr_t address, std::string hex, bool useMapCache = true);
+    static MemoryPatch createWithHex(uintptr_t absolute_address, std::string hex);
+
+    /*
+     * Validate patch
+     */
+    bool isValid() const;
+
+    size_t get_PatchSize() const;
+
+    /*
+     * Returns pointer to the target address
+     */
+    uintptr_t get_TargetAddress() const;
+
+    /*
+     * Restores patch to original value
+     */
+    bool Restore();
+
+    /*
+     * Applies patch modifications to target address
+     */
+    bool Modify();
+
+    /*
+     * Returns current patch target address bytes as hex string
+     */
+    std::string get_CurrBytes();
+};
+
+```
+
+`Android/test_src/src/Logger.h`:
+
+```h
+//
+//  Logger.h
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#pragma once
+
+
+#include <jni.h>
+#include <android/log.h>
+
+enum LogType {
+    eDEBUG = 3,
+    eINFO  = 4,
+    eWARN  = 5,
+    eERROR = 6,
+};
+
+#define __LOG_TAG__ "KittyMemory"
+
+#define __DEBUG_BUILD__
+
+#ifdef __DEBUG_BUILD__
+#define LOGD(...) ((void)__android_log_print(eDEBUG, __LOG_TAG__, __VA_ARGS__))
+#else
+#define LOGD(...)
+#endif
+
+#define LOGE(...) ((void)__android_log_print(eERROR, __LOG_TAG__, __VA_ARGS__))
+#define LOGI(...) ((void)__android_log_print(eINFO,  __LOG_TAG__, __VA_ARGS__))
+#define LOGW(...) ((void)__android_log_print(eWARN,  __LOG_TAG__, __VA_ARGS__))
+
+```
+
+`Android/test_src/src/main.cpp`:
+
+```cpp
+#include <pthread.h>
+#include "Logger.h"
+
+#include "KittyMemory/KittyMemory.h"
+#include "KittyMemory/MemoryPatch.h"
+#include "KittyMemory/KittyScanner.h"
+
+using KittyMemory::ProcMap;
+
+// fancy struct for patches
+ struct GlobalPatches {
+     // let's assume we have patches for these functions for whatever game
+	 // like show in miniMap boolean function
+     MemoryPatch canShowInMinimap;
+     // etc...
+ }gPatches;
+
+
+// we will run our patches in a new thread so "sleep" doesn't block process main thread
+void *my_test_thread(void *) {
+	LOGD("I have been loaded...");
+    
+	// loop until our target library is found
+	ProcMap il2cppMap;
+	do {
+		il2cppMap = KittyMemory::getLibraryMap("libil2cpp.so");
+		sleep(1);
+	} while(!il2cppMap.isValid());
+	
+    // wait more to make sure lib is fully loaded and ready
+    sleep(1);
+	
+
+    // now we can do our stuff
+    // let's say our patches are meant for an arm library
+
+    // http://shell-storm.org/online/Online-Assembler-and-Disassembler/
+    /*
+    * mov r0, #1
+    * bx lr
+    */
+	// address = 0x6A6144
+    // bytes len = 8
+    // patch simple boolean return
+    gPatches.canShowInMinimap = MemoryPatch("libil2cpp.so", 0x6A6144,
+                                          "\x01\x00\xA0\xE3\x1E\xFF\x2F\xE1", 8);
+
+    // by default MemoryPatch will cache library map for faster lookup when use getAbsoluteAddress
+    // You can disable this by passing false for last argument
+    //gPatches.canShowInMinimap = MemoryPatch("libil2cpp.so", 0x6A6144, "\x01\x00\xA0\xE3\x1E\xFF\x2F\xE1", 8, false);
+
+    // also possible with hex & no need to specify len
+     gPatches.canShowInMinimap = MemoryPatch::createWithHex("libil2cpp.so", 0x6A6144, "0100A0E31EFF2FE1");
+
+    // spaces are fine too
+     gPatches.canShowInMinimap = MemoryPatch::createWithHex("libil2cpp.so", 0x6A6144, "01 00 A0 E3 1E FF 2F E1");
+
+    LOGD("===== New Patch Entry =====");
+
+    LOGD("Patch Address: %p", (void *)gPatches.canShowInMinimap.get_TargetAddress());
+    LOGD("Patch Size: %zu", gPatches.canShowInMinimap.get_PatchSize());
+    LOGD("Current Bytes: %s", gPatches.canShowInMinimap.get_CurrBytes().c_str());
+
+    // modify & print bytes
+    if (gPatches.canShowInMinimap.Modify()) {
+        LOGD("canShowInMinimap has been modified successfully");
+        LOGD("Current Bytes: %s", gPatches.canShowInMinimap.get_CurrBytes().c_str());
+    }
+    
+    // restore & print bytes
+    if (gPatches.canShowInMinimap.Restore()) {
+        LOGD("canShowInMinimap has been restored successfully");
+        LOGD("Current Bytes: %s", gPatches.canShowInMinimap.get_CurrBytes().c_str());
+    }
+
+    // scan for bytes with mask x and ?
+    uintptr_t found_at = KittyScanner::find_from_lib("libil2cpp.so", "\x00\x00\x00\x00\x00\x00\x00\x00\x00", "xxxx??x?x");
+    LOGD("scanner found bytes at: %p", (void*)found_at);
+
+    LOGD("===========================");
+
+    return NULL;
+}
+
+__attribute__((constructor))
+void initializer() {
+    pthread_t ptid;
+    pthread_create(&ptid, NULL, my_test_thread, NULL);
+}
+
+
+
+
+
+```
+
+`IOS/README.md`:
+
+```md
+This is an example theos tweak project, explanation in source files.<br/>
+```
+
+`IOS/test_src/FWD_Kitty.plist`:
+
+```plist
+{ Filter = { Bundles = ( "com.blayzegames.newfps" ); }; }
+
+```
+
+`IOS/test_src/KittyMemory/KittyArm64.cpp`:
+
+```cpp
+#include "KittyArm64.hpp"
+
+// refs to
+// https://github.com/CAS-Atlantic/AArch64-Encoding
+// https://github.com/bminor/binutils-gdb
+// https://github.com/capstone-engine/capstone
+// https://github.com/qemu/QEMU
+// https://reverseengineering.stackexchange.com/questions/15418/getting-function-address-by-reading-adrp-and-add-instruction-values
+// https://stackoverflow.com/questions/41906688/what-are-the-semantics-of-adrp-and-adrl-instructions-in-arm-assembly
+
+namespace KittyArm64
+{
+
+	int32_t bit_from(uint32_t insn, int pos)
+	{
+		return ((1 << pos) & insn) >> pos;
+	}
+
+	int32_t bits_from(uint32_t insn, int pos, int l)
+	{
+		return (insn >> pos) & ((1 << l) - 1);
+	}
+
+	bool is_insn_adr(uint32_t insn)
+	{
+		return (insn & 0x9F000000) == 0x10000000;
+	}
+
+	bool is_insn_adrp(uint32_t insn)
+	{
+		return (insn & 0x9F000000) == 0x90000000;
+	}
+
+	// decode adr/adrp
+	bool decode_adr_imm(uint32_t insn, int64_t *imm)
+	{
+		if (is_insn_adr(insn) || is_insn_adrp(insn))
+		{
+			// 21-bit imm encoded in adrp.
+			int64_t imm_val = bits_from(insn, 5, 19) << 2; // immhi
+			imm_val |= bits_from(insn, 29, 2);			   // immlo
+
+			if (is_insn_adrp(insn))
+			{
+				// Retrieve msb of 21-bit-signed imm for sign extension.
+				uint64_t msbt = (imm_val >> 20) & 1;
+				
+				// Real value is imm multiplied by 4k. Value now has 33-bit information.
+				imm_val <<= 12;
+
+				// Sign extend to 64-bit by repeating msbt 31 (64-33) times and merge it
+				// with value.
+				*imm = ((((uint64_t)(1) << 32) - msbt) << 33) | imm_val;
+			}
+			else // adr
+			{
+				// Sign-extend the 21-bit immediate.
+				if (imm_val & (1 << (21 - 1)))
+					imm_val |= ~((1LL << 21) - 1);
+
+				*imm = imm_val;
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	/*
+	 *  31 30 29 28         23 22 21         10 9   5 4   0
+	 * +--+--+--+-------------+--+-------------+-----+-----+
+	 * |sf|op| S| 1 0 0 0 1 0 |sh|    imm12    |  Rn | Rd  |
+	 * +--+--+--+-------------+--+-------------+-----+-----+
+	 *
+	 *    sf: 0 -> 32bit, 1 -> 64bit
+	 *    op: 0 -> add  , 1 -> sub
+	 *     S: 1 -> set flags
+	 *    sh: 1 -> LSL imm by 12
+	 */
+
+	int32_t decode_addsub_imm(uint32_t insn)
+	{
+		int32_t imm12 = bits_from(insn, 10, 12);
+
+		bool shift = bit_from(insn, 22) == 1;
+
+		if (shift)
+		{
+			imm12 <<= 12;
+		}
+
+		return imm12;
+	}
+
+	bool is_insn_ld(uint32_t insn)
+	{
+		// L bit
+		return bit_from(insn, 22) == 1;
+	}
+
+	bool is_insn_ldst(uint32_t insn)
+	{
+		return (insn & 0x0a000000) == 0x08000000;
+	}
+
+	bool is_insn_ldst_uimm(uint32_t insn)
+	{
+		return (insn & 0x3b000000) == 0x39000000;
+	}
+
+	// decode Load/store unsigned immediate
+	bool decode_ldrstr_uimm(uint32_t insn, int32_t *imm12)
+	{
+		if (is_insn_ldst_uimm(insn))
+		{
+			*imm12 = bits_from(insn, 10, 12);
+			// shift with scale value
+			*imm12 <<= bits_from(insn, 30, 2); // size bits
+
+			return true;
+		}
+
+		return false;
+	}
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyArm64.hpp`:
+
+```hpp
+#pragma once
+
+#include <cstdio>
+#include <cstdint>
+#include <string>
+
+namespace KittyArm64
+{
+
+	int32_t bit_from(uint32_t insn, int pos);
+
+	int32_t bits_from(uint32_t insn, int pos, int l);
+
+	bool is_insn_adr(uint32_t insn);
+
+	bool is_insn_adrp(uint32_t insn);
+
+	bool decode_adr_imm(uint32_t insn, int64_t *imm);
+
+	int32_t decode_addsub_imm(uint32_t insn);
+
+	bool is_insn_ld(uint32_t insn);
+
+	bool is_insn_ldst(uint32_t insn);
+
+	bool is_insn_ldst_uimm(uint32_t insn);
+
+	bool decode_ldrstr_uimm(uint32_t insn, int32_t *offset);
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyMemory.cpp`:
+
+```cpp
+//
+//  KittyMemory.cpp
+//
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+//
+
+#include "KittyMemory.hpp"
+#include <substrate.h>
+
+// may not be accurate
+static bool cydiaExist()
+{
+    bool ret = false;
+    FILE *f = NULL;
+    if ((f = fopen("/Applications/Cydia.app", "r")) || (f = fopen("/Library/MobileSubstrate/MobileSubstrate.dylib", "r")))
+    {
+        ret = true;
+    }
+    if (f != NULL)
+    {
+        fclose(f);
+    }
+    return ret;
+}
+
+typedef void (*MSHookMemory_t)(void *, const void *, size_t);
+inline bool findMSHookMemory(void *dst, const void *src, size_t len)
+{
+    static void *ret = MSFindSymbol(NULL, "_MSHookMemory");
+    if (ret != NULL)
+    {
+        reinterpret_cast<MSHookMemory_t>(ret)(dst, src, len);
+        return true;
+    }
+    return false;
+}
+
+extern "C" kern_return_t mach_vm_remap(vm_map_t, mach_vm_address_t *, mach_vm_size_t,
+                                       mach_vm_offset_t, int, vm_map_t, mach_vm_address_t,
+                                       boolean_t, vm_prot_t *, vm_prot_t *, vm_inherit_t);
+
+namespace KittyMemory
+{
+
+    bool ProtectAddr(void *address, size_t length, int protection)
+    {
+        uintptr_t pageStart = _PAGE_START_OF_(address);
+        uintptr_t pageLen = _PAGE_LEN_OF_(address, length);
+        return mprotect(reinterpret_cast<void *>(pageStart), pageLen, protection) != -1;
+    }
+
+    kern_return_t getPageInfo(void *page_start, vm_region_submap_short_info_64 *outInfo)
+    {
+        vm_address_t region = reinterpret_cast<vm_address_t>(page_start);
+        vm_size_t region_len = 0;
+        mach_msg_type_number_t info_count = VM_REGION_SUBMAP_SHORT_INFO_COUNT_64;
+        unsigned int depth = 0;
+        return vm_region_recurse_64(mach_task_self(), &region, &region_len,
+                                    &depth,
+                                    (vm_region_recurse_info_t)outInfo,
+                                    &info_count);
+    }
+
+    /*
+    refs to
+    - https://github.com/asLody/whale/blob/master/whale/src/platform/memory.cc
+    - CydiaSubstrate
+    */
+    Memory_Status memWrite(void *address, const void *buffer, size_t len)
+    {
+        if (address == NULL)
+            return INV_ADDR;
+
+        if (buffer == NULL)
+            return INV_BUF;
+
+        if (len < 1 || len > INT_MAX)
+            return INV_LEN;
+
+        // check for cydia existance first
+        if (cydiaExist() && findMSHookMemory(address, buffer, len))
+        {
+            return SUCCESS;
+        }
+
+        void *page_start = reinterpret_cast<void *>(_PAGE_START_OF_(address));
+        void *page_offset = reinterpret_cast<void *>(_PAGE_OFFSET_OF_(address));
+        size_t page_len = _PAGE_LEN_OF_(address, len);
+
+        vm_region_submap_short_info_64 page_info;
+        if (BAD_KERN_CALL(getPageInfo(page_start, &page_info)))
+            return INV_KERN_CALL;
+
+        if (page_info.protection & VM_PROT_WRITE)
+        {
+            if (memcpy(address, buffer, len) != NULL)
+            {
+                return SUCCESS;
+            }
+            else
+            {
+                return FAILED;
+            }
+        }
+
+        void *new_map = mmap(NULL, page_len, _PROT_RW_, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
+        if (new_map == NULL)
+            return INV_MAP;
+
+        task_t self_task = mach_task_self();
+
+        if (BAD_KERN_CALL(vm_copy(self_task,
+                                  reinterpret_cast<vm_address_t>(page_start), page_len, reinterpret_cast<vm_address_t>(new_map))))
+            return INV_KERN_CALL;
+
+        void *dst = reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(new_map) + reinterpret_cast<uintptr_t>(page_offset));
+        if (memcpy(dst, buffer, len) == NULL || mprotect(new_map, page_len, _PROT_RX_) == -1)
+            return FAILED;
+
+        vm_prot_t cur_protection, max_protection;
+        mach_vm_address_t mach_vm_page_start = reinterpret_cast<mach_vm_address_t>(page_start);
+        if (BAD_KERN_CALL(mach_vm_remap(self_task, &mach_vm_page_start, page_len, 0, VM_FLAGS_OVERWRITE,
+                                        self_task, reinterpret_cast<mach_vm_address_t>(new_map), TRUE, &cur_protection, &max_protection,
+                                        page_info.inheritance)))
+            return INV_KERN_CALL;
+
+        return SUCCESS;
+    }
+
+    Memory_Status memRead(void *buffer, const void *addr, size_t len)
+    {
+        if (addr == NULL)
+            return INV_ADDR;
+
+        if (buffer == NULL)
+            return INV_BUF;
+
+        if (len < 1 || len > INT_MAX)
+            return INV_LEN;
+
+        if (memcpy(buffer, addr, len) != NULL)
+            return SUCCESS;
+
+        return FAILED;
+    }
+
+    std::string read2HexStr(const void *addr, size_t len)
+    {
+        char temp[len];
+        memset(temp, 0, len);
+
+        const size_t bufferLen = len * 2 + 1;
+        char buffer[bufferLen];
+        memset(buffer, 0, bufferLen);
+
+        std::string ret;
+
+        if (memRead(temp, addr, len) != SUCCESS)
+            return ret;
+
+        for (int i = 0; i < len; i++)
+        {
+            sprintf(&buffer[i * 2], "%02X", (unsigned char)temp[i]);
+        }
+
+        ret += buffer;
+        return ret;
+    }
+
+    memory_file_info getBaseInfo()
+    {
+        memory_file_info _info = {
+            0,
+            (const mach_header_64 *)_dyld_get_image_header(0),
+            _dyld_get_image_name(0),
+            _dyld_get_image_vmaddr_slide(0)};
+        return _info;
+    }
+
+    memory_file_info getMemoryFileInfo(std::string fileName)
+    {
+        memory_file_info _info;
+
+        int imageCount = _dyld_image_count();
+
+        for (int i = 0; i < imageCount; i++)
+        {
+            const char *name = _dyld_get_image_name(i);
+            if (!name)
+                continue;
+
+            std::string str = name;
+            if (str.length() < fileName.length())
+                continue;
+            if (str.compare(str.length() - fileName.length(), fileName.length(), fileName))
+                continue;
+
+            memory_file_info info = {
+                i, (const mach_header_64 *)_dyld_get_image_header(i), name, _dyld_get_image_vmaddr_slide(i)};
+
+            _info = info;
+            break;
+        }
+        return _info;
+    }
+
+    uint64_t getAbsoluteAddress(const char *fileName, uint64_t address)
+    {
+        memory_file_info info;
+        if (fileName != NULL)
+        {
+            info = getMemoryFileInfo(fileName);
+        }
+        else
+        {
+            info = getBaseInfo();
+        }
+        if (info.address == 0)
+            return 0;
+        return info.address + address;
+    }
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyMemory.hpp`:
+
+```hpp
+//
+//  KittyMemory.hpp
+//
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+//
+
+#pragma once
+
+#include <stdio.h>
+#include <string>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <mach-o/dyld.h>
+#include <mach/mach.h>
+#include <libkern/OSCacheControl.h>
+#include <vector>
+
+#define BAD_KERN_CALL(call) call != KERN_SUCCESS
+
+#define _SYS_PAGE_SIZE_ (sysconf(_SC_PAGE_SIZE))
+
+#define _PAGE_START_OF_(x) ((uintptr_t)x & ~(uintptr_t)(_SYS_PAGE_SIZE_ - 1))
+#define _PAGE_END_OF_(x, len) (_PAGE_START_OF_((uintptr_t)x + len - 1))
+#define _PAGE_LEN_OF_(x, len) (_PAGE_END_OF_(x, len) - _PAGE_START_OF_(x) + _SYS_PAGE_SIZE_)
+#define _PAGE_OFFSET_OF_(x) ((uintptr_t)x - _PAGE_START_OF_(x))
+
+#define _PROT_RWX_ (PROT_READ | PROT_WRITE | PROT_EXEC)
+#define _PROT_RX_ (PROT_READ | PROT_EXEC)
+#define _PROT_RW_ (PROT_READ | PROT_WRITE)
+
+#define EMPTY_VEC_OFFSET std::vector<int>()
+
+namespace KittyMemory
+{
+
+    typedef enum
+    {
+        FAILED = 0,
+        SUCCESS = 1,
+        INV_ADDR = 2,
+        INV_LEN = 3,
+        INV_BUF = 4,
+        INV_PROT = 5,
+        INV_KERN_CALL = 6,
+        INV_MAP = 7
+    } Memory_Status;
+
+    typedef struct
+    {
+        int index;
+        const mach_header_64 *header;
+        const char *name;
+        intptr_t address;
+    } memory_file_info;
+
+    /*
+     * Changes protection of an address with given length
+     */
+    bool ProtectAddr(void *address, size_t length, int protection);
+
+    /*
+     * Writes buffer content to an address
+     */
+    Memory_Status memWrite(void *address, const void *buffer, size_t len);
+
+    /*
+     * Reads an address content into a buffer
+     */
+    Memory_Status memRead(void *buffer, const void *addr, size_t len);
+
+    /*
+     * Wrapper to dereference & get value of a multi level pointer
+     * Make sure to use the correct data type!
+     */
+    template <typename Type>
+    Type readMultiPtr(void *ptr, std::vector<int> offsets)
+    {
+        Type defaultVal = {};
+        if (ptr == NULL)
+            return defaultVal;
+
+        uintptr_t finalPtr = reinterpret_cast<uintptr_t>(ptr);
+        int offsetsSize = offsets.size();
+        if (offsetsSize > 0)
+        {
+            for (int i = 0; finalPtr != 0 && i < offsetsSize; i++)
+            {
+                if (i == (offsetsSize - 1))
+                    return *reinterpret_cast<Type *>(finalPtr + offsets[i]);
+
+                finalPtr = *reinterpret_cast<uintptr_t *>(finalPtr + offsets[i]);
+            }
+        }
+
+        if (finalPtr == 0)
+            return defaultVal;
+
+        return *reinterpret_cast<Type *>(finalPtr);
+    }
+
+    /*
+     * Wrapper to dereference & set value of a multi level pointer
+     * Make sure to use the correct data type!, const objects won't work
+     */
+    template <typename Type>
+    bool writeMultiPtr(void *ptr, std::vector<int> offsets, Type val)
+    {
+        if (ptr == NULL)
+            return false;
+
+        uintptr_t finalPtr = reinterpret_cast<uintptr_t>(ptr);
+        int offsetsSize = offsets.size();
+        if (offsetsSize > 0)
+        {
+            for (int i = 0; finalPtr != 0 && i < offsetsSize; i++)
+            {
+                if (i == (offsetsSize - 1))
+                {
+                    *reinterpret_cast<Type *>(finalPtr + offsets[i]) = val;
+                    return true;
+                }
+
+                finalPtr = *reinterpret_cast<uintptr_t *>(finalPtr + offsets[i]);
+            }
+        }
+
+        if (finalPtr == 0)
+            return false;
+
+        *reinterpret_cast<Type *>(finalPtr) = val;
+        return true;
+    }
+
+    /*
+     * Wrapper to dereference & get value of a pointer
+     * Make sure to use the correct data type!
+     */
+    template <typename Type>
+    Type readPtr(void *ptr)
+    {
+        Type defaultVal = {};
+        if (ptr == NULL)
+            return defaultVal;
+
+        return *reinterpret_cast<Type *>(ptr);
+    }
+
+    /*
+     * Wrapper to dereference & set value of a pointer
+     * Make sure to use the correct data type!, const objects won't work
+     */
+    template <typename Type>
+    bool writePtr(void *ptr, Type val)
+    {
+        if (ptr == NULL)
+            return false;
+
+        *reinterpret_cast<Type *>(ptr) = val;
+        return true;
+    }
+
+    /*
+     * Reads an address content and returns hex string
+     */
+    std::string read2HexStr(const void *address, size_t len);
+
+    kern_return_t getPageInfo(void *page_start, vm_region_submap_short_info_64 *outInfo);
+
+    /*
+     * returns base executable info
+     */
+    memory_file_info getBaseInfo();
+
+    /*
+     * find in memory file info
+     */
+    memory_file_info getMemoryFileInfo(std::string fileName);
+
+    /*
+     * returns relative address of file in memory, NULL as fileName will return base executable
+     */
+    uint64_t getAbsoluteAddress(const char *fileName, uint64_t address);
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyScanner.cpp`:
+
+```cpp
+#include "KittyScanner.hpp"
+
+// refs 
+// https://github.com/learn-more/findpattern-bench
+
+namespace KittyScanner
+{
+
+    bool compare(const char *data, const char *pattern, const char *mask)
+    {
+        for (; *mask; ++mask, ++data, ++pattern)
+        {
+            if (*mask == 'x' && *data != *pattern)
+                return false;
+        }
+
+        return !*mask;
+    }
+
+    uintptr_t find(const uintptr_t start, const size_t size, const char *pattern, const char *mask)
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            if (!compare(reinterpret_cast<const char *>(start + i), pattern, mask))
+                continue;
+
+            return start + i;
+        }
+        return 0;
+    }
+
+    uintptr_t find_from_segment64(const mach_header_64 *header, const char *seg, const char *pattern, const char *mask)
+    {
+        if (!header || !seg || !pattern || !mask)
+            return 0;
+
+        unsigned long size = 0;
+        uint8_t *start = getsegmentdata(header, seg, &size);
+        if (!start || size == 0)
+            return 0;
+
+        return find((uintptr_t)start, size, pattern, mask);
+    }
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyScanner.hpp`:
+
+```hpp
+#pragma once
+
+#include <string>
+#include <cstdint>
+
+#include <mach-o/dyld.h>
+#include <mach-o/getsect.h>
+#include <mach/mach.h>
+
+namespace KittyScanner
+{
+
+    bool compare(const char *data, const char *pattern, const char *mask);
+
+    uintptr_t find(const uintptr_t start, const size_t size, const char *pattern, const char *mask);
+
+    uintptr_t find_from_segment64(const mach_header_64 *header, const char *seg, const char *pattern, const char *mask);
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyUtils.cpp`:
+
+```cpp
+#include "KittyUtils.hpp"
+
+#include <sstream>
+#include <iomanip>
+
+static void xtrim(std::string &hex)
+{
+    if (hex.compare(0, 2, "0x") == 0)
+    {
+        hex.erase(0, 2);
+    }
+
+    // https://www.techiedelight.com/remove-whitespaces-string-cpp/
+    hex.erase(std::remove_if(hex.begin(), hex.end(), [](char c)
+                             { return (c == ' ' || c == '\n' || c == '\r' ||
+                                       c == '\t' || c == '\v' || c == '\f'); }),
+              hex.end());
+}
+
+namespace KittyUtils
+{
+    bool validateHexString(std::string &xstr)
+    {
+        if (xstr.length() < 2)
+            return false;
+        xtrim(xstr); // first remove spaces
+        if (xstr.length() % 2 != 0)
+            return false;
+        for (size_t i = 0; i < xstr.length(); i++)
+        {
+            if (!std::isxdigit((unsigned char)xstr[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // https://tweex.net/post/c-anything-tofrom-a-hex-string/
+
+    // ------------------------------------------------------------------
+    /*!
+        Convert a block of data to a hex string
+    */
+    void toHex(
+        void *const data,        //!< Data to convert
+        const size_t dataLength, //!< Length of the data to convert
+        std::string &dest        //!< Destination string
+    )
+    {
+        unsigned char *byteData = reinterpret_cast<unsigned char *>(data);
+        std::stringstream hexStringStream;
+
+        hexStringStream << std::hex << std::setfill('0');
+        for (size_t index = 0; index < dataLength; ++index)
+            hexStringStream << std::setw(2) << static_cast<int>(byteData[index]);
+        dest = hexStringStream.str();
+    }
+
+    // ------------------------------------------------------------------
+    /*!
+        Convert a hex string to a block of data
+    */
+    void fromHex(
+        const std::string &in, //!< Input hex string
+        void *const data       //!< Data store
+    )
+    {
+        size_t length = in.length();
+        unsigned char *byteData = reinterpret_cast<unsigned char *>(data);
+
+        std::stringstream hexStringStream;
+        hexStringStream >> std::hex;
+        for (size_t strIndex = 0, dataIndex = 0; strIndex < length; ++dataIndex)
+        {
+            // Read out and convert the string two characters at a time
+            const char tmpStr[3] = {in[strIndex++], in[strIndex++], 0};
+
+            // Reset and fill the string stream
+            hexStringStream.clear();
+            hexStringStream.str(tmpStr);
+
+            // Do the conversion
+            int tmpValue = 0;
+            hexStringStream >> tmpValue;
+            byteData[dataIndex] = static_cast<unsigned char>(tmpValue);
+        }
+    }
+
+}
+```
+
+`IOS/test_src/KittyMemory/KittyUtils.hpp`:
+
+```hpp
+#pragma once
+
+#include <string>
+#include <algorithm>
+
+namespace KittyUtils
+{
+    bool validateHexString(std::string &xstr);
+    void toHex(void *const data, const size_t dataLength, std::string &dest);
+    void fromHex(const std::string &in, void *const data);
+}
+```
+
+`IOS/test_src/KittyMemory/MemoryBackup.cpp`:
+
+```cpp
+//
+//  MemoryBackup.cpp
+//
+//  Created by MJ (Ruit) on 4/19/20.
+//
+
+#include "MemoryBackup.hpp"
+
+MemoryBackup::MemoryBackup()
+{
+  _address = 0;
+  _size = 0;
+  _orig_code.clear();
+}
+
+MemoryBackup::MemoryBackup(const char *fileName, uint64_t address, size_t backup_size)
+{
+  MemoryBackup();
+
+  if (address == 0 || backup_size < 1)
+    return;
+
+  _address = reinterpret_cast<void *>(KittyMemory::getAbsoluteAddress(fileName, address));
+  if (_address == NULL)
+    return;
+
+  _size = backup_size;
+
+  _orig_code.resize(backup_size);
+
+  // backup current content
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), backup_size);
+}
+
+MemoryBackup::MemoryBackup(uint64_t absolute_address, size_t backup_size)
+{
+  MemoryBackup();
+
+  if (absolute_address == 0 || backup_size < 1)
+    return;
+
+  _address = reinterpret_cast<void *>(absolute_address);
+
+  _size = backup_size;
+
+  _orig_code.resize(backup_size);
+
+  // backup current content
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), backup_size);
+}
+
+MemoryBackup::~MemoryBackup()
+{
+  // clean up
+  _orig_code.clear();
+}
+
+bool MemoryBackup::isValid() const
+{
+  return (_address != 0 && _size > 0 && _orig_code.size() == _size);
+}
+
+size_t MemoryBackup::get_BackupSize() const
+{
+  return _size;
+}
+
+void *MemoryBackup::get_TargetAddress() const
+{
+  return _address;
+}
+
+bool MemoryBackup::Restore()
+{
+  if (!isValid())
+    return false;
+  return KittyMemory::memWrite(reinterpret_cast<void *>(_address), &_orig_code[0], _size) == KittyMemory::SUCCESS;
+}
+
+std::string MemoryBackup::get_CurrBytes()
+{
+  if (!isValid())
+    _hexString = std::string("0xInvalid");
+  else
+    _hexString = KittyMemory::read2HexStr(reinterpret_cast<const void *>(_address), _size);
+
+  return _hexString;
+}
+
+```
+
+`IOS/test_src/KittyMemory/MemoryBackup.hpp`:
+
+```hpp
+//
+//  MemoryBackup.hpp
+//
+//  Created by MJ (Ruit) on 4/19/20.
+//
+
+#pragma once
+
+#include <vector>
+
+#include "KittyMemory.hpp"
+
+class MemoryBackup
+{
+private:
+    void *_address;
+    size_t _size;
+
+    std::vector<uint8_t> _orig_code;
+
+    std::string _hexString;
+
+public:
+    MemoryBackup();
+
+    /*
+     * expects library name and relative address
+     */
+    MemoryBackup(const char *fileName, uint64_t address, size_t backup_size);
+
+    /*
+     * expects absolute address
+     */
+    MemoryBackup(uint64_t absolute_address, size_t backup_size);
+
+    ~MemoryBackup();
+
+    /*
+     * Validate patch
+     */
+    bool isValid() const;
+
+    size_t get_BackupSize() const;
+
+    /*
+     * Returns pointer to the target address
+     */
+    void *get_TargetAddress() const;
+
+    /*
+     * Restores backup code
+     */
+    bool Restore();
+
+    /*
+     * Returns current target address bytes as hex string
+     */
+    std::string get_CurrBytes();
+};
+
+```
+
+`IOS/test_src/KittyMemory/MemoryPatch.cpp`:
+
+```cpp
+//
+//  MemoryPatch.cpp
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#include "MemoryPatch.hpp"
+
+MemoryPatch::MemoryPatch()
+{
+  _address = 0;
+  _size = 0;
+  _orig_code.clear();
+  _patch_code.clear();
+}
+
+MemoryPatch::MemoryPatch(uint64_t absolute_address,
+                         const void *patch_code, size_t patch_size)
+{
+  MemoryPatch();
+
+  if (absolute_address == 0 || patch_code == NULL || patch_size < 1)
+    return;
+
+  _address = reinterpret_cast<void *>(absolute_address);
+  _size = patch_size;
+
+  _orig_code.resize(patch_size);
+  _patch_code.resize(patch_size);
+
+  // initialize patch & backup current content
+  KittyMemory::memRead(&_patch_code[0], patch_code, patch_size);
+  KittyMemory::memRead(&_orig_code[0], static_cast<const void *>(_address), patch_size);
+}
+
+MemoryPatch::MemoryPatch(const char *fileName, uint64_t address,
+                         const void *patch_code, size_t patch_size)
+{
+  MemoryPatch();
+
+  if (address == 0 || patch_code == NULL || patch_size < 1)
+    return;
+
+  _address = reinterpret_cast<void *>(KittyMemory::getAbsoluteAddress(fileName, address));
+  if (_address == NULL)
+    return;
+
+  _size = patch_size;
+
+  _orig_code.resize(patch_size);
+  _patch_code.resize(patch_size);
+
+  // initialize patch & backup current content
+  KittyMemory::memRead(&_patch_code[0], patch_code, patch_size);
+  KittyMemory::memRead(&_orig_code[0], reinterpret_cast<const void *>(_address), patch_size);
+}
+
+MemoryPatch::~MemoryPatch()
+{
+  // clean up
+  _orig_code.clear();
+  _patch_code.clear();
+}
+
+MemoryPatch MemoryPatch::createWithHex(const char *fileName, uint64_t address, std::string hex)
+{
+  MemoryPatch patch;
+
+  if (address == 0 || !KittyUtils::validateHexString(hex))
+    return patch;
+
+  patch._address = reinterpret_cast<void *>(KittyMemory::getAbsoluteAddress(fileName, address));
+  if (patch._address == NULL)
+    return patch;
+
+  patch._size = hex.length() / 2;
+
+  patch._orig_code.resize(patch._size);
+  patch._patch_code.resize(patch._size);
+
+  // initialize patch
+  KittyUtils::fromHex(hex, &patch._patch_code[0]);
+
+  // backup current content
+  KittyMemory::memRead(&patch._orig_code[0], reinterpret_cast<const void *>(patch._address), patch._size);
+  return patch;
+}
+
+MemoryPatch MemoryPatch::createWithHex(uint64_t absolute_address, std::string hex)
+{
+  MemoryPatch patch;
+
+  if (absolute_address == 0 || !KittyUtils::validateHexString(hex))
+    return patch;
+
+  patch._address = reinterpret_cast<void *>(absolute_address);
+  patch._size = hex.length() / 2;
+
+  patch._orig_code.resize(patch._size);
+  patch._patch_code.resize(patch._size);
+
+  // initialize patch
+  KittyUtils::fromHex(hex, &patch._patch_code[0]);
+
+  // backup current content
+  KittyMemory::memRead(&patch._orig_code[0], reinterpret_cast<const void *>(patch._address), patch._size);
+  return patch;
+}
+
+bool MemoryPatch::isValid() const
+{
+  return (_address != NULL && _size > 0 && _orig_code.size() == _size && _patch_code.size() == _size);
+}
+
+size_t MemoryPatch::get_PatchSize() const
+{
+  return _size;
+}
+
+void *MemoryPatch::get_TargetAddress() const
+{
+  return _address;
+}
+
+bool MemoryPatch::Restore()
+{
+  if (!isValid())
+    return false;
+  return KittyMemory::memWrite(_address, &_orig_code[0], _size) == KittyMemory::SUCCESS;
+}
+
+bool MemoryPatch::Modify()
+{
+  if (!isValid())
+    return false;
+  return (KittyMemory::memWrite(_address, &_patch_code[0], _size) == KittyMemory::SUCCESS);
+}
+
+std::string MemoryPatch::get_CurrBytes()
+{
+  if (!isValid())
+    _hexString = std::string("0xInvalid");
+  else
+    _hexString = KittyMemory::read2HexStr(reinterpret_cast<const void *>(_address), _size);
+
+  return _hexString;
+}
+
+```
+
+`IOS/test_src/KittyMemory/MemoryPatch.hpp`:
+
+```hpp
+//
+//  MemoryPatch.h
+//
+//  Created by MJ (Ruit) on 1/1/19.
+//
+
+#pragma once
+
+#include <vector>
+
+#include "KittyMemory.hpp"
+#include "KittyUtils.hpp"
+
+class MemoryPatch
+{
+private:
+    void *_address;
+    size_t _size;
+
+    std::vector<uint8_t> _orig_code;
+    std::vector<uint8_t> _patch_code;
+
+    std::string _hexString;
+
+public:
+    MemoryPatch();
+
+    /*
+     * expects an already calculated address
+     */
+    MemoryPatch(uint64_t absolute_address,
+                const void *patch_code, size_t patch_size);
+
+    /*
+     * expects file name and relative address, you can pass NULL as filename for base executable
+     */
+    MemoryPatch(const char *fileName, uint64_t address,
+                const void *patch_code, size_t patch_size);
+
+    ~MemoryPatch();
+
+    /*
+     * compatible hex format (0xffff & ffff & ff ff)
+     */
+    static MemoryPatch createWithHex(const char *fileName, uint64_t address, std::string hex);
+    static MemoryPatch createWithHex(uint64_t absolute_address, std::string hex);
+
+    /*
+     * Validate patch
+     */
+    bool isValid() const;
+
+    size_t get_PatchSize() const;
+
+    /*
+     * Returns pointer to the target address
+     */
+    void *get_TargetAddress() const;
+
+    /*
+     * Restores patch to original value
+     */
+    bool Restore();
+
+    /*
+     * Applies patch modifications to target address
+     */
+    bool Modify();
+
+    /*
+     * Returns current patch target address bytes as hex string
+     */
+    std::string get_CurrBytes();
+};
+```
+
+`IOS/test_src/KittyMemory/writeData.cpp`:
+
+```cpp
+//
+//  writeData.cpp
+//
+//
+//  Created by MJ (Ruit) on 4/13/19.
+//
+
+/*
+   This is an alternative for the old writeData that was made by HackJack & Razzile
+*/
+
+#include "writeData.hpp"
+
+bool writeData8(uint64_t offset, uint8_t data)
+{
+	const size_t sz = sizeof(uint8_t);
+
+	// pass NULL as fileName for base executable
+	return MemoryPatch(NULL, /* relative address */ offset, /* patch bytes */ &data, /* patch bytes length */ sz).Modify();
+}
+
+bool writeData16(uint64_t offset, uint16_t data)
+{
+	const size_t sz = sizeof(uint16_t);
+	SwapData<uint16_t>(data);
+
+	// pass NULL as fileName for base executable
+	return MemoryPatch(NULL, /* relative address */ offset, /* patch bytes */ &data, /* patch bytes length */ sz).Modify();
+}
+
+bool writeData32(uint64_t offset, uint32_t data)
+{
+	const size_t sz = sizeof(uint32_t);
+	SwapData<uint32_t>(data);
+
+	// pass NULL as fileName for base executable
+	return MemoryPatch(NULL, /* relative address */ offset, /* patch bytes */ &data, /* patch bytes length */ sz).Modify();
+}
+
+bool writeData64(uint64_t offset, uint64_t data)
+{
+	const size_t sz = sizeof(uint64_t);
+	SwapData<uint64_t>(data);
+
+	// pass NULL as fileName for base executable
+	return MemoryPatch(NULL, /* relative address */ offset, /* patch bytes */ &data, /* patch bytes length */ sz).Modify();
+}
+
+```
+
+`IOS/test_src/KittyMemory/writeData.hpp`:
+
+```hpp
+//
+//  writeData.h
+//
+//
+//  Created by MJ (Ruit) on 4/13/19.
+//
+
+/*
+   This is an alternative for the old writeData that was made by HackJack & Razzile
+*/
+
+#ifndef writeData_h
+#define writeData_h
+
+#include <math.h>
+#include "MemoryPatch.hpp"
+
+#define BITS_IN_BYTE 8
+
+// https://www.exploringbinary.com/number-of-bits-in-a-decimal-integer/
+// returns bits size of an integer
+inline int findBits(uint64_t n)
+{
+	if (n > 0)
+	{
+		return floor(log(n) / log(2)) + 1;
+	}
+	return 0;
+}
+
+// returns bytes size of an integer
+inline size_t findBytes(uint64_t data)
+{
+	int bits = findBits(data);
+	if (bits > 0)
+	{
+		return (size_t)(bits / BITS_IN_BYTE);
+	}
+	return 0;
+}
+
+template <typename T>
+void SwapData(T &data)
+{
+	const size_t sz = sizeof(T);
+	switch (sz)
+	{
+	case sizeof(int16_t):
+		data = _OSSwapInt16(data);
+		break;
+	case sizeof(int32_t):
+		data = _OSSwapInt32(data);
+		break;
+	case sizeof(int64_t):
+		data = _OSSwapInt64(data);
+		break;
+	default:
+		break;
+	}
+}
+
+bool writeData8(uint64_t offset, uint8_t data);
+bool writeData16(uint64_t offset, uint16_t data);
+bool writeData32(uint64_t offset, uint32_t data);
+bool writeData64(uint64_t offset, uint64_t data);
+
+#endif /* writeData.h */
+```
+
+`IOS/test_src/Makefile`:
+
+```
+include $(THEOS)/makefiles/common.mk
+
+TWEAK_NAME = FWD_Kitty
+
+FWD_Kitty_CCFLAGS = -std=c++11 -fno-rtti -w
+
+FWD_Kitty_FILES = Tweak.xm \
+$(wildcard KittyMemory/*.cpp)
+
+FWD_Kitty_LIBRARIES += substrate
+
+include $(THEOS_MAKE_PATH)/tweak.mk
+
+```
+
+`IOS/test_src/Tweak.xm`:
+
+```xm
+#import <pthread.h>
+#import "KittyMemory/KittyMemory.hpp"
+#import "KittyMemory/MemoryPatch.hpp"
+#import "KittyMemory/writeData.hpp"
+#import "KittyMemory/KittyScanner.hpp"
+
+using KittyMemory::memory_file_info;
+
+#define ARM64_RET_TRUE "\x20\x00\x80\xD2\xC0\x03\x5F\xD6"
+
+
+static MemoryPatch minimapPatch;
+
+void *HackThread(void *user_data) {
+
+    // public bool get_CanShowOnMinimap(); // 0x1016BB4F4  ( outdated offset ofc )
+
+      NSLog(@"============  New Patch Entry  =============");
+      NSLog(@"============================================");
+      NSLog(@"============================================");
+
+    // pass NULL as fileName for base executable
+    minimapPatch = MemoryPatch(NULL,
+      /* relative address */ 0x1016BB4F4,
+      /* patch bytes */ ARM64_RET_TRUE,
+      /* patch bytes length */ 8);
+
+    // also possible with hex
+    // spaces in hex string are fine too
+     minimapPatch = MemoryPatch::createWithHex(NULL, 0x1016BB4F4, "200080D2C0035FD6");
+     minimapPatch.Modify();
+
+    // log current bytes
+    NSLog(@"get_CanShowOnMinimap Current Bytes: %s", minimapPatch.get_CurrBytes().c_str());
+
+    if(minimapPatch.Modify()){ // modify and apply patch bytes
+        NSLog(@"get_CanShowOnMinimap has been modified successfully");
+	    NSLog(@"get_CanShowOnMinimap Current Bytes: %s", minimapPatch.get_CurrBytes().c_str());
+    } else {
+	    NSLog(@"Failed to patch get_CanShowOnMinimap");
+    }
+
+
+    // for restoring to original bytes
+    if(minimapPatch.Restore()){ // restore and apply original bytes
+       NSLog(@"get_CanShowOnMinimap has been restored successfully");
+       NSLog(@"get_CanShowOnMinimap Current Bytes: %s", minimapPatch.get_CurrBytes().c_str());
+    } else {
+       NSLog(@"Failed to restore get_CanShowOnMinimap");
+    }
+
+
+
+	/* writedata alternative, check KittyMemory/writeData.hpp */
+
+	// write 64 bit integer ( 8 bytes )
+	if(writeData64(0x1016BB4F4, 0x200080D2C0035FD6)){
+	    NSLog(@"get_CanShowOnMinimap has been modified successfully");
+	}
+
+
+	// or as 32 bit integer ( 4 bytes )
+	if(writeData32(0x1016BB4F4, 0x200080D2) && writeData32(0x1016BB4F4 + 4, 0xC0035FD6)){
+	    NSLog(@"get_CanShowOnMinimap has been modified successfully");
+	}
+
+	// and same thing for 1 and 2 bytes
+
+    // scan for bytes with mask x and ?
+    memory_file_info some_bin = KittyMemory::getMemoryFileInfo("xxxxx");
+
+    uintptr_t found_at = KittyScanner::find_from_segment64(some_bin.header, "__TEXT", "\x00\x00\x00\x00\x00\x00\x00\x00\x00", "xxxx??x?x");
+    NSLog(@"scanner found bytes at: %p", (void*)found_at);
+
+    return NULL;
+}
+
+__attribute__((constructor))
+static void runHacksInitializer(){
+    pthread_t tid_hack;
+    pthread_create(&tid_hack, NULL, HackThread, NULL);
+}
+
+```
+
+`IOS/test_src/control`:
+
+```
+Package: com.fwdkitty.ios
+Name: FWD_Kitty
+Depends: mobilesubstrate
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Test tweak for fwd assault
+Maintainer: CyberCat
+Author: CyberCat
+Section: Tweaks
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2019 MJ
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# KittyMemory
+This library aims for runtime code patching for both Android and iOS
+```
