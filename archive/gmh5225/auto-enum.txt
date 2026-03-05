@@ -1,0 +1,1601 @@
+Project Path: arc_gmh5225_auto-enum_3d7de08s
+
+Source Tree:
+
+```txt
+arc_gmh5225_auto-enum_3d7de08s
+├── README.md
+├── demo
+│   ├── demo
+│   └── demo.c
+└── plugin
+    ├── auto_enum.py
+    └── data
+        └── linux
+            ├── enums.json
+            └── functions
+                ├── bpf.json
+                ├── clone.json
+                ├── close_range.json
+                ├── epoll_create.json
+                ├── epoll_ctl.json
+                ├── eventfd.json
+                ├── execveat.json
+                ├── fanotify_init.json
+                ├── fanotify_mark.json
+                ├── fcntl.json
+                ├── flock.json
+                ├── fseek.json
+                ├── getitimer.json
+                ├── getrandom.json
+                ├── getrlimit.json
+                ├── getrusage.json
+                ├── inotify_init1.json
+                ├── lseek.json
+                ├── madvise.json
+                ├── memfd_create.json
+                ├── mmap.json
+                ├── mount.json
+                ├── mprotect.json
+                ├── msgctl.json
+                ├── msgsnd.json
+                ├── msync.json
+                ├── open.json
+                ├── openat.json
+                ├── prctl.json
+                ├── ptrace.json
+                ├── recv.json
+                ├── sched_setscheduler.json
+                ├── send.json
+                ├── setns.json
+                ├── setxattr.json
+                ├── shmat.json
+                ├── shmctl.json
+                ├── shmget.json
+                ├── signalfd.json
+                ├── sigprocmask.json
+                ├── socket.json
+                ├── splice.json
+                ├── statx.json
+                ├── sync_file_range.json
+                ├── tee.json
+                ├── timerfd_create.json
+                ├── unshare.json
+                └── vmsplice.json
+
+```
+
+`README.md`:
+
+```md
+# Auto Enum
+IDA Plugin to automatically identify and set enums for standard functions
+
+(Very WIP)
+
+## Demo
+
+
+https://github.com/junron/auto-enum/assets/26194273/9e43f3ec-0722-4388-951a-b90bec5ab19b
+
+
+See [`demo.c`](./demo/demo.c) for the source code.
+
+## Installation
+
+Copy `plugin/*` to your IDA Plugin directory and hopefully everything should work. No dependencies required.
+
+```
+
+`demo/demo.c`:
+
+```c
+#include <stdio.h>
+#include <seccomp.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/prctl.h>
+#include <linux/filter.h>
+#include <seccomp.h>
+#include <stddef.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+
+
+struct sock_filter filter[] = {
+    BPF_STMT(BPF_LD + BPF_W + BPF_ABS, (offsetof(struct seccomp_data, nr))),
+    BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_read, 1, 0),
+    BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_write, 0, 1),
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+    BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_KILL),
+};
+
+struct sock_fprog prog = {
+    .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
+    .filter = filter,
+};
+
+struct sockaddr_in server = {
+    .sin_family = AF_INET,
+    .sin_addr.s_addr = INADDR_ANY,
+    .sin_port = 14597,
+};
+int main() {
+    void* region = mmap(NULL, 
+			0x1000,
+			PROT_WRITE | PROT_EXEC | PROT_READ,
+			MAP_ANONYMOUS | MAP_PRIVATE,
+			-1,
+			0);
+
+    int socket_desc , client_sock , c;
+    struct sockaddr_in client;
+     
+    //Create socket
+    socket_desc = socket(AF_INET , SOCK_STREAM , 0);
+    if (socket_desc == -1)
+    {
+        return 1;
+    }
+     
+    //Bind
+    if( bind(socket_desc,(struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+        return 1;
+    }
+     
+    listen(socket_desc , 3);
+     
+    c = sizeof(struct sockaddr_in);
+	
+    client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&c);
+
+    int recv_len = recv(client_sock, region, 0x1000, 0);
+    printf("Received %d bytes!\n", recv_len);
+
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
+        return 1;
+    }
+    if (prctl(PR_SET_SECCOMP, 2, &prog)) {
+        return 1;
+    }
+
+    ((int(*)())region)();
+
+    return 0;
+}
+```
+
+`plugin/auto_enum.py`:
+
+```py
+import os.path
+import logging
+import re
+import traceback
+import functools
+import string
+import json
+
+import idc
+import idautils
+import idaapi
+import ida_typeinf
+import ida_nalt
+import ida_hexrays
+import ida_funcs
+
+# From https://github.com/tmr232/Sark/blob/main/sark/ui.py#L358
+class ActionHandler(idaapi.action_handler_t):
+    """A wrapper around `idaapi.action_handler_t`.
+
+    The class simplifies the creation of UI actions in IDA >= 6.7.
+
+    To create an action, simply create subclass and override the relevant fields
+    and register it::
+
+        class MyAction(ActionHandler):
+            TEXT = "My Action"
+            HOTKEY = "Alt+Z"
+
+            def _activate(self, ctx):
+                idaapi.msg("Activated!")
+
+        MyAction.register()
+
+    Additional Documentation:
+        Introduction to `idaapi.action_handler_t`:
+            http://www.hexblog.com/?p=886
+
+        Return values for update (from the SDK):
+            AST_ENABLE_ALWAYS     // enable action and do not call action_handler_t::update() anymore
+            AST_ENABLE_FOR_IDB    // enable action for the current idb. Call action_handler_t::update() when a database is opened/closed
+            AST_ENABLE_FOR_WIDGET // enable action for the current widget. Call action_handler_t::update() when a form gets/loses focus
+            AST_ENABLE            // enable action - call action_handler_t::update() when anything changes
+
+            AST_DISABLE_ALWAYS    // disable action and do not call action_handler_t::action() anymore
+            AST_DISABLE_FOR_IDB   // analog of ::AST_ENABLE_FOR_IDB
+            AST_DISABLE_FOR_WIDGET// analog of ::AST_ENABLE_FOR_WIDGET
+            AST_DISABLE           // analog of ::AST_ENABLE
+    """
+    NAME = None
+    TEXT = "Default. Replace me!"
+    HOTKEY = ""
+    TOOLTIP = ""
+    ICON = -1
+
+    @classmethod
+    def get_name(cls):
+        """Return the name of the action.
+
+        If a name has not been set (using the `Name` class variable), the
+        function generates a name based on the class name and id.
+        :return: action name
+        :rtype: str
+        """
+        if cls.NAME is not None:
+            return cls.NAME
+
+        return "{}:{}".format(cls.__name__, id(cls))
+
+    @classmethod
+    def get_desc(cls):
+        """Get a descriptor for this handler."""
+        name = cls.get_name()
+        text = cls.TEXT
+        handler = cls()
+        hotkey = cls.HOTKEY
+        tooltip = cls.TOOLTIP
+        icon = cls.ICON
+        action_desc = idaapi.action_desc_t(
+            name,
+            text,
+            handler,
+            hotkey,
+            tooltip,
+            icon,
+        )
+        return action_desc
+
+    @classmethod
+    def register(cls):
+        """Register the action.
+
+        Each action MUST be registered before it can be used. To remove the action
+        use the `unregister` method.
+        """
+        action_desc = cls.get_desc()
+
+        return idaapi.register_action(action_desc)
+
+    @classmethod
+    def unregister(cls):
+        """Unregister the action.
+
+        After unregistering the class cannot be used.
+        """
+        idaapi.unregister_action(cls.get_name())
+
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        try:
+            self._activate(ctx)
+            return 1
+        except:
+            trace = traceback.format_exc()
+            idaapi.msg("Action {!r} failed to activate. Traceback:\n{}".format(self.get_name(), trace))
+            return 0
+
+    def update(self, ctx):
+        """Update the action.
+
+        Optionally override this function.
+        See IDA-SDK for more information.
+        """
+        return idaapi.AST_ENABLE_ALWAYS
+
+    def _activate(self, ctx):
+        """Activate the action.
+
+        This function contains the action code itself. You MUST implement
+        it in your class for the action to work.
+
+        Args:
+            ctx: The action context passed from IDA.
+        """
+        raise NotImplementedError()
+
+
+class Argument:
+
+    def __init__(self):
+        self.name = ""
+        self.enum = None
+        self._logger = logging.getLogger(
+            __name__ + '.' + self.__class__.__name__)
+
+
+class Function:
+
+    def __init__(self):
+        self.name = ""
+        self.arguments = []
+        self._logger = logging.getLogger(
+            __name__ + '.' + self.__class__.__name__)
+
+    def __str__(self):
+        return ("%s -- %s" % (self.name, self.arguments))
+
+    def __repr__(self):
+        return self.__str__()
+
+
+def all_digits(val: str):
+    return all(x in string.digits for x in val)
+
+
+class FunctionMap:
+    def __init__(self, data_dir: str):
+        self.data_dir = data_dir
+        self.enums = json.loads(open(f"{self.data_dir}/enums.json").read())
+
+    @functools.lru_cache()
+    def __contains__(self, funcname: str):
+        return os.path.exists(f"{self.data_dir}/functions/{funcname}.json")
+
+    @functools.lru_cache()
+    def __getitem__(self, funcname: str):
+        if funcname not in self:
+            raise KeyError(f"{funcname} not found!")
+        func = Function()
+        with open(f"{self.data_dir}/functions/{funcname}.json", "r") as file:
+            data = json.loads(file.read())
+            func.name = data["name"]
+            args = []
+            for k, v in data["enums"].items():
+                arg = Argument()
+                arg.name = k
+                arg.enum = v
+                args.append(arg)
+
+            func.arguments = args
+            return func
+
+    def expand_enum(self, enum: dict[str, int], enum_id: str) -> dict[str, int]:
+        items = list(enum.items())
+        if not all_digits(enum_id):
+            if re.search(r"_[0-9]+$", enum_id):
+                enum_id = re.sub(r"_[0-9]+$", "", enum_id)
+            for k, v in items:
+                del enum[k]
+                if k == "0":
+                    enum["NULL"] = v
+                else:
+                    enum[f"{enum_id}_{k}"] = v
+            return enum
+
+        for k, v in items:
+            if k == "0":
+                del enum[k]
+                enum["NULL"] = v
+        return enum
+
+    def get_enum(self, name: str):
+        enum = self.enums[name]
+        return self.expand_enum(enum, name)
+
+
+def make_import_names_callback(library_calls, library_addr):
+    """ Return a callback function used by idaapi.enum_import_names(). """
+
+    def callback(ea, name, ordinal):
+        """ Callback function to retrieve code references to library calls. """
+        if "@" in name:
+            name = name.split("@")[0]
+            ea = next(idautils.CodeRefsTo(ea, 0), None)
+            if ea is None:
+                return True
+            ea = next(ida_funcs.get_func(ea).addresses())
+        library_calls[name] = []
+        library_addr[name] = ea
+        for ref in idautils.CodeRefsTo(ea, 0):
+            library_calls[name].append(ref)
+        return True  # True -> Continue enumeration
+
+    return callback
+
+
+def get_imports(library_calls, library_addr):
+    """ Populate dictionaries with import information. """
+    import_names_callback = make_import_names_callback(library_calls,
+                                                       library_addr)
+    for i in range(0, idaapi.get_import_module_qty()):
+        idaapi.enum_import_names(i, import_names_callback)
+
+
+def get_funcinfo(funcptr_addr):
+    tif = ida_typeinf.tinfo_t()
+    funcdata = ida_typeinf.func_type_data_t()
+
+    if not ida_nalt.get_tinfo(tif, funcptr_addr):
+        return None, None
+    if not tif.is_funcptr():
+        if tif.is_func():
+            tif.get_func_details(funcdata)
+            return False, funcdata
+        return None, None
+    if not tif.get_pointed_object().get_func_details(funcdata):
+        return None, None
+    return True, funcdata
+
+
+@functools.lru_cache()
+def get_or_add_enum(funcmap: FunctionMap, enum_id: str):
+    enum_name = f"ENUM_{enum_id}"
+    ida_enum_id = idc.get_enum(enum_name)
+    if ida_enum_id == idaapi.BADADDR:
+        ida_enum_id = idc.add_enum(-1, enum_name, idaapi.hex_flag())
+        enum = funcmap.get_enum(enum_id)
+        for k, v in enum.items():
+            idc.add_enum_member(ida_enum_id, k, v, -1)
+        return enum_name
+    return enum_name
+
+class Hooks(idaapi.UI_Hooks):
+    def finish_populating_widget_popup(self, form, popup):
+        type = idaapi.get_widget_type(form)
+        if type == idaapi.BWN_DISASM or type == idaapi.BWN_PSEUDOCODE:
+            idaapi.attach_action_to_popup(form, popup, AutoEnum.get_name(), '')
+
+class AutoEnum(ActionHandler):
+    TEXT = "Auto Enum"
+    HOTKEY = "Ctrl+Shift+M"
+
+    def _activate(self, ctx):
+        main()
+
+
+class AutoEnumPlugin(idaapi.plugin_t):
+    flags = 0
+    comment = 'Automatically detect standard enums'
+    help = 'Automatically detect standard enums'
+    wanted_name = 'Auto Enum'
+    wanted_hotkey = "Ctrl+Shift+M"
+
+    def init(self):
+        print("[AutoEnum] Plugin loaded!")
+        AutoEnum.register()
+        self.hooks = Hooks()
+        self.hooks.hook()
+
+        return idaapi.PLUGIN_KEEP
+    
+    def term(self):
+        self.hooks.unhook()
+        AutoEnum.unregister()
+    
+    def run(self, arg):
+        pass
+
+def PLUGIN_ENTRY():
+    return AutoEnumPlugin()
+
+
+def main():
+    handle = ida_hexrays.open_pseudocode(idc.here(), 0)
+    library_calls = {}
+    library_addr = {}
+    get_imports(library_calls, library_addr)
+    binary_type = "windows"
+    if "ELF" in idaapi.get_file_type_name():
+        binary_type = "linux"
+    if binary_type == "windows":
+        raise Exception("Windows is not supported at the moment!")
+    thisdir = os.path.dirname(__file__)
+    func_map = FunctionMap(os.path.join(thisdir, "data", binary_type))
+    functions = list(library_addr.items())
+    BOOL = ida_typeinf.tinfo_t()
+    BOOL.get_named_type(idaapi.get_idati(), "MACRO_BOOL")
+    for name, addr in functions:
+        is_ptr, funcdata = get_funcinfo(addr)
+        if name[:-1] in func_map:
+            library_addr[name[:-1]] = library_addr[name]
+            name = name[:-1]
+        in_map = name in func_map
+        changed = False
+        if not funcdata:
+            continue
+        for arg in funcdata:
+            if arg.type.is_ptr():
+                continue
+            type_name = arg.type.get_type_name()
+            if type_name is not None and type_name.lower() in ["bool"]:
+                arg.type = BOOL
+                changed = True
+            elif in_map and arg.type.is_integral() and not arg.type.is_enum():
+                func = func_map[name]
+                matching_args = [a for a in func.arguments if a.name == arg.name]
+                if len(matching_args) and matching_args[0].enum is not None:
+                    enum_name = get_or_add_enum(func_map, matching_args[0].enum)
+                    enum_type = ida_typeinf.tinfo_t()
+                    enum_type.get_named_type(idaapi.get_idati(), enum_name)
+                    arg.type = enum_type
+                    changed = True
+        if changed:
+            print(f"Setting enums for {name}")
+            ti = idaapi.tinfo_t()
+            ti.create_func(funcdata)
+            if is_ptr:
+                tip = idaapi.tinfo_t()
+                tip.create_ptr(ti)
+                ida_typeinf.apply_tinfo(addr, tip, idaapi.TINFO_DEFINITE)
+            else:
+                ida_typeinf.apply_tinfo(addr, ti, idaapi.TINFO_DEFINITE)
+    handle.refresh_view(True)
+```
+
+`plugin/data/linux/enums.json`:
+
+```json
+{
+  "BPF": {
+    "EXIST": 2,
+    "ANY": 0,
+    "NOEXIST": 1,
+    "MAP_UPDATE_ELEM": 2,
+    "MAP_GET_NEXT_KEY": 4,
+    "PROG_LOAD": 5,
+    "MAP_CREATE": 0,
+    "MAP_LOOKUP_ELEM": 1,
+    "MAP_DELETE_ELEM": 3
+  },
+  "CLONE": {
+    "SIGHAND": 2048,
+    "NEWUSER": 268435456,
+    "FS": 512,
+    "PARENT": 32768,
+    "CLEAR_SIGHAND": 0,
+    "THREAD": 65536,
+    "UNTRACED": 8388608,
+    "NEWNET": 1073741824,
+    "NEWCGROUP": 33554432,
+    "VM": 256,
+    "VFORK": 16384,
+    "PTRACE": 8192,
+    "FILES": 1024,
+    "NEWNS": 131072,
+    "NEWPID": 536870912,
+    "DETACHED": 4194304,
+    "CHILD_CLEARTID": 2097152,
+    "SYSVSEM": 262144,
+    "CHILD_SETTID": 16777216,
+    "IO": -2147483648,
+    "NEWIPC": 134217728,
+    "PARENT_SETTID": 1048576,
+    "INTO_CGROUP": 0,
+    "SETTLS": 524288,
+    "NEWUTS": 67108864,
+    "PIDFD": 4096
+  },
+  "CLOSE_RANGE": {
+    "UNSHARE": 2,
+    "CLOEXEC": 4
+  },
+  "16198": {
+    "EPOLL_CLOEXEC": 524288
+  },
+  "EPOLL_CTL": {
+    "MOD": 3,
+    "DEL": 2,
+    "ADD": 1
+  },
+  "EFD": {
+    "NONBLOCK": 2048,
+    "CLOEXEC": 524288,
+    "SEMAPHORE": 1
+  },
+  "AT": {
+    "EMPTY_PATH": 4096,
+    "SYMLINK_NOFOLLOW": 256
+  },
+  "64473": {
+    "FAN_NONBLOCK": 2,
+    "FAN_REPORT_DFID_NAME": 3072,
+    "FAN_REPORT_TID": 256,
+    "O_RDONLY": 0,
+    "FAN_CLASS_PRE_CONTENT": 8,
+    "FAN_CLASS_CONTENT": 4,
+    "FAN_REPORT_DIR_FID": 1024,
+    "FAN_UNLIMITED_QUEUE": 16,
+    "FAN_ENABLE_AUDIT": 64,
+    "O_WRONLY": 1,
+    "FAN_CLASS_NOTIF": 0,
+    "FAN_REPORT_FID": 512,
+    "FAN_UNLIMITED_MARKS": 32,
+    "FAN_REPORT_NAME": 2048,
+    "O_RDWR": 2,
+    "FAN_CLOEXEC": 1
+  },
+  "O": {
+    "LARGEFILE": 32768,
+    "RDONLY": 0,
+    "WRONLY": 1,
+    "CLOEXEC": 524288,
+    "RDWR": 2
+  },
+  "FAN_MARK": {
+    "REMOVE": 2,
+    "IGNORED_SURV_MODIFY": 64,
+    "FILESYSTEM": 256,
+    "ADD": 1,
+    "FLUSH": 128,
+    "ONLYDIR": 8,
+    "MOUNT": 16,
+    "IGNORED_MASK": 32,
+    "DONT_FOLLOW": 4
+  },
+  "F": {
+    "SET_RW_HINT": 1036,
+    "SETLEASE": 1024,
+    "RDLCK": 0,
+    "GET_RW_HINT": 1035,
+    "WRLCK": 1,
+    "UNLCK": 2,
+    "SET_FILE_RW_HINT": 1038,
+    "GET_FILE_RW_HINT": 1037
+  },
+  "LOCK": {
+    "SH": 1,
+    "UN": 8,
+    "EX": 2
+  },
+  "ITIMER": {
+    "REAL": 0,
+    "PROF": 2,
+    "VIRTUAL": 1
+  },
+  "GRND": {
+    "NONBLOCK": 1,
+    "RANDOM": 2
+  },
+  "RLIMIT": {
+    "RTPRIO": 14,
+    "RTTIME": 15,
+    "CORE": 4,
+    "FSIZE": 1,
+    "MSGQUEUE": 12,
+    "NOFILE": 7,
+    "RSS": 5,
+    "NPROC": 6,
+    "STACK": 3,
+    "AS": 9,
+    "MEMLOCK": 8,
+    "CPU": 0,
+    "LOCKS": 10,
+    "DATA": 2,
+    "SIGPENDING": 11,
+    "NICE": 13
+  },
+  "RUSAGE": {
+    "SELF": 0,
+    "THREAD": 1,
+    "CHILDREN": -1
+  },
+  "IN": {
+    "CLOEXEC": 524288,
+    "NONBLOCK": 2048
+  },
+  "SEEK": {
+    "CUR": 1,
+    "END": 2,
+    "SET": 0,
+    "HOLE": 4,
+    "DATA": 3
+  },
+  "SEEK_1": {
+    "CUR": 1,
+    "END": 2,
+    "SET": 0
+  },
+  "MADV": {
+    "NORMAL": 0,
+    "DONTFORK": 10,
+    "WIPEONFORK": 18,
+    "PAGEOUT": 21,
+    "UNMERGEABLE": 13,
+    "SOFT_OFFLINE": 101,
+    "HUGEPAGE": 14,
+    "DODUMP": 17,
+    "DONTDUMP": 16,
+    "COLD": 20,
+    "FREE": 8,
+    "WILLNEED": 3,
+    "SEQUENTIAL": 2,
+    "KEEPONFORK": 19,
+    "DONTNEED": 4,
+    "REMOVE": 9,
+    "NOHUGEPAGE": 15,
+    "DOFORK": 11,
+    "HWPOISON": 100,
+    "MERGEABLE": 12,
+    "RANDOM": 1
+  },
+  "MFD": {
+    "HUGETLB": 4,
+    "CLOEXEC": 1,
+    "ALLOW_SEALING": 2
+  },
+  "PROT": {
+    "NONE": 0,
+    "WRITE": 2,
+    "READ": 1,
+    "EXEC": 4
+  },
+  "MAP": {
+    "PRIVATE": 2,
+    "NONBLOCK": 65536,
+    "POPULATE": 32768,
+    "LOCKED": 8192,
+    "ANON": 32,
+    "HUGETLB": 262144,
+    "FIXED": 16,
+    "STACK": 131072,
+    "GROWSDOWN": 256,
+    "FIXED_NOREPLACE": 1048576,
+    "SHARED_VALIDATE": 3,
+    "FILE": 0,
+    "SHARED": 1,
+    "NORESERVE": 16384,
+    "DENYWRITE": 2048,
+    "ANONYMOUS": 32,
+    "EXECUTABLE": 4096,
+    "SYNC": 524288
+  },
+  "MS": {
+    "MANDLOCK": 64,
+    "NOSUID": 2,
+    "RELATIME": 2097152,
+    "NOATIME": 1024,
+    "NOEXEC": 8,
+    "NODEV": 4,
+    "NODIRATIME": 2048,
+    "STRICTATIME": 16777216,
+    "SYNCHRONOUS": 16,
+    "REC": 16384,
+    "RDONLY": 1,
+    "DIRSYNC": 128,
+    "NOSYMFOLLOW": 256,
+    "LAZYTIME": 33554432,
+    "SILENT": 32768
+  },
+  "PROT_1": {
+    "WRITE": 2,
+    "READ": 1,
+    "NONE": 0,
+    "GROWSDOWN": 16777216,
+    "EXEC": 4,
+    "GROWSUP": 33554432,
+    "SEM": 8
+  },
+  "65266": {
+    "IPC_RMID": 0,
+    "IPC_STAT": 2,
+    "MSG_STAT": 11,
+    "IPC_INFO": 3,
+    "IPC_SET": 1,
+    "MSG_INFO": 12,
+    "MSG_STAT_ANY": 13
+  },
+  "12245": {
+    "MSG_NOERROR": 4096,
+    "IPC_NOWAIT": 2048,
+    "MSG_COPY": 16384,
+    "MSG_EXCEPT": 8192
+  },
+  "MS_1": {
+    "INVALIDATE": 2,
+    "SYNC": 4,
+    "ASYNC": 1
+  },
+  "PTRACE": {
+    "SETSIGINFO": 16899,
+    "PEEKSIGINFO": 16905,
+    "GETREGS": 12,
+    "TRACEME": 0,
+    "PEEKUSER": 3,
+    "GETSIGINFO": 16898,
+    "POKEUSER": 6,
+    "PEEKTEXT": 1,
+    "SETREGS": 13,
+    "GETREGSET": 16900,
+    "POKETEXT": 4,
+    "SETREGSET": 16901
+  },
+  "MSG": {
+    "PEEK": 2,
+    "DONTWAIT": 64,
+    "CMSG_CLOEXEC": 1073741824,
+    "OOB": 1,
+    "ERRQUEUE": 8192,
+    "TRUNC": 32,
+    "WAITALL": 256
+  },
+  "SCHED": {
+    "IDLE": 5,
+    "BATCH": 3,
+    "FIFO": 1,
+    "NORMAL": 0,
+    "RR": 2
+  },
+  "MSG_1": {
+    "DONTROUTE": 4,
+    "CONFIRM": 2048,
+    "DONTWAIT": 64,
+    "NOSIGNAL": 16384,
+    "OOB": 1,
+    "EOR": 128,
+    "MORE": 32768
+  },
+  "CLONE_1": {
+    "NEWUSER": 268435456,
+    "NEWTIME": 128,
+    "NEWNS": 131072,
+    "NEWIPC": 134217728,
+    "NEWNET": 1073741824,
+    "NEWCGROUP": 33554432,
+    "NEWUTS": 67108864,
+    "NEWPID": 536870912
+  },
+  "XATTR": {
+    "CREATE": 1,
+    "REPLACE": 2
+  },
+  "18250": {
+    "SHM_STAT": 13,
+    "IPC_RMID": 0,
+    "IPC_STAT": 2,
+    "SHM_INFO": 14,
+    "SHM_STAT_ANY": 15,
+    "IPC_INFO": 3,
+    "IPC_SET": 1
+  },
+  "17259": {
+    "IPC_CREAT": 512,
+    "SHM_HUGETLB": 2048,
+    "SHM_NORESERVE": 4096,
+    "IPC_EXCL": 1024
+  },
+  "SHM": {
+    "REMAP": 16384,
+    "RDONLY": 4096,
+    "EXEC": 32768
+  },
+  "SFD": {
+    "NONBLOCK": 2048,
+    "CLOEXEC": 524288
+  },
+  "SIG": {
+    "BLOCK": 0,
+    "UNBLOCK": 1,
+    "SETMASK": 2
+  },
+  "AF": {
+    "MPLS": 28,
+    "UNIX": 1,
+    "BLUETOOTH": 31,
+    "INET6": 10,
+    "LOCAL": 1,
+    "INET": 2,
+    "KEY": 15,
+    "IB": 27,
+    "RDS": 21,
+    "TIPC": 30,
+    "NETLINK": 16,
+    "VSOCK": 40,
+    "CAN": 29,
+    "KCM": 41,
+    "X25": 9,
+    "AX25": 3,
+    "IPX": 4,
+    "DECnet": 12,
+    "PACKET": 17,
+    "ALG": 38,
+    "APPLETALK": 5,
+    "PPPOX": 24,
+    "XDP": 44,
+    "LLC": 26
+  },
+  "SOCK": {
+    "SEQPACKET": 5,
+    "DGRAM": 2,
+    "RDM": 4,
+    "PACKET": 10,
+    "STREAM": 1,
+    "CLOEXEC": 524288,
+    "NONBLOCK": 2048,
+    "RAW": 3
+  },
+  "SPLICE_F": {
+    "MORE": 4,
+    "MOVE": 1,
+    "NONBLOCK": 2,
+    "GIFT": 8
+  },
+  "AT_1": {
+    "STATX_SYNC_AS_STAT": 0,
+    "SYMLINK_NOFOLLOW": 256,
+    "NO_AUTOMOUNT": 2048,
+    "EMPTY_PATH": 4096,
+    "STATX_DONT_SYNC": 16384,
+    "STATX_FORCE_SYNC": 8192
+  },
+  "SYNC_FILE_RANGE": {
+    "WAIT_BEFORE": 1,
+    "WAIT_AFTER": 4,
+    "WRITE": 2
+  },
+  "CLOCK": {
+    "MONOTONIC": 1,
+    "BOOTTIME_ALARM": 9,
+    "BOOTTIME": 7,
+    "REALTIME_ALARM": 8,
+    "REALTIME": 0
+  },
+  "TFD": {
+    "TIMER_CANCEL_ON_SET": 2,
+    "TIMER_ABSTIME": 1,
+    "NONBLOCK": 2048,
+    "CLOEXEC": 524288
+  },
+  "CLONE_2": {
+    "NEWUSER": 268435456,
+    "FS": 512,
+    "FILES": 1024,
+    "NEWTIME": 128,
+    "NEWNS": 131072,
+    "NEWIPC": 134217728,
+    "NEWNET": 1073741824,
+    "NEWCGROUP": 33554432,
+    "SYSVSEM": 262144,
+    "NEWUTS": 67108864,
+    "NEWPID": 536870912
+  },
+  "PR": {
+    "CAP_AMBIENT": 47,
+    "CAPBSET_READ": 23,
+    "CAPBSET_DROP": 24,
+    "SET_CHILD_SUBREAPER": 36,
+    "GET_CHILD_SUBREAPER": 37,
+    "SET_DUMPABLE": 4,
+    "GET_DUMPABLE": 3,
+    "SET_ENDIAN": 20,
+    "GET_ENDIAN": 19,
+    "SET_FP_MODE": 45,
+    "GET_FP_MODE": 46,
+    "SET_FPEMU": 10,
+    "GET_FPEMU": 9,
+    "SET_FPEXC": 12,
+    "GET_FPEXC": 11,
+    "SET_IO_FLUSHER": 57,
+    "SET_KEEPCAPS": 8,
+    "GET_KEEPCAPS": 7,
+    "MCE_KILL": 33,
+    "MCE_KILL_GET": 34,
+    "SET_MM": 35,
+    "MPX_DISABLE_MANAGEMENT": 44,
+    "SET_NAME": 15,
+    "GET_NAME": 16,
+    "SET_NO_NEW_PRIVS": 38,
+    "GET_NO_NEW_PRIVS": 39,
+    "PAC_RESET_KEYS": 54,
+    "SET_PDEATHSIG": 1,
+    "GET_PDEATHSIG": 2,
+    "SET_PTRACER": 1499557217,
+    "SET_SECCOMP": 22,
+    "GET_SECCOMP": 21,
+    "SET_SECUREBITS": 28,
+    "GET_SECUREBITS": 27,
+    "GET_SPECULATION_CTRL": 52,
+    "SPEC_DISABLE_NOEXEC": 16,
+    "SET_SPECULATION_CTRL": 53,
+    "SPEC_INDIRECT_BRANCH": 1,
+    "SVE_SET_VL": 50,
+    "SVE_GET_VL": 51,
+    "SET_SYSCALL_USER_DISPATCH": 59,
+    "SET_TAGGED_ADDR_CTRL": 55,
+    "GET_TAGGED_ADDR_CTRL": 56,
+    "TASK_PERF_EVENTS_DISABLE": 31,
+    "TASK_PERF_EVENTS_ENABLE": 32,
+    "SET_THP_DISABLE": 41,
+    "GET_THP_DISABLE": 42,
+    "GET_TID_ADDRESS": 40,
+    "SET_TIMERSLACK": 29,
+    "GET_TIMERSLACK": 30,
+    "SET_TIMING": 14,
+    "GET_TIMING": 13,
+    "SET_TSC": 26,
+    "GET_TSC": 25
+  },
+  "O_1": {
+    "RSYNC": 1052672,
+    "WRONLY": 1,
+    "DIRECT": 16384,
+    "DIRECTORY": 65536,
+    "SYNC": 1052672,
+    "DSYNC": 4096,
+    "RDONLY": 0,
+    "CREAT": 64,
+    "TRUNC": 512,
+    "RDWR": 2,
+    "CLOEXEC": 524288,
+    "NOFOLLOW": 131072,
+    "APPEND": 1024,
+    "LARGEFILE": 0,
+    "ASYNC": 8192,
+    "NDELAY": 2048,
+    "TMPFILE": 4259840,
+    "NOATIME": 262144,
+    "EXCL": 128,
+    "PATH": 2097152,
+    "NONBLOCK": 2048,
+    "NOCTTY": 256
+  },
+  "S": {
+    "IRWXU": 448,
+    "IRWXG": 56,
+    "IROTH": 4,
+    "IWOTH": 2,
+    "IXGRP": 8,
+    "ISGID": 1024,
+    "IWUSR": 128,
+    "ISUID": 2048,
+    "IWGRP": 16,
+    "ISVTX": 512,
+    "IXUSR": 64,
+    "IRWXO": 7,
+    "IRUSR": 256,
+    "IXOTH": 1,
+    "IRGRP": 32
+  }
+}
+```
+
+`plugin/data/linux/functions/bpf.json`:
+
+```json
+{
+  "name": "bpf",
+  "enums": {
+    "cmd": "BPF"
+  }
+}
+```
+
+`plugin/data/linux/functions/clone.json`:
+
+```json
+{
+  "name": "clone",
+  "enums": {
+    "flags": "CLONE"
+  }
+}
+```
+
+`plugin/data/linux/functions/close_range.json`:
+
+```json
+{
+  "name": "close_range",
+  "enums": {
+    "flags": "CLOSE_RANGE"
+  }
+}
+```
+
+`plugin/data/linux/functions/epoll_create.json`:
+
+```json
+{
+  "name": "epoll_create",
+  "enums": {
+    "size": "16198"
+  }
+}
+```
+
+`plugin/data/linux/functions/epoll_ctl.json`:
+
+```json
+{
+  "name": "epoll_ctl",
+  "enums": {
+    "op": "EPOLL_CTL"
+  }
+}
+```
+
+`plugin/data/linux/functions/eventfd.json`:
+
+```json
+{
+  "name": "eventfd",
+  "enums": {
+    "flags": "EFD"
+  }
+}
+```
+
+`plugin/data/linux/functions/execveat.json`:
+
+```json
+{
+  "name": "execveat",
+  "enums": {
+    "flags": "AT"
+  }
+}
+```
+
+`plugin/data/linux/functions/fanotify_init.json`:
+
+```json
+{
+  "name": "fanotify_init",
+  "enums": {
+    "flags": "64473",
+    "event_f_flags": "O"
+  }
+}
+```
+
+`plugin/data/linux/functions/fanotify_mark.json`:
+
+```json
+{
+  "name": "fanotify_mark",
+  "enums": {
+    "flags": "FAN_MARK"
+  }
+}
+```
+
+`plugin/data/linux/functions/fcntl.json`:
+
+```json
+{
+  "name": "fcntl",
+  "enums": {
+    "cmd": "F"
+  }
+}
+```
+
+`plugin/data/linux/functions/flock.json`:
+
+```json
+{
+  "name": "flock",
+  "enums": {
+    "operation": "LOCK"
+  }
+}
+```
+
+`plugin/data/linux/functions/fseek.json`:
+
+```json
+{
+  "name": "fseek",
+  "enums": {
+    "whence": "SEEK_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/getitimer.json`:
+
+```json
+{
+  "name": "getitimer",
+  "enums": {
+    "which": "ITIMER"
+  }
+}
+```
+
+`plugin/data/linux/functions/getrandom.json`:
+
+```json
+{
+  "name": "getrandom",
+  "enums": {
+    "flags": "GRND"
+  }
+}
+```
+
+`plugin/data/linux/functions/getrlimit.json`:
+
+```json
+{
+  "name": "getrlimit",
+  "enums": {
+    "resource": "RLIMIT"
+  }
+}
+```
+
+`plugin/data/linux/functions/getrusage.json`:
+
+```json
+{
+  "name": "getrusage",
+  "enums": {
+    "who": "RUSAGE"
+  }
+}
+```
+
+`plugin/data/linux/functions/inotify_init1.json`:
+
+```json
+{
+  "name": "inotify_init1",
+  "enums": {
+    "flags": "IN"
+  }
+}
+```
+
+`plugin/data/linux/functions/lseek.json`:
+
+```json
+{
+  "name": "lseek",
+  "enums": {
+    "whence": "SEEK"
+  }
+}
+```
+
+`plugin/data/linux/functions/madvise.json`:
+
+```json
+{
+  "name": "madvise",
+  "enums": {
+    "advice": "MADV"
+  }
+}
+```
+
+`plugin/data/linux/functions/memfd_create.json`:
+
+```json
+{
+  "name": "memfd_create",
+  "enums": {
+    "flags": "MFD"
+  }
+}
+```
+
+`plugin/data/linux/functions/mmap.json`:
+
+```json
+{
+  "name": "mmap",
+  "enums": {
+    "prot": "PROT",
+    "flags": "MAP"
+  }
+}
+```
+
+`plugin/data/linux/functions/mount.json`:
+
+```json
+{
+  "name": "mount",
+  "enums": {
+    "mountflags": "MS"
+  }
+}
+```
+
+`plugin/data/linux/functions/mprotect.json`:
+
+```json
+{
+  "name": "mprotect",
+  "enums": {
+    "prot": "PROT_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/msgctl.json`:
+
+```json
+{
+  "name": "msgctl",
+  "enums": {
+    "cmd": "65266"
+  }
+}
+```
+
+`plugin/data/linux/functions/msgsnd.json`:
+
+```json
+{
+  "name": "msgsnd",
+  "enums": {
+    "msgflg": "12245"
+  }
+}
+```
+
+`plugin/data/linux/functions/msync.json`:
+
+```json
+{
+  "name": "msync",
+  "enums": {
+    "flags": "MS_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/open.json`:
+
+```json
+{
+  "name": "open",
+  "enums": {
+    "flags": "O_1",
+    "oflag": "O_1",
+    "mode": "S"
+  }
+}
+```
+
+`plugin/data/linux/functions/openat.json`:
+
+```json
+{
+  "name": "openat",
+  "enums": {
+    "flags": "O_1",
+    "oflag": "O_1",
+    "mode": "S"
+  }
+}
+```
+
+`plugin/data/linux/functions/prctl.json`:
+
+```json
+{
+  "name": "prctl",
+  "enums": {
+    "option": "PR"
+  }
+}
+```
+
+`plugin/data/linux/functions/ptrace.json`:
+
+```json
+{
+  "name": "ptrace",
+  "enums": {
+    "request": "PTRACE"
+  }
+}
+```
+
+`plugin/data/linux/functions/recv.json`:
+
+```json
+{
+  "name": "recv",
+  "enums": {
+    "flags": "MSG"
+  }
+}
+```
+
+`plugin/data/linux/functions/sched_setscheduler.json`:
+
+```json
+{
+  "name": "sched_setscheduler",
+  "enums": {
+    "policy": "SCHED"
+  }
+}
+```
+
+`plugin/data/linux/functions/send.json`:
+
+```json
+{
+  "name": "send",
+  "enums": {
+    "flags": "MSG_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/setns.json`:
+
+```json
+{
+  "name": "setns",
+  "enums": {
+    "nstype": "CLONE_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/setxattr.json`:
+
+```json
+{
+  "name": "setxattr",
+  "enums": {
+    "flags": "XATTR"
+  }
+}
+```
+
+`plugin/data/linux/functions/shmat.json`:
+
+```json
+{
+  "name": "shmat",
+  "enums": {
+    "shmflg": "SHM"
+  }
+}
+```
+
+`plugin/data/linux/functions/shmctl.json`:
+
+```json
+{
+  "name": "shmctl",
+  "enums": {
+    "cmd": "18250"
+  }
+}
+```
+
+`plugin/data/linux/functions/shmget.json`:
+
+```json
+{
+  "name": "shmget",
+  "enums": {
+    "shmflg": "17259"
+  }
+}
+```
+
+`plugin/data/linux/functions/signalfd.json`:
+
+```json
+{
+  "name": "signalfd",
+  "enums": {
+    "flags": "SFD"
+  }
+}
+```
+
+`plugin/data/linux/functions/sigprocmask.json`:
+
+```json
+{
+  "name": "sigprocmask",
+  "enums": {
+    "how": "SIG"
+  }
+}
+```
+
+`plugin/data/linux/functions/socket.json`:
+
+```json
+{
+  "name": "socket",
+  "enums": {
+    "domain": "AF",
+    "type": "SOCK"
+  }
+}
+```
+
+`plugin/data/linux/functions/splice.json`:
+
+```json
+{
+  "name": "splice",
+  "enums": {
+    "flags": "SPLICE_F"
+  }
+}
+```
+
+`plugin/data/linux/functions/statx.json`:
+
+```json
+{
+  "name": "statx",
+  "enums": {
+    "flags": "AT_1"
+  }
+}
+```
+
+`plugin/data/linux/functions/sync_file_range.json`:
+
+```json
+{
+  "name": "sync_file_range",
+  "enums": {
+    "flags": "SYNC_FILE_RANGE"
+  }
+}
+```
+
+`plugin/data/linux/functions/tee.json`:
+
+```json
+{
+  "name": "tee",
+  "enums": {
+    "flags": "SPLICE_F"
+  }
+}
+```
+
+`plugin/data/linux/functions/timerfd_create.json`:
+
+```json
+{
+  "name": "timerfd_create",
+  "enums": {
+    "clockid": "CLOCK",
+    "flags": "TFD"
+  }
+}
+```
+
+`plugin/data/linux/functions/unshare.json`:
+
+```json
+{
+  "name": "unshare",
+  "enums": {
+    "flags": "CLONE_2"
+  }
+}
+```
+
+`plugin/data/linux/functions/vmsplice.json`:
+
+```json
+{
+  "name": "vmsplice",
+  "enums": {
+    "flags": "SPLICE_F"
+  }
+}
+```
