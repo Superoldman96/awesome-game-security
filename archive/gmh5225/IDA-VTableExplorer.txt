@@ -1,0 +1,1372 @@
+Project Path: arc_gmh5225_IDA-VTableExplorer_ljagq4pe
+
+Source Tree:
+
+```txt
+arc_gmh5225_IDA-VTableExplorer_ljagq4pe
+├── CHANGELOG.md
+├── Makefile
+├── README.md
+├── docker
+│   ├── Dockerfile
+│   ├── Makefile
+│   └── README.md
+├── docs
+│   └── images
+│       ├── annotated-vtable.jpg
+│       ├── context-menu.jpg
+│       ├── function-browser.jpg
+│       └── vtable-chooser.jpg
+└── src
+    ├── main.cpp
+    ├── smart_annotator.h
+    ├── vtable_chooser.h
+    └── vtable_detector.h
+
+```
+
+`CHANGELOG.md`:
+
+```md
+# Changelog
+
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+
+---
+
+## [1.1.0] - 2025-12-02
+
+### Added
+
+**Function Browser**
+
+- New `Del` key action: Browse all functions in a vtable
+- Secondary chooser window showing function index, address, name, and status
+- Jump to any function with `Enter` key
+- Pure virtual functions highlighted in red
+
+**Pure Virtual Detection**
+
+- Automatic detection of `__cxa_pure_virtual`, `_purecall`, and `purevirt` symbols
+- Abstract classes marked with `[abstract]` suffix and distinct color
+- Function count shows pure virtual breakdown: `26 (3 pv)`
+
+**Annotate All**
+
+- New `Ins` key action: Annotate all vtables at once
+- Progress indicator with cancel support
+- Summary dialog showing total vtables and functions processed
+
+**UI Improvements**
+
+- New "Functions" column showing function count per vtable
+- Color coding: abstract classes in light blue, pure virtuals in red
+- Dockable tab instead of modal window
+- Singleton chooser - reopening brings back the same tab with cached data
+- Refresh action to rescan vtables
+
+### Optimized
+
+- Cached vtable data for instant reopening
+- Binary search for vtable boundary detection
+- Unified scanner template eliminates duplicate code
+
+---
+
+## [1.0.2] - 2025-11-20
+
+### Fixed
+
+- Buffer overrun protection in `demangle_msvc_name()` for malformed MSVC symbols
+- Exception handling around `find_vtables()` to prevent crashes
+
+### Removed
+
+- Windows Docker build (MinGW has ABI incompatibility with MSVC for C++ virtual functions)
+
+---
+
+## [1.0.1] - 2025-11-18
+
+### Changed
+
+**Annotation Format**
+
+- Updated vtable entry comments to `"index: X | offset: Y"` format (includes both virtual function index and byte offset)
+- Removed function-level comments from decompiled code (assembly-only annotation now)
+
+**Function Detection**
+
+- Enhanced function pointer validation with name-based trust (accepts IDA auto-generated names: `sub_*`, `nullsub_*`, `j_*`, `*_vfunc_*`)
+- Increased invalid entry tolerance from 2 to 5 consecutive entries for better vtable scanning
+
+---
+
+## [1.0.0] - 2025-11-16
+
+### Added
+
+- Symbol-based vtable detection (`_ZTV*` for Linux/GCC, `??_7*` for Windows/MSVC)
+- Automatic class name extraction from mangled symbols
+- Virtual function index annotation with byte offsets
+- Native IDA chooser with searchable vtable list
+- Smart RTTI offset detection
+- Context menu and hotkey support (⌘⇧V / Ctrl+Shift+V)
+- Multi-platform support: IDA Pro 9.x on Linux, Windows, macOS (ARM64 + x64)
+- Docker-based cross-compilation build system
+
+---
+
+**Repository**: [K4ryuu/IDA-VTableExplorer](https://github.com/K4ryuu/IDA-VTableExplorer)
+
+```
+
+`Makefile`:
+
+```
+# VTableExplorer Makefile - Docker multi-platform build
+
+.PHONY: build build-clean check-docker
+
+check-docker:
+	@which docker > /dev/null || (printf "\n[!] Docker is not installed or not in PATH\n\n" && \
+	printf "    Install Docker:\n" && \
+	printf "    ▪ macOS:   https://docs.docker.com/desktop/install/mac-install/\n" && \
+	printf "    ▪ Linux:   https://docs.docker.com/engine/install/\n" && \
+	printf "    ▪ Windows: https://docs.docker.com/desktop/install/windows-install/\n\n" && \
+	exit 1)
+	@docker info > /dev/null 2>&1 || ( \
+		printf "\n[!] Docker is not running\n\n"; \
+		if [ "$$(uname -s)" = "Darwin" ]; then \
+			printf "    Starting Docker Desktop...\n"; \
+			open -a Docker && sleep 5 && \
+			(docker info > /dev/null 2>&1 && printf "    [✓] Docker started successfully\n\n" || \
+			(printf "    [!] Failed to start Docker Desktop\n" && \
+			printf "    Please start it manually from Applications\n\n" && exit 1)); \
+		else \
+			printf "    Linux: sudo systemctl start docker\n"; \
+			printf "    Windows: Start Docker Desktop\n\n"; \
+			exit 1; \
+		fi \
+	)
+
+build: check-docker
+	@printf "[*] Building all platforms via Docker multi-stage build...\n"
+	@docker build -f docker/Dockerfile --target artifacts -t vtable-all-artifacts .
+	@printf "[*] Extracting binaries...\n"
+	@docker create --name vtable-all-extract vtable-all-artifacts
+	@mkdir -p release
+	@docker cp vtable-all-extract:/vtable64-linux-x64.so release/
+	@docker cp vtable-all-extract:/vtable64-macos-arm64.dylib release/
+	@docker cp vtable-all-extract:/vtable64-macos-x64.dylib release/
+	@docker rm vtable-all-extract
+	@docker rmi vtable-all-artifacts
+	@printf "\n[*] ========================================\n"
+	@printf "[+] Linux & macOS built successfully!\n"
+	@printf "\n"
+	@printf "    Linux:      release/vtable64-linux-x64.so\n"
+	@printf "    macOS ARM:  release/vtable64-macos-arm64.dylib\n"
+	@printf "    macOS x64:  release/vtable64-macos-x64.dylib\n"
+	@printf "\n"
+	@printf "    Note: For Windows, use ida-win-build with Clang MSVC ABI\n"
+	@printf "\n"
+
+build-clean:
+	@printf "[*] Cleaning Docker artifacts...\n"
+	@docker rm -f vtable-all-extract 2>/dev/null || true
+	@docker rmi vtable-all-artifacts 2>/dev/null || true
+	@printf "[*] Docker cleanup complete\n"
+
+```
+
+`README.md`:
+
+```md
+# VTable Explorer
+
+C++ virtual table detection and annotation tool for **IDA Pro 9.x** with support for **Windows**, **Linux**, and **macOS** (Intel + Apple Silicon).
+
+Automatically discover, navigate, and annotate virtual function tables in compiled C++ binaries.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/vtable-chooser.jpg" alt="VTable Chooser" width="700"/>
+  <br/>
+  <em>Searchable vtable list with function counts, abstract class detection, and pure virtual indicators</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/function-browser.jpg" alt="Function Browser" width="700"/>
+  <br/>
+  <em>Browse all virtual functions in a vtable with pure virtual highlighting</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/annotated-vtable.jpg" alt="Annotated VTable" width="700"/>
+  <br/>
+  <em>Annotated vtable with function indices and byte offsets</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/context-menu.jpg" alt="Context Menu" width="300"/>
+  <br/>
+  <em>Right-click context menu with Annotate All, Browse Functions, and Refresh</em>
+</p>
+
+---
+
+## Features
+
+**Core Functionality**
+
+- Symbol-based vtable detection (Linux/GCC + Windows/MSVC)
+- Automatic class name extraction from mangled symbols
+- Virtual function index annotation (0-based indexing)
+- Searchable vtable list with 2000+ entries
+- Smart offset detection (RTTI-aware)
+- **Function browser** - Browse and jump to any virtual function
+- **Pure virtual detection** - Identifies abstract classes automatically
+- **Batch annotation** - Annotate all vtables at once
+
+**Platform Support**
+
+- ► IDA Pro 9.x (modern SDK)
+- ► macOS ARM64 (Apple Silicon)
+- ► macOS x64 (Intel)
+- ► Linux x64
+- ► Windows x64
+
+**Integration**
+
+- Native IDA chooser interface
+- Context menu integration (right-click → VTable Explorer)
+- Platform-specific hotkeys (⌘⇧V / Ctrl+Shift+V)
+- One-click annotation and navigation
+
+---
+
+## Why VTable Explorer?
+
+**Problem**: When reverse engineering C++ applications (especially games), you often need to hook or call virtual functions at runtime using their vtable index. Manually counting offsets in vtables is error-prone and time-consuming.
+
+**Solution**: VTable Explorer automatically:
+
+1. **Finds all vtables** - Scans for `_ZTV` (Linux/GCC) and `??_7` (Windows/MSVC) symbols
+2. **Extracts class names** - Demangles symbols to show readable class names
+3. **Annotates indices** - Labels each virtual function with its exact index (0-based)
+4. **Enables quick navigation** - Jump between vtables and their virtual functions instantly
+
+### Use Cases
+
+**Runtime Hooking**
+
+```cpp
+// Without VTable Explorer: Manual counting, error-prone
+void** vtable = *(void***)pObject;
+auto func = (FunctionType)vtable[???];  // Which index?
+
+// With VTable Explorer: Known index from annotations
+auto func = (FunctionType)vtable[7];  // vtable index #7
+```
+
+**Reverse Engineering Games**
+
+- Quickly locate player/entity vtables by class name
+- Identify virtual function hierarchies
+- Map out class inheritance structures
+- Hook specific virtual methods for modding/analysis
+
+**Code Analysis**
+
+- Understand polymorphic behavior
+- Track virtual function implementations across inheritance
+- Identify unused or pure virtual functions
+
+---
+
+## How It Works
+
+VTable Explorer uses **symbol-based detection** to find vtables:
+
+**Linux/GCC Format:**
+
+```
+_ZTV6CCSBot → vtable for CCSBot
+_ZTV6Player → vtable for Player
+```
+
+**Windows/MSVC Format:**
+
+```
+??_7CCSBot@@6B@ → const CCSBot::`vftable'
+```
+
+**Annotation Example:**
+
+```
+.data:1CDB018 _ZTV6CCSBot:              ; vtable for 'CCSBot'
+.data:1CDB020   dq offset _ZTI6CCSBot  ; typeinfo (RTTI)
+.data:1CDB028   dq offset sub_A23D00   ; index: 0 | offset: 0
+.data:1CDB030   dq offset sub_A237B0   ; index: 1 | offset: 8
+.data:1CDB038   dq offset sub_A283C0   ; index: 2 | offset: 16
+```
+
+---
+
+## Installation
+
+**1. Download** the latest release for your platform
+
+**2. Copy** to IDA plugins folder:
+
+- ▪ Windows: `vtable64-windows-x64.dll` → `C:\Program Files\IDA Pro X.X\plugins\`
+- ▪ Linux: `vtable64-linux-x64.so` → `/path/to/ida/plugins/`
+- ▪ macOS: `vtable64-macos-*.dylib` → `/Applications/IDA Pro X.X.app/Contents/MacOS/plugins/`
+
+**3. Restart** IDA Pro
+
+### Usage
+
+| Method       | Shortcut                                       |
+| ------------ | ---------------------------------------------- |
+| Menu         | `Edit > Plugins > VTableExplorer`              |
+| Hotkey       | `Ctrl+Shift+V` (Win/Linux) / `⌘⇧V` (macOS)     |
+| Context Menu | Right-click in disassembly → `VTable Explorer` |
+
+**Chooser Hotkeys:**
+
+| Key     | Action                                              |
+| ------- | --------------------------------------------------- |
+| `Enter` | Annotate selected vtable and jump to it             |
+| `Del`   | Open function browser for selected vtable           |
+| `Ins`   | Annotate ALL vtables at once (with progress dialog) |
+
+**Workflow:**
+
+1. Open plugin (hotkey or menu)
+2. Browse searchable list of vtables (by class name)
+3. Select a vtable and press `Enter` to annotate, or `Del` to browse functions
+4. In function browser: `Enter` jumps directly to any virtual function
+5. Use `Ins` to batch-annotate all vtables at once
+
+---
+
+## Building from Source
+
+### Prerequisites
+
+- **Docker** - Installed and running
+- **IDA SDK** - Extract to `sdk/` in project root
+
+### Build All Platforms
+
+```bash
+make build
+```
+
+Builds **all 4 platforms** (Linux x64, Windows x64, macOS ARM64, macOS Intel x64) in a single Docker multi-stage container.
+
+**Output:** `release/vtable64-{platform}-{arch}.{ext}`
+
+See [docker/README.md](docker/README.md) for implementation details.
+
+---
+
+## Technical Details
+
+**Symbol Detection Patterns:**
+
+- `_ZTV*` - Linux/GCC vtable symbols
+- `??_7*@@6B@` - Windows/MSVC vftable symbols
+- `*vftable*`, `*vtbl*` - Generic fallback patterns
+
+**Class Name Extraction:**
+
+- IDA demangler integration
+- Fallback: Itanium C++ name mangling parser
+- Handles nested namespaces and templates
+
+**Offset Detection:**
+
+- Linux/GCC: Auto-detects RTTI offset (typically +2 qwords)
+- Windows/MSVC: Starts at vtable base (offset 0)
+- Smart boundary detection (stops at next vtable or invalid pointers)
+
+**Annotation Strategy:**
+
+- 0-based indexing (matches C++ standard)
+- Includes both index and byte offset in comments (`index: X | offset: Y`)
+- Skips typeinfo/RTTI pointers
+- Tolerates up to 5 consecutive invalid entries for better vtable scanning
+- Enhanced function detection (trusts IDA auto-generated function names)
+
+**Pure Virtual Detection:**
+
+- Detects `__cxa_pure_virtual` (Linux/GCC)
+- Detects `_purecall` and `purevirt` (Windows/MSVC)
+- Abstract classes marked with `[abstract]` in chooser
+- Function count shows pure virtual breakdown: `26 (3 pv)`
+
+---
+
+## Credits
+
+**Inspiration**: The concept originated from a Python vtable script by [KillStr3aK](https://github.com/KillStr3aK), which I used extensively for reverse engineering workflows. While the original script served its purpose well, I decided to create a full-featured IDA plugin with native UI support and cross-platform compatibility, particularly for macOS environments where plugin integration is preferred.
+
+**Build System**: Adapted from my [IDA-Fusion-Enhanced fork](https://github.com/K4ryuu/IDA-Fusion-Enhanced)
+
+## License
+
+MIT License - Free for personal and commercial use
+
+```
+
+`docker/Dockerfile`:
+
+```
+# Multi-platform build - all targets in one container
+FROM ubuntu:24.04 AS base
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    g++ \
+    clang \
+    cmake \
+    git \
+    make \
+    wget \
+    libssl-dev \
+    lzma-dev \
+    libxml2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY src/ ./src/
+COPY sdk/ ./sdk/
+COPY docker/Makefile ./Makefile
+
+# ============================================
+# Linux x64 build
+# ============================================
+FROM base AS linux-build
+ENV PLATFORM=Linux
+RUN make && \
+    mkdir -p /output && \
+    cp release/*.so /output/vtable64-linux-x64.so
+
+# ============================================
+# macOS osxcross - use pre-built image
+# ============================================
+FROM --platform=$BUILDPLATFORM crazymax/osxcross:latest-ubuntu AS osxcross
+
+# ============================================
+# macOS ARM64 build
+# ============================================
+FROM base AS macos-arm64-build
+ENV PATH="/osxcross/bin:$PATH"
+ENV LD_LIBRARY_PATH="/osxcross/lib"
+ENV PLATFORM=Darwin
+ENV ARCH=arm64
+WORKDIR /build
+COPY src/ ./src/
+COPY sdk/ ./sdk/
+COPY docker/Makefile ./Makefile
+RUN --mount=type=bind,from=osxcross,source=/osxcross,target=/osxcross \
+    make && \
+    mkdir -p /output && \
+    cp release/*.dylib /output/vtable64-macos-arm64.dylib
+
+# ============================================
+# macOS Intel x64 build
+# ============================================
+FROM base AS macos-x64-build
+ENV PATH="/osxcross/bin:$PATH"
+ENV LD_LIBRARY_PATH="/osxcross/lib"
+ENV PLATFORM=Darwin
+ENV ARCH=x86_64
+WORKDIR /build
+COPY src/ ./src/
+COPY sdk/ ./sdk/
+COPY docker/Makefile ./Makefile
+RUN --mount=type=bind,from=osxcross,source=/osxcross,target=/osxcross \
+    make && \
+    mkdir -p /output && \
+    cp release/*.dylib /output/vtable64-macos-x64.dylib
+
+# ============================================
+# Final stage - collect all artifacts
+# ============================================
+FROM alpine:latest AS artifacts
+COPY --from=linux-build /output/vtable64-linux-x64.so /
+COPY --from=macos-arm64-build /output/vtable64-macos-arm64.dylib /
+COPY --from=macos-x64-build /output/vtable64-macos-x64.dylib /
+CMD ["/bin/sh"]
+
+```
+
+`docker/Makefile`:
+
+```
+# Internal Makefile for Docker builds - no Docker check needed
+
+# Platform detection (via env vars in Docker, uname for native)
+PLATFORM ?= $(shell uname -s)
+
+# Default values - IDA SDK requires C++17
+USE_COMPILER   := g++
+COMPILER_FLAGS := -O2 -std=c++17 -Wreturn-type
+LINKER_FLAGS   :=
+
+OBJ_DIR        := obj/
+CPP_FILES      := $(wildcard ./src/*.cpp)
+
+# Platform-specific settings
+ifeq ($(PLATFORM),Linux)
+    # Linux - GCC (official)
+    USE_COMPILER   := g++
+    COMPILER_FLAGS += -Isdk/src/include
+    COMPILER_FLAGS += -fPIC
+    COMPILER_FLAGS += -D__LINUX__ -D__EA64__
+    LINKER_FLAGS   := -shared
+    RELEASE_NAME   := vtable64.so
+
+else ifeq ($(PLATFORM),Darwin)
+    # macOS - Clang (official)
+    ARCH           ?= arm64
+    ifeq ($(ARCH),x86_64)
+        USE_COMPILER   := o64-clang++
+        COMPILER_FLAGS += -Isdk/src/include
+        COMPILER_FLAGS += -D__MAC__ -D__EA64__
+        COMPILER_FLAGS += -Lsdk/src/lib/x64_mac_clang_64
+        RELEASE_NAME   := vtable64-macos-x64.dylib
+    else
+        USE_COMPILER   := oa64-clang++
+        COMPILER_FLAGS += -Isdk/src/include
+        COMPILER_FLAGS += -D__MAC__ -D__EA64__
+        COMPILER_FLAGS += -Lsdk/src/lib/arm64_mac_clang_64
+        RELEASE_NAME   := vtable64-macos-arm64.dylib
+    endif
+    LINKER_FLAGS   := -dynamiclib -undefined dynamic_lookup -lida
+
+else
+    # Windows builds not supported via Docker/MinGW due to ABI incompatibility
+    # Use Clang with MSVC ABI target (clang-cl + lld-link) instead
+    $(error Windows builds require MSVC ABI. Use clang-cl on Windows or cross-compile with xwin)
+endif
+
+.PHONY: all clean
+
+all:
+	@mkdir -p $(OBJ_DIR)
+	@echo "Building for $(PLATFORM) with $(USE_COMPILER)..."
+	@count=0; \
+	for file in $(CPP_FILES); do \
+	  echo "  Compiling: $$file"; \
+	  $(USE_COMPILER) $$file -c -o $(OBJ_DIR)$$count.o $(COMPILER_FLAGS); \
+	  count=$$((count + 1)); \
+	done
+	@mkdir -p release
+	@echo "  Linking: $(RELEASE_NAME)"
+	@$(USE_COMPILER) -o release/$(RELEASE_NAME) $(COMPILER_FLAGS) $(OBJ_DIR)*.o $(LINKER_FLAGS)
+	@echo "Done: release/$(RELEASE_NAME)"
+
+clean:
+	@rm -rf $(OBJ_DIR) release/
+
+```
+
+`docker/README.md`:
+
+```md
+# Docker Multi-Platform Build
+
+Cross-compile IDA-Fusion for **all platforms** from any host OS using a single multi-stage container.
+
+## Prerequisites
+
+- Docker installed and running
+- IDA SDK extracted to `sdk/` directory
+
+## Usage
+
+### Build All Platforms
+
+```bash
+make build
+```
+
+Builds all 4 platforms in one multi-stage Docker container.
+
+### Cleanup
+
+```bash
+make build-clean
+```
+
+## Output
+
+Binaries are saved to `release/`:
+
+- `fusion64-linux-x64.so` - Linux x64
+- `fusion64-windows-x64.dll` - Windows x64
+- `fusion64-macos-arm64.dylib` - macOS ARM64
+- `fusion64-macos-x64.dylib` - macOS Intel x64
+
+> **Note**: 32-bit builds are not included (IDA Pro 7.5+ is 64-bit only)
+
+## Implementation
+
+**Files:**
+- `Dockerfile` - Multi-stage build for all platforms
+- `Makefile` - Platform-specific build logic (no Docker check)
+
+**Build stages:**
+- **Linux**: Ubuntu 22.04 with g++
+- **Windows**: Ubuntu 22.04 with MinGW cross-compiler
+- **macOS ARM64**: Ubuntu 22.04 with osxcross (MacOSX13.3 SDK)
+- **macOS x64**: Ubuntu 22.04 with osxcross (MacOSX13.3 SDK)
+
+All artifacts are collected in a final `scratch` stage for extraction. Containers are automatically cleaned up after build.
+
+```
+
+`src/main.cpp`:
+
+```cpp
+#include <ida.hpp>
+#include <idp.hpp>
+#include <loader.hpp>
+#include <kernwin.hpp>
+#include "vtable_chooser.h"
+
+struct vtable_explorer_action_t : public action_handler_t {
+    virtual int idaapi activate(action_activation_ctx_t*) override {
+        show_vtable_chooser();
+        return 1;
+    }
+
+    virtual action_state_t idaapi update(action_update_ctx_t*) override {
+        return AST_ENABLE_ALWAYS;
+    }
+};
+
+static vtable_explorer_action_t ah_explorer;
+
+static ssize_t idaapi ui_notification(void*, int notification_code, va_list va) {
+    if (notification_code == ui_finish_populating_widget_popup) {
+        TWidget* widget = va_arg(va, TWidget*);
+        TPopupMenu* popup = va_arg(va, TPopupMenu*);
+
+        if (get_widget_type(widget) == BWN_DISASM || get_widget_type(widget) == BWN_PSEUDOCODE) {
+            attach_action_to_popup(widget, popup, "-", nullptr, SETMENU_APP);
+            attach_action_to_popup(widget, popup, "vtable:explorer", nullptr, SETMENU_APP);
+        }
+    }
+    return 0;
+}
+
+struct vtable_plugin_ctx_t : public plugmod_t {
+    virtual bool idaapi run(size_t) override {
+        show_vtable_chooser();
+        return true;
+    }
+
+    virtual ~vtable_plugin_ctx_t() {
+        unregister_action("vtable:explorer");
+        unhook_from_notification_point(HT_UI, ui_notification, nullptr);
+    }
+};
+
+plugmod_t* idaapi init() {
+    action_desc_t desc_explorer = ACTION_DESC_LITERAL(
+        "vtable:explorer",
+        "VTable Explorer",
+        &ah_explorer,
+#ifdef __MAC__
+        "Cmd+Shift+V",
+#else
+        "Ctrl+Shift+V",
+#endif
+        "Open VTable Explorer with searchable class list",
+        -1
+    );
+
+    register_action(desc_explorer);
+
+    hook_to_notification_point(HT_UI, ui_notification, nullptr);
+
+    return new vtable_plugin_ctx_t;
+}
+
+plugin_t PLUGIN = {
+    IDP_INTERFACE_VERSION,
+    PLUGIN_MULTI,
+    init,
+    nullptr,
+    nullptr,
+    "VTable Explorer v1.1.0 - Symbol-based vtable detection & annotation",
+    "https://github.com/K4ryuu/IDA-VTableExplorer",
+    "VTableExplorer",
+#ifdef __MAC__
+    "Cmd-Shift-V"
+#else
+    "Ctrl-Shift-V"
+#endif
+};
+
+```
+
+`src/smart_annotator.h`:
+
+```h
+#pragma once
+#include <ida.hpp>
+#include <idp.hpp>
+#include <bytes.hpp>
+#include <funcs.hpp>
+#include <segment.hpp>
+#include <lines.hpp>
+#include <auto.hpp>
+#include <vector>
+#include <algorithm>
+
+namespace smart_annotator {
+
+inline int get_ptr_size() {
+    static int ptr_size = inf_is_64bit() ? 8 : 4;
+    return ptr_size;
+}
+
+inline ea_t read_ptr(ea_t addr) {
+    return get_ptr_size() == 8 ? get_qword(addr) : get_dword(addr);
+}
+
+inline int detect_vfunc_start_offset(ea_t vtable_addr, bool is_windows) {
+    if (is_windows) return 0;
+
+    const int ptr_size = get_ptr_size();
+    for (int i = 0; i < 4; ++i) {
+        ea_t entry_addr = vtable_addr + (i * ptr_size);
+        if (!is_mapped(entry_addr)) continue;
+
+        segment_t* seg = getseg(read_ptr(entry_addr));
+        if (seg && (seg->perm & SEGPERM_EXEC)) return i;
+    }
+    return 2;
+}
+
+inline bool is_pure_virtual(ea_t func_ptr) {
+    if (!func_ptr || func_ptr == BADADDR) return false;
+
+    qstring name;
+    if (!get_name(&name, func_ptr) || name.empty()) return false;
+
+    return name.find("__cxa_pure_virtual") != qstring::npos ||
+           name.find("_purecall") != qstring::npos ||
+           name.find("purevirt") != qstring::npos;
+}
+
+inline bool is_typeinfo(ea_t ptr) {
+    qstring name;
+    if (!get_name(&name, ptr)) return false;
+    return name.find("_ZTI") != qstring::npos || name.find("typeinfo") != qstring::npos;
+}
+
+inline bool is_valid_function_pointer(ea_t addr) {
+    if (!addr || addr == BADADDR || !is_mapped(addr)) return false;
+
+    segment_t* seg = getseg(addr);
+    if (!seg || !(seg->perm & SEGPERM_EXEC)) return false;
+
+    if (is_code(get_flags(addr))) return true;
+
+    qstring name;
+    if (get_name(&name, addr) && !name.empty()) {
+        const char* n = name.c_str();
+        if (strncmp(n, "sub_", 4) == 0 ||
+            strncmp(n, "nullsub_", 8) == 0 ||
+            strncmp(n, "j_", 2) == 0 ||
+            strstr(n, "_vfunc_")) {
+            return true;
+        }
+    }
+
+    uint8 b = get_byte(addr);
+    return b == 0x55 || b == 0x48 || b == 0x40 || b == 0x41;
+}
+
+inline ea_t find_next_vtable(ea_t current, const std::vector<ea_t>& sorted_addrs) {
+    auto it = std::upper_bound(sorted_addrs.begin(), sorted_addrs.end(), current);
+    return (it != sorted_addrs.end()) ? *it : BADADDR;
+}
+
+struct VTableEntry {
+    ea_t entry_addr;
+    ea_t func_ptr;
+    int index;
+    bool is_pure_virtual;
+};
+
+struct VTableStats {
+    int func_count = 0;
+    int pure_virtual_count = 0;
+};
+
+template<bool collect_entries, bool annotate>
+inline VTableStats scan_vtable(
+    ea_t vtable_addr,
+    bool is_windows,
+    const std::vector<ea_t>& sorted_vtables,
+    std::vector<VTableEntry>* out_entries = nullptr)
+{
+    VTableStats stats;
+    const int ptr_size = get_ptr_size();
+    const int start_offset = detect_vfunc_start_offset(vtable_addr, is_windows);
+    const ea_t next_vtable = find_next_vtable(vtable_addr, sorted_vtables);
+
+    int max_check = 1024;
+    if (next_vtable != BADADDR)
+        max_check = std::min(max_check, (int)((next_vtable - vtable_addr) / ptr_size));
+
+    int consecutive_invalid = 0;
+    int vfunc_index = 0;
+    char cmt_buf[64];
+
+    for (int i = start_offset; i < max_check && consecutive_invalid < 5; ++i) {
+        ea_t entry_addr = vtable_addr + (i * ptr_size);
+        if (!is_mapped(entry_addr)) break;
+
+        if (std::binary_search(sorted_vtables.begin(), sorted_vtables.end(), entry_addr) &&
+            entry_addr != vtable_addr) break;
+
+        ea_t func_ptr = read_ptr(entry_addr);
+        if (!func_ptr || func_ptr == BADADDR) {
+            ++consecutive_invalid;
+            continue;
+        }
+
+        bool pure_virt = is_pure_virtual(func_ptr);
+
+        if (!pure_virt && !is_valid_function_pointer(func_ptr)) {
+            if (is_typeinfo(func_ptr)) {
+                ++consecutive_invalid;
+                continue;
+            }
+            ++consecutive_invalid;
+            continue;
+        }
+
+        consecutive_invalid = 0;
+        stats.func_count++;
+        if (pure_virt) stats.pure_virtual_count++;
+
+        if constexpr (collect_entries) {
+            if (out_entries) {
+                out_entries->push_back({entry_addr, func_ptr, vfunc_index, pure_virt});
+            }
+        }
+
+        if constexpr (annotate) {
+            if (!is_code(get_flags(func_ptr)))
+                add_func(func_ptr);
+
+            int byte_offset = vfunc_index * ptr_size;
+            qsnprintf(cmt_buf, sizeof(cmt_buf), "index: %d | offset: %d", vfunc_index, byte_offset);
+            set_cmt(entry_addr, cmt_buf, false);
+        }
+
+        ++vfunc_index;
+    }
+
+    return stats;
+}
+
+inline VTableStats get_vtable_stats(ea_t addr, bool is_win, const std::vector<ea_t>& vtables) {
+    return scan_vtable<false, false>(addr, is_win, vtables);
+}
+
+inline std::vector<VTableEntry> get_vtable_entries(ea_t addr, bool is_win, const std::vector<ea_t>& vtables) {
+    std::vector<VTableEntry> entries;
+    entries.reserve(64);
+    scan_vtable<true, false>(addr, is_win, vtables, &entries);
+    return entries;
+}
+
+inline int annotate_vtable(ea_t addr, bool is_win, const std::vector<ea_t>& vtables, const std::string& = "") {
+    return scan_vtable<false, true>(addr, is_win, vtables).func_count;
+}
+
+} // namespace smart_annotator
+
+```
+
+`src/vtable_chooser.h`:
+
+```h
+#pragma once
+#include <ida.hpp>
+#include <kernwin.hpp>
+#include <vector>
+#include <string>
+#include "vtable_detector.h"
+#include "smart_annotator.h"
+
+struct vtable_cache_t {
+    std::vector<VTableInfo> vtables;
+    std::vector<ea_t> sorted_addrs;
+    bool valid = false;
+
+    void refresh() {
+        vtables = vtable_detector::find_vtables();
+        sorted_addrs.clear();
+        sorted_addrs.reserve(vtables.size());
+        for (const auto &v : vtables)
+            sorted_addrs.push_back(v.address);
+        std::sort(sorted_addrs.begin(), sorted_addrs.end());
+
+        for (auto &vt : vtables) {
+            auto stats = smart_annotator::get_vtable_stats(vt.address, vt.is_windows, sorted_addrs);
+            vt.func_count = stats.func_count;
+            vt.pure_virtual_count = stats.pure_virtual_count;
+        }
+        valid = true;
+    }
+
+    void invalidate() { valid = false; }
+};
+
+static vtable_cache_t g_vtable_cache;
+
+struct func_browser_t : public chooser_t {
+protected:
+    static constexpr uint32 flags_ = CH_MODAL | CH_KEEP;
+    std::vector<smart_annotator::VTableEntry> entries;
+    ea_t vtable_addr;
+
+public:
+    static constexpr int widths_[] = { 8, 20, 20, 14 };
+    static constexpr const char *const header_[] = {
+        "Index",
+        "Entry Address",
+        "Function",
+        "Status"
+    };
+
+    qstring title_storage;
+
+    func_browser_t(const std::string& cls_name, ea_t vt_addr,
+                   const std::vector<smart_annotator::VTableEntry>& ents)
+        : chooser_t(flags_, qnumber(widths_), widths_, header_, "Functions"),
+          entries(ents), vtable_addr(vt_addr)
+    {
+        title_storage.sprnt("Functions: %s", cls_name.c_str());
+        title = title_storage.c_str();
+    }
+
+    virtual size_t idaapi get_count() const override {
+        return entries.size();
+    }
+
+    virtual void idaapi get_row(
+        qstrvec_t *cols,
+        int *,
+        chooser_item_attrs_t *attrs,
+        size_t n) const override
+    {
+        if (cols == nullptr || n >= entries.size())
+            return;
+
+        const auto &entry = entries[n];
+
+        char idx_buf[16];
+        qsnprintf(idx_buf, sizeof(idx_buf), "%d", entry.index);
+        cols->at(0) = idx_buf;
+
+        char entry_buf[32];
+        qsnprintf(entry_buf, sizeof(entry_buf), "0x%llX", (unsigned long long)entry.entry_addr);
+        cols->at(1) = entry_buf;
+
+        qstring func_name;
+        if (get_name(&func_name, entry.func_ptr) && func_name.length() > 0) {
+            cols->at(2) = func_name.c_str();
+        } else {
+            char func_buf[32];
+            qsnprintf(func_buf, sizeof(func_buf), "0x%llX", (unsigned long long)entry.func_ptr);
+            cols->at(2) = func_buf;
+        }
+
+        if (entry.is_pure_virtual) {
+            cols->at(3) = "pure virtual";
+            if (attrs)
+                attrs->color = 0x8080FF;
+        } else {
+            cols->at(3) = "";
+        }
+    }
+
+    virtual cbret_t idaapi enter(size_t n) override {
+        if (n >= entries.size())
+            return cbret_t(0);
+
+        jumpto(entries[n].func_ptr);
+        return cbret_t(n);
+    }
+};
+
+struct vtable_chooser_t : public chooser_t {
+protected:
+    static constexpr uint32 flags_ = CH_KEEP | CH_CAN_INS | CH_CAN_DEL | CH_CAN_REFRESH;
+
+public:
+    static constexpr int widths_[] = { 55, 18, 10, 14 };
+    static constexpr const char *const header_[] = {
+        "Class Name",
+        "Address",
+        "Functions",
+        "Type"
+    };
+
+    vtable_chooser_t() : chooser_t(flags_, qnumber(widths_), widths_, header_, "VTable Explorer") {
+        popup_names[POPUP_INS] = "Annotate All VTables";
+        popup_names[POPUP_DEL] = "Browse Functions";
+        popup_names[POPUP_REFRESH] = "Refresh VTables";
+
+        if (!g_vtable_cache.valid) {
+            try {
+                g_vtable_cache.refresh();
+            } catch (...) {
+                g_vtable_cache.vtables.clear();
+            }
+        }
+    }
+
+    virtual size_t idaapi get_count() const override {
+        return g_vtable_cache.vtables.size();
+    }
+
+    virtual void idaapi get_row(
+        qstrvec_t *cols,
+        int *,
+        chooser_item_attrs_t *attrs,
+        size_t n) const override
+    {
+        if (cols == nullptr || n >= g_vtable_cache.vtables.size())
+            return;
+
+        const VTableInfo &vt = g_vtable_cache.vtables[n];
+
+        std::string name_display = vt.class_name;
+        if (vt.pure_virtual_count > 0) {
+            name_display += " [abstract]";
+            if (attrs)
+                attrs->color = 0xFFB080;
+        }
+        cols->at(0) = name_display.c_str();
+
+        char addr_buf[32];
+        qsnprintf(addr_buf, sizeof(addr_buf), "0x%llX", (unsigned long long)vt.address);
+        cols->at(1) = addr_buf;
+
+        char count_buf[16];
+        if (vt.pure_virtual_count > 0) {
+            qsnprintf(count_buf, sizeof(count_buf), "%d (%d pv)", vt.func_count, vt.pure_virtual_count);
+        } else {
+            qsnprintf(count_buf, sizeof(count_buf), "%d", vt.func_count);
+        }
+        cols->at(2) = count_buf;
+        cols->at(3) = vt.is_windows ? "Windows/MSVC" : "Linux/GCC";
+    }
+
+    virtual cbret_t idaapi enter(size_t n) override {
+        if (n >= g_vtable_cache.vtables.size())
+            return cbret_t(0);
+
+        const VTableInfo &vt = g_vtable_cache.vtables[n];
+        int count = smart_annotator::annotate_vtable(vt.address, vt.is_windows, g_vtable_cache.sorted_addrs, vt.class_name);
+
+        jumpto(vt.address);
+
+        info("VTable Annotation Complete\n\n"
+             "Class: %s\n"
+             "Address: 0x%llX\n"
+             "Functions annotated: %d%s",
+             vt.class_name.c_str(),
+             (unsigned long long)vt.address,
+             count,
+             vt.pure_virtual_count > 0 ? "\n(Abstract class - has pure virtual functions)" : "");
+
+        return cbret_t(n);
+    }
+
+    virtual cbret_t idaapi del(size_t n) override {
+        if (n >= g_vtable_cache.vtables.size())
+            return cbret_t(0);
+
+        const VTableInfo &vt = g_vtable_cache.vtables[n];
+        auto entries = smart_annotator::get_vtable_entries(vt.address, vt.is_windows, g_vtable_cache.sorted_addrs);
+
+        if (entries.empty()) {
+            warning("No functions found in vtable");
+            return cbret_t(n);
+        }
+
+        func_browser_t browser(vt.class_name, vt.address, entries);
+        browser.choose();
+
+        return cbret_t(n);
+    }
+
+    virtual cbret_t idaapi ins(ssize_t) override {
+        if (g_vtable_cache.vtables.empty())
+            return cbret_t(0);
+
+        show_wait_box("Annotating all vtables...");
+
+        int total_funcs = 0;
+        int total_vtables = 0;
+
+        for (const auto &vt : g_vtable_cache.vtables) {
+            int count = smart_annotator::annotate_vtable(vt.address, vt.is_windows, g_vtable_cache.sorted_addrs, vt.class_name);
+            total_funcs += count;
+            total_vtables++;
+
+            if (user_cancelled()) {
+                hide_wait_box();
+                info("Annotation cancelled.\n\n"
+                     "VTables annotated: %d / %d\n"
+                     "Functions annotated: %d",
+                     total_vtables, (int)g_vtable_cache.vtables.size(), total_funcs);
+                return cbret_t(0);
+            }
+        }
+
+        hide_wait_box();
+
+        info("All VTables Annotated!\n\n"
+             "VTables processed: %d\n"
+             "Total functions annotated: %d",
+             total_vtables, total_funcs);
+
+        return cbret_t(0);
+    }
+
+    virtual cbret_t idaapi refresh(ssize_t) override {
+        show_wait_box("Scanning vtables...");
+        g_vtable_cache.refresh();
+        hide_wait_box();
+        return cbret_t(ALL_CHANGED);
+    }
+
+    virtual const void *idaapi get_obj_id(size_t *len) const override {
+        static const char id[] = "VTableExplorer";
+        *len = sizeof(id);
+        return id;
+    }
+
+};
+
+static vtable_chooser_t* g_chooser = nullptr;
+
+inline void show_vtable_chooser() {
+    if (!g_chooser) {
+        g_chooser = new vtable_chooser_t();
+    }
+    g_chooser->choose();
+}
+
+inline void close_vtable_chooser() {
+    if (g_chooser) {
+        delete g_chooser;
+        g_chooser = nullptr;
+    }
+    g_vtable_cache.invalidate();
+}
+
+```
+
+`src/vtable_detector.h`:
+
+```h
+#pragma once
+#include <ida.hpp>
+#include <idp.hpp>
+#include <name.hpp>
+#include <nalt.hpp>
+#include <demangle.hpp>
+#include <segment.hpp>
+#include <funcs.hpp>
+#include <bytes.hpp>
+#include <vector>
+#include <string>
+#include <map>
+#include <algorithm>
+
+struct VTableInfo {
+    ea_t address;
+    std::string class_name;
+    std::string display_name;
+    bool is_windows;
+    int func_count;
+    int pure_virtual_count;
+};
+
+namespace vtable_detector {
+
+inline bool is_valid_class_name(const std::string& name) {
+    const size_t len = name.length();
+    if (len < 2 || len > 512) return false;
+
+    const char first = name[0];
+    if (!isupper(first) && first != '_') return false;
+
+    int alnum_count = 0;
+    int mangling_count = 0;
+    bool all_same = true;
+
+    for (size_t i = 0; i < len; ++i) {
+        const char c = name[i];
+        if (isalnum(c) || c == '_') ++alnum_count;
+        if (i > 0 && c != first) all_same = false;
+        if (i + 1 < len) {
+            const char next = name[i + 1];
+            if ((c == 'E' && (next == 'L' || next == 'E')) ||
+                (c == 'L' && isdigit(next)))
+                ++mangling_count;
+        }
+    }
+
+    return alnum_count > 0 &&
+           !all_same &&
+           (float)alnum_count / len >= 0.6f &&
+           mangling_count <= 3;
+}
+
+inline std::string extract_class_name(const char* mangled_name, bool& is_windows) {
+    std::string sym_name(mangled_name);
+    is_windows = false;
+
+    if (sym_name.length() > 4 && sym_name.compare(sym_name.length() - 4, 4, "_ptr") == 0)
+        sym_name.resize(sym_name.length() - 4);
+
+    qstring demangled;
+    if (demangle_name(&demangled, sym_name.c_str(), MNG_NODEFINIT) > 0) {
+        const char* dem = demangled.c_str();
+
+        const char* vtable_pos = strstr(dem, "vtable for ");
+        if (vtable_pos) {
+            std::string class_name(vtable_pos + 11);
+            if (is_valid_class_name(class_name)) return class_name;
+        }
+
+        const char* vft_pos = strstr(dem, "::`vftable'");
+        if (vft_pos) {
+            is_windows = true;
+            const char* const_pos = strstr(dem, "const ");
+            if (const_pos && const_pos < vft_pos) {
+                std::string class_name(const_pos + 6, vft_pos - const_pos - 6);
+                if (is_valid_class_name(class_name)) return class_name;
+            }
+        }
+    }
+
+    if (sym_name.compare(0, 4, "_ZTV") != 0) return "";
+
+    const char* p = sym_name.c_str() + 4;
+    const char* end = sym_name.c_str() + sym_name.length();
+
+    if (*p == 'N') {
+        std::string last_component;
+        for (++p; *p && *p != 'E'; ) {
+            if (!isdigit(*p)) { ++p; continue; }
+
+            int len = atoi(p);
+            while (isdigit(*p)) ++p;
+            if (len <= 0 || len >= 1024 || p + len > end) break;
+
+            last_component.assign(p, len);
+            p += len;
+        }
+        if (is_valid_class_name(last_component)) return last_component;
+    }
+    else if (isdigit(*p)) {
+        int len = atoi(p);
+        while (isdigit(*p)) ++p;
+        if (len <= 0 || len >= 1024 || p + len > end) return "";
+
+        std::string class_name(p, len);
+        if (is_valid_class_name(class_name)) return class_name;
+
+        size_t first_upper = class_name.find_first_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        if (first_upper != std::string::npos) {
+            size_t template_start = std::string::npos;
+            for (size_t i = first_upper; i + 1 < class_name.length(); ++i) {
+                if (class_name[i] == 'L' && isdigit(class_name[i + 1])) {
+                    template_start = i;
+                    break;
+                }
+            }
+            size_t end_pos = (template_start != std::string::npos) ? template_start : class_name.length();
+            std::string cleaned = class_name.substr(first_upper, end_pos - first_upper);
+            if (is_valid_class_name(cleaned)) return cleaned;
+        }
+    }
+
+    return "";
+}
+
+inline std::vector<VTableInfo> find_vtables() {
+    std::vector<VTableInfo> vtables;
+    std::map<std::string, ea_t> seen;
+
+    const size_t name_count = get_nlist_size();
+    vtables.reserve(name_count / 100);
+
+    auto add_vtable = [&](ea_t ea, const std::string& class_name, bool is_win, const char* suffix) {
+        std::string display = class_name + suffix;
+        if (seen.emplace(display, ea).second) {
+            vtables.push_back({ea, class_name, std::move(display), is_win, 0, 0});
+        }
+    };
+
+    for (size_t i = 0; i < name_count; ++i) {
+        const char* name = get_nlist_name(i);
+        if (!name || !*name) continue;
+
+        ea_t ea = get_nlist_ea(i);
+        bool is_windows = false;
+        std::string class_name;
+
+        if (strncmp(name, "_ZTV", 4) == 0) {
+            class_name = extract_class_name(name, is_windows);
+            if (is_valid_class_name(class_name))
+                add_vtable(ea, class_name, false, " (Linux/GCC)");
+        }
+        else if (strncmp(name, "??_7", 4) == 0) {
+            class_name = extract_class_name(name, is_windows);
+            if (class_name.empty()) {
+                const char* marker = strstr(name, "@@6B@");
+                if (marker) class_name.assign(name + 4, marker - name - 4);
+            }
+            if (is_valid_class_name(class_name))
+                add_vtable(ea, class_name, true, " (Windows/MSVC)");
+        }
+        else if (strstr(name, "vftable") || strstr(name, "vtbl")) {
+            class_name = extract_class_name(name, is_windows);
+            if (class_name.empty()) { class_name = name; is_windows = true; }
+            if (is_valid_class_name(class_name))
+                add_vtable(ea, class_name, is_windows, " (Detected)");
+        }
+    }
+
+    std::sort(vtables.begin(), vtables.end(),
+        [](const VTableInfo& a, const VTableInfo& b) { return a.class_name < b.class_name; });
+
+    return vtables;
+}
+
+} // namespace vtable_detector
+
+```

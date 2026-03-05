@@ -1,0 +1,2257 @@
+Project Path: arc_gmh5225_ida-semray_75_o1pjk
+
+Source Tree:
+
+```txt
+arc_gmh5225_ida-semray_75_o1pjk
+├── README.md
+├── codedump
+│   ├── __pycache__
+│   │   └── codedump.cpython-312.pyc
+│   ├── codedump.py
+│   ├── micro-analyzer.py
+│   └── ptn_utils.py
+├── ida-plugin.json
+└── semray.py
+
+```
+
+`README.md`:
+
+```md
+# SemRay - AI-Powered Semantic Analysis for IDA Pro
+
+SemRay is a powerful IDA Pro plugin that leverages Google's Gemini AI to provide intelligent semantic analysis of binary code. It automatically suggests meaningful function names, detailed comments, and descriptive variable renames based on deep contextual understanding of your code.
+
+## Features
+
+- **Intelligent Function Naming**: Generate concise, descriptive function names that encode role and domain (e.g., `crc32_checksum`, `parse_http_header`)
+- **Comprehensive Comments**: Automatically create detailed multi-line comments explaining function behavior
+- **Variable Renaming**: Suggest meaningful names for local variables and function arguments
+- **Context-Aware Analysis**: Analyzes callers, callees, and cross-references to understand function relationships
+- **Flexible Analysis Modes**:
+  - Analyze single functions
+  - Analyze all functions in context
+  - Analyze functions within N levels of call depth
+- **Multiple Content Modes**: Choose between decompiled C code or raw assembly for LLM analysis
+- **Optional CodeDumper Integration**: Enhanced context discovery with virtual calls, jump tables, and PTN provenance annotations
+- **Interactive UI**: Review and selectively apply suggested changes through an intuitive tabbed interface
+
+## Requirements
+
+### Essential
+
+- **IDA Pro 7.6+** with Python 3 and PyQt5 support
+- **Hex-Rays Decompiler** (for decompilation mode and PTN analysis)
+- **Python Libraries**:
+  ```bash
+  pip install google-genai pydantic
+  ```
+- **Google AI API Key**: Required for Gemini API access
+
+## Installation
+
+### 1. Plugin Installation
+
+Copy the plugin directory to your IDA plugins folder:
+
+```bash
+# Linux
+cp -r semray ~/.idapro/plugins/semray
+
+# Windows
+copy semray "C:\Users\YourName\AppData\Roaming\Hex-Rays\IDA Pro\plugins\semray"
+
+# macOS
+cp -r semray ~/Library/Application\ Support/Hex-Rays/IDA\ Pro/plugins/semray
+```
+
+Alternatively, you can place it directly in the IDA installation's plugins directory:
+
+```bash
+# Example for Linux
+cp -r semray /opt/ida-pro/plugins/semray
+```
+
+### 2. Python Dependencies
+
+Install required Python libraries in IDA's Python environment:
+
+```bash
+# If using system Python (ensure it matches IDA's Python version)
+pip install google-genai pydantic
+
+# If using IDA's bundled Python
+/path/to/ida/python3 -m pip install google-genai pydantic
+```
+
+### 3. API Key Configuration
+
+Set your Google AI API key as an environment variable:
+
+```bash
+# Linux/macOS - Add to ~/.bashrc or ~/.zshrc
+export GOOGLE_API_KEY="your-api-key-here"
+
+# Windows - Set as system environment variable
+setx GOOGLE_API_KEY "your-api-key-here"
+```
+
+To obtain a Google AI API key:
+1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Create a new API key
+4. Copy and set it as the `GOOGLE_API_KEY` environment variable
+
+### 4. Verify Installation
+
+Start IDA Pro and check the output window for:
+```
+Initializing SemRay (Google AI Semantic Analysis) plugin.
+SemRay: CodeDumper integration enabled.  # (if CodeDumper is available)
+SemRay (Google AI Semantic Analysis) initialized successfully.
+```
+
+## Usage
+
+### Quick Start
+
+1. **Navigate to a function** in IDA Pro (Disassembly or Pseudocode view)
+2. **Right-click** to open the context menu
+3. Select **SemRay Analysis** from the menu
+4. Choose your analysis mode:
+   - **Analyze CURRENT Func Only**: Analyzes only the selected function
+   - **Analyze ALL Funcs in Context**: Analyzes the function plus all callers/callees in context
+   - **Analyze Current + N Levels**: Analyzes functions within N depth levels
+
+### Configuration Prompts
+
+When you trigger an analysis, you'll be prompted for:
+
+1. **Content Mode**: Choose between:
+   - **Decompiled**: Uses Hex-Rays decompiled C pseudocode (recommended)
+   - **Assembly**: Uses raw disassembly (useful when decompilation fails)
+
+2. **Context Depths**:
+   - **Caller Depth**: How many levels of calling functions to include (default: 1)
+   - **Callee Depth**: How many levels of called functions to include (default: 1)
+   - **Analysis Depth**: (Depth-limited mode only) How many function levels to analyze
+
+### Analysis Workflow
+
+1. **Context Collection**: The plugin gathers code, call graphs, cross-references, and literals
+2. **LLM Processing**: Sends the context to Google's Gemini model for semantic analysis
+3. **Results Display**: Opens a tabbed UI showing suggestions for each function
+4. **Review & Apply**: 
+   - Review each suggestion
+   - Uncheck items you don't want to apply
+   - Click **Apply Selected** to update your IDB
+   - Click **Close** to dismiss without changes
+
+### Results UI
+
+The results window displays tabs for each analyzed function, showing:
+
+- **Suggested Function Name**: With reasoning and evidence
+- **Suggested Comment**: Multi-line documentation of function behavior
+- **Variable Renames**: Original → New name mappings with explanations
+
+Each suggestion has a checkbox - uncheck to exclude it from being applied.
+
+### Batch Analysis
+
+You can also analyze multiple functions at once:
+
+1. Go to **Edit → Plugins → SemRay (Google AI Semantic Analysis)**
+2. Enter comma-separated function names or addresses:
+   ```
+   sub_401000, parse_header, 0x402340
+   ```
+3. Choose content mode and context depths
+4. Review and apply results
+
+## How It Works
+
+### Context Building
+
+SemRay builds rich context for the LLM by collecting:
+
+1. **Code Content**:
+   - Decompiled C pseudocode (via Hex-Rays)
+   - Or raw disassembly with labels and addresses
+
+2. **Call Graph**:
+   - Direct calls
+   - Indirect calls
+   - Virtual calls (with CodeDumper)
+   - Jump tables (with CodeDumper)
+   - Tail calls
+
+3. **Semantic Hints**:
+   - String literals referenced in functions
+   - Large constant values
+   - Function prototypes/signatures
+
+4. **PTN Annotations** (with CodeDumper):
+   - Provenance tracking of data flows
+   - Virtual table analysis
+   - Enhanced cross-reference context
+
+### LLM Processing
+
+The plugin sends a carefully crafted prompt to Google's Gemini model that includes:
+
+- **Persona**: "You are an expert reverse engineer"
+- **Naming Contract**: Rules for meaningful, non-generic names
+- **Call Graph**: Relationships between functions
+- **Code Context**: All relevant source code
+- **Schema Enforcement**: Structured JSON output via response schema
+
+The LLM analyzes the code holistically and provides:
+- Function names that encode purpose and domain
+- Detailed comments explaining behavior
+- Evidence-based reasoning for each suggestion
+- Variable renames that clarify intent
+
+### Name Validation
+
+The plugin filters out generic/unhelpful names using regex patterns:
+- Rejects: `var5`, `tmp`, `foo`, `bar`, `helper`, `unused`
+- Only accepts: meaningful, descriptive identifiers
+
+### IDB Updates
+
+When you apply changes, the plugin:
+1. Sets function comments (with word wrapping)
+2. Renames functions (with collision checking)
+3. Renames local variables (using Hex-Rays API)
+4. Marks affected functions as dirty
+5. Refreshes pseudocode views automatically
+
+## Configuration
+
+### Model Selection
+
+By default, SemRay uses `gemini-flash-latest` for speed and cost-efficiency. To change the model, edit `semray.py`:
+
+```python
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"  # or "gemini-pro-latest"
+MODELS_TO_REGISTER = [DEFAULT_GEMINI_MODEL]
+```
+
+### Default Depths
+
+Customize default analysis depths:
+
+```python
+DEFAULT_CONTEXT_CALLER_DEPTH = 1
+DEFAULT_CONTEXT_CALLEE_DEPTH = 1
+DEFAULT_ANALYSIS_DEPTH = 1
+```
+
+### Cross-Reference Types
+
+Control which reference types are considered (when using CodeDumper):
+
+```python
+DEFAULT_XREF_TYPES = {
+    'direct_call',
+    'indirect_call',
+    'data_ref',
+    'immediate_ref',
+    'tail_call_push_ret',
+    'virtual_call',
+    'jump_table',
+}
+```
+
+### Safety Settings
+
+The plugin disables Google AI's content filtering to avoid blocking reverse engineering content. Adjust in `semray.py` if needed:
+
+```python
+DEFAULT_SAFETY_SETTINGS = [
+    types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+    types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+]
+```
+
+## CodeDumper Integration
+
+SemRay can optionally use the CodeDumper plugin for enhanced capabilities:
+
+### With CodeDumper
+
+- Advanced virtual call resolution via v-table analysis
+- Jump table detection and analysis
+- Detailed cross-reference reasons
+- PTN (Provenance Tracking Network) annotations showing data flow
+- More comprehensive context discovery
+
+### Without CodeDumper
+
+- Falls back to standard IDA API functions
+- Basic call graph analysis
+- Direct and indirect call tracking
+- Fully functional but with less contextual information
+
+The plugin automatically detects CodeDumper and enables integration if available.
+
+## Troubleshooting
+
+### Plugin Not Loading
+
+**Check IDA Output Window** for error messages:
+- "PyQt5 not found": Install PyQt5 in IDA's Python environment
+- "pydantic not found": Install pydantic (`pip install pydantic`)
+- "google-genai not found": Install google-genai (`pip install google-genai`)
+
+### API Key Issues
+
+**"GOOGLE_API_KEY environment variable not set"**:
+- Verify the environment variable is set: `echo $GOOGLE_API_KEY` (Linux/Mac) or `echo %GOOGLE_API_KEY%` (Windows)
+- Restart IDA Pro after setting the variable
+- Check for typos in the variable name
+
+### Empty or Blocked Responses
+
+**"Google AI response was empty or blocked"**:
+- Check Google AI API quota/billing
+- Review safety settings if content is being filtered
+- Try a simpler function first to verify API connectivity
+
+### Decompilation Failures
+
+**"Decompilation FAILED"**:
+- Ensure Hex-Rays decompiler is installed and licensed
+- Try **Assembly** mode instead of **Decompiled** mode
+- Some functions may not decompile due to code complexity
+
+### Variable Rename Failures
+
+**Variables not renamed**:
+- Ensure the function can be decompiled
+- Check that variable names match exactly (case-sensitive)
+- Some variables may be compiler-generated and cannot be renamed
+
+### Performance Issues
+
+**Slow analysis**:
+- Reduce caller/callee depth (try 1 or 2 instead of higher values)
+- Analyze fewer functions at once
+- Use "Analyze CURRENT Func Only" for individual functions
+- Consider using `gemini-flash-latest` instead of `gemini-pro`
+
+## Best Practices
+
+1. **Start Small**: Begin with single function analysis to verify setup and understand results
+2. **Iterative Refinement**: Analyze high-level functions first, then drill down into details
+3. **Context Balance**: More context improves accuracy but increases cost and time
+   - Depth 1-2: Fast, good for focused analysis
+   - Depth 3+: Slower, better for understanding complex relationships
+4. **Review Carefully**: Always review suggestions before applying - AI can make mistakes
+5. **Backup Your IDB**: Keep backups before applying large batch changes
+6. **Use Decompiled Mode**: Generally provides better results than assembly
+7. **Check Naming Contract**: Ensure suggested names follow your team's conventions
+
+## Architecture
+
+### Plugin Structure
+
+```
+semray/
+├── semray.py              # Main plugin file
+├── ida-plugin.json        # IDA plugin metadata
+└── codedump/              # Optional CodeDumper integration
+    ├── codedump.py        # Context discovery utilities
+    ├── micro-analyzer.py  # Micro-architectural analysis
+    └── ptn_utils.py       # PTN provenance tracking
+```
+
+### Key Components
+
+1. **Configuration** (Lines 127-173): Constants, API settings, models
+2. **Data Models** (Lines 186-219): Pydantic schemas for validation
+3. **Context Builder** (Lines 337-496): Gathers code, call graphs, semantics
+4. **Analysis Orchestrator** (Lines 501-647): Manages the analysis pipeline
+5. **UI Components** (Lines 650-908): PyQt5 widgets for results display
+6. **IDA Integration** (Lines 911-1207): Actions, hooks, plugin lifecycle
+
+### Execution Flow
+
+```
+User Action (Right-click menu)
+    ↓
+CtxActionHandler.activate()
+    ↓
+async_call() orchestrates:
+    ↓
+1. build_context_material() [IDA main thread]
+    ↓
+2. Construct LLM prompt with context
+    ↓
+3. do_google_ai_analysis() [Background thread]
+    ↓
+4. Parse & validate JSON response
+    ↓
+5. do_show_ui() [UI thread]
+    ↓
+User reviews and clicks "Apply Selected"
+    ↓
+_perform_ida_updates() [IDA main thread]
+    ↓
+IDB updated, views refreshed
+```
+
+## License
+
+This plugin is provided as-is for reverse engineering and security research purposes.
+
+## Contributing
+
+Contributions are welcome! Key areas for improvement:
+- Support for additional LLM providers (OpenAI, Claude, etc.)
+- Enhanced prompt engineering for better results
+- Additional context extraction strategies
+- UI/UX improvements
+- Performance optimizations
+
+## Changelog
+
+### Current Version
+- Initial release with Google AI (Gemini) integration
+- Support for decompiled and assembly analysis modes
+- Optional CodeDumper integration
+- Interactive UI for reviewing suggestions
+- Concurrent analysis prevention
+- Comprehensive error handling and fallbacks
+
+## Support
+
+For issues, questions, or feature requests, please check the output window in IDA Pro for diagnostic information and error messages.
+
+## Credits
+
+- Built on IDA Pro's powerful reverse engineering platform
+- Leverages Google's Gemini AI for semantic understanding
+- Integrates with CodeDumper plugin for enhanced context (optional)
+- Uses Pydantic for robust data validation
+
+```
+
+`codedump/micro-analyzer.py`:
+
+```py
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+import ida_hexrays
+import ida_funcs
+import idaapi
+import ida_kernwin
+import ida_nalt
+import idautils
+import idc
+import ida_name
+
+from typing import Dict, List, Optional, Tuple
+from ptn_utils import FunctionSummary, ArgUse, GlobalAccess, Alias
+
+# Intraprocedural provenance extraction based primarily on ctree with defensive fallbacks.
+# This module must run in the IDA main thread.
+
+def _get_func_name(ea: int) -> str:
+    try:
+        n = ida_funcs.get_func_name(ea)
+        if n:
+            return n
+    except Exception:
+        pass
+    return f"sub_{ea:X}"
+
+def _type_size_bytes(t) -> Optional[int]:
+    try:
+        if t and t.get_size() > 0:
+            return int(t.get_size())
+    except Exception:
+        pass
+    return None
+
+def _ptr_pointee_size_bytes(t) -> Optional[int]:
+    try:
+        if t and t.is_ptr():
+            pt = t.get_pointed_object()
+            if pt:
+                return _type_size_bytes(pt)
+    except Exception:
+        pass
+    return None
+
+def _num_value(e) -> Optional[int]:
+    try:
+        if e.op == ida_hexrays.cot_num:
+            return int(e.numval())
+    except Exception:
+        pass
+    return None
+
+def _unwrap_casts(e):
+    while e and e.op == ida_hexrays.cot_cast:
+        e = e.x
+    return e
+
+def _normalize_expr_origin(cfunc, e) -> Tuple[str, int, str, Optional[int], Optional[int], Optional[str], str]:
+    """
+    Returns (base_kind, base_id, base_name, off, length, cast, mode)
+    base_kind: 'L' | 'P' | 'G' | 'U'
+    base_id: lidx | pidx | global_ea | -1
+    base_name: textual name for humans/LLMs when index is -1
+    off: byte offset if known
+    length: byte length if known
+    cast: textual cast type if present
+    mode: '', '&', or '*'
+    """
+    mode = ""
+    off = 0
+    length = None
+    cast_txt = None
+    base_kind = "U"
+    base_id = -1
+    base_name = ""
+
+    def peel(expr):
+        nonlocal mode, off, cast_txt
+        cur = expr
+        while True:
+            if cur is None:
+                return None
+            if cur.op == ida_hexrays.cot_cast:
+                try:
+                    cast_txt = str(cur.type)
+                except Exception:
+                    cast_txt = None
+                cur = cur.x
+                continue
+            if cur.op == ida_hexrays.cot_ref:
+                mode = "&"
+                cur = cur.x
+                continue
+            if cur.op == ida_hexrays.cot_memref:
+                mode = "*"
+                cur = cur.x
+                continue
+            if cur.op == ida_hexrays.cot_memptr:
+                mode = "*"
+                try:
+                    off += int(cur.m)
+                except Exception:
+                    pass
+                cur = cur.x
+                continue
+            if cur.op == ida_hexrays.cot_idx:
+                idxv = _num_value(cur.y)
+                stride = _ptr_pointee_size_bytes(cur.x.type) or _type_size_bytes(cur.type)
+                if idxv is not None and stride:
+                    off += idxv * stride
+                cur = cur.x
+                continue
+            if cur.op == ida_hexrays.cot_add:
+                c1 = _num_value(cur.y)
+                c0 = _num_value(cur.x)
+                if c1 is not None:
+                    off += c1
+                    cur = cur.x
+                    continue
+                if c0 is not None:
+                    off += c0
+                    cur = cur.y
+                    continue
+            break
+        return cur
+
+    base = peel(_unwrap_casts(e))
+    if base is None:
+        return ("U", -1, "", None, None, cast_txt, mode)
+
+    try:
+        if base.op == ida_hexrays.cot_var:
+            lv = base.v
+            pidx = -1
+            lidx = -1
+            try:
+                if getattr(lv, "is_arg_var", False):
+                    pidx = getattr(lv, "argidx", -1)
+                    base_kind = "P"
+                    base_id = int(pidx) if isinstance(pidx, int) else -1
+                else:
+                    base_kind = "L"
+                    lidx = getattr(lv, "idx", -1)
+                    base_id = int(lidx) if isinstance(lidx, int) else -1
+            except Exception:
+                base_kind = "L"
+                base_id = -1
+            base_name = getattr(lv, "name", "")
+            if mode == "&":
+                length = _ptr_pointee_size_bytes(e.type) or _ptr_pointee_size_bytes(base.type)
+            else:
+                length = _type_size_bytes(e.type)
+        elif base.op == ida_hexrays.cot_obj:
+            base_kind = "G"
+            base_id = int(base.obj_ea)
+            base_name = ""
+            length = _type_size_bytes(e.type)
+        else:
+            base_kind = "U"
+            base_id = -1
+        off_val = off if off != 0 else None
+        return (base_kind, base_id, base_name, off_val, length, cast_txt, mode)
+    except Exception:
+        return ("U", -1, "", None, None, cast_txt, mode)
+
+class _ProvCollector(ida_hexrays.ctree_visitor_t):
+    def __init__(self, cfunc):
+        super().__init__(ida_hexrays.CV_FAST)
+        self.cfunc = cfunc
+        self.fs = FunctionSummary(func_ea=cfunc.entry_ea,
+                                  func_name=_get_func_name(cfunc.entry_ea))
+        try:
+            lvars = list(cfunc.get_lvars())
+            for lv in lvars:
+                nm = getattr(lv, "name", "")
+                if getattr(lv, "is_arg_var", False):
+                    pidx = getattr(lv, "argidx", -1)
+                    self.fs.params[int(pidx) if isinstance(pidx, int) else -1] = nm
+                else:
+                    lidx = getattr(lv, "idx", -1)
+                    self.fs.locals[int(lidx) if isinstance(lidx, int) else -1] = nm
+        except Exception:
+            pass
+
+    def _record_arguse(self, call_ea: int, callee_ea: Optional[int], arg_index: int, e):
+        bk, bid, bname, off, length, cast, mode = _normalize_expr_origin(self.cfunc, e)
+        conf = "high" if bk in ("L", "P", "G") else "low"
+        self.fs.arguses.append(ArgUse(
+            cs_ea=call_ea or 0,
+            callee_ea=callee_ea,
+            arg_index=arg_index,
+            base_kind=bk,
+            base_id=bid if isinstance(bid, int) else -1,
+            base_name=bname or "",
+            off=off, length=length, mode=mode, cast=cast, conf=conf
+        ))
+
+    def _record_alias(self, lhs, rhs):
+        dst_kind, dst_id, dst_name = "U", -1, ""
+        try:
+            if lhs.op == ida_hexrays.cot_var:
+                lv = lhs.v
+                dst_name = getattr(lv, "name", "")
+                if getattr(lv, "is_arg_var", False):
+                    dst_kind = "P"
+                    dst_id = getattr(lv, "argidx", -1)
+                else:
+                    dst_kind = "L"
+                    dst_id = getattr(lv, "idx", -1)
+        except Exception:
+            return
+        bk, bid, bname, off, length, cast, mode = _normalize_expr_origin(self.cfunc, rhs)
+        if bk in ("L", "P", "G") and mode in ("&", "*", ""):
+            self.fs.aliases.append(Alias(
+                dst_kind=dst_kind, dst_id=dst_id if isinstance(dst_id, int) else -1, dst_name=dst_name or "",
+                src_kind=bk, src_id=bid if isinstance(bid, int) else -1, src_name=bname or "",
+                off=off, length=length, mode=mode or "&", cast=cast, conf="med"
+            ))
+
+    def _record_global_write_from_lvalue(self, lhs, cs_ea: int):
+        cur = lhs
+        off = 0
+        try:
+            while cur:
+                if cur.op == ida_hexrays.cot_obj:
+                    gea = int(cur.obj_ea)
+                    self.fs.globals.append(GlobalAccess(ea=gea, off=(off if off else None), length=None, kind="W", cs_ea=cs_ea or 0))
+                    return
+                if cur.op == ida_hexrays.cot_memptr:
+                    off += int(cur.m)
+                    cur = cur.x
+                    continue
+                if cur.op == ida_hexrays.cot_memref:
+                    cur = cur.x
+                    continue
+                if cur.op == ida_hexrays.cot_cast:
+                    cur = cur.x
+                    continue
+                break
+        except Exception:
+            return
+
+    def _record_global_read_from_expr(self, e, cs_ea: int):
+        cur = e
+        seen = set()
+        stack = [cur]
+        try:
+            while stack:
+                cur = stack.pop()
+                if not cur or id(cur) in seen:
+                    continue
+                seen.add(id(cur))
+                if cur.op == ida_hexrays.cot_obj:
+                    gea = int(cur.obj_ea)
+                    self.fs.globals.append(GlobalAccess(ea=gea, off=None, length=None, kind="R", cs_ea=cs_ea or 0))
+                for ch in (getattr(cur, "x", None), getattr(cur, "y", None), getattr(cur, "z", None)):
+                    if ch is not None:
+                        stack.append(ch)
+        except Exception:
+            return
+
+    def visit_expr(self, e):
+        try:
+            if e.op == ida_hexrays.cot_call:
+                call_ea = int(e.ea) if e.ea else 0
+                callee_ea = self._extract_callee_ea(e.x)
+                argc = e.a.size()
+                for k in range(argc):
+                    arg = e.a[k]
+                    self._record_arguse(call_ea, callee_ea, k, arg)
+                self._record_global_read_from_expr(e, call_ea)
+                return 0
+            if e.op == ida_hexrays.cot_asg:
+                a_ea = int(e.ea) if e.ea else 0
+                self._record_global_write_from_lvalue(e.x, a_ea)
+                self._record_alias(e.x, e.y)
+                self._record_global_read_from_expr(e.y, a_ea)
+                return 0
+            eea = int(e.ea) if e.ea else 0
+            self._record_global_read_from_expr(e, eea)
+        except Exception:
+            pass
+        return 0
+
+    def _extract_callee_ea(self, x) -> Optional[int]:
+        try:
+            y = x
+            while y and y.op == ida_hexrays.cot_cast:
+                y = y.x
+            if not y:
+                return None
+            if y.op == ida_hexrays.cot_obj:
+                return int(y.obj_ea)
+            if y.op == ida_hexrays.cot_helper:
+                h = getattr(y, "helper", None)
+                if h:
+                    ea = ida_name.get_name_ea(idaapi.BADADDR, h)
+                    if ea != idaapi.BADADDR:
+                        return int(ea)
+                return None
+            return None
+        except Exception:
+            return None
+
+def analyze_functions_ctree(func_eas) -> Dict[int, FunctionSummary]:
+    out: Dict[int, FunctionSummary] = {}
+    for ea in func_eas:
+        cfunc = None
+        try:
+            cfunc = ida_hexrays.decompile(ea)
+        except ida_hexrays.DecompilationFailure:
+            cfunc = None
+        except Exception:
+            cfunc = None
+        if not cfunc:
+            out[ea] = FunctionSummary(func_ea=ea, func_name=_get_func_name(ea))
+            continue
+        v = _ProvCollector(cfunc)
+        try:
+            v.apply_to(cfunc.body, None)
+        except Exception:
+            try:
+                cfunc.body.visit_exprs(v)
+            except Exception:
+                pass
+        out[ea] = v.fs
+    return out
+
+```
+
+`codedump/ptn_utils.py`:
+
+```py
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, Set
+
+ConfT = str  # 'low' | 'med' | 'high'
+
+@dataclass
+class ArgUse:
+    cs_ea: int
+    callee_ea: Optional[int]
+    arg_index: int
+    base_kind: str                 # 'L' | 'P' | 'G' | 'U' (unknown)
+    base_id: int                   # lvar_idx | param_idx | global_ea | -1
+    base_name: str = ""
+    off: Optional[int] = None      # bytes
+    length: Optional[int] = None   # bytes
+    mode: str = ""                 # '', '&', '*'
+    cast: Optional[str] = None
+    conf: ConfT = "med"
+
+@dataclass
+class Alias:
+    dst_kind: str                  # 'L' or 'P'
+    dst_id: int
+    dst_name: str
+    src_kind: str                  # 'L' | 'P' | 'G' | 'U'
+    src_id: int
+    src_name: str = ""
+    off: Optional[int] = None
+    length: Optional[int] = None
+    mode: str = "&"
+    cast: Optional[str] = None
+    conf: ConfT = "med"
+
+@dataclass
+class GlobalAccess:
+    ea: int                        # global base EA
+    off: Optional[int]             # byte offset into global, if known
+    length: Optional[int]          # byte length, if known
+    kind: str                      # 'R' or 'W'
+    cs_ea: int = 0                 # code-site EA for this access (per-instruction correlation)
+
+@dataclass
+class FunctionSummary:
+    func_ea: int
+    func_name: str
+    params: Dict[int, str] = field(default_factory=dict)  # pidx -> name
+    locals: Dict[int, str] = field(default_factory=dict)  # lidx -> name
+    arguses: List[ArgUse] = field(default_factory=list)
+    aliases: List[Alias] = field(default_factory=list)
+    globals: List[GlobalAccess] = field(default_factory=list)
+
+class PTNEmitter:
+    def __init__(self, summaries: Dict[int, FunctionSummary]):
+        self.summaries = summaries
+        self._fid_by_ea: Dict[int, str] = {}
+        self._ea_by_fid: Dict[str, int] = {}
+        self._name_by_ea: Dict[int, str] = {ea: fs.func_name for ea, fs in summaries.items()}
+        self._assign_fids()
+
+    def _assign_fids(self) -> None:
+        for n, ea in enumerate(sorted(self.summaries.keys())):
+            fid = f"F{n+1}"
+            self._fid_by_ea[ea] = fid
+            self._ea_by_fid[fid] = ea
+
+    def _fid(self, ea: int) -> str:
+        return self._fid_by_ea.get(ea, f"F?")
+
+    @staticmethod
+    def _fmt_slice(off: Optional[int], length: Optional[int]) -> str:
+        if off is None and length is None:
+            return ""
+        if off is None and length is not None:
+            return f"@[?:0x{length:X}]"
+        if off is not None and length is None:
+            return f"@[0x{off:X}:?]"
+        return f"@[0x{off:X}:0x{length:X}]"
+
+    @staticmethod
+    def _fmt_meta(meta: Dict[str, object]) -> str:
+        if not meta:
+            return ""
+        parts = []
+        for k, v in meta.items():
+            if isinstance(v, int):
+                if k in ("cs",):
+                    parts.append(f"{k}=0x{v:X}")
+                else:
+                    parts.append(f"{k}={v}")
+            else:
+                parts.append(f"{k}={v}")
+        return " {" + ",".join(parts) + "}"
+
+    def _fmt_node_L(self, fid: str, lidx: int, off: Optional[int], length: Optional[int],
+                    mode: str, cast: Optional[str], name: str = "", meta: Optional[Dict[str, object]] = None) -> str:
+        s = f"L({fid},{lidx}){self._fmt_slice(off, length)}{mode}"
+        if cast:
+            s += f":({cast})"
+        if meta:
+            s += self._fmt_meta(meta)
+        return s
+
+    def _fmt_node_P(self, fid: str, pidx: int, off: Optional[int], length: Optional[int],
+                    mode: str, cast: Optional[str], meta: Optional[Dict[str, object]] = None) -> str:
+        s = f"P({fid},{pidx}){self._fmt_slice(off, length)}{mode}"
+        if cast:
+            s += f":({cast})"
+        if meta:
+            s += self._fmt_meta(meta)
+        return s
+
+    def _fmt_node_A(self, fid: str, arg_index: int, meta: Optional[Dict[str, object]] = None) -> str:
+        s = f"A({fid},{arg_index})"
+        if meta:
+            s += self._fmt_meta(meta)
+        return s
+
+    def _fmt_node_G(self, ea: int, off: Optional[int], length: Optional[int], meta: Optional[Dict[str, object]] = None) -> str:
+        s = f"G(0x{ea:X}){self._fmt_slice(off, length)}"
+        if meta:
+            s += self._fmt_meta(meta)
+        return s
+
+    def _fmt_node_F(self, fid: str, meta: Optional[Dict[str, object]] = None) -> str:
+        s = f"F({fid})"
+        if meta:
+            s += self._fmt_meta(meta)
+        return s
+
+    def _dict_header(self, restrict_eas: Optional[Set[int]] = None) -> str:
+        eas = sorted((restrict_eas or set(self.summaries.keys())))
+        parts = []
+        for ea in eas:
+            fid = self._fid(ea)
+            name = self._name_by_ea.get(ea, "")
+            if name:
+                parts.append(f"{fid}=0x{ea:X},{name}")
+            else:
+                parts.append(f"{fid}=0x{ea:X}")
+        return "D:" + ";".join(parts)
+
+    def _build_param_forward(self) -> Dict[Tuple[int, int], List[Tuple[int, int, Dict[str, object]]]]:
+        fwd: Dict[Tuple[int, int], List[Tuple[int, int, Dict[str, object]]]] = {}
+        for fea, fs in self.summaries.items():
+            for au in fs.arguses:
+                if au.base_kind == "P" and au.callee_ea is not None:
+                    key = (fea, au.base_id)
+                    lst = fwd.setdefault(key, [])
+                    meta = {}
+                    if au.off is not None:
+                        meta["off"] = au.off
+                    if au.length is not None:
+                        meta["len"] = au.length
+                    if au.mode:
+                        meta["mode"] = au.mode
+                    if au.cs_ea:
+                        meta["cs"] = au.cs_ea
+                    if au.conf:
+                        meta["conf"] = au.conf
+                    lst.append((au.callee_ea, au.arg_index, meta))
+        return fwd
+
+    def _build_incoming_map(self) -> Dict[Tuple[int, int], List[Dict[str, object]]]:
+        inc: Dict[Tuple[int, int], List[Dict[str, object]]] = {}
+        for caller_ea, fs in self.summaries.items():
+            for au in fs.arguses:
+                if au.callee_ea is None:
+                    continue
+                key = (au.callee_ea, au.arg_index)
+                lst = inc.setdefault(key, [])
+                lst.append({
+                    "caller_ea": caller_ea,
+                    "origin_kind": au.base_kind,
+                    "origin_id": au.base_id,
+                    "origin_name": au.base_name,
+                    "off": au.off,
+                    "length": au.length,
+                    "mode": au.mode,
+                    "cast": au.cast,
+                    "conf": au.conf,
+                    "cs_ea": au.cs_ea,
+                })
+        return inc
+
+    def emit_ptn(self, start_eas: Set[int], callee_depth: int, restrict_eas: Optional[Set[int]] = None) -> str:
+        lines: List[str] = []
+        target_set = restrict_eas or start_eas or set(self.summaries.keys())
+        lines.append("#PTN v0")
+        lines.append(self._dict_header(target_set))
+
+        param_forward = self._build_param_forward()
+        incoming_map = self._build_incoming_map()
+        visited_line_keys: Set[str] = set()
+
+        def add_line(s: str) -> None:
+            if s not in visited_line_keys:
+                visited_line_keys.add(s)
+                lines.append(s)
+
+        for fea in sorted(target_set):
+            fs = self.summaries.get(fea)
+            if not fs:
+                continue
+            fid = self._fid(fea)
+            add_line(f"D:{fid}=0x{fea:X},{fs.func_name}")
+            for al in fs.aliases:
+                dst = f"{al.dst_kind}({fid},{al.dst_id})"
+                src = self._fmt_origin(al.src_kind, fea, al.src_id, al.src_name, al.off, al.length, al.mode, al.cast, {"conf": al.conf})
+                add_line(f"A:{dst}:={src}")
+
+        for (callee_ea, pidx), entries in incoming_map.items():
+            if callee_ea not in target_set:
+                continue
+            callee_fid = self._fid(callee_ea)
+            for ent in entries:
+                caller_ea = ent["caller_ea"]
+                origin = self._fmt_origin(ent["origin_kind"], caller_ea, ent["origin_id"], ent["origin_name"],
+                                          ent["off"], ent["length"], ent["mode"], ent["cast"],
+                                          {"conf": ent["conf"], "cs": ent["cs_ea"], "caller": self._fid(caller_ea)})
+                dst = self._fmt_node_P(callee_fid, pidx, None, None, "", None, None)
+                add_line(f"I:{origin} -> {dst}")
+
+        by_func: Dict[int, List[ArgUse]] = {}
+        for fea, fs in self.summaries.items():
+            by_func.setdefault(fea, []).extend(fs.arguses)
+
+        for fea in sorted(target_set):
+            uses = by_func.get(fea, [])
+            for au in uses:
+                if au.callee_ea is None:
+                    continue
+                origin = self._fmt_origin(au.base_kind, fea, au.base_id, au.base_name, au.off, au.length, au.mode, au.cast,
+                                          {"conf": au.conf, "cs": au.cs_ea} if au.cs_ea else {"conf": au.conf})
+                fid_to = self._fid(au.callee_ea)
+                add_line(f"E:{origin} -> {self._fmt_node_A(fid_to, au.arg_index)}")
+
+                frontier: List[Tuple[int, int, int]] = []
+                if au.base_kind in ("L", "P"):
+                    frontier.append((au.callee_ea, au.arg_index, 1))
+                depth_seen: Set[Tuple[int, int]] = set()
+                while frontier:
+                    cur_fea, pidx, depth = frontier.pop()
+                    if depth >= callee_depth:
+                        continue
+                    key = (cur_fea, pidx)
+                    if key in depth_seen:
+                        continue
+                    depth_seen.add(key)
+                    for (next_callee_ea, next_argk, meta) in param_forward.get(key, []):
+                        fid_mid = self._fid(cur_fea)
+                        fid_next = self._fid(next_callee_ea)
+                        add_line(f"E:{origin} -> A({fid_mid},{pidx}) -> A({fid_next},{next_argk})")
+                        frontier.append((next_callee_ea, next_argk, depth + 1))
+
+        writers: Dict[int, Set[int]] = {}
+        readers: Dict[int, Set[int]] = {}
+        for fea, fs in self.summaries.items():
+            for ga in fs.globals:
+                if ga.kind == "W":
+                    writers.setdefault(ga.ea, set()).add(fea)
+                elif ga.kind == "R":
+                    readers.setdefault(ga.ea, set()).add(fea)
+        for gea, ws in writers.items():
+            rs = readers.get(gea, set())
+            for fw in sorted(ws):
+                for fr in sorted(rs):
+                    if fw in target_set or fr in target_set:
+                        lines.append("G:" + self._fmt_node_F(self._fid(fw)) + " -> " +
+                                     self._fmt_node_G(gea, None, None, {}) + " -> " +
+                                     self._fmt_node_F(self._fid(fr)))
+
+        return "\
+".join(lines) + "\
+"
+
+    def _fmt_origin(self, kind: str, fea: int, idx: int, name: str,
+                    off: Optional[int], length: Optional[int], mode: str, cast: Optional[str],
+                    meta: Dict[str, object]) -> str:
+        fid = self._fid(fea)
+        m = dict(meta)
+        if name:
+            m["name"] = name
+        if kind == "L":
+            return self._fmt_node_L(fid, max(idx, -1), off, length, mode, cast, name, m)
+        if kind == "P":
+            return self._fmt_node_P(fid, max(idx, -1), off, length, mode, cast, m)
+        if kind == "G":
+            return self._fmt_node_G(idx, off, length, m)
+        return "U" + self._fmt_meta(m)
+
+    def per_function_annotations(self, callee_depth: int) -> Dict[int, str]:
+        param_forward = self._build_param_forward()
+        incoming_map = self._build_incoming_map()
+        out: Dict[int, str] = {}
+        for fea, fs in self.summaries.items():
+            fid = self._fid(fea)
+            lines: List[str] = []
+            lines.append(f"// @PTN D:{fid}=0x{fea:X},{fs.func_name}")
+            for al in fs.aliases:
+                dst = f"{al.dst_kind}({fid},{al.dst_id})"
+                src = self._fmt_origin(al.src_kind, fea, al.src_id, al.src_name, al.off, al.length, al.mode, al.cast, {"conf": al.conf})
+                lines.append(f"// @PTN A:{dst}:={src}")
+            for (callee_ea, pidx), entries in incoming_map.items():
+                if callee_ea != fea:
+                    continue
+                for ent in entries:
+                    caller_ea = ent["caller_ea"]
+                    origin = self._fmt_origin(ent["origin_kind"], caller_ea, ent["origin_id"], ent["origin_name"],
+                                              ent["off"], ent["length"], ent["mode"], ent["cast"],
+                                              {"conf": ent["conf"], "cs": ent["cs_ea"], "caller": self._fid(caller_ea)})
+                    dst = self._fmt_node_P(fid, pidx, None, None, "", None, None)
+                    lines.append(f"// @PTN I:{origin} -> {dst}")
+            for au in fs.arguses:
+                if au.callee_ea is None:
+                    continue
+                origin = self._fmt_origin(au.base_kind, fea, au.base_id, au.base_name, au.off, au.length, au.mode, au.cast,
+                                          {"conf": au.conf, "cs": au.cs_ea} if au.cs_ea else {"conf": au.conf})
+                lines.append(f"// @PTN E:{origin} -> {self._fmt_node_A(self._fid(au.callee_ea), au.arg_index)}")
+                if callee_depth > 1 and au.base_kind in ("L", "P"):
+                    key = (au.callee_ea, au.arg_index)
+                    for (nc_ea, narg, meta) in param_forward.get(key, []):
+                        lines.append(f"// @PTN E:{origin} -> A({self._fid(au.callee_ea)},{au.arg_index}) -> A({self._fid(nc_ea)},{narg})")
+            for ga in fs.globals:
+                if ga.kind == "W":
+                    lines.append(f"// @PTN G:{self._fmt_node_F(fid)} -> {self._fmt_node_G(ga.ea, ga.off, ga.length)}")
+                elif ga.kind == "R":
+                    lines.append(f"// @PTN G:{self._fmt_node_G(ga.ea, ga.off, ga.length)} -> {self._fmt_node_F(fid)}")
+            out[fea] = "\
+".join(lines) + ("\
+" if lines else "")
+        return out
+
+    def per_instruction_hints(self, callee_depth: int = 1) -> Dict[int, Dict[int, List[str]]]:
+        hints: Dict[int, Dict[int, List[str]]] = {}
+        param_forward = self._build_param_forward()
+        for fea, fs in self.summaries.items():
+            for au in fs.arguses:
+                if not au.cs_ea or au.callee_ea is None:
+                    continue
+                origin = self._fmt_origin(au.base_kind, fea, au.base_id, au.base_name, au.off, au.length, au.mode, au.cast,
+                                          {"conf": au.conf})
+                fid_to = self._fid(au.callee_ea)
+                line0 = f"@PTN E:{origin} -> {self._fmt_node_A(fid_to, au.arg_index)}"
+                hints.setdefault(fea, {}).setdefault(au.cs_ea, []).append(line0)
+
+                if callee_depth > 1 and au.base_kind in ("L", "P"):
+                    frontier: List[Tuple[int, int, int]] = [(au.callee_ea, au.arg_index, 1)]
+                    depth_seen: Set[Tuple[int, int]] = set()
+                    while frontier:
+                        cur_fea, pidx, depth = frontier.pop()
+                        if depth >= callee_depth:
+                            continue
+                        key = (cur_fea, pidx)
+                        if key in depth_seen:
+                            continue
+                        depth_seen.add(key)
+                        for (next_callee_ea, next_argk, meta) in param_forward.get(key, []):
+                            fid_mid = self._fid(cur_fea)
+                            fid_next = self._fid(next_callee_ea)
+                            hints.setdefault(fea, {}).setdefault(au.cs_ea, []).append(
+                                f"@PTN E:{origin} -> A({fid_mid},{pidx}) -> A({fid_next},{next_argk})"
+                            )
+                            frontier.append((next_callee_ea, next_argk, depth + 1))
+        for fea, fs in self.summaries.items():
+            fid = self._fid(fea)
+            for ga in fs.globals:
+                if not ga.cs_ea:
+                    continue
+                if ga.kind == "W":
+                    line = f"@PTN G:{self._fmt_node_F(fid)} -> {self._fmt_node_G(ga.ea, ga.off, ga.length)}"
+                else:
+                    line = f"@PTN G:{self._fmt_node_G(ga.ea, ga.off, ga.length)} -> {self._fmt_node_F(fid)}"
+                hints.setdefault(fea, {}).setdefault(ga.cs_ea, []).append(line)
+        return hints
+
+    def emit_ptn_json(self, start_eas: Set[int], callee_depth: int, restrict_eas: Optional[Set[int]] = None) -> str:
+        target_set = sorted(list(restrict_eas or start_eas or set(self.summaries.keys())))
+        param_forward = self._build_param_forward()
+        incoming_map = self._build_incoming_map()
+
+        obj: Dict[str, object] = {
+            "version": "0",
+            "dict": [{"fid": self._fid(ea), "ea": f"0x{ea:X}", "name": self._name_by_ea.get(ea, "")} for ea in target_set],
+            "aliases": [],
+            "calls": [],
+            "globals": [],
+            "inbound": []
+        }
+
+        for fea in target_set:
+            fs = self.summaries.get(fea)
+            if not fs:
+                continue
+            fid = self._fid(fea)
+            for al in fs.aliases:
+                obj["aliases"].append({
+                    "func": {"fid": fid, "ea": f"0x{fea:X}"},
+                    "dst": {"kind": al.dst_kind, "id": al.dst_id, "name": al.dst_name},
+                    "src": {"kind": al.src_kind, "id": al.src_id, "name": al.src_name,
+                            "off": al.off, "len": al.length, "mode": al.mode, "cast": al.cast},
+                    "conf": al.conf
+                })
+
+        for fea in target_set:
+            fs = self.summaries.get(fea)
+            if not fs:
+                continue
+            for au in fs.arguses:
+                if au.callee_ea is None:
+                    continue
+                obj["calls"].append({
+                    "caller": {"fid": self._fid(fea), "ea": f"0x{fea:X}"},
+                    "cs_ea": f"0x{au.cs_ea:X}" if au.cs_ea else None,
+                    "origin": {"kind": au.base_kind, "id": au.base_id, "name": au.base_name,
+                               "off": au.off, "len": au.length, "mode": au.mode, "cast": au.cast, "conf": au.conf},
+                    "callee": {"fid": self._fid(au.callee_ea), "ea": f"0x{au.callee_ea:X}"},
+                    "arg_index": au.arg_index
+                })
+
+        for fea in target_set:
+            fs = self.summaries.get(fea)
+            if not fs:
+                continue
+            for ga in fs.globals:
+                obj["globals"].append({
+                    "func": {"fid": self._fid(fea), "ea": f"0x{fea:X}"},
+                    "op": ga.kind,
+                    "global_ea": f"0x{ga.ea:X}",
+                    "off": ga.off, "len": ga.length,
+                    "cs_ea": f"0x{ga.cs_ea:X}" if ga.cs_ea else None
+                })
+
+        for (callee_ea, pidx), entries in incoming_map.items():
+            if callee_ea not in target_set:
+                continue
+            for ent in entries:
+                obj["inbound"].append({
+                    "to": {"fid": self._fid(callee_ea), "ea": f"0x{callee_ea:X}", "param": pidx},
+                    "from": {"fid": self._fid(ent["caller_ea"]), "ea": f"0x{ent['caller_ea']:X}"},
+                    "origin": {"kind": ent["origin_kind"], "id": ent["origin_id"], "name": ent["origin_name"],
+                               "off": ent["off"], "len": ent["length"], "mode": ent["mode"], "cast": ent["cast"], "conf": ent["conf"]},
+                    "cs_ea": f"0x{ent['cs_ea']:X}" if ent["cs_ea"] else None
+                })
+
+        return json.dumps(obj, indent=2) + "\
+"
+
+```
+
+`ida-plugin.json`:
+
+```json
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "semray",
+    "entryPoint": "semray.py"
+  }
+}
+
+```
+
+`semray.py`:
+
+```py
+# -*- coding: utf-8 -*-
+"""
+summary: High-performance, AI-driven semantic analysis for the IDA Pro decompiler.
+
+description:
+  This plugin, SemRay, integrates with Google's Generative AI API (Gemini) to
+  provide suggestions for function names, comments, and local variable renames.
+
+  This final, merged version combines the best features of previous implementations:
+  • ROBUSTNESS: Gracefully falls back to basic IDA API calls if the 'codedump'
+    plugin is not available, ensuring functionality in all environments.
+  • MODULARITY: A clean, refactored architecture for better readability and maintenance.
+  • NO CODE DUPLICATION: Adheres to the DRY principle by importing shared logic
+    from 'codedump' when available, rather than duplicating it.
+  • ENHANCED CONTEXT: When 'codedump' is present, it leverages its advanced context
+    discovery (virtual calls, jump tables, detailed xref reasons) and optional PTN
+    provenance annotations for richer semantic input to the LLM.
+  • FLEXIBILITY: Allows the user to select either Hex-Rays decompilation or raw
+    disassembly as the content for analysis.
+  • USABILITY: Can be invoked from context menus in both the Pseudocode and
+    Disassembly views, with clear dialogs for user input.
+
+  Requires:
+  - IDA Pro 7.6+ (with Python 3 and PyQt5 support)
+  - Hex-Rays Decompiler (for decompilation mode and PTN analysis)
+  - google-genai library (`pip install google-genai`)
+  - pydantic library (`pip install pydantic`)
+  - A Google AI API Key set in the environment variable `GOOGLE_API_KEY`.
+"""
+
+# --- Imports ---
+import ida_kernwin
+import ida_hexrays
+import ida_funcs
+import ida_name
+import ida_bytes
+import idaapi
+import idautils
+import idc
+import ida_xref
+import ida_typeinf
+import ida_nalt
+import ida_ua
+import ida_idp
+import ida_search
+
+import threading
+import json
+import textwrap
+import os
+import sys
+import traceback
+import time
+import re
+from collections import deque, defaultdict
+from functools import partial
+from typing import Dict, List, Set, Optional, Tuple
+
+# Ensure sibling plugin directories are importable (allow importing 'codedump.*')
+try:
+    _THIS_DIR = os.path.dirname(__file__)
+    _PARENT = os.path.abspath(os.path.join(_THIS_DIR, ".."))
+    if _PARENT not in sys.path:
+        sys.path.append(_PARENT)
+except Exception:
+    pass
+
+# --- Optional CodeDumper integration imports ---
+CODEDUMP_AVAILABLE = False
+try:
+    from codedump.codedump import (
+        find_callers_recursive as cd_find_callers_recursive,
+        find_callees_recursive as cd_find_callees_recursive,
+        decompile_functions_main as cd_decompile_functions_main,
+        disassemble_functions_main as cd_disassemble_functions_main,
+        find_vtables as cd_find_vtables,
+    )
+    from codedump.micro_analyzer import analyze_functions_ctree as cd_analyze_functions_ctree
+    from codedump.ptn_utils import PTNEmitter as CD_PTNEmitter
+
+    CODEDUMP_AVAILABLE = True
+    print("SemRay DEBUG: CodeDumper integration available.")
+except Exception as _e:
+    CODEDUMP_AVAILABLE = False
+    print(f"SemRay WARNING: CodeDumper not available ({_e}). Falling back to internal context logic.")
+
+# Third-party libraries
+try:
+    from PyQt5 import QtCore, QtGui, QtWidgets
+    from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QScrollArea,
+                                 QLabel, QVBoxLayout, QHBoxLayout, QGridLayout,
+                                 QGroupBox, QCheckBox, QPushButton, QFrame,
+                                 QTabWidget)
+
+    print("SemRay DEBUG: PyQt5 imported successfully.")
+except ImportError:
+    print("SemRay Error: PyQt5 not found. Please ensure it's installed in IDA's Python environment.")
+
+try:
+    from pydantic import BaseModel, Field
+
+    print("SemRay DEBUG: pydantic imported successfully.")
+except ImportError:
+    print("SemRay Error: pydantic not found. Please install it: pip install pydantic")
+
+try:
+    from google import genai
+    from google.genai import types
+    from google.genai import errors as google_genai_errors
+
+    print("SemRay DEBUG: google-genai imported successfully.")
+except ImportError:
+    print("SemRay Error: google-genai not found. Please install it: pip install google-genai")
+
+# --- Configuration ---
+PLUGIN_NAME = "SemRay (Google AI Semantic Analysis)"
+ACTION_ID_CTX_PREFIX_MULTI = "semray:googleai:ctx:multi:"
+ACTION_ID_CTX_PREFIX_SINGLE = "semray:googleai:ctx:single:"
+ACTION_ID_CTX_PREFIX_DEPTH = "semray:googleai:ctx:depth:"
+MENU_PATH_CTX = "SemRay Analysis/"
+
+# Google AI Configuration
+GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_API_KEY")
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
+MODELS_TO_REGISTER = [DEFAULT_GEMINI_MODEL]
+
+# Safety settings
+try:
+    DEFAULT_SAFETY_SETTINGS = [
+        types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+        types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE'),
+        types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+        types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+        types.SafetySetting(category='HARM_CATEGORY_CIVIC_INTEGRITY', threshold='BLOCK_NONE'),
+    ]
+    print("SemRay DEBUG: Default safety settings configured.")
+except Exception:
+    DEFAULT_SAFETY_SETTINGS = []
+
+# Default depths
+DEFAULT_CONTEXT_CALLER_DEPTH = 1
+DEFAULT_CONTEXT_CALLEE_DEPTH = 1
+DEFAULT_ANALYSIS_DEPTH = 1
+
+# Content mode for LLM
+CONTENT_MODE_DECOMP = "decomp"
+CONTENT_MODE_ASM = "asm"
+DEFAULT_CONTENT_MODE = CONTENT_MODE_DECOMP
+
+# Allowed xref types (used with CodeDumper)
+DEFAULT_XREF_TYPES = {'direct_call', 'indirect_call', 'data_ref', 'immediate_ref', 'tail_call_push_ret', 'virtual_call',
+                      'jump_table'}
+
+# --- Concurrency Control ---
+g_analysis_in_progress = set()
+g_multi_analysis_active = False
+g_analysis_lock = threading.Lock()
+print("SemRay DEBUG: Concurrency control initialized.")
+
+# -----------------------------------------------------------------------------
+# 1.  DATA MODELS
+# -----------------------------------------------------------------------------
+_BAD_NAME_RE = re.compile(r"\\b(var\\d+|v\\d+|tmp|foo|bar|helper|unused)\\b", re.I)
+
+
+def _lint_name(name: str) -> bool:
+    return _BAD_NAME_RE.search(name) is None
+
+
+class VariableRename(BaseModel):
+    original_name: str = Field(..., description="The original variable/argument name as seen in pseudocode.")
+    new_name: str = Field(..., description="The suggested descriptive name.")
+    rename_reason: str = Field(..., description="Why this rename clarifies semantics.")
+    rename_reason_findings: str = Field(..., description="Evidence or observations that justify the rename.")
+
+
+class SingleFunctionAnalysis(BaseModel):
+    original_function_name: str = Field(..., description="Exactly as in the '// === Function:' header.")
+    function_name: str = Field(..., description="IDA‑style concise descriptive name.")
+    comment: str = Field(..., description="Multi‑line C‑style block comment (without /* */).")
+    variables: List[VariableRename] = Field(..., description="Suggested variable/argument renames for this function.")
+    observations: List[dict] = Field(..., description="Notable observations influencing interpretation.")
+    function_name_reason: str = Field(..., description="Rationale for the chosen function name.")
+    function_name_reason_findings: str = Field(..., description="Evidence backing the chosen function name.")
+    comment_reason: str = Field(..., description="Rationale for the comment block.")
+    comment_reason_findings: str = Field(..., description="Evidence backing the comment block.")
+
+
+class MultiFunctionAnalysisResult(BaseModel):
+    function_analyses: List[SingleFunctionAnalysis]
+
+
+# -----------------------------------------------------------------------------
+# 2.  JSON SCHEMA
+# -----------------------------------------------------------------------------
+explicit_multi_function_analysis_schema: Dict = {
+    "type": "object",
+    "properties": {
+        "function_analyses": {
+            "type": "array",
+            "description": "Per‑function analysis results.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "original_function_name": {"type": "string"},
+                    "observations": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "observation": {"type": "string"},
+                                "observation_impact": {"type": "string"},
+                            },
+                            "required": ["observation", "observation_impact"],
+                        },
+                    },
+                    "function_name_reason": {"type": "string"},
+                    "function_name_reason_findings": {"type": "string"},
+                    "function_name": {"type": "string"},
+                    "comment_reason": {"type": "string"},
+                    "comment_reason_findings": {"type": "string"},
+                    "comment": {"type": "string"},
+                    "variables": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "rename_reason": {"type": "string"},
+                                "rename_reason_findings": {"type": "string"},
+                                "original_name": {"type": "string"},
+                                "new_name": {"type": "string"},
+                            },
+                            "required": ["rename_reason", "rename_reason_findings", "original_name", "new_name"],
+                        },
+                    },
+                },
+                "required": [
+                    "original_function_name", "observations", "function_name_reason",
+                    "function_name_reason_findings", "function_name", "comment_reason",
+                    "comment_reason_findings", "comment", "variables"
+                ],
+            },
+        }
+    },
+    "required": ["function_analyses"],
+}
+
+
+# -----------------------------------------------------------------------------
+# 3.  Helper utilities
+# -----------------------------------------------------------------------------
+def get_function_prototype(ea: int) -> Optional[str]:
+    try:
+        return idc.get_type(ea) or ida_typeinf.idc_get_type(ea)
+    except Exception:
+        return None
+
+
+def _gather_literals_main(ea: int, out: list) -> int:
+    func = ida_funcs.get_func(ea)
+    if not func:
+        out.append([])
+        return 1
+    literals: list[str] = []
+    it = func.start_ea
+    while it < func.end_ea:
+        flags = ida_bytes.get_full_flags(it)
+        if ida_bytes.is_strlit(flags):
+            s = ida_bytes.get_strlit_contents(it, -1, ida_nalt.get_str_type(it))
+            if s:
+                head = s[:40].decode("utf-8", "ignore") if isinstance(s, bytes) else str(s)[:40]
+                literals.append(f'string:"{head}"')
+        it = ida_bytes.next_head(it, func.end_ea)
+    insn = ida_ua.insn_t()
+    it = func.start_ea
+    while it < func.end_ea:
+        ilen = ida_ua.decode_insn(insn, it)
+        if ilen == 0:
+            it = idc.next_head(it, func.end_ea)
+            continue
+        for op in insn.ops:
+            if op.type == idaapi.o_imm and op.value > 0xFFFF:
+                literals.append(f"const:0x{op.value:X}")
+        it += ilen
+    out.append(literals)
+    return 1
+
+
+def gather_literals(ea: int) -> List[str]:
+    holder: list = []
+    ida_kernwin.execute_sync(lambda: _gather_literals_main(ea, holder), ida_kernwin.MFF_READ)
+    return holder[0] if holder else []
+
+
+# -----------------------------------------------------------------------------
+# 4.  Context Builder (CodeDumper-aware with fallbacks)
+# -----------------------------------------------------------------------------
+def _format_asm_block(func_ea: int, func_name: str, items: List[Tuple[str, int, str]]) -> str:
+    lines_out = [f"// --- ASM Function: {func_name} (0x{func_ea:X}) ---"]
+    for kind, ea, text in items:
+        lines_out.append(text if kind == "label" else f"0x{ea:X}: {text}")
+    lines_out.append(f"// --- End ASM Function: {func_name} (0x{func_ea:X}) ---")
+    return "\n".join(lines_out)
+
+
+def _edges_to_strings(edges: Dict[int, Dict[int, Set[str]]], name_map: Dict[int, str]) -> List[str]:
+    lines = []
+    for src in sorted(edges.keys()):
+        dsts = edges.get(src)
+        if not dsts: continue
+        parts = [f"{name_map.get(dst, f'sub_{dst:X}')} [{'/'.join(sorted(reasons))}]"
+                 for dst, reasons in sorted(dsts.items())]
+        if parts:
+            lines.append(f"{name_map.get(src, f'sub_{src:X}')} -> {', '.join(parts)}")
+    return lines
+
+
+def _fallback_decompile_functions_main(eas_to_decompile: Set[int]) -> Dict[int, str]:
+    results: Dict[int, str] = {}
+    if not ida_hexrays.init_hexrays_plugin():
+        return {ea: f"// Decompilation FAILED - Hex-Rays unavailable" for ea in eas_to_decompile}
+    for func_ea in sorted(list(eas_to_decompile)):
+        func_name = ida_name.get_name(func_ea) or f"sub_{func_ea:X}"
+        try:
+            cfunc = ida_hexrays.decompile(func_ea)
+            results[func_ea] = str(cfunc) if cfunc else f"// Decompilation FAILED for {func_name}"
+        except ida_hexrays.DecompilationFailure as e:
+            results[func_ea] = f"// Decompilation ERROR for {func_name}: {e}"
+    return results
+
+
+def build_context_material(start_eas: Set[int],
+                           caller_depth: int,
+                           callee_depth: int,
+                           content_mode: str) -> Tuple[Dict[int, str],
+Dict[int, str],
+Dict[int, Dict[int, Set[str]]],
+Dict[int, str]]:
+    """Must run in the IDA main thread."""
+    print(f"SemRay DEBUG: Building context (callers={caller_depth}, callees={callee_depth}, mode={content_mode})")
+    all_nodes: Set[int] = set(start_eas)
+    edges: Dict[int, Dict[int, Set[str]]] = defaultdict(lambda: defaultdict(set))
+
+    # --- Collect Callers ---
+    if caller_depth > 0:
+        visited_callers: Set[int] = set()
+        if CODEDUMP_AVAILABLE:
+            for ea in start_eas:
+                all_nodes.update(cd_find_callers_recursive(ea, 1, caller_depth, visited_callers, edges=edges,
+                                                           allowed_types=DEFAULT_XREF_TYPES))
+        else:  # Fallback
+            q = deque([(ea, 0) for ea in start_eas])
+            visited = set(start_eas)
+            while q:
+                cur, d = q.popleft()
+                if d >= caller_depth: continue
+                ref = ida_xref.get_first_cref_to(cur)
+                while ref != idaapi.BADADDR:
+                    f = ida_funcs.get_func(ref)
+                    if f and f.start_ea not in visited:
+                        all_nodes.add(f.start_ea)
+                        edges[f.start_ea][cur].add('direct_call')
+                        visited.add(f.start_ea)
+                        q.append((f.start_ea, d + 1))
+                    ref = ida_xref.get_next_cref_to(cur, ref)
+
+    # --- Collect Callees/Refs ---
+    if callee_depth > 0:
+        visited_callees: Set[int] = set()
+        if CODEDUMP_AVAILABLE:
+            vtables = cd_find_vtables()
+            for ea in start_eas:
+                all_nodes.update(
+                    cd_find_callees_recursive(ea, 1, callee_depth, visited_callees, edges=edges, vtables=vtables,
+                                              allowed_types=DEFAULT_XREF_TYPES))
+        else:  # Fallback
+            q = deque([(ea, 0) for ea in start_eas])
+            visited = set(start_eas)
+            while q:
+                cur, d = q.popleft()
+                if d >= callee_depth: continue
+                f = ida_funcs.get_func(cur)
+                if not f: continue
+                for item_ea in idautils.FuncItems(cur):
+                    for ref_ea in idautils.CodeRefsFrom(item_ea, 1):
+                        ref_f = ida_funcs.get_func(ref_ea)
+                        if ref_f and ref_f.start_ea not in visited:
+                            all_nodes.add(ref_f.start_ea)
+                            edges[cur][ref_f.start_ea].add('direct_call')
+                            visited.add(ref_f.start_ea)
+                            q.append((ref_f.start_ea, d + 1))
+
+    # --- Name Map ---
+    name_map = {ea: (ida_funcs.get_func_name(ea) or f"sub_{ea:X}") for ea in all_nodes}
+
+    # --- Materialize Code Blocks ---
+    codes_by_ea: Dict[int, str] = {}
+    if content_mode == CONTENT_MODE_ASM:
+        if CODEDUMP_AVAILABLE:
+            asm_dict = cd_disassemble_functions_main(all_nodes)
+        else:  # Fallback
+            asm_dict = {}
+            for fea in all_nodes:
+                items = [("label", fea, f"{name_map[fea]}:")]
+                items.extend(("inst", i_ea, idc.GetDisasm(i_ea) or "") for i_ea in idautils.FuncItems(fea))
+                asm_dict[fea] = items
+        for fea, items in asm_dict.items():
+            codes_by_ea[fea] = _format_asm_block(fea, name_map[fea], items)
+    else:  # Decompilation
+        if CODEDUMP_AVAILABLE:
+            codes_by_ea = cd_decompile_functions_main(all_nodes)
+        else:  # Fallback
+            codes_by_ea = _fallback_decompile_functions_main(all_nodes)
+
+    # --- PTN Annotations (only if CodeDumper is available) ---
+    ptn_ann: Dict[int, str] = {}
+    if CODEDUMP_AVAILABLE and ida_hexrays.init_hexrays_plugin():
+        try:
+            fsums = cd_analyze_functions_ctree(all_nodes)
+            emitter = CD_PTNEmitter(fsums)
+            ptn_ann = emitter.per_function_annotations(max(1, callee_depth))
+        except Exception as e:
+            print(f"SemRay WARNING: PTN analysis failed: {e}")
+
+    print(f"SemRay DEBUG: Context built. Nodes={len(all_nodes)}, Codes={len(codes_by_ea)}")
+    return codes_by_ea, name_map, edges, ptn_ann
+
+
+# -----------------------------------------------------------------------------
+# 5.  Main async_call
+# -----------------------------------------------------------------------------
+def async_call(
+        start_eas: Set[int],
+        context_caller_depth: int,
+        context_callee_depth: int,
+        model_name: str,
+        analysis_mode: str,
+        analysis_depth: int = 0,
+        extra_context: Optional[str] = None,
+        content_mode: str = DEFAULT_CONTENT_MODE,
+):
+    if not start_eas: return
+    primary_ea = min(start_eas)
+
+    # Phase 1: Build context (MAIN THREAD)
+    mat_holder: list = [None]
+
+    def _collect_ctx_material(holder):
+        ida_kernwin.show_wait_box(
+            f"Collecting context (Callers={context_caller_depth}, Callees={context_callee_depth})...")
+        try:
+            holder.append(build_context_material(start_eas, context_caller_depth, context_callee_depth, content_mode))
+            return 1
+        finally:
+            ida_kernwin.hide_wait_box()
+
+    if ida_kernwin.execute_sync(lambda: _collect_ctx_material(mat_holder), ida_kernwin.MFF_READ) != 1 or not mat_holder[
+        1]:
+        print("SemRay Error: failed to build context.")
+        return
+    all_codes, ea_to_name, edges, ptn_ann = mat_holder[1]
+
+    # Phase 2: Determine analysis targets
+    target_analysis_eas: Set[int]
+    if analysis_mode == 'current':
+        target_analysis_eas = start_eas.intersection(all_codes.keys())
+    elif analysis_mode == 'all':
+        target_analysis_eas = set(all_codes.keys())
+    elif analysis_mode == 'depth_limited':
+        target_container: list = [None]
+        ida_kernwin.execute_sync(
+            lambda: target_container.append(find_functions_within_depth(start_eas, analysis_depth)),
+            ida_kernwin.MFF_READ)
+        target_analysis_eas = (target_container[1] or start_eas).intersection(all_codes.keys())
+    else:
+        target_analysis_eas = start_eas.intersection(all_codes.keys())
+    if not target_analysis_eas:
+        print("SemRay Error: No target functions after filtering.")
+        return
+
+    # Phase 3: Build prompt
+    code_blocks = []
+    for ea in sorted(all_codes):
+        header = f"// === Function: {ea_to_name.get(ea, f'sub_{ea:X}')} (0x{ea:X}) ==="
+        proto = get_function_prototype(ea)
+        proto_hdr = f"// prototype: {proto}" if proto and content_mode == CONTENT_MODE_DECOMP else ""
+        body = all_codes[ea]
+        code_blocks.append("\n".join(filter(None, [header, proto_hdr, body])))
+
+    call_edges_lines = _edges_to_strings(edges, ea_to_name)
+    semantic_tags = [f"{ea_to_name[ea]} tags: {', '.join(gather_literals(ea))}" for ea in start_eas if
+                     ea in ea_to_name and gather_literals(ea)]
+    ptn_lines = [ptn_ann[ea] for ea in sorted(ptn_ann.keys()) if ea in target_analysis_eas]
+
+    persona_block = f"You are an expert reverse engineer. The input is {content_mode} from IDA Pro."
+    target_func_names = sorted([ea_to_name[ea] for ea in target_analysis_eas if ea in ea_to_name])
+    scope_instr = (f"Analyze ONLY the following function(s): {', '.join(target_func_names)}. "
+                   "Use other functions for background context only.") if analysis_mode != 'all' else "Analyze EVERY function provided."
+
+    prompt_content = "\
+\
+".join(filter(None, [
+        persona_block,
+        "### NAMING CONTRACT\n- Encode role and domain (e.g., crc32_checksum).\n- Placeholders like `tmp`, `v5` are forbidden.",
+        "Respond with pure JSON adhering to the supplied schema. Field `original_function_name` must match the header exactly.",
+        scope_instr,
+        "### CALLGRAPH\
+" + ("\n".join(call_edges_lines) if call_edges_lines else "(none)"),
+        "### PTN SEMANTICS (for analyzed targets)\
+" + ("\n".join(ptn_lines) if ptn_lines else "(none)"),
+        "### SEMANTICS (Primary Functions)\
+" + ("\n".join(semantic_tags) if semantic_tags else "(none)"),
+        "### START CODE CONTEXT\
+" + "\
+\
+/* --- */\
+\
+".join(code_blocks) + "\
+### END CODE CONTEXT",
+        "### SELF‑REVIEW (mandatory, ≤ 120 words)\nAfter the JSON, list any generic identifiers left and explain why."
+    ]))
+
+    # Phase 4: Query LLM
+    ida_kernwin.execute_ui_requests([lambda: ida_kernwin.show_wait_box("HIDECANCEL\nQuerying LLM...")])
+    result_holder, exc_holder = [None], [None]
+
+    def _llm_worker():
+        try:
+            result_holder[0] = do_google_ai_analysis(prompt_content, model_name)
+        except Exception as e:
+            exc_holder[0] = e
+
+    t = threading.Thread(target=_llm_worker)
+    t.start()
+    try:
+        while t.is_alive():
+            if ida_kernwin.user_cancelled(): break
+            time.sleep(0.1)
+        t.join()
+    finally:
+        ida_kernwin.execute_ui_requests([ida_kernwin.hide_wait_box])
+
+    if ida_kernwin.user_cancelled() or exc_holder[0] or not result_holder[0]:
+        if exc_holder[0]: print(f"SemRay Error: LLM call failed: {exc_holder[0]}")
+        return
+
+    # Phase 5: Map and lint results
+    name_to_ea = {v: k for k, v in ea_to_name.items()}
+    mapped = []
+    for ana in result_holder[0]:
+        oname = ana.get("original_function_name")
+        if not oname or oname not in name_to_ea: continue
+        ea = name_to_ea[oname]
+        if ea not in target_analysis_eas: continue
+        if not ana.get("function_name") or not _lint_name(ana["function_name"]): continue
+        if any(not v.get("new_name") or not _lint_name(v["new_name"]) for v in ana.get("variables", [])): continue
+        ana["function_ea"] = ea
+        mapped.append(ana)
+
+    # Phase 6: Update UI
+    if mapped:
+        ida_kernwin.execute_ui_requests([partial(do_show_ui, mapped, primary_ea)])
+    else:
+        ida_kernwin.warning("SemRay: No valid analysis results after filtering.")
+
+
+# --- UI Widgets (unchanged logic) ---
+class FunctionNameWidget(QWidget):
+    accepted = True
+
+    def __init__(self, function_name):
+        super(FunctionNameWidget, self).__init__()
+        layout = QHBoxLayout()
+        self.checkbox = QCheckBox()
+        self.checkbox.setCheckState(QtCore.Qt.Checked)
+        self.checkbox.stateChanged.connect(lambda s: setattr(self, 'accepted', s == QtCore.Qt.Checked))
+        self.name_label = QLabel(function_name)
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.name_label)
+        group_box = QGroupBox("Suggested Function Name")
+        group_box.setLayout(layout)
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(group_box)
+        self.setLayout(main_layout)
+
+
+class CommentWidget(QWidget):
+    accepted = True
+
+    def __init__(self, comment):
+        super(CommentWidget, self).__init__()
+        layout = QHBoxLayout()
+        self.checkbox = QCheckBox()
+        self.checkbox.setCheckState(QtCore.Qt.Checked)
+        self.checkbox.stateChanged.connect(lambda s: setattr(self, 'accepted', s == QtCore.Qt.Checked))
+        self.comment_area = QLabel(comment)
+        self.comment_area.setWordWrap(True)
+        self.comment_area.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.comment_area)
+        group_box = QGroupBox("Suggested Comment")
+        group_box.setLayout(layout)
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(group_box)
+        self.setLayout(main_layout)
+
+
+class VariableWidget(QWidget):
+    def __init__(self, variables):
+        super(VariableWidget, self).__init__()
+        group_layout = QGridLayout()
+        group_layout.setColumnStretch(1, 1)
+        group_layout.setColumnStretch(3, 1)
+        self.checkboxes = []
+        self.variable_data = variables
+        for i, var_data in enumerate(variables):
+            row, col_base = i // 2, (i % 2) * 4
+            checkbox = QCheckBox()
+            checkbox.setCheckState(QtCore.Qt.Checked)
+            self.checkboxes.append(checkbox)
+            group_layout.addWidget(checkbox, row, col_base + 0)
+            group_layout.addWidget(QLabel(var_data.get('original_name', 'N/A')), row, col_base + 1)
+            group_layout.addWidget(QLabel("→"), row, col_base + 2, QtCore.Qt.AlignCenter)
+            group_layout.addWidget(QLabel(var_data.get('new_name', 'N/A')), row, col_base + 3)
+        group_box = QGroupBox("Suggested Variable Renames")
+        group_box.setLayout(group_layout)
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(group_box)
+        self.setLayout(main_layout)
+
+    def get_selected_variables(self):
+        return [self.variable_data[i] for i, cb in enumerate(self.checkboxes) if cb.isChecked()]
+
+
+class SemRayUIForm(ida_kernwin.PluginForm):
+    def __init__(self, analysis_results_list, primary_trigger_ea):
+        super(SemRayUIForm, self).__init__()
+        self.analysis_results = analysis_results_list or []
+        self.primary_trigger_ea = primary_trigger_ea
+        self.widgets_by_ea = {}
+        self.parent_widget = None
+
+    def OnCreate(self, form):
+        self.parent_widget = self.FormToPyQtWidget(form)
+        self.PopulateForm()
+
+    def PopulateForm(self):
+        main_layout = QVBoxLayout()
+        tab_widget = QTabWidget()
+        sorted_results = sorted(self.analysis_results, key=lambda r: r.get('function_ea', 0))
+        for result_data in sorted_results:
+            func_ea = result_data.get('function_ea')
+            if func_ea is None: continue
+            func_name_ida = ida_funcs.get_func_name(func_ea) or f"sub_{func_ea:X}"
+            tab_title = f"{func_name_ida} (0x{func_ea:X})"
+            tab_content_widget = QWidget()
+            tab_layout = QVBoxLayout(tab_content_widget)
+            name_widget = FunctionNameWidget(result_data.get('function_name', 'N/A'))
+            comment_widget = CommentWidget(result_data.get('comment', 'No comment.'))
+            variable_widget = VariableWidget(result_data.get('variables', [])) if result_data.get('variables') else None
+            tab_layout.addWidget(name_widget)
+            tab_layout.addWidget(comment_widget)
+            if variable_widget: tab_layout.addWidget(variable_widget)
+            tab_layout.addStretch(1)
+            scroll_area = QScrollArea()
+            scroll_area.setWidgetResizable(True)
+            scroll_area.setWidget(tab_content_widget)
+            tab_widget.addTab(scroll_area, tab_title)
+            self.widgets_by_ea[func_ea] = {'name': name_widget, 'comment': comment_widget, 'vars': variable_widget,
+                                           'data': result_data}
+        main_layout.addWidget(tab_widget)
+        accept_button = QPushButton("Apply Selected")
+        accept_button.clicked.connect(self.on_accept_clicked)
+        cancel_button = QPushButton("Close")
+        cancel_button.clicked.connect(self.Close)
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(accept_button)
+        button_layout.addWidget(cancel_button)
+        main_layout.addLayout(button_layout)
+        self.parent_widget.setLayout(main_layout)
+        self.parent_widget.setMinimumSize(600, 500)
+
+    def on_accept_clicked(self):
+        changes_by_ea = {}
+        for func_ea, widgets in self.widgets_by_ea.items():
+            data = widgets['data']
+            changes = {
+                'function_name': data.get('function_name') if widgets['name'].accepted else None,
+                'comment': data.get('comment') if widgets['comment'].accepted else None,
+                'variables': widgets['vars'].get_selected_variables() if widgets['vars'] else []
+            }
+            if any(changes.values()):
+                changes_by_ea[func_ea] = changes
+        if changes_by_ea:
+            ida_kernwin.execute_sync(lambda: self._perform_ida_updates(changes_by_ea), ida_kernwin.MFF_WRITE)
+        self.Close(0)
+
+    def _rename_lvar(self, func_ea: int, cfunc, lv, new_name: str) -> bool:
+        if hasattr(cfunc, "set_lvar_name"):
+            try:
+                return cfunc.set_lvar_name(lv, new_name)
+            except Exception:
+                pass
+        if hasattr(cfunc, "rename_lvar"):
+            try:
+                return cfunc.rename_lvar(lv, new_name)
+            except Exception:
+                pass
+        try:
+            return ida_hexrays.rename_lvar(func_ea, lv.name, new_name)
+        except Exception:
+            return False
+
+    def _perform_ida_updates(self, changes_by_ea: Dict[int, dict]) -> bool:
+        overall_success = True
+        refresh_needed = False
+        vdui_refreshed = set()
+
+        for func_ea, changes in changes_by_ea.items():
+            func_t = ida_funcs.get_func(func_ea)
+            if changes.get('comment') and func_t:
+                wrapped = "\n".join(textwrap.wrap(changes['comment'], width=80))
+                if not ida_funcs.set_func_cmt(func_t, wrapped, False):
+                    overall_success = False
+                else:
+                    refresh_needed = True
+            if changes.get('function_name'):
+                if not ida_name.set_name(func_ea, changes['function_name'], ida_name.SN_CHECK | ida_name.SN_FORCE):
+                    overall_success = False
+                else:
+                    refresh_needed = True
+            if changes.get('variables'):
+                try:
+                    cfunc = ida_hexrays.decompile(func_ea)
+                    if cfunc:
+                        lvars_map = {lv.name: lv for lv in cfunc.get_lvars()}
+                        renamed_any = False
+                        for item in changes['variables']:
+                            if item['original_name'] in lvars_map:
+                                if self._rename_lvar(func_ea, cfunc, lvars_map[item['original_name']],
+                                                     item['new_name']):
+                                    renamed_any = True
+                        if renamed_any:
+                            ida_hexrays.mark_cfunc_dirty(func_ea)
+                            refresh_needed = True
+                except ida_hexrays.DecompilationFailure:
+                    overall_success = False
+
+            if refresh_needed and func_ea not in vdui_refreshed:
+                widget = ida_kernwin.find_widget(f"Pseudocode-A:{func_ea:X}")
+                if widget:
+                    vdui = ida_hexrays.get_widget_vdui(widget)
+                    if vdui:
+                        vdui.refresh_view(True)
+                        vdui_refreshed.add(func_ea)
+
+        if refresh_needed:
+            ida_kernwin.refresh_idaview_anyway()
+
+        return overall_success
+
+    def OnClose(self, form):
+        SemRayUI.open_forms.pop(self.primary_trigger_ea, None)
+
+
+class SemRayUI:
+    open_forms = {}
+
+    def __init__(self, analysis_results_list, primary_trigger_ea):
+        if primary_trigger_ea in self.open_forms:
+            try:
+                self.open_forms[primary_trigger_ea].GetWidget().activateWindow()
+            except:  # Window may have been closed
+                self.open_forms.pop(primary_trigger_ea, None)
+                self.__init__(analysis_results_list, primary_trigger_ea)  # Recurse
+            return
+        form = SemRayUIForm(analysis_results_list, primary_trigger_ea)
+        self.open_forms[primary_trigger_ea] = form
+        func_name = ida_funcs.get_func_name(primary_trigger_ea) or f"sub_{primary_trigger_ea:X}"
+        form.Show(f"SemRay Suggestions: {func_name} Context", ida_kernwin.WOPN_PERSIST | ida_kernwin.WOPN_RESTORE)
+
+
+def do_show_ui(results_list, primary_trigger_ea):
+    SemRayUI(results_list, primary_trigger_ea)
+
+
+# --- Action Handlers & Plugin Class ---
+def find_functions_within_depth(start_eas: Set[int], max_depth: int) -> Set[int]:
+    if max_depth <= 0: return start_eas
+    q, visited = deque([(ea, 0) for ea in start_eas]), set(start_eas)
+    while q:
+        ea, depth = q.popleft()
+        if depth >= max_depth: continue
+        # Callers
+        for ref in idautils.CodeRefsTo(ea, 1):
+            f = ida_funcs.get_func(ref)
+            if f and f.start_ea not in visited:
+                visited.add(f.start_ea)
+                q.append((f.start_ea, depth + 1))
+        # Callees
+        f = ida_funcs.get_func(ea)
+        if f:
+            for item_ea in idautils.FuncItems(ea):
+                for ref in idautils.CodeRefsFrom(item_ea, 1):
+                    callee_f = ida_funcs.get_func(ref)
+                    if callee_f and callee_f.start_ea not in visited:
+                        visited.add(callee_f.start_ea)
+                        q.append((callee_f.start_ea, depth + 1))
+    return visited
+
+
+def do_google_ai_analysis(code_prompt, model_name):
+    if not GOOGLE_AI_API_KEY:
+        ida_kernwin.warning("SemRay Error: Google AI API Key not configured.")
+        return None
+    try:
+        client = genai.Client(api_key=GOOGLE_AI_API_KEY)
+        generation_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=explicit_multi_function_analysis_schema,
+            temperature=0.0,
+            thinking_config=types.ThinkingConfig(thinking_budget=24576),
+            safety_settings=DEFAULT_SAFETY_SETTINGS
+        )
+        response = client.models.generate_content(
+            model=f'models/{model_name}', contents=code_prompt, config=generation_config
+        )
+        if not hasattr(response, 'text') or not response.text:
+            ida_kernwin.warning(f"SemRay: Google AI response was empty or blocked.")
+            return None
+        raw_text = response.text
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', raw_text, re.DOTALL)
+        json_text = json_match.group(1) if json_match else raw_text
+        parsed = json.loads(json_text)
+        return parsed.get("function_analyses", [])
+    except Exception as e:
+        ida_kernwin.warning(f"SemRay: AI interaction error: {e}")
+        traceback.print_exc()
+        return None
+
+
+def single_analysis_task_wrapper(primary_func_ea, context_caller_depth, context_callee_depth, model, analysis_mode,
+                                 analysis_depth, context, content_mode):
+    try:
+        async_call(
+            start_eas={primary_func_ea}, context_caller_depth=context_caller_depth,
+            context_callee_depth=context_callee_depth, model_name=model,
+            analysis_mode=analysis_mode, analysis_depth=analysis_depth,
+            extra_context=context, content_mode=content_mode
+        )
+    finally:
+        with g_analysis_lock:
+            g_analysis_in_progress.discard(primary_func_ea)
+
+
+def multi_analysis_task_wrapper(start_eas, caller_depth, callee_depth, model, context, content_mode):
+    global g_multi_analysis_active
+    try:
+        async_call(
+            start_eas=start_eas, context_caller_depth=caller_depth,
+            context_callee_depth=callee_depth, model_name=model,
+            analysis_mode='all', analysis_depth=0,
+            extra_context=context, content_mode=content_mode
+        )
+    finally:
+        with g_analysis_lock:
+            g_multi_analysis_active = False
+
+
+class CtxActionHandler(ida_kernwin.action_handler_t):
+    def __init__(self, model_name, analysis_mode='all'):
+        self.model, self.analysis_mode = model_name, analysis_mode
+        super().__init__()
+
+    def activate(self, ctx):
+        global g_analysis_in_progress, g_multi_analysis_active
+
+        ea = idaapi.BADADDR
+        try:
+            if ctx.widget_type == ida_kernwin.BWN_DISASM:
+                ea = ctx.cur_ea
+            elif ctx.widget_type == ida_kernwin.BWN_PSEUDOCODE:
+                vu = ida_hexrays.get_widget_vdui(ctx.widget)
+                if vu and vu.cfunc:
+                    ea = vu.cfunc.entry_ea
+        except Exception:
+            ea = ida_kernwin.get_screen_ea()
+
+        f = ida_funcs.get_func(ea)
+        if not f:
+            ida_kernwin.warning("SemRay: Could not determine current function.")
+            return 1
+
+        primary_func_ea = f.start_ea
+        with g_analysis_lock:
+            if primary_func_ea in g_analysis_in_progress or g_multi_analysis_active:
+                ida_kernwin.warning("SemRay: An analysis is already in progress.")
+                return 1
+            g_analysis_in_progress.add(primary_func_ea)
+
+        content_choice = ida_kernwin.ask_buttons("Decompiled", "Assembly", "Cancel", 1, "Select content for LLM:")
+        if content_choice == -1:  # Cancel
+            with g_analysis_lock: g_analysis_in_progress.discard(primary_func_ea)
+            return 1
+        content_mode = CONTENT_MODE_DECOMP if content_choice == 1 else CONTENT_MODE_ASM
+
+        a_depth = ida_kernwin.ask_long(DEFAULT_ANALYSIS_DEPTH,
+                                       "Analysis Depth") if self.analysis_mode == 'depth_limited' else 0
+        c_depth = ida_kernwin.ask_long(DEFAULT_CONTEXT_CALLER_DEPTH, "Context Caller Depth")
+        ca_depth = ida_kernwin.ask_long(DEFAULT_CONTEXT_CALLEE_DEPTH, "Context Callee/Ref Depth")
+        if c_depth is None or ca_depth is None or a_depth is None:
+            with g_analysis_lock: g_analysis_in_progress.discard(primary_func_ea)
+            return 1
+
+        threading.Thread(target=single_analysis_task_wrapper, args=(
+            primary_func_ea, c_depth, ca_depth, self.model, self.analysis_mode, a_depth, None, content_mode
+        )).start()
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_FOR_WIDGET if ctx.widget_type in (ida_kernwin.BWN_PSEUDOCODE,
+                                                                        ida_kernwin.BWN_DISASM) else ida_kernwin.AST_DISABLE_FOR_WIDGET
+
+
+class Hooks(ida_kernwin.UI_Hooks):
+    def finish_populating_widget_popup(self, widget, popup_handle, ctx=None):
+        if ida_kernwin.get_widget_type(widget) in (ida_kernwin.BWN_PSEUDOCODE, ida_kernwin.BWN_DISASM):
+            for model in MODELS_TO_REGISTER:
+                ida_kernwin.attach_action_to_popup(widget, popup_handle, f"{ACTION_ID_CTX_PREFIX_MULTI}{model}",
+                                                   f"{MENU_PATH_CTX}", ida_kernwin.SETMENU_INS)
+                ida_kernwin.attach_action_to_popup(widget, popup_handle, f"{ACTION_ID_CTX_PREFIX_SINGLE}{model}",
+                                                   f"{MENU_PATH_CTX}", ida_kernwin.SETMENU_INS)
+                ida_kernwin.attach_action_to_popup(widget, popup_handle, f"{ACTION_ID_CTX_PREFIX_DEPTH}{model}",
+                                                   f"{MENU_PATH_CTX}", ida_kernwin.SETMENU_INS)
+
+
+class semray_t(idaapi.plugin_t):
+    flags, comment, help, wanted_name = idaapi.PLUGIN_PROC | idaapi.PLUGIN_FIX, PLUGIN_NAME, "Google AI assistance", PLUGIN_NAME
+    hooks, registered_actions = None, []
+
+    def init(self):
+        for model in MODELS_TO_REGISTER:
+            for mode, label in [('all', 'Analyze ALL Funcs in Context'), ('current', 'Analyze CURRENT Func Only'),
+                                ('depth_limited', 'Analyze Current + N Levels')]:
+                prefix = {'all': ACTION_ID_CTX_PREFIX_MULTI, 'current': ACTION_ID_CTX_PREFIX_SINGLE,
+                          'depth_limited': ACTION_ID_CTX_PREFIX_DEPTH}[mode]
+                action_id = f"{prefix}{model}"
+                desc = ida_kernwin.action_desc_t(action_id, f"{label} ({model})", CtxActionHandler(model, mode), None,
+                                                 None, 199)
+                if ida_kernwin.register_action(desc): self.registered_actions.append(action_id)
+        self.hooks = Hooks()
+        self.hooks.hook()
+        return idaapi.PLUGIN_KEEP
+
+    def run(self, arg):
+        global g_multi_analysis_active
+        with g_analysis_lock:
+            if g_multi_analysis_active: return
+            g_multi_analysis_active = True
+
+        func_list_str = ida_kernwin.ask_str("", 0, "Enter comma-separated function names or addresses")
+        if not func_list_str:
+            with g_analysis_lock: g_multi_analysis_active = False
+            return
+
+        start_eas = set()
+        for item in func_list_str.split(','):
+            item_strip = item.strip()
+            if not item_strip: continue
+            ea = ida_name.get_name_ea(idaapi.BADADDR, item_strip)
+            if ea == idaapi.BADADDR:
+                try:
+                    ea = int(item_strip, 0)
+                except ValueError:
+                    continue
+            if ida_funcs.get_func(ea): start_eas.add(ea)
+
+        if not start_eas:
+            ida_kernwin.warning("SemRay: No valid functions found from input.")
+            with g_analysis_lock: g_multi_analysis_active = False
+            return
+
+        content_choice = ida_kernwin.ask_buttons("Decompiled", "Assembly", "Cancel", 1, "Select content for LLM:")
+        if content_choice == -1:
+            with g_analysis_lock: g_multi_analysis_active = False
+            return
+        content_mode = CONTENT_MODE_DECOMP if content_choice == 1 else CONTENT_MODE_ASM
+
+        c_depth = ida_kernwin.ask_long(DEFAULT_CONTEXT_CALLER_DEPTH, "Context Caller Depth")
+        ca_depth = ida_kernwin.ask_long(DEFAULT_CONTEXT_CALLEE_DEPTH, "Context Callee/Ref Depth")
+        if c_depth is None or ca_depth is None:
+            with g_analysis_lock: g_multi_analysis_active = False
+            return
+
+        threading.Thread(target=multi_analysis_task_wrapper,
+                         args=(start_eas, c_depth, ca_depth, DEFAULT_GEMINI_MODEL, None, content_mode)).start()
+
+    def term(self):
+        if self.hooks: self.hooks.unhook()
+        for action in self.registered_actions: ida_kernwin.unregister_action(action)
+        for form in list(SemRayUI.open_forms.values()): form.Close(0)
+
+
+def PLUGIN_ENTRY():
+    return semray_t()
+
+```
