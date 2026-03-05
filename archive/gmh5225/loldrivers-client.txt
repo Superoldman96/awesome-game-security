@@ -1,0 +1,891 @@
+Project Path: arc_gmh5225_loldrivers-client_sxkcwx93
+
+Source Tree:
+
+```txt
+arc_gmh5225_loldrivers-client_sxkcwx93
+├── README.md
+├── cli
+│   └── loldrivers-client
+│       └── loldrivers-client.go
+├── go.mod
+└── pkg
+    ├── checksums
+    │   └── checksums.go
+    ├── filesystem
+    │   └── filesystem.go
+    ├── logger
+    │   └── logger.go
+    └── loldrivers
+        └── loldrivers.go
+
+```
+
+`README.md`:
+
+```md
+# LOLDrivers-client
+A client for [LOLDrivers](https://github.com/magicsword-io/LOLDrivers) (Living Off The Land Drivers). Scan your computer for known vulnerable and known malicious Windows drivers.
+
+## Usage
+```
+LOLDrivers-client.exe -m [MODE] [OPTIONS]
+
+Modes:
+    online    Download the newest driver set (default)
+    local     Use a local drivers.json file (requires '-f')
+    internal  Use the built-in driver set (can be outdated)
+
+Options:
+    -d Directory to scan for drivers (default: Windows Default)
+    -f File path to 'drivers.json' for mode 'local'
+    -t Number of threads to spawn (default: 20)
+    -v Print verbose messages (default: false)
+    -h Shows this text
+```
+## Installation
+### Binaries
+Download the prebuilt binaries [here](https://github.com/rtfmkiesel/loldrivers-client/releases).
+
+## Build from source
+```bash
+git clone https://github.com/rtfmkiesel/loldrivers-client
+cd loldrivers-client
+wget -q "https://www.loldrivers.io/api/drivers.json" -O pkg/loldrivers/drivers.json
+go mod tidy
+go build -o LOLDrivers-client.exe -ldflags="-s -w" cli/loldrivers-client/loldrivers-client.go
+```
+
+# Contributing 
+Improvements in the form of PRs are always welcome, especially as this was made during my first year of using Golang. 
+```
+
+`cli/loldrivers-client/loldrivers-client.go`:
+
+```go
+//go:build windows
+
+package main
+
+import (
+	"flag"
+	"fmt"
+	"sync"
+	"time"
+
+	"loldrivers-client/pkg/checksums"
+	"loldrivers-client/pkg/filesystem"
+	"loldrivers-client/pkg/logger"
+	"loldrivers-client/pkg/loldrivers"
+)
+
+func main() {
+	// To track execution time
+	startTime := time.Now()
+
+	// Setup & parse command line arguments
+	var flagMode string
+	var flagDir string
+	var flagLocalFile string
+	var flagThreads int
+	var flagVerbose bool
+	flag.StringVar(&flagMode, "m", "online", "")
+	flag.StringVar(&flagDir, "d", "", "")
+	flag.StringVar(&flagLocalFile, "f", "", "")
+	flag.IntVar(&flagThreads, "t", 20, "")
+	flag.BoolVar(&flagVerbose, "v", false, "")
+	flag.Usage = func() {
+		fmt.Println(`
+LOLDrivers-client.exe -m [MODE] [OPTIONS]
+
+Modes:
+    online    Download the newest driver set (default)
+    local     Use a local drivers.json file (requires '-f')
+    internal  Use the built-in driver set (can be outdated)
+
+Options:
+    -d Directory to scan for drivers (default: Windows Default)
+    -f File path to 'drivers.json' for mode 'local'
+    -t Number of threads to spawn (default: 20)
+    -v Print verbose messages (default: false)
+    -h Shows this text
+	`)
+	}
+	flag.Parse()
+
+	if flagVerbose {
+		// Set the value in the logger module
+		logger.BeVerbose = true
+	}
+
+	// ASCII L0VE
+	logger.Banner()
+	logger.Log("[*] Started")
+
+	// To store the drivers in
+	var drivers []loldrivers.Driver
+
+	// Load the drivers based on the selected mode
+	logger.Verbose(fmt.Sprintf("[*] Mode '%s'", flagMode))
+
+	switch flagMode {
+	case "online":
+		// Default, download from the web
+		// Download drivers
+		var err error
+		drivers, err = loldrivers.Get()
+		if err != nil {
+			logger.CatchCrit(err)
+		}
+
+	case "local":
+		// User wants to use a local file
+		if flagLocalFile == "" {
+			logger.CatchCrit(fmt.Errorf("mode 'local' requires '-f'"))
+		}
+
+		// Read file
+		jsonBytes, err := filesystem.FileRead(flagLocalFile)
+		if err != nil {
+			logger.CatchCrit(err)
+		}
+
+		// Parse file
+		drivers, err = loldrivers.Parse(jsonBytes)
+		if err != nil {
+			logger.CatchCrit(err)
+		}
+
+	case "internal":
+		// User wants to use internal data set
+		// Parse bytes
+		var err error
+		drivers, err = loldrivers.Parse(loldrivers.InternalDrivers)
+		if err != nil {
+			logger.CatchCrit(err)
+		}
+
+	default:
+		logger.CatchCrit(fmt.Errorf("invalid mode '%s'", flagMode))
+	}
+
+	logger.Verbose(fmt.Sprintf("[*] Loaded %d drivers", len(drivers)))
+
+	// To store all driver checksums
+	driverHashes := loldrivers.DriverHashes{}
+	// Get all checksums from the loaded drivers
+	for _, driver := range drivers {
+		for _, knownVulnSample := range driver.KnownVulnerableSamples {
+			// Append MD5 if exist
+			if knownVulnSample.MD5 != "" && knownVulnSample.MD5 != "-" {
+				driverHashes.MD5Sums = append(driverHashes.MD5Sums, knownVulnSample.MD5)
+			}
+			// Append SHA1 if exist
+			if knownVulnSample.SHA1 != "" && knownVulnSample.SHA1 != "-" {
+				driverHashes.SHA1Sums = append(driverHashes.SHA1Sums, knownVulnSample.SHA1)
+			}
+			// Append SHA256 if exist
+			if knownVulnSample.SHA256 != "" && knownVulnSample.SHA256 != "-" {
+				driverHashes.SHA256Sums = append(driverHashes.SHA256Sums, knownVulnSample.SHA256)
+			}
+		}
+	}
+
+	logger.Verbose(fmt.Sprintf("[*] Got %d MD5 hashes", len(driverHashes.MD5Sums)))
+	logger.Verbose(fmt.Sprintf("[*] Got %d SHA1 hashes", len(driverHashes.SHA1Sums)))
+	logger.Verbose(fmt.Sprintf("[*] Got %d SHA256 hashes", len(driverHashes.SHA256Sums)))
+
+	// Create the channels and waitgroup for the checksum runners
+	chanFiles := make(chan string)
+	chanChecksums := make(chan checksums.Sums)
+	wgChecksums := new(sync.WaitGroup)
+	// Spawn the checksum runners
+	for i := 0; i <= flagThreads; i++ {
+		go checksums.CalcRunner(wgChecksums, chanFiles, chanChecksums)
+		wgChecksums.Add(1)
+	}
+
+	// Create the channels and waitgroup for the compare runners
+	chanResults := make(chan logger.Result)
+	wgCompare := new(sync.WaitGroup)
+	// Spawn the compare runners
+	for i := 0; i <= flagThreads; i++ {
+		go checksums.CompareRunner(wgCompare, chanChecksums, chanResults, driverHashes)
+		wgCompare.Add(1)
+	}
+
+	// Create the waitgroup for the output runner
+	wgOutput := new(sync.WaitGroup)
+	// Spawn the output runner
+	go logger.OutputRunner(wgOutput, chanResults)
+	wgOutput.Add(1)
+
+	// Scan for drivers
+	//
+	// A tiny amount of time could be saved if only ".sys" files were checked.
+	// I tried and the time saved is not worth it since malicious drivers could have other file extensions.
+	if flagDir == "" {
+		// User did not specify a path, use the default Windows paths
+
+		// Since scanning the default folders requires admin privileges, check here
+		if !filesystem.IsAdmin() {
+			logger.CatchCrit(fmt.Errorf("not running with administrative privileges"))
+		}
+
+		for _, path := range filesystem.DriverPaths {
+			// Get all files
+			files, err := filesystem.FilesInFolder(path)
+			if err != nil {
+				logger.CatchCrit(err)
+			}
+
+			// Add jobs to the channel
+			for _, file := range files {
+				chanFiles <- file
+			}
+		}
+	} else {
+		// Scan the user specified folder for drivers
+		// Get all files
+		files, err := filesystem.FilesInFolder(flagDir)
+		if err != nil {
+			logger.CatchCrit(err)
+		}
+
+		// Add jobs to the channel
+		for _, file := range files {
+			chanFiles <- file
+		}
+	}
+
+	// Close the channel to start the checksum runners
+	close(chanFiles)
+	// Wait here until all checksums are calculated
+	logger.Verbose("[*] Waiting for the checksum runners to complete")
+	wgChecksums.Wait()
+
+	// Close the channel to start the compare runners
+	close(chanChecksums)
+	// Wait here until all compares have been done
+	logger.Verbose("[*] Waiting for the compare runners to complete")
+	wgCompare.Wait()
+
+	// Close the results channel to process the results
+	close(chanResults)
+	// Wait until all results have been processed
+	wgOutput.Wait()
+
+	logger.Verbose(fmt.Sprintf("[*] Done, took %s\n", time.Since(startTime)))
+}
+
+```
+
+`go.mod`:
+
+```mod
+module loldrivers-client
+
+go 1.20
+
+```
+
+`pkg/checksums/checksums.go`:
+
+```go
+// Package checksums calculates the MD5, SHA1 and SHA256 checksum of files
+package checksums
+
+import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"sync"
+
+	"loldrivers-client/pkg/filesystem"
+	"loldrivers-client/pkg/logger"
+	"loldrivers-client/pkg/loldrivers"
+)
+
+// Struct for the return values of Calc()
+type Sums struct {
+	Filename string
+	MD5      string
+	SHA1     string
+	SHA256   string
+}
+
+// Calc() will return the MD5, SHA1 and SHA256 checksum of a given file as a Sums struct
+func Calc(filepath string) (sums Sums, err error) {
+	// Calculate the MD5
+	sums.MD5, err = MD5(filepath)
+	if err != nil {
+		return sums, err
+	}
+
+	// Calculate the SHA1
+	sums.SHA1, err = SHA1(filepath)
+	if err != nil {
+		return sums, err
+	}
+
+	// Calculate the SHA256
+	sums.SHA256, err = SHA256(filepath)
+	if err != nil {
+		return sums, err
+	}
+
+	// Set the filename
+	sums.Filename = filepath
+
+	return sums, nil
+}
+
+// MD5() will return the MD5 checksum of the given file
+func MD5(filepath string) (string, error) {
+	// Check if the file exists
+	if !filesystem.FileExists(filepath) {
+		return "", fmt.Errorf("file '%s' does not exist", filepath)
+	}
+
+	// Open the file
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Create a new MD5
+	hash := md5.New()
+
+	// Copy the file data into the hash
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	// Get the checksum
+	checksum := hash.Sum(nil)
+
+	// Convert the checksum to a hex string
+	return hex.EncodeToString(checksum), nil
+}
+
+// SHA1 will return the SHA1 checksum of the given file
+func SHA1(filepath string) (string, error) {
+	// Check if the file exists
+	if !filesystem.FileExists(filepath) {
+		return "", fmt.Errorf("file '%s' does not exist", filepath)
+	}
+
+	// Open the file
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Create a new SHA1
+	hash := sha1.New()
+
+	// Copy the file data into the hash
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	// Get the checksum
+	checksum := hash.Sum(nil)
+
+	// Convert the checksum to a hex string
+	return hex.EncodeToString(checksum), nil
+}
+
+// SHA256 will return the SHA256 checksum of the given file
+func SHA256(filepath string) (string, error) {
+	// Check if the file exists
+	if !filesystem.FileExists(filepath) {
+		return "", fmt.Errorf("file '%s' does not exist", filepath)
+	}
+
+	// Open the file
+	file, err := os.Open(filepath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Create a new SHA256
+	hash := sha256.New()
+
+	// Copy the file data into the hash
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	// Get the checksum
+	checksum := hash.Sum(nil)
+
+	// Convert the checksum to a hex string
+	return hex.EncodeToString(checksum), nil
+}
+
+// CalcRunner() is used as a go func for calculating file checksums from a job list of filenames
+func CalcRunner(wg *sync.WaitGroup, chanJobs <-chan string, chanResults chan<- Sums) {
+	defer wg.Done()
+
+	// For each job
+	for job := range chanJobs {
+		// Calculate checksums
+		sums, err := Calc(job)
+		if err != nil {
+			logger.Catch(err)
+			continue
+		}
+
+		// Add to the output channel
+		chanResults <- sums
+	}
+}
+
+// CompareRunner() is used as a go func for comparing checksums
+func CompareRunner(wg *sync.WaitGroup, chanJobs <-chan Sums, chanResults chan<- logger.Result, checksums loldrivers.DriverHashes) {
+	defer wg.Done()
+
+	// For each job
+	for job := range chanJobs {
+		// Check if the MD5 in in the driver slice
+		if contains(checksums.MD5Sums, job.MD5) {
+			// Send result to the output channel
+			chanResults <- logger.Result{
+				Filename: job.Filename,
+				Checksum: job.MD5,
+			}
+			continue
+		}
+		// Check if the SHA1 in in the driver slice
+		if contains(checksums.SHA1Sums, job.SHA1) {
+			// Send result to the output channel
+			chanResults <- logger.Result{
+				Filename: job.Filename,
+				Checksum: job.SHA1,
+			}
+			continue
+		}
+		// Check if the SHA256 in in the driver slice
+		if contains(checksums.SHA256Sums, job.SHA256) {
+			// Send result to the output channel
+			chanResults <- logger.Result{
+				Filename: job.Filename,
+				Checksum: job.SHA256,
+			}
+			continue
+		}
+	}
+}
+
+// contains() will return true if a []string contains a string
+func contains(slice []string, value string) bool {
+	for _, s := range slice {
+		if s == value {
+			return true
+		}
+	}
+
+	return false
+}
+
+```
+
+`pkg/filesystem/filesystem.go`:
+
+```go
+// Package filesystem handles filesystem operations
+package filesystem
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"loldrivers-client/pkg/logger"
+)
+
+var (
+	// Default driver paths for Windows 10 and Windows 11
+	DriverPaths = []string{"C:\\Windows\\System32\\drivers", "C:\\Windows\\System32\\DriverStore\\FileRepository"}
+)
+
+// FileExists() will return true if a given file exists
+func FileExists(filepath string) bool {
+	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		return false
+	} else {
+		return true
+	}
+}
+
+// FileRead() will return the contents of a file as bytes
+func FileRead(filepath string) (contentBytes []byte, err error) {
+	// Check if file exists
+	if !FileExists(filepath) {
+		return nil, fmt.Errorf("file '%s' does not exist", filepath)
+	}
+
+	// Open file
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("could not open file '%s'", filepath)
+	}
+	defer file.Close()
+
+	// Read file
+	contentBytes, err = io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("could not read file '%s'", filepath)
+	}
+
+	return contentBytes, nil
+}
+
+// FilesInFolder() will return a []string of files in a folder (recursively)
+func FilesInFolder(path string) (files []string, err error) {
+	logger.Verbose(fmt.Sprintf("[*] Searching for files in %s", path))
+
+	// Walk over every file in a given folder
+	err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Only append if it's not a directory
+		if !info.IsDir() {
+			// Append to slice
+			files = append(files, path)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return files, err
+	}
+
+	logger.Verbose(fmt.Sprintf("[+] Found %d files in %s", len(files), path))
+	return files, nil
+}
+
+// FilesInFolderExt() will return a []string of files in a folder (recursively)
+//
+// A file extension may be specified for filtering, ex: '.txt'.
+// If not needed, set 'ext' to an empty string.
+func FilesInFolderExt(path string, ext string) (files []string, err error) {
+	logger.Verbose(fmt.Sprintf("[*] Searching for files in %s", path))
+
+	useFilter := false
+	if ext != "" {
+		// normalize since Windows file extensions are not case sensitive
+		ext = strings.ToLower(ext)
+		useFilter = true
+	}
+
+	// Walk over every file in a given folder
+	err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if useFilter {
+			// Only append if it's not a directory and if it has the file extension specified
+			if !info.IsDir() && strings.ToLower(filepath.Ext(path)) == ext {
+				// Append to slice
+				files = append(files, path)
+			}
+		} else {
+			// Only append if it's not a directory
+			if !info.IsDir() {
+				// Append to slice
+				files = append(files, path)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return files, err
+	}
+
+	logger.Verbose(fmt.Sprintf("[+] Found %d files in %s", len(files), path))
+	return files, nil
+}
+
+// IsAdmin() will return true is the current binary runs under administrative privileges
+func IsAdmin() bool {
+	_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+	return err == nil
+}
+
+```
+
+`pkg/logger/logger.go`:
+
+```go
+// Package logger handles errors as well as the output handling
+package logger
+
+import (
+	"fmt"
+	"os"
+	"sync"
+	"time"
+)
+
+var (
+	// To control verbose output
+	BeVerbose bool = false
+)
+
+const (
+	// Time format for the terminal output
+	timeFormat = "2006-01-02T15:04:05"
+)
+
+// Struct for the results of the compare runners
+type Result struct {
+	Filename string
+	Checksum string
+}
+
+// Log() will print to the terminal
+func Log(message string) {
+	fmt.Printf("%s %s\n", time.Now().Format(timeFormat), message)
+}
+
+// Verbose() will print verbose messages to the terminal if verbose mode is selected
+func Verbose(message string) {
+	if BeVerbose {
+		fmt.Printf("%s %s\n", time.Now().Format(timeFormat), message)
+	}
+}
+
+// Catch() will handle errors
+func Catch(err error) {
+	fmt.Printf("%s ERROR: %s\n", time.Now().Format(timeFormat), err)
+
+}
+
+// CatchCrit() will handle critical errors
+func CatchCrit(err error) {
+	fmt.Printf("%s CRITICAL: %s\n", time.Now().Format(timeFormat), err)
+	os.Exit(1)
+}
+
+// Banner() will print the banner
+func Banner() {
+	fmt.Printf(`   __    ___  __     _      _                    
+  / /   /___\/ /  __| |_ __(_)_   _____ _ __ ___ 
+ / /   //  // /  / _  | '__| \ \ / / _ \ '__/ __|
+/ /___/ \_// /__| (_| | |  | |\ V /  __/ |  \__ \
+\____/\___/\____/\__,_|_|  |_| \_/ \___|_|  |___/
+https://www.loldrivers.io | Client by @rtfmkiesel
+
+`)
+}
+
+// OutputRunner() is used as a go func to display the results
+func OutputRunner(wg *sync.WaitGroup, chanJobs <-chan Result) {
+	defer wg.Done()
+
+	// To count how many results we got
+	counter := 0
+
+	// For each job
+	for job := range chanJobs {
+		// Print result
+		Log(fmt.Sprintf("[+] %s:%s", job.Filename, job.Checksum))
+		// Increment counter
+		counter++
+	}
+
+	if counter == 0 {
+		Log("[-] No vulnerable/malicious drivers found!")
+	} else {
+		Log(fmt.Sprintf("[*] Found %d vulnerable/malicious driver(s)!", counter))
+	}
+}
+
+```
+
+`pkg/loldrivers/loldrivers.go`:
+
+```go
+// Package loldrivers handles the JSON data from loldrivers.io
+package loldrivers
+
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"io"
+	"loldrivers-client/pkg/logger"
+	"net/http"
+)
+
+var (
+	// Embed a driver.json during build for use with -m 'internal'
+	//go:embed drivers.json
+	InternalDrivers []byte
+)
+
+const (
+	// Download link to the 'drivers.json' file
+	apiURL = "https://www.loldrivers.io/api/drivers.json"
+)
+
+// Struct for a single driver from loldrivers.io
+//
+// Based on the the JSON spec from
+// https://github.com/magicsword-io/LOLDrivers/blob/validate/bin/spec/drivers.spec.json
+type Driver struct {
+	Name     string `json:"Name"`
+	Author   string `json:"Author"`
+	Created  string `json:"Created"`
+	MitreID  string `json:"MitreID"`
+	Category string `json:"Category"`
+	Verified string `json:"Verified"`
+	Commands struct {
+		Command         string `json:"Command"`
+		Description     string `json:"Description"`
+		Usecase         string `json:"Usecase"`
+		Privileges      string `json:"Privileges"`
+		OperatingSystem string `json:"OperatingSystem"`
+	} `json:"Commands"`
+	Resources       []string `json:"Resources"`
+	Acknowledgement struct {
+		Person string `json:"Person"`
+		Handle string `json:"Handle"`
+	} `json:"Acknowledgement"`
+	Detection []struct {
+		Type  string `json:"type"`
+		Value string `json:"value"`
+	} `json:"Detection"`
+	KnownVulnerableSamples []struct {
+		Filename         string              `json:"Filename"`
+		MD5              string              `json:"MD5"`
+		SHA1             string              `json:"SHA1"`
+		SHA256           string              `json:"SHA256"`
+		Signature        StringOrStringArray `json:"Signature"`
+		Date             string              `json:"Date"`
+		Publisher        string              `json:"Publisher"`
+		Company          string              `json:"Company"`
+		Description      string              `json:"Description"`
+		Product          string              `json:"Product"`
+		ProductVersion   string              `json:"ProductVersion"`
+		FileVersion      string              `json:"FileVersion"`
+		MachineType      string              `json:"MachineType"`
+		OriginalFilename string              `json:"OriginalFilename"`
+		Authentihash     struct {
+			MD5    string `json:"MD5"`
+			SHA1   string `json:"SHA1"`
+			SHA256 string `json:"SHA256"`
+		} `json:"Authentihash"`
+		InternalName      string              `json:"InternalName"`
+		Copyright         string              `json:"Copyright"`
+		Imports           StringOrStringArray `json:"Imports"`
+		ExportedFunctions StringOrStringArray `json:"ExportedFunctions"`
+		PDBPath           string              `json:"PDBPath"`
+	} `json:"KnownVulnerableSamples"`
+}
+
+// Struct that is used during unmarshalling of the JSON data
+// since sometimes a key can be either a single string or an array of strings
+type StringOrStringArray struct {
+	Value []string
+	Set   bool
+}
+
+// Struct to store driver hashes
+type DriverHashes struct {
+	MD5Sums    []string
+	SHA1Sums   []string
+	SHA256Sums []string
+}
+
+// The UnmarshalJSON method will parse the JSON as either a single string
+// or an array of strings into a slice of strings
+func (s *StringOrStringArray) UnmarshalJSON(b []byte) error {
+	var strVal string
+	var arrVal []string
+	// Try to unmarshal into a single string first
+	err := json.Unmarshal(b, &strVal)
+	if err == nil {
+		// No error, create a array with a single value
+		arrVal = []string{strVal}
+	} else {
+		// Try to unmarshall into a slice of strings
+		err = json.Unmarshal(b, &arrVal)
+		if err != nil {
+			// Both unmarshall were unsuccessful
+			return err
+		}
+	}
+	// Set the value of s to the unmarshalled value which will always be a slice
+	s.Value = arrVal
+	s.Set = true
+	return nil
+}
+
+// Get() will download the current loldrivers.io driver data set
+func Get() (drivers []Driver, err error) {
+	logger.Verbose(fmt.Sprintf("[*] Downloading the newest drivers from %s", apiURL))
+
+	// Setup HTTP client
+	client := &http.Client{}
+
+	// Build request
+	request, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Make the request
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	logger.Verbose("[+] Download successful")
+
+	// Read the bode into []byte
+	jsonBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse the data
+	drivers, err = Parse(jsonBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return drivers, nil
+}
+
+// Parse() will return a slice of drivers from JSON input bytes
+func Parse(jsonBytes []byte) (drivers []Driver, err error) {
+	logger.Verbose("[*] Parsing JSON data into struct")
+
+	// Unmarshal JSON data
+	if err := json.Unmarshal(jsonBytes, &drivers); err != nil {
+		return nil, err
+	}
+
+	logger.Verbose("[+] Parsing successful")
+	return drivers, nil
+}
+
+```
