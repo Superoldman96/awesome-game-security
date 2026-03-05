@@ -1,0 +1,1801 @@
+Project Path: arc_gmh5225_ida2llvm_68rczq6q
+
+Source Tree:
+
+```txt
+arc_gmh5225_ida2llvm_68rczq6q
+├── Dockerfile
+├── README.md
+├── docker_entrypoint.py
+├── ida2llvm
+│   ├── __init__.py
+│   ├── _utils.py
+│   ├── address.py
+│   ├── function.py
+│   ├── insn.py
+│   └── type.py
+├── ida2llvm_plugin.py
+├── run.sh
+├── screenshots
+│   ├── default-roman.png
+│   ├── fully-defined-main.png
+│   ├── interactive.gif
+│   ├── selected-function.png
+│   └── viewer-UI.png
+└── tests
+    ├── bin
+    │   └── romannumeral.out
+    ├── idb
+    │   ├── demo-control-flow-flatten.elf64.i64
+    │   └── romannumeral.i64
+    └── src
+        └── romannumeral.cpp
+
+```
+
+`Dockerfile`:
+
+```
+FROM debian:stable-20230320-slim
+
+# Global: ignore TLS errors
+ENV CURL_CA_BUNDLE=""
+ENV PYTHONWARNINGS="ignore:Unverified HTTPS request"
+RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99-cert
+
+# Install prerequisites
+RUN apt-get update --fix-missing && \
+    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends \
+        ca-certificates \
+        git \
+        inotify-tools \
+        sudo \
+        wget && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install wine
+ARG DEBIAN_FRONTEND=noninteractive
+RUN dpkg --add-architecture i386 && \
+    mkdir -pm755 /etc/apt/keyrings && \
+    wget --no-check-certificate --output-document /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key && \
+    wget --no-check-certificate -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/debian/dists/bullseye/winehq-bullseye.sources
+
+RUN apt-get update && \
+    apt-get install -y --fix-missing --no-install-recommends \
+        winehq-stable \
+        xvfb && \
+    rm -rf /var/lib/apt/lists/*
+
+# Prevents the popup to install mono
+# https://superuser.com/questions/948508/how-to-disable-gecko-package-popup-for-wine
+ENV WINEDLLOVERRIDES="mscoree,mshtml="
+
+# Ensure that registry change is flushed from registry onto disk
+# https://serverfault.com/questions/1082578/wine-in-docker-reg-add-only-keeps-effects-temporarily
+RUN wine reg add "HKEY_CURRENT_USER\Software\Wine" /v Version /t REG_SZ /d win10 /f && \
+    while [ ! -f ~/.wine/user.reg ]; do sleep 1; done
+
+# Install python
+# Note that Python 3.10 requires wine to emulate Windows 10
+ARG PYTHON_URL=https://www.python.org/ftp/python/3.10.0/python-3.10.0-amd64.exe
+ARG PYTHON_DIR="C:\\Program Files\\Python310"
+RUN Xvfb :0 -screen 0 1024x768x16 & \
+    wget --quiet --no-check-certificate "${PYTHON_URL}" --output-document \
+        python_installer.exe && \
+    DISPLAY=:0 wine python_installer.exe \
+        /quiet \
+        InstallAllUsers=1 \
+        PrependPath=1 && \
+    rm python_installer.exe
+
+# Download python dependencies on Wine-Python
+COPY .devcontainer/dep/requirements.txt ./requirements.txt
+RUN WINEPATH="${PYTHON_DIR}" wine python -m pip install -r requirements.txt && \
+    rm -rf requirements.txt
+
+# Copy IDA over
+COPY .devcontainer/dep/ida.tar ./ida.tar
+RUN mkdir ~/.wine/ida && \
+    tar -x -f ./ida.tar -C ~/.wine/ida && \
+    rm -rf ./ida.tar
+
+# Accept IDA EUA and set Python's version via registry
+RUN wine reg add "HKEY_CURRENT_USER\Software\Hex-Rays\IDA" /v Python3TargetDLL /t REG_SZ /d "${PYTHON_DIR}/python3.dll" /f && \
+    wine reg add "HKEY_CURRENT_USER\Software\Hex-Rays\IDA" /v "License Think-Cell Operations GmbH" /t REG_DWORD /d 1 /f && \
+    while inotifywait -e modify ~/.wine/user.reg; do sleep 1; done
+
+# Modify headless_ida to allow tests to go through
+
+RUN mkdir /home/bin2llvm
+WORKDIR /home/bin2llvm
+
+COPY ida2llvm /home/bin2llvm/ida2llvm/
+COPY run.sh /home/bin2llvm/run.sh
+COPY docker_entrypoint.py /home/bin2llvm/docker_entrypoint.py
+ENTRYPOINT ["/home/bin2llvm/run.sh"]
+```
+
+`README.md`:
+
+```md
+# IDA2LLVM - Dynamic Binary Lifting IDA code to LLVM IR
+
+Because I was curious, "can Hexrays decompilation be hijacked for LLVM lifting"?
+
+
+## Features
+
+1. Lifts all IDA-decompilable binaries to LLVM bitcode, including executables and shared libraries for each platform.
+2. **guarantees CFG preservation** during lifting
+3. enable **interactive lifting**, for reverse-engineers most familiar with state-of-the-art IDA
+
+## Dependencies
+| Name | Version | 
+| ---- | ------- |
+| [Python](https://www.python.org/) | 3.10* |
+| [llvmlite](https://pypi.org/project/llvmlite/) | 0.39.1* |
+| [headless-ida](https://pypi.org/project/headless-ida/)** | 0.5.2 |
+| [pytest](https://pypi.org/project/pytest/)** | 7.4.3 |
+| [IDA Pro](https://www.hex-rays.com/products/ida) | 7.7+ |
+
+*llvmlite 0.39.1 did not have wheels for Python 3.11+  
+**only needed for unittests
+
+## Using the lifter
+
+### Run as IDA Plugin
+
+IDA2LLVM will load for any architecture with a Hex-Rays decompiler present. Use the hot-key (Ctrl+Alt+L) or <ins>Edit/IDA2LLVM/Lifting Viewer</ins> to open the Lifting Viewer.
+
+![Lifting Viewer UI](screenshots/viewer-UI.png)
+
+Lifting is performed at IDA's **function** level (assuming Microcode can be emitted). The viewer will always synchronize against the user's cursor in the disassembly window, indicating whether it can be lifted.
+
+Functions are **recursively added** to children. If `main` calls the function `f` and main is defined, both `main` and `f` will be defined.
+
+![Function selection](screenshots/selected-function.png)
+
+Having added a function, we can select it in the panel. Here we can: 
+1. mark function as declare-only
+2. redefine the function
+   - lifting is performed on a per-demand basis.
+   - if there are changes to decompiler, we should redefine the function.
+3. delete function, with `Del` key
+
+An example of a fully defined main function is as such:
+
+![Fully defined main](screenshots/fully-defined-main.png)
+
+### Interactive lifting
+
+> More often than not, lifting will not work out of the box. A key feature of IDA2LLVM is interactive lifting. 
+
+Let's look `tests/bin/romannumeral.out`. Variable names have been renamed appropriately:
+
+![Incorrect stack variables](screenshots/default-roman.png)
+
+Pay attention to `arr_eleX` variables. 
+- Hexray's decompiler has displayed these as individual stack variables,
+- however, the line `*(&arr_ele0 + i)` betrays the fact that it is an array of integers `{1, 4, 123, 5123...}` of size 11.
+
+Our lifted output will be faithful to Hexray's decompiler. Each integer variable will be an indepedent stack variable, and the line `*(&arr_ele0 + i)` will result in an memory access error.
+
+![Interactive change](screenshots/interactive.gif)
+
+We can fix this issue by appropriately defining the types in the decompiler, and redefining the function. All work has been done and saved in `tests/idb/romannumeral.i64`.
+
+### Run in Docker
+
+> This works mostly as a convenience tool. We sacrifice **the entire capability for a reverse engineer to interactively lift**, hence accuracy is severely diminished.
+
+This requires an IDA Pro Windows installation.
+
+Our Dockerfile runs Windows IDA Pro in a Linux container, emulating it in Wine. 
+
+#### Step 1: Clone the repository
+
+```pwsh
+git clone https://github.com/loyaltypollution/ida2llvm
+```
+
+#### Step 2: Add `ida.tar` to `.devcontainer/dep`
+
+Insert a tar zip of the entire IDA Pro folder 
+```pwsh
+tar cvf ida.tar "$(dirname "$(which ida64)")"
+```
+
+#### Step 3: Build & Run Dockerfile
+
+Insert the idb in the directory 
+
+```pwsh
+docker build . -t bin2llvm
+docker run --rm -it -v .\tests:/home/bin2llvm/tests bin2llvm
+```
+
+## Linking Notes
+
+Suppose the user lifted all functions in the idb. This potentially includes symbols from the C standard library, such as `_start`.
+
+Naievely compiling from `clang` will likely result in link issues. Common issues include:
+- duplicate symbols
+- undefined symbols
+
+In general, link issues are not our concern. Our lifter has already done its work and it's up to the user to fix linking issues *(good luck)*. 
+
+Here are some tips to fix linking issues:
+- instruct the linker to use the first symbol seen (`allow-multiple-definition`)
+    ```bash
+        clang lifted.ll -c
+        clang lifted.o -v -Wl,--allow-multiple-definition -o lifted.out
+    ```
+
+*please raise an issue and let the author learn more about cpp linking*
+```
+
+`docker_entrypoint.py`:
+
+```py
+import ida_pro
+import ida_ida
+import ida_nalt
+import logging
+
+from llvmlite import ir
+from os.path import basename
+
+import ida2llvm
+
+logger = logging.getLogger(__name__)
+filename = basename(ida_nalt.get_input_file_path())
+logging.basicConfig(filename=f".\\tests\\log\\{filename}.log",
+                    format='%(levelname)s (%(name)s.py) %(message)s',
+                    filemode='a',
+                    level=logging.DEBUG)
+
+module = ir.Module(filename)
+logger.info(f"declared ir module of name {filename}")
+
+try:
+    func_name = 'main'
+    ida2llvm.function.lift_function(module, func_name, False)
+except Exception as e:
+    logger.exception(e)
+
+with open(f'.\\tests\\ll\\{filename}.ll', 'w') as f:
+    f.write(str(module))
+
+ida_pro.qexit(ida_ida.IDB_PACKED)
+```
+
+`ida2llvm/__init__.py`:
+
+```py
+from . import _utils
+from . import address
+from . import function
+from . import insn
+from . import type
+
+
+
+```
+
+`ida2llvm/_utils.py`:
+
+```py
+import logging
+import llvmlite.binding as llvm
+
+from llvmlite import ir
+
+logger = logging.getLogger(__name__)
+
+def get_offset_to(builder: ir.IRBuilder, arg: ir.Value, off: int = 0) -> ir.Value:
+    """
+    A Value can be indexed relative to some offset.
+
+    :param arg: value to index from
+    :type arg: ir.Value
+    :param off: offset to index, defaults to 0
+    :type off: int, optional
+    :return: value after indexing by off
+    :rtype: ir.Value
+    """
+    match arg:
+        case ptr if isinstance(arg.type, ir.PointerType) and isinstance(ptr.type.pointee, ir.ArrayType):
+            arr = ptr.type.pointee
+            td = llvm.create_target_data("e")
+            size = arr.element.get_abi_size(td)
+            return builder.gep(ptr, (ir.Constant(ir.IntType(8), 0), ir.Constant(ir.IntType(8), off // size),))
+        case ptr if isinstance(arg.type, ir.PointerType) and isinstance(ptr.type.pointee, ir.LiteralStructType):
+            return builder.bitcast(ptr, ir.IntType(8).as_pointer())
+        case ptr if isinstance(arg.type, ir.PointerType) and off > 0:
+            td = llvm.create_target_data("e")
+            size = ptr.type.pointee.get_abi_size(td)
+            return builder.gep(ptr, (ir.Constant(ir.IntType(8), off // size),))
+        case _:
+            return arg
+
+def dedereference(arg: ir.Value) -> ir.Value:
+    """
+    A memory address is deferenced if the memory at the address is loaded.
+    In LLVM, a LoadInstruction instructs the CPU to perform the dereferencing.
+
+    In cases where we wish to retrieve the memory address, we "de-dereference".
+    - this is needed as IDA microcode treats all LVARS as registers
+    - whereas during lifting we treat all LVARS as stack variables (in accordance to LLVM SSA)
+
+    :param arg: value to de-dereference
+    :type arg: ir.Value
+    :raises NotImplementedError: arg is not of type LoadInstr
+    :return: original memory address
+    :rtype: ir.Value
+    """
+    match arg:
+        case arg if isinstance(arg, ir.LoadInstr):
+            return arg.operands[0]
+        case arg if isinstance(arg.type, ir.PointerType):
+            return arg
+        case _:
+            raise NotImplementedError(f"not implemented: get reference for object {arg} of type {arg.type}")
+
+
+```
+
+`ida2llvm/address.py`:
+
+```py
+import ida_bytes
+import ida_hexrays
+import ida_segment
+import ida_typeinf
+import ida_nalt
+import ida_name
+import ida_funcs
+import ida_idaapi
+import logging
+import struct
+import llvmlite.binding as llvm
+
+from llvmlite import ir
+import ida2llvm
+
+logger = logging.getLogger(__name__)
+
+def lift_type_from_address(ea: int):
+    if ida_segment.segtype(ea) & ida_segment.SEG_XTRN:
+        # let's assume its a function that returns ONE register and takes in variadic arguments
+        ida_func_details = ida_typeinf.func_type_data_t()
+        void = ida_typeinf.tinfo_t()
+        void.create_simple_type(ida_typeinf.BTF_VOID)
+        ida_func_details.rettype = void
+        ida_func_details.cc = ida_typeinf.CM_CC_ELLIPSIS | ida_typeinf.CC_CDECL_OK
+
+        function_tinfo = ida_typeinf.tinfo_t()
+        function_tinfo.create_func(ida_func_details)
+        return function_tinfo
+
+    if (func := ida_funcs.get_func(ea)) is not None:
+        ida_hf = ida_hexrays.hexrays_failure_t()
+        tif = ida_hexrays.decompile(func, ida_hf).type
+        ida_nalt.set_tinfo(ea, tif)
+
+    tif = ida_typeinf.tinfo_t()
+    ida_nalt.get_tinfo(tif, ea)
+    if tif.empty():
+        raise NotImplementedError(f"not implemented: type inference for object at {hex(ea)}")
+    return tif
+
+def lift_from_address(module: ir.Module, ea: int, typ: ir.Type = None):
+    if typ is None:
+        tif = lift_type_from_address(ea)
+        typ = ida2llvm.type.lift_tif(tif)
+    return _lift_from_address(module, ea, typ)
+
+def _lift_from_address(module: ir.Module, ea: int, typ: ir.Type):
+    match typ:
+        case typ if isinstance(typ, ir.FunctionType):
+            ida_funcs.add_func(ea, ida_idaapi.BADADDR)
+            func = ida_funcs.get_func(ea)
+            func_name = ida_name.get_name(ea)
+            res = module.get_global(func_name)
+            res.lvars = dict()
+
+            ida_hf = ida_hexrays.hexrays_failure_t()
+            ida_mbr = ida_hexrays.mba_ranges_t()
+            ida_mbr.ranges.push_back(func)
+
+            lvars = ida_hexrays.decompile(func, ida_hf).lvars
+            mba = ida_hexrays.gen_microcode(ida_mbr, ida_hf, None,
+                                            ida_hexrays.DECOMP_ALL_BLKS,
+                                            ida_hexrays.MMAT_LVARS)
+
+            for index in range(mba.qty):
+                res.append_basic_block(name = f"@{index}") 
+
+            ida_func_details = ida_typeinf.func_type_data_t()
+            tif = lift_type_from_address(ea)
+            tif.get_func_details(ida_func_details)
+            names = [ida_func_details.at(i).name for i in range(ida_func_details.size())]
+            
+            builder = ir.IRBuilder(res.entry_basic_block)
+
+            with builder.goto_entry_block():
+                # declare function arguments as stack variables
+                for arg, arg_t, arg_n in zip(res.args, typ.args, names):
+                    res.lvars[arg_n] = builder.alloca(arg_t, name = arg_n)
+                
+                # declare function results as stack variable
+                if not isinstance(typ.return_type, ir.VoidType):
+                    res.lvars["result"] = builder.alloca(typ.return_type, name = "result")
+
+                # if function is variadic, declare va_start intrinsic
+                if tif.is_vararg_cc() and typ.var_arg:
+                    ptr = builder.alloca(ir.IntType(8).as_pointer(), name = "ArgList")
+                    res.lvars["ArgList"] = ptr
+                    va_start = module.declare_intrinsic('llvm.va_start', fnty=ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer()]))
+                    ptr = builder.load(ptr)
+                    builder.call(va_start, (ptr, ))
+
+                # store stack variables
+                for arg, arg_n in zip(res.args, names):
+                    arg = ida2llvm.type.typecast(arg, res.lvars[arg_n].type.pointee, builder)
+                    builder.store(arg, res.lvars[arg_n])
+
+            with builder.goto_block(res.blocks[-1]):
+                if isinstance(typ.return_type, ir.VoidType):
+                    builder.ret_void()
+                else:
+                    builder.ret(builder.load(res.lvars["result"]))
+
+            # lift each bblk in cfg
+            for index, blk in enumerate(res.blocks):
+                ida_blk = mba.get_mblock(index)
+
+                ida_insn = ida_blk.head
+                while ida_insn is not None:
+                    lifted_insn = ida2llvm.insn.lift_insn(ida_insn, blk, builder)
+                    logger.debug(f"=> {lifted_insn}")
+                    ida_insn = ida_insn.next
+
+                if not blk.is_terminated and index + 1 < len(res.blocks):
+                    with builder.goto_block(blk):
+                        builder.branch(res.blocks[index + 1])
+
+            # if function is variadic, declare va_end intrinsic
+            if tif.is_vararg_cc() and typ.var_arg:
+                ptr = res.lvars["ArgList"]
+                va_end = module.declare_intrinsic('llvm.va_end', fnty=ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer()]))
+                with builder.goto_block(res.blocks[-1]):
+                    ptr = builder.load(ptr)
+                    builder.call(va_end, (ptr, ))
+
+            return res
+
+            # # define function return type
+            # define_rettype()
+        case typ if isinstance(typ, ir.IntType):
+            # should probably check endianness
+            r = ida_bytes.get_bytes(ea, typ.width // 8)
+            return typ(int.from_bytes(r, "little"))
+        case typ if isinstance(typ, ir.FloatType):
+            # should probably check endianness
+            # floats are not guaranteed to be 8 bytes long
+            return typ(struct.unpack('f', ida_bytes.get_bytes(ea, 8)))
+        case typ if isinstance(typ, ir.DoubleType):
+            # should probably check endianness
+            # doubles are not guaranteed to be 8 bytes long
+            return typ(struct.unpack('d', ida_bytes.get_bytes(ea, 8)))
+        case typ if isinstance(typ, ir.PointerType):
+            # check if ea is valid
+            if (ida_segment.segtype(ea) & ida_segment.SEG_BSS == ida_segment.SEG_BSS
+                or isinstance(typ.pointee, ir.FunctionType)):
+                val = ir.Constant(typ, None)
+            else:
+                assumedType = ir.ArrayType(typ.pointee, 1000) # we assume the pointer points to maximally 1000 elements
+                val = lift_from_address(module, ea, assumedType)
+            return val
+        case typ if isinstance(typ, ir.ArrayType):
+            td = llvm.create_target_data("e")
+            subSize = typ.element.get_abi_size(td)
+
+            return ir.Constant.literal_array([ lift_from_address(module, sub_ea, typ.element)
+                for sub_ea in range(ea, ea + subSize * typ.count, subSize)
+            ])
+        case typ if isinstance(typ, ir.LiteralStructType) or isinstance(typ, ir.IdentifiedStructType):
+            td = llvm.create_target_data("e")
+            sub_ea = ea
+            structEles = []
+            for el in typ.elements:
+                if isinstance(el, ir.PointerType):
+                    address_ea = ida_bytes.get_dword(sub_ea)
+                    if ida_idaapi.get_inf_structure().is_64bit():
+                        address_ea = ida_bytes.get_qword(sub_ea)
+                    g_cmt = lift_from_address(module, address_ea, el)
+
+                    val = ir.GlobalVariable(module, g_cmt.type, f"{typ}_{hex(ea)}")
+                    val.initializer = g_cmt
+                    structEle = val.gep((ir.IntType(64)(0),))
+                else:
+                    structEle = lift_from_address(module, sub_ea, el)
+                structEles.append(structEle)
+                subSize = el.get_abi_size(td)
+                sub_ea += subSize
+
+            return ir.Constant.literal_struct(structEles)
+    raise NotImplementedError(f"object at {hex(ea)} is of unsupported type {typ}")
+```
+
+`ida2llvm/function.py`:
+
+```py
+import ida_typeinf
+import ida_name
+import ida_idaapi
+import ida_segment
+import logging
+
+from llvmlite import ir
+from contextlib import suppress
+
+import ida2llvm
+
+logger = logging.getLogger(__name__)
+
+def lift_intrinsic_function(module: ir.Module, func_name: str):
+    """
+    Lifts IDA macros to corresponding LLVM intrinsics.
+
+    Hexray's decompiler recognises higher-level functions at the Microcode level.
+        Such ida_hexrays:mop_t objects are typed as ida_hexrays.mop_h (auxillary function member)
+        
+        This improves decompiler output, representing operations that cannot be mapped to nice C code
+        (https://hex-rays.com/blog/igors-tip-of-the-week-67-decompiler-helpers/).
+
+        For relevant #define macros, refer to IDA SDK: `defs.h` and `pro.h`.
+
+    LLVM intrinsics have well known names and semantics and are required to follow certain restrictions.
+
+    :param module: _description_
+    :type module: ir.Module
+    :param func_name: _description_
+    :type func_name: str
+    :raises NotImplementedError: _description_
+    :return: _description_
+    :rtype: _type_
+    """
+    # retrieve intrinsic function if it already exists
+    with suppress(KeyError):
+        return module.get_global(f"_h_{func_name}")
+
+    match func_name:
+        case "strcpy":
+            typ = ir.FunctionType(ir.VoidType(), (ir.IntType(8).as_pointer(), ir.IntType(8).as_pointer()))
+            f = ir.Function(module, typ, "_h_strcpy")
+            if f.is_declaration:
+                f.append_basic_block('head')
+                builder = ir.IRBuilder(f.entry_basic_block)
+
+                memcpy = module.declare_intrinsic('llvm.memcpy', [ir.IntType(8).as_pointer(), ir.IntType(8).as_pointer(), ir.IntType(64)])
+
+                logger.debug("TODO: fix strcpy naieve assumptions")
+                dest, src = f.llvm_f.args
+                length = ir.Constant(ir.IntType(64), 45)
+                volatile = ir.Constant(ir.IntType(1), True)
+
+                builder.call(memcpy, (dest, src, length, volatile))
+                builder.ret_void()
+            return f
+    
+        case "__halt":
+            fty = ir.FunctionType(ir.VoidType(), [])
+            f = ir.Function(module, fty, "_h_halt")
+            if f.is_declaration:
+                f.append_basic_block('head')
+                builder = ir.IRBuilder(f.entry_basic_block)
+                builder.asm(fty, "hlt", "", (), True)
+                builder.ret_void()
+            return f
+
+        # case "memset":
+        #     # ida_pro: (dest, src, length)
+        #     # llvmintrinsic: (dest, src, length, isvolatile=True)
+        #     typ = ir.FunctionType(ir.VoidType(), (ir.IntType(8).as_pointer(), ir.IntType(8), ir.IntType(64)))
+        #     f = declare_function("_h_memset", typ)
+
+        #     if not f.is_defined():
+        #         f.llvm_f.append_basic_block('head')
+        #         f.builder = ir.IRBuilder(f.llvm_f.entry_basic_block)
+
+        #         memset = module.declare_intrinsic('llvm.memset', [ir.IntType(8).as_pointer(), ir.IntType(64)])
+
+        #         dest, src, length = f.llvm_f.args
+        #         volatile = ir.Constant(ir.IntType(1), True)
+        #         f.builder.call(memset, (dest, src, length, volatile))
+        #         f.builder.ret_void()
+        #     return f.llvm_f
+
+        # case "__ROL8__":
+        #     # ida_pro: (item, shiftamount)
+        #     # llvmintrinsic: (left, right, shiftamount) funnelshiftright is equal to rotateright iff left and right operands are equal.
+        #     typ = ir.FunctionType(ir.IntType(64), (ir.IntType(64), ir.IntType(8)))
+        #     f = declare_function("_h_rol8", typ)
+
+        #     if not f.is_defined():
+        #         f.llvm_f.append_basic_block('head')
+        #         f.builder = ir.IRBuilder(f.llvm_f.entry_basic_block)
+        #         rol_func_type = ir.FunctionType(ir.IntType(64), (ir.IntType(64), ir.IntType(64), ir.IntType(64)))
+        #         rol8 = module.declare_intrinsic('llvm.fshl.i64', [ir.IntType(64), ir.IntType(64), ir.IntType(64)], rol_func_type)
+
+        #         item, shiftamount = f.llvm_f.args
+        #         shiftamount = llvmgen.ida2llvm.type.change_type(f.builder, shiftamount, ir.IntType(64))
+        #         return_val = f.builder.call(rol8, (item, item, shiftamount))
+        #         f.builder.ret(return_val)
+        #     return f.llvm_f
+            
+        # case "_byteswap_uint64":
+        #     # ida_pro: (item)
+        #     # llvmintrinsic: (item)
+        #     typ = ir.FunctionType(ir.IntType(64), (ir.IntType(64),))
+        #     f = declare_function("_h_byteswap_uint64", typ)
+
+        #     if not f.is_defined():
+        #         f.llvm_f.append_basic_block('head')
+        #         f.builder = ir.IRBuilder(f.llvm_f.entry_basic_block)
+        #         byteswap_func_type = ir.FunctionType(ir.IntType(64), (ir.IntType(64),))
+        #         byteswap64 = module.declare_intrinsic('llvm.bswap.i64', [ir.IntType(64),], byteswap_func_type)
+
+        #         item, = f.llvm_f.args
+        #         return_val = f.builder.call(byteswap64, (item,))
+        #         f.builder.ret(return_val)
+        #     return f.llvm_f
+
+        # case "_byteswap_ulong":
+        #     # ida_pro: (item)
+        #     # llvmintrinsic: (item)
+        #     typ = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
+        #     f = declare_function("_h_byteswap_uint32", typ)
+
+        #     if not f.is_defined():
+        #         f.llvm_f.append_basic_block('head')
+        #         f.builder = ir.IRBuilder(f.llvm_f.entry_basic_block)
+        #         byteswap_func_type = ir.FunctionType(ir.IntType(32), (ir.IntType(32),))
+        #         byteswap32 = module.declare_intrinsic('llvm.bswap.i32', [ir.IntType(32),], byteswap_func_type)
+
+        #         item, = f.llvm_f.args
+        #         return_val = f.builder.call(byteswap32, (item,))
+        #         f.builder.ret(return_val)
+        #     return f.llvm_f
+
+        case _:
+            raise NotImplementedError(f"NotImplementedError {func_name}")
+
+def lift_function(module: ir.Module, func_name: str, is_declare: bool, tif: ida_typeinf.tinfo_t = None):
+    """
+    Declares function given its name. 
+    If `is_declare` is False, also define the function by recursively.
+    If `tif` is given, enforce function type as given.
+    lifting its instructions in IDA decompiler output.
+    Heavylifting is done in `lift_from_address`.
+
+    :param module: parent module of function
+    :type module: ir.Module
+    :param func_name: name of function to lift
+    :type func_name: str
+    :param is_declare: is the function declare only?
+    :type is_declare: bool
+    :param tif: function type, defaults to None
+    :type tif: ida_typeinf.tinfo_t, optional
+    :return: lifted function
+    :rtype: ir.Function
+    """
+    from contextlib import suppress
+    with suppress(NotImplementedError):
+        return lift_intrinsic_function(module, func_name)
+
+    with suppress(KeyError):
+        return module.get_global(func_name)
+
+    func_ea = ida_name.get_name_ea(ida_idaapi.BADADDR, func_name)
+    if ida_segment.segtype(func_ea) & ida_segment.SEG_XTRN:
+        is_declare = True
+
+    assert func_ea != ida_idaapi.BADADDR
+    if tif is None:
+        tif = ida2llvm.address.lift_type_from_address(func_ea)
+    typ = ida2llvm.type.lift_tif(tif)
+    res = ir.Function(module, typ, func_name)
+    logger.debug(f"lifting function {func_name} at {hex(func_ea)}, type: {typ} from {tif}")
+
+    # rename all function args to arg0, arg1, arg2, if does not exist
+    ida_func_details = ida_typeinf.func_type_data_t()
+    tif.get_func_details(ida_func_details)
+
+    ida_args = (ida_func_details.at(i) for i in range(ida_func_details.size()))
+    for i, arg in enumerate(ida_args):
+        arg.name = f"arg{i}"
+    function_tinfo = ida_typeinf.tinfo_t()
+    function_tinfo.create_func(ida_func_details)
+    if func_ea != 0xffffffffffffffff:
+        ida_typeinf.apply_tinfo(func_ea, function_tinfo, ida_typeinf.TINFO_DEFINITE)
+
+    if is_declare:
+        return res
+    return ida2llvm.address.lift_from_address(module, func_ea)
+
+```
+
+`ida2llvm/insn.py`:
+
+```py
+import ida_idaapi
+import ida_funcs
+import ida_hexrays
+import ida_typeinf
+import ida_segment
+import ida_nalt
+import ida_name
+import itertools
+import logging
+import llvmlite.binding as llvm
+
+from llvmlite import ir
+from contextlib import suppress
+import ida2llvm
+
+logger = logging.getLogger(__name__)
+
+def lift_mop(mop: ida_hexrays.mop_t, blk: ir.Block, builder: ir.IRBuilder) -> ir.Value:
+    """Lifts an IDA mop_t object to LLVM Value.
+
+    :param mop: mop_t object to lift
+    :type mop: ida_hexrays.mop_t
+    :param blk: LLVM Block to add instructions to
+    :type blk: ir.Block
+    :raises NotImplementedError: specific mop_t types are not implemented
+    :param builder: builder to emit instructions into
+    :type builder: ir.IRBuilder
+    :return: lifted LLVM Value
+    :rtype: ir.Value
+    """
+    builder.position_at_end(blk)
+    match mop.t:
+        case ida_hexrays.mop_r: # register value
+            # logger.warning("register lifting not implemented, None is returned")
+            return None
+        case ida_hexrays.mop_n: # immediate value
+            res = ir.Constant(ir.IntType(mop.size * 8), mop.nnn.value)
+            res.parent = blk
+            return res
+        case ida_hexrays.mop_d: # another instruction
+            d = lift_insn(mop.d, blk, builder)
+            td = llvm.create_target_data("e")
+            match mop:
+                case voidType if isinstance(d.type, ir.VoidType):
+                    pass
+                case mcall if isinstance(mcall, ida_hexrays.mcallarg_t):
+                    lltype = ida2llvm.type.lift_tif(mop.type)
+                    d = ida2llvm.type.typecast(d, lltype, builder, signed=mop.type.is_signed())
+                case sizeEnforced if d.type.get_abi_size(td) != mop.size and mop.size != -1:
+                    d = ida2llvm.type.typecast(d, ir.IntType(mop.size * 8), builder)
+            return d
+        case ida_hexrays.mop_l: # local variables
+            lvar_ref = mop.l
+            lvar = lvar_ref.var()
+            name = lvar.name
+            off = lvar_ref.off
+
+            if not lvar.has_user_type:
+                ulvars = lvar_ref.mba.vars
+                ulvar = ulvars.at(lvar_ref.idx)
+                lvar.set_final_lvar_type(ulvar.tif)
+                lvar.set_user_type()
+
+            func = blk.parent
+            if name not in func.lvars:
+                with builder.goto_entry_block():                
+                    func.lvars[name] = builder.alloca(ida2llvm.type.lift_tif(lvar.tif), name = name)
+
+            llvm_arg = func.lvars[name]
+
+            if lvar.width != mop.size and mop.size != -1:
+                mop_type = ir.IntType(mop.size * 8).as_pointer()
+                llvm_arg = ida2llvm.type.typecast(llvm_arg, mop_type, builder)
+
+            llvm_arg = ida2llvm._utils.get_offset_to(builder, llvm_arg, off)
+            return builder.load(llvm_arg)
+        case ida_hexrays.mop_S: # stack variables
+            pass
+        case ida_hexrays.mop_b: # block number (used in jmp\call instruction)
+            return blk.parent.blocks[mop.b]
+        case ida_hexrays.mop_v: # global variable
+            ea = mop.g
+            name = ida_name.get_name(ea)
+            if name == "":
+                name = f"g_{hex(ea)}"
+            tif = ida_typeinf.tinfo_t()
+            ida_nalt.get_tinfo(tif, ea)
+            if tif.empty():
+                match mop.size:
+                    case 1:
+                        tif.create_simple_type(ida_typeinf.BT_UNK_BYTE)
+                    case 2:
+                        tif.create_simple_type(ida_typeinf.BT_UNK_WORD)
+                    case 4:
+                        tif.create_simple_type(ida_typeinf.BT_UNK_DWORD)
+                    case 8:
+                        tif.create_simple_type(ida_typeinf.BT_UNK_QWORD)
+                    case 16:
+                        tif.create_simple_type(ida_typeinf.BT_UNK_OWORD)
+                    case _:
+                        size = mop.size if mop.size > 0 else 1000
+                        onebyte_tif = ida_typeinf.tinfo_t()
+                        onebyte_tif.create_simple_type(ida_typeinf.BT_UNK_BYTE)
+                        tif.create_array(onebyte_tif, size, 0, ida_typeinf.BT_ARRAY)
+            match tif:
+                case func if func.is_func() or func.is_funcptr():
+                    with suppress(KeyError):
+                        g = blk.parent.parent.get_global(name)
+                        typ = ida2llvm.type.lift_tif(tif).as_pointer()
+                        g = ida2llvm.type.typecast(g, typ, builder)
+                        return g
+                    if func.is_funcptr():
+                        tif = tif.get_ptrarr_object()
+                    # if function is a thunk function, define the actual function instead
+                    if ida_funcs.get_func(ea).flags & ida_funcs.FUNC_THUNK: 
+                        tfunc_ea, ptr = ida_funcs.calc_thunk_func_target(ida_funcs.get_func(ea))
+                        if tfunc_ea != ida_idaapi.BADADDR:
+                            ea = tfunc_ea
+                            name = ida_name.get_name(ea)
+                    
+                    # if no function definition,
+                    if ((ida_funcs.get_func(ea) is None)
+                    # or if the function is a library function,
+                    or (ida_funcs.get_func(ea).flags & ida_funcs.FUNC_LIB) 
+                    # or if the function is declared in a XTRN segment,
+                    or ida_segment.segtype(ea) & ida_segment.SEG_XTRN): 
+                        # return function declaration
+                        g = ida2llvm.function.lift_function(blk.parent.parent, name, True, tif)
+                    else:
+                        g = ida2llvm.function.lift_function(blk.parent.parent, name, False, tif)
+                    return g
+                case _:
+                    with suppress(KeyError):
+                        g = blk.parent.parent.get_global(name)
+                        return builder.load(g)
+                    typ = ida2llvm.type.lift_tif(tif)
+                    g_cmt = ida2llvm.address.lift_from_address(blk.parent.parent, ea, typ)
+                    g = ir.GlobalVariable(blk.parent.parent, g_cmt.type, name = name)
+                    g.initializer = g_cmt
+                    td = llvm.create_target_data("e")
+                    if g.type.get_abi_size(td) != mop.size and mop.size != -1:
+                        g = ida2llvm.type.typecast(g, ir.IntType(mop.size * 8).as_pointer(), builder)
+                    return builder.load(g)
+        case ida_hexrays.mop_f: # function call information
+            mcallinfo = mop.f
+            f_args = []
+
+            for arg in mcallinfo.args:
+                typ = ida2llvm.type.lift_tif(arg.type)
+                f_arg = lift_mop(arg, blk, builder)
+                f_arg = ida2llvm.type.typecast(f_arg, typ, builder)
+                logger.debug(f"{f_arg} ({f_arg.type}) lifted from {arg} ({typ})")
+                f_args.append(f_arg)
+            return f_args
+        case ida_hexrays.mop_a: # operating number address (mop_l\mop_v\mop_S\mop_r)
+            mop_addr = mop.a
+            val = ida2llvm._utils.dedereference(lift_mop(mop_addr, blk, builder))
+            match mop:
+                case mcall if isinstance(mcall, ida_hexrays.mcallarg_t):
+                    lltype = ida2llvm.type.lift_tif(mop.type)
+                    val = ida2llvm.type.typecast(val, lltype, builder)
+                case mop_addr if isinstance(mop_addr, ida_hexrays.mop_addr_t):
+                    lltype = ida2llvm.type.lift_tif(mop.type)
+                    val = ida2llvm.type.typecast(val, lltype, builder)
+                case _:
+                    lltype = ir.IntType(8).as_pointer()
+                    val = ida2llvm.type.typecast(val, lltype, builder)
+            return val
+        case ida_hexrays.mop_h: # auxiliary function number
+            return ida2llvm.function.lift_intrinsic_function(blk.parent.parent, mop.helper)
+        case ida_hexrays.mop_str: # string constant
+            str_csnt = mop.cstr
+
+            strType = ir.ArrayType(ir.IntType(8), len(str_csnt))
+            g = ir.GlobalVariable(blk.parent.parent, strType, name=str_csnt)
+            g.initializer = ir.Constant(strType, bytearray(str_csnt.encode("utf-8")))
+            g.linkage = "private"
+            g.global_constant = True
+            return ida2llvm.type.typecast(g, ir.IntType(8).as_pointer(), builder)
+        case ida_hexrays.mop_c: # switch case and target
+            pass
+        case ida_hexrays.mop_fn: # floating points constant
+            pass
+        case ida_hexrays.mop_p: # the number of operations is correct
+            pass
+        case ida_hexrays.mop_sc: # decentralized operation information
+            pass
+        case ida_hexrays.mop_z: # does not exist
+            return None
+    mop_descs = {ida_hexrays.mop_r: "register value",
+                ida_hexrays.mop_n: "immediate value",
+                ida_hexrays.mop_d: "another instruction",
+                ida_hexrays.mop_l: "local variables",
+                ida_hexrays.mop_S: "stack variables",
+                ida_hexrays.mop_b: "block number (used in jmp\call instruction)",
+                ida_hexrays.mop_v: "global variable",
+                ida_hexrays.mop_f: "function call information",
+                ida_hexrays.mop_a: "operating number address (mop_l\mop_v\mop_S\mop_r)",
+                ida_hexrays.mop_h: "auxiliary function number",
+                ida_hexrays.mop_str: "string constant",
+                ida_hexrays.mop_c: "switch case and target",
+                ida_hexrays.mop_fn: "floating points constant",
+                ida_hexrays.mop_p: "the number of operations is correct",
+                ida_hexrays.mop_sc: "decentralized operation information"
+    }
+    raise NotImplementedError(f"not implemented: {mop.dstr()} of type {mop_descs[mop.t]}")
+
+def _store_as(l: ir.Value, d: ir.Value, blk: ir.Block, builder: ir.IRBuilder, d_typ: ir.Type = None, signed: bool = True):
+    """
+    Private helper function to store value to destination.
+    """
+    if d is None:  # destination does not exist
+        return l
+
+    d = ida2llvm._utils.dedereference(d)
+    if d_typ:
+        d = ida2llvm.type.typecast(d, d_typ, builder, signed)
+    assert isinstance(d.type, ir.PointerType)
+
+    if isinstance(d.type.pointee, ir.ArrayType):
+        arrtoptr = d.type.pointee.element.as_pointer()
+        d = ida2llvm.type.typecast(d, arrtoptr.as_pointer(), builder, signed)
+
+    if isinstance(l.type, ir.VoidType):
+        return
+
+    l = ida2llvm.type.typecast(l, d.type.pointee, builder, signed)
+    return builder.store(l, d)
+
+def lift_insn(ida_insn: ida_hexrays.minsn_t, blk: ir.Block, builder: ir.IRBuilder) -> ir.Instruction:
+    """Heavylifter function that lifts a given IDA Microcode instruction.
+
+    A given ida instruction could comprise multiple Instructions.
+    Note that only final instruction is returned.
+    Intermediate instructions emitted discretely into `blk`.
+
+    :param ida_insn: IDA Microcode instruction
+    :type ida_insn: ida_hexrays.minsn_t
+    :param blk: LLVM Block to emit instructions into
+    :type blk: ir.Block
+    :raises NotImplementedError: m_add only supports addition between integers/pointers
+    :raises NotImplementedError: m_sub only supports subtraction between integers/pointers
+    :raises NotImplementedError: certain minsn_t have not been lifted yet
+    :param builder: builder to emit instructions into
+    :type builder: ir.IRBuilder
+    :return: final instruction (intermediate instructions emitted are not returned)
+    :rtype:ir.Instruction
+    """
+    builder.position_at_end(blk)
+    logger.debug(str(ida_insn.dstr()))
+    l = lift_mop(ida_insn.l, blk, builder)
+    r = lift_mop(ida_insn.r, blk, builder)
+    d = lift_mop(ida_insn.d, blk, builder)
+    logger.debug(f"{chr(10).join('-'+str(i) for i in (l,r,d) if i)}")
+    blk_itr = iter(blk.parent.blocks)
+    list(itertools.takewhile(lambda x: x.name != blk.name, blk_itr)) # consume iter
+    next_blk = next(blk_itr, None)
+
+    match ida_insn.opcode:
+        case ida_hexrays.m_nop:  # 0x00,  nop    no operation
+            return
+        case ida_hexrays.m_stx:  # 0x01,  stx  l,    {r=sel, d=off}  store register to memory*F
+            if d is None:  # destination does not exist
+                return l
+            d = ida2llvm._utils.dedereference(d)
+            assert isinstance(d.type, ir.PointerType)
+
+            if isinstance(d.type.pointee, ir.ArrayType):
+                arrtoptr = d.type.pointee.element.as_pointer()
+                d = ida2llvm.type.typecast(d, arrtoptr.as_pointer(), builder, True)
+
+            if isinstance(l.type, ir.VoidType):
+                return
+
+            l = ida2llvm.type.typecast(l, d.type.pointee, builder, True)
+            return builder.store(l, d)
+        case ida_hexrays.m_ldx:  # 0x02,  ldx  {l=sel,r=off}, d load    register from memory    *F
+            if not isinstance(r.type, ir.PointerType):
+                register_size = 8*ida_insn.r.size
+                r = ida2llvm.type.typecast(r, ir.IntType(register_size).as_pointer(), builder)    
+            r = builder.load(r)
+
+            return _store_as(r, d, blk, builder)
+        case ida_hexrays.m_ldc:  # 0x03,  ldc  l=const,d   load constant
+            pass
+        case ida_hexrays.m_mov:  # 0x04,  mov  l, d   move*F
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_neg:  # 0x05,  neg  l, d   negate
+            l = builder.neg(l)
+            l = builder.load(l)
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_lnot:  # 0x06,  lnot l, d   logical not
+            assert isinstance(l.type, ir.IntType)
+            cmp = builder.icmp_unsigned("==", l, ir.IntType(l.type.width)(0))
+            return _store_as(cmp, d, blk, builder)
+        case ida_hexrays.m_bnot:  # 0x07,  bnot l, d   bitwise not
+            l = builder.xor(l.type(pow(l, l.type.width) - 1), l)
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_xds:  # 0x08,  xds  l, d   extend (signed)
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_xdu:  # 0x09,  xdu  l, d   extend (unsigned)
+            return _store_as(l, d, blk, builder, signed=False)
+        case ida_hexrays.m_low:  # 0x0A,  low  l, d   take low part
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_high:  # 0x0B,  high l, d   take high part
+            return _store_as(l, d, blk, builder)
+        case ida_hexrays.m_add:  # 0x0C,  add  l,   r, d   l + r -> dst
+            match (l, r):
+                case (ptr, const) if isinstance(ptr.type, ir.PointerType) and isinstance(const.type, ir.IntType):
+                    castPtr = builder.bitcast(ptr, ir.IntType(8).as_pointer())
+                    math = builder.gep(castPtr, (const, ))
+                    math = builder.bitcast(math, ptr.type)
+                case (const, ptr) if isinstance(ptr.type, ir.PointerType) and isinstance(const.type, ir.IntType):
+                    castPtr = builder.bitcast(ptr, ir.IntType(8).as_pointer())
+                    math = builder.gep(castPtr, (const, ))
+                    math = builder.bitcast(math, ptr.type)
+                case (const1, const2) if isinstance(const1.type, ir.IntType) and isinstance(const2.type, ir.IntType):
+                    math = builder.add(const1, const2)
+                case (ptr1, ptr2) if isinstance(ptr1.type, ir.PointerType) and isinstance(ptr2.type, ir.PointerType):
+                    ptrType = ir.IntType(64) # get pointer type
+                    const1 = builder.ptrtoint(ptr1, ptrType)
+                    const2 = builder.ptrtoint(ptr2, ptrType)
+                    math = builder.add(const1, const2)
+                case _:
+                    raise NotImplementedError("expected addition between pointer/integers")
+            return _store_as(math, d, blk, builder) 
+        case ida_hexrays.m_sub:  # 0x0D,  sub  l,   r, d   l - r -> dst
+            match (l, r):
+                case (ptr, const) if isinstance(ptr.type, ir.PointerType) and isinstance(const.type, ir.IntType):
+                    const.constant *= -1
+                    castPtr = builder.bitcast(ptr, ir.IntType(8).as_pointer())
+                    math = builder.gep(castPtr, (const, ))
+                    math = builder.bitcast(math, ptr.type)
+                case (const, ptr) if isinstance(ptr.type, ir.PointerType) and isinstance(const.type, ir.IntType):
+                    const.constant *= -1
+                    castPtr = builder.bitcast(ptr, ir.IntType(8).as_pointer())
+                    math = builder.gep(castPtr, (const, ))
+                    math = builder.bitcast(math, ptr.type)
+                case (const1, const2) if isinstance(const1.type, ir.IntType) and isinstance(const2.type, ir.IntType):
+                    math = builder.sub(const1, const2)
+                case (ptr1, ptr2) if isinstance(ptr1.type, ir.PointerType) and isinstance(ptr2.type, ir.PointerType):
+                    ptrType = ir.IntType(64) # get pointer type
+                    const1 = builder.ptrtoint(ptr1, ptrType)
+                    const2 = builder.ptrtoint(ptr2, ptrType)
+                    math = builder.sub(const1, const2)
+                case _:
+                    raise NotImplementedError("expected subtraction between pointer/integers")
+            return _store_as(math, d, blk, builder) 
+        case ida_hexrays.m_mul:  # 0x0E,  mul  l,   r, d   l * r -> dst
+            math = builder.mul(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_udiv:  # 0x0F,  udiv l,   r, d   l / r -> dst
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.udiv(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_sdiv:  # 0x10,  sdiv l,   r, d   l / r -> dst
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.sdiv(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_umod:  # 0x11,  umod l,   r, d   l % r -> dst
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.urem(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_smod:  # 0x12,  smod l,   r, d   l % r -> dst
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.srem(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_or:  # 0x13,  or   l,   r, d   bitwise or
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.or_(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_and:  # 0x14,  and  l,   r, d   bitwise and
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.and_(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_xor:  # 0x15,  xor  l,   r, d   bitwise xor
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.xor(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_shl:  # 0x16,  shl  l,   r, d   shift logical left
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.shl(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_shr:  # 0x17,  shr  l,   r, d   shift logical right
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.shr(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_sar:  # 0x18,  sar  l,   r, d   shift arithmetic right
+            r = ida2llvm.type.typecast(r, l.type, builder)
+            math = builder.ashr(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_cfadd:  # 0x19,  cfadd l,  r,    d=carry    calculate carry    bit of (l+r)
+            math = builder.sadd_with_overflow(l, r) # a { result, overflow bit } structure is returned
+            math = math.gep((ir.IntType(64)(0), ir.IntType(64)(0)))
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_ofadd:  # 0x1A,  ofadd l,  r,    d=overf    calculate overflow bit of (l+r)
+            math = builder.sadd_with_overflow(l, r) # a { result, overflow bit } structure is returned
+            math = math.gep((ir.IntType(64)(0), ir.IntType(64)(1)))
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_cfshl:  # 0x1B,  cfshl l,  r,    d=carry    calculate carry    bit of (l<<r)
+            pass
+        case ida_hexrays.m_cfshr:  # 0x1C,  cfshr l,  r,    d=carry    calculate carry    bit of (l>>r)
+            pass
+        case ida_hexrays.m_sets:  # 0x1D,  sets  l,d=byte  SF=1Sign
+            pass
+        case ida_hexrays.m_seto:  # 0x1E,  seto  l,  r, d=byte  OF=1Overflow of (l-r)
+            pass
+        case ida_hexrays.m_setp:  # 0x1F,  setp  l,  r, d=byte  PF=1Unordered/Parity  *F
+            pass
+        case ida_hexrays.m_setnz:  # 0x20,  setnz l,  r, d=byte  ZF=0Not Equal    *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("!=", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setz:  # 0x21,  setz  l,  r, d=byte  ZF=1Equal   *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("==", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setae:  # 0x22,  setae l,  r, d=byte  CF=0Above or Equal    *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned(">=", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setb:  # 0x23,  setb  l,  r, d=byte  CF=1Below   *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("<", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_seta:  # 0x24,  seta  l,  r, d=byte  CF=0 & ZF=0   Above   *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned(">", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setbe:  # 0x25,  setbe l,  r, d=byte  CF=1 | ZF=1   Below or Equal    *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("<=", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setg:  # 0x26,  setg  l,  r, d=byte  SF=OF & ZF=0  Greater
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed(">", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setge:  # 0x27,  setge l,  r, d=byte  SF=OF    Greater or Equal
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed(">=", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setl:  # 0x28,  setl  l,  r, d=byte  SF!=OF   Less
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed("<", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_setle:  # 0x29,  setle l,  r, d=byte  SF!=OF | ZF=1 Less or Equal
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed("<=", l, r)
+            result = builder.select(cond, ir.IntType(1)(1), ir.IntType(1)(0))
+            return _store_as(result, d, blk, builder)
+        case ida_hexrays.m_jcnd:  # 0x2A,  jcnd   l,    d   d is mop_v or mop_b
+            return builder.cbranch(l, d, next_blk)
+        case ida_hexrays.m_jnz:  # 0x2B,  jnz    l, r, d   ZF=0Not Equal *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("!=", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jz:  # 0x2C,  jzl, r, d   ZF=1Equal*F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("==", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jae:  # 0x2D,  jae    l, r, d   CF=0Above or Equal *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned(">=", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jb:  # 0x2E,  jbl, r, d   CF=1Below*F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("<", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_ja:  # 0x2F,  jal, r, d   CF=0 & ZF=0   Above*F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned(">", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jbe:  # 0x30,  jbe    l, r, d   CF=1 | ZF=1   Below or Equal *F
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_unsigned("<=", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jg:  # 0x31,  jgl, r, d   SF=OF & ZF=0  Greater
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed(">", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jge:  # 0x32,  jge    l, r, d   SF=OF    Greater or Equal
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed(">=", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jl:  # 0x33,  jll, r, d   SF!=OF   Less
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed("<", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jle:  # 0x34,  jle    l, r, d   SF!=OF | ZF=1 Less or Equal
+            l = ida2llvm.type.typecast(l, ir.IntType(64), builder)
+            r = ida2llvm.type.typecast(r, ir.IntType(64), builder)
+            cond = builder.icmp_signed("<=", l, r)
+            return builder.cbranch(cond, d, next_blk)
+        case ida_hexrays.m_jtbl:  # 0x35,  jtbl   l, r=mcases    Table jump
+            pass
+        case ida_hexrays.m_ijmp:  # 0x36,  ijmp  {r=sel, d=off}  indirect unconditional jump
+            pass
+        case ida_hexrays.m_goto:  # 0x37,  goto   l    l is mop_v or mop_b
+            return builder.branch(l)
+        case ida_hexrays.m_call:  # 0x38,  call   ld   l is mop_v or mop_b or mop_h
+            args = list(d)
+            for (i, llvmtype) in enumerate(l.type.pointee.args):
+                args[i] = ida2llvm.type.typecast(args[i], llvmtype, builder)
+            
+            if l.type.pointee.var_arg: # function is variadic
+                function = blk.parent
+                if "ArgList" in function.lvars:
+                    logger.warning("nested variadic function detected, variadic arguments will not be passed properly")
+                ltype = l.type.pointee
+                newargs = list(ltype.args)
+                for i in range(len(newargs), len(args)):
+                    newargs.append(args[i].type)
+                new_func_type = ir.FunctionType(ltype.return_type, newargs, var_arg=True).as_pointer()
+                l = ida2llvm.type.typecast(l, new_func_type, builder)
+            logger.debug(f"lifting call: {l.type} {d}")
+            return builder.call(l, args)
+        case ida_hexrays.m_icall:  # 0x39,  icall  {l=sel, r=off} d    indirect call
+            ftype = ir.FunctionType(ir.IntType(8).as_pointer(), (arg.type for arg in d))
+            f = ida2llvm.type.typecast(r, ftype.as_pointer(), builder)
+            return builder.call(f, d)
+        case ida_hexrays.m_ret:  # 0x3A,  ret
+            pass
+        case ida_hexrays.m_push:  # 0x3B,  push   l
+            pass
+        case ida_hexrays.m_pop:  # 0x3C,  popd
+            pass
+        case ida_hexrays.m_und:  # 0x3D,  undd   undefine
+            pass
+        case ida_hexrays.m_ext:  # 0x3E,  ext  in1, in2,  out1  external insn, not microcode *F
+            pass
+        case ida_hexrays.m_f2i:  # 0x3F,  f2il,    d int(l) => d; convert fp -> integer   +F
+            pass
+        case ida_hexrays.m_f2u:  # 0x40,  f2ul,    d uint(l)=> d; convert fp -> uinteger  +F
+            pass
+        case ida_hexrays.m_i2f:  # 0x41,  i2fl,    d fp(l)  => d; convert integer -> fp e +F
+            pass
+        case ida_hexrays.m_u2f:  # 0x42,  i2fl,    d fp(l)  => d; convert uinteger -> fp  +F
+            pass
+        case ida_hexrays.m_f2f:  # 0x43,  f2fl,    d l => d; change fp precision+F
+            pass
+        case ida_hexrays.m_fneg:  # 0x44,  fneg    l,    d -l=> d; change sign   +F
+            assert l.isfloat() and r.isfloat()
+            math = builder.fadd(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_fadd:  # 0x45,  fadd    l, r, d l + r  => d; add +F
+            assert l.isfloat() and r.isfloat()
+            math = builder.fadd(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_fsub:  # 0x46,  fsub    l, r, d l - r  => d; subtract +F
+            assert l.isfloat() and r.isfloat()
+            math = builder.fsub(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_fmul:  # 0x47,  fmul    l, r, d l * r  => d; multiply +F
+            assert l.isfloat() and r.isfloat()
+            math = builder.fmul(l, r)
+            return _store_as(math, d, blk, builder)
+        case ida_hexrays.m_fdiv:  # 0x48,  fdiv    l, r, d l / r  => d; divide   +F
+            assert l.isfloat() and r.isfloat()
+            math = builder.fdiv(l, r)
+            return _store_as(math, d, blk, builder)
+    raise NotImplementedError(f"not implemented {ida_insn.dstr()}")
+```
+
+`ida2llvm/type.py`:
+
+```py
+import ida_typeinf
+import ida_idaapi
+import logging
+
+from llvmlite import ir
+
+logger = logging.getLogger(__name__)
+
+def lift_tif(tif: ida_typeinf.tinfo_t) -> ir.Type:
+    """
+    Lifts the given IDA type to corresponding LLVM type.
+    If IDA type is an array/struct/tif, type lifting is performed recursively.
+
+    :param tif: the type to lift, in IDA
+    :type tif: ida_typeinf.tinfo_t
+    :raises NotImplementedError: variadic structs
+    :return: lifted LLVM type
+    :rtype: ir.Type
+    """
+    match tif:
+        case tif if tif.is_func():
+            # a function type is composed of:
+            ## return type, argument types, variadic
+            ida_rettype = tif.get_rettype()
+            ida_args = (tif.get_nth_arg(i) for i in range(tif.get_nargs()))
+            is_vararg = tif.is_vararg_cc()
+
+            llvm_rettype = lift_tif(ida_rettype)
+            llvm_args = (lift_tif(arg) for arg in ida_args)
+            return ir.FunctionType(llvm_rettype, llvm_args, var_arg = is_vararg)
+
+        case tif if tif.is_ptr():
+            child_tif = tif.get_ptrarr_object()
+
+            # clang compiles C void * to LLVM IR i8*
+            if child_tif.is_void():
+                return ir.IntType(8).as_pointer()
+
+            return lift_tif(child_tif).as_pointer()
+
+        case tif if tif.is_array():
+            child_tif = tif.get_ptrarr_object()
+            element = lift_tif(child_tif)
+
+            count = tif.get_array_nelems()
+            if count == 0:
+                # an array with an indeterminate number of elements = type pointer
+                tif.convert_array_to_ptr()
+                return lift_tif(tif)
+
+            return ir.ArrayType(element, count)
+
+        case tif if tif.is_void():
+            return ir.VoidType()
+
+        case tif if tif.is_udt():
+            udt_data = ida_typeinf.udt_type_data_t()
+            tif.get_udt_details(udt_data)
+            type_name = tif.get_type_name()
+            context = ir.context.global_context
+
+            if type_name not in context.identified_types:
+                struct_t = context.get_identified_type(type_name)
+                elementTypes = []
+                for idx in range(udt_data.size()):
+                    udt_member = udt_data.at(idx)
+                    element = lift_tif(udt_member.type)
+                    elementTypes.append(element)
+                if tif.is_varstruct():
+                    raise NotImplementedError(f"variadic structs not implemented: {tif}")
+                struct_t.set_body(*elementTypes)
+            return context.get_identified_type(type_name)
+
+        case tif if tif.is_bool():
+            return ir.IntType(1)
+
+        case tif if tif.is_float():
+            return ir.FloatType()
+
+        case tif if tif.is_double():
+            return ir.DoubleType()
+
+        case _:
+            byte_size = tif.get_size()
+            # naieve assumption that system is either 32 bit or 64 bit
+            bitness = 32
+            if ida_idaapi.get_inf_structure().is_64bit():
+                bitness = 64
+            if byte_size == (1 << bitness) - 1:
+                byte_size = 1
+            return ir.IntType(byte_size * 8)
+
+def typecast(src: ir.Value, dst_type: ir.Type, builder: ir.IRBuilder, signed: bool = False) -> ir.Value:
+    """
+    Given some `src`, convert it to type `dst_type`.
+    Instructions are emitted into `builder`.
+
+    :param src: value to convert
+    :type src: ir.Value
+    :param dst_type: destination type
+    :type dst_type: ir.Type
+    :param builder: builds instructions
+    :type builder: ir.IRBuilder
+    :param signed: whether to preserve signness, defaults to True
+    :type signed: bool, optional
+    :raises NotImplementedError: type conversion not supported
+    :return: value after typecast
+    :rtype: ir.Value   
+    """
+    if src.type != dst_type:
+        match (src, dst_type):
+            case (src, dst_type) if isinstance(src.type, ir.PointerType) and isinstance(dst_type, ir.PointerType):
+                return builder.bitcast(src, dst_type)
+            case (src, dst_type) if isinstance(src.type, ir.PointerType) and isinstance(dst_type, ir.IntType):
+                return builder.ptrtoint(src, dst_type)
+            case (src, dst_type) if isinstance(src.type, ir.IntType) and isinstance(dst_type, ir.PointerType):
+                return builder.inttoptr(src, dst_type)
+
+            case (src, dst_type) if isinstance(src.type, ir.IntType) and isinstance(dst_type, ir.FloatType):
+                return builder.uitofp(src, dst_type)
+            case (src, dst_type) if isinstance(src.type, ir.FloatType) and isinstance(dst_type, ir.IntType):
+                return builder.fptoui(src, dst_type)
+            case (src, dst_type) if isinstance(src.type, ir.FloatType) and isinstance(dst_type, ir.FloatType):
+                return src
+
+            case (src, dst_type) if isinstance(src.type, ir.IntType) and isinstance(dst_type, ir.IntType) and src.type.width < dst_type.width:
+                if signed:
+                    return builder.sext(src, dst_type)
+                else:
+                    return builder.zext(src, dst_type)
+            case (src, dst_type) if isinstance(src.type, ir.IntType) and isinstance(dst_type, ir.IntType) and src.type.width > dst_type.width:
+                return builder.trunc(src, dst_type)
+            case _:
+                raise NotImplementedError(f"cannot convert {src} of type {src.type} into {dst_type}")
+    return src
+```
+
+`ida2llvm_plugin.py`:
+
+```py
+import ida_idaapi
+import ida_kernwin
+import idautils
+import ida_name
+import ida_funcs
+import ida_segment
+
+from PyQt5 import QtCore, QtWidgets, QtGui
+
+def PLUGIN_ENTRY():
+    return IDA2LLVMPlugin()
+
+class IDA2LLVMPlugin(ida_idaapi.plugin_t):
+
+    flags = ida_idaapi.PLUGIN_PROC | ida_idaapi.PLUGIN_HIDE
+    comment = "Microcode Lifter to LLVM"
+    help = ""
+    wanted_name = "IDA2LLVM"
+    wanted_hotkey = ""
+
+    def init(self):
+        
+        action = {
+            'id': 'ida2llvm:view_lifting',
+            'name': 'Lifting Viewer',
+            'hotkey': 'Ctrl-Alt-L',
+            'comment': 'UI for which function to lift',
+            'menu_location': 'Edit/IDA2LLVM/Viewer'
+        }
+        if not ida_kernwin.register_action(ida_kernwin.action_desc_t(
+            action['id'],
+            action['name'], # The name the user sees
+            IDA2LLVMController(), # The function to call
+            action['hotkey'], # A shortcut, if any (optional)
+            action['comment'], # A comment, if any (optional)
+            -1
+        )):
+            print("ida2llvm: failed to register action")
+
+        if not ida_kernwin.attach_action_to_menu(
+            action['menu_location'], # The menu location
+            action['id'], # The unique function ID
+            0):
+            print("ida2llvm: failed to attach to menu")
+
+        return ida_idaapi.PLUGIN_KEEP
+
+    def run(self, arg):
+        ida_kernwin.warning("%s cannot be run as a script in IDA." % self.wanted_name)
+
+    def term(self):
+        pass
+
+class IDA2LLVMController(ida_kernwin.action_handler_t):
+    """
+    The control component of BinaryLift Explorer.
+    """
+    def __init__(self):
+        from llvmlite import ir
+        ida_kernwin.action_handler_t.__init__(self)
+        self.current_address = None
+
+        class AddressHook(ida_kernwin.UI_Hooks):
+            def __init__(self, controller):
+                ida_kernwin.UI_Hooks.__init__(self)
+                self.controller = controller
+            def database_inited(self, is_new_database, idc_script):
+                self.controller.cache = dict()
+                self.controller.namecache = dict()
+                self.controller.config = dict()
+                self.controller.m = ir.Module()
+            def screen_ea_changed(self, ea, prev_ea):
+                self.controller.screen_ea = ea
+                self.controller.view.refresh()
+        
+        self._hook = AddressHook(self)
+        self._hook.hook()
+        self.view = IDA2LLVMView(self)
+
+    def activate(self, ctx):
+        self.view.Show()
+        return 1
+
+    def update(self, ctx):
+        return ida_kernwin.AST_ENABLE_ALWAYS
+
+    def isScreenEaInvalid(self):
+        return ida_funcs.get_func(self.screen_ea) is None
+
+    def resolveName(self, current_address):
+        func_name = ida_name.get_name(current_address)
+        if func_name != self.namecache.get(current_address, None):
+            print("NAME NOT SYNCED, PROBABLY CHANGED")
+        self.namecache[current_address] = func_name
+        return self.namecache[current_address]
+
+    def declareCurrentFunction(self, isDeclare):
+        current_name = self.resolveName(self.current_address)
+        self.config[self.current_address] = bool(isDeclare)
+        self.cache[self.current_address] = self.getLiftedText()
+        self.view.refresh()
+
+    def updateFunctionSelected(self, selectName):
+        if selectName == "":
+            return
+        current_address, _ = selectName.split(":", maxsplit=1)
+        self.current_address = int(current_address, 16)
+        current_name = self.resolveName(self.current_address)
+        ida_kernwin.jumpto(self.current_address)
+        ida_kernwin.activate_widget(self.view._twidget, True)
+
+    def insertAllFunctions(self):
+        for f_ea in idautils.Functions():
+            name = ida_funcs.get_func_name(f_ea)
+            if (ida_funcs.get_func(f_ea).flags & ida_funcs.FUNC_LIB
+                or ida_segment.segtype(f_ea) & ida_segment.SEG_XTRN
+                or name.startswith("_")):
+                continue
+            self.insertFunctionAtEa(f_ea)
+
+    def insertFunctionAtScreenEa(self):
+        if self.isScreenEaInvalid():
+            return
+        self.current_address = ida_funcs.get_func(self.screen_ea).start_ea
+        self.insertFunctionAtEa(self.current_address)
+        self.view.refresh()
+
+    def insertFunctionAtEa(self, ea):
+        temp_ea = self.current_address
+        self.current_address = ea
+        current_name = self.resolveName(self.current_address)
+
+        if self.current_address not in self.config:
+            self.config[self.current_address] = False
+            
+        self.cache[self.current_address] = self.getLiftedText()
+        self.current_address = temp_ea
+
+    def removeFromModule(self, func_name):
+        from contextlib import suppress
+        from llvmlite import ir
+        with suppress(KeyError):
+            old_func = self.m.globals[func_name]
+            _m = ir.Module()
+            for name, gv in self.m.globals.items():
+                if name != func_name:
+                    gv.parent = _m
+                    _m.add_global(gv)
+            self.m = _m
+
+    def getLiftedText(self):
+        import ida2llvm
+
+        func_name = self.resolveName(self.current_address)
+        isDeclare = self.config[self.current_address]
+        self.removeFromModule(func_name)
+        llvm_f = ida2llvm.function.lift_function(self.m, func_name, isDeclare)
+
+        for f in self.m.functions:
+            f_name = f.name
+            f_ea = ida_name.get_name_ea(ida_idaapi.BADADDR, f_name)
+            self.namecache[f_ea] = f_name
+            self.config[f_ea] = f.is_declaration
+            self.cache[f_ea] = str(f)
+
+            name = f"{hex(f_ea)}: {f_name}"
+            if not self.view.function_list.findItems(name, QtCore.Qt.MatchExactly):
+                self.view.function_list.addItem(name)
+
+        return str(llvm_f)
+
+    def save_to_file(self):
+       filename, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'Save Lifted LLVM IR', '', 'LLVM IR (*.ll)')
+       if filename:
+           with open(filename, 'w') as f:
+               f.write(str(self.m))
+
+class IDA2LLVMView(ida_kernwin.PluginForm):
+    """
+    The view component of BinaryLift Explorer.
+    """
+    def __init__(self, controller):
+        ida_kernwin.PluginForm.__init__(self)
+        self.controller = controller
+        self.created = False
+
+    def Show(self):
+        return ida_kernwin.PluginForm.Show(
+            self, "IDA2LLVM Viewer",
+            options=(ida_kernwin.PluginForm.WOPN_PERSIST |
+                     ida_kernwin.PluginForm.WCLS_SAVE |
+                     ida_kernwin.PluginForm.WOPN_MENU |
+                     ida_kernwin.PluginForm.WOPN_RESTORE |
+                     ida_kernwin.PluginForm.WOPN_TAB))
+
+    def refresh(self):
+        if not self.created:
+            return
+        self.lifting_settings.setDisabled(self.function_list.currentRow() == -1)
+        self.curr_ea_button.setDisabled(self.controller.isScreenEaInvalid())
+        if not self.controller.isScreenEaInvalid():
+            self.curr_ea_button.setText(f"{'Redefine' if ida_funcs.get_func(self.controller.screen_ea).start_ea in self.controller.config else 'Add'} function at current address ({hex(self.controller.screen_ea)})")
+        if self.controller.current_address:
+            self.isDeclare.setChecked(self.controller.config[self.controller.current_address])
+            self.code_view.setText(self.controller.cache[self.controller.current_address])
+
+    def create_code_view(self):
+        self.code_view = QtWidgets.QTextEdit(self.widget)
+
+    def create_function_settings(self):
+        self.isDeclare = QtWidgets.QCheckBox("Keep function as declare-only")
+        self.isDeclare.setChecked(False)
+        self.isDeclare.stateChanged.connect(self.controller.declareCurrentFunction)
+        
+        self.lifting_settings = QtWidgets.QGroupBox("Lift Settings")
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.isDeclare)
+        self.lifting_settings.setLayout(layout)
+
+    def create_function_list(self):
+        controller = self.controller
+        class FunctionListWidget(QtWidgets.QListWidget):
+            def __init__(self, parent, *args, **kwargs):
+                super().__init__(parent, *args, **kwargs)
+
+                for address in controller.config:
+                    current_name = controller.resolveName(address)
+                    self.addItem(f"{hex(address)}: {current_name}")
+            def keyPressEvent(self, event):
+                if event.key() == QtCore.Qt.Key_Delete:
+                    row = self.currentRow()
+                    item = self.takeItem(row)
+                    address, name = item.text().split(": ", maxsplit=1)
+                    address = int(address, 16)
+                    controller.removeFromModule(name)
+                    del controller.cache[address]
+                    del controller.namecache[address]
+                    del controller.config[address]
+                    del item
+                else:
+                    super().keyPressEvent(event)
+        self.function_list = FunctionListWidget(self.widget)
+        self.function_list.setSortingEnabled(True)
+        self.function_list.currentTextChanged.connect(self.controller.updateFunctionSelected)
+
+    def OnCreate(self, form):
+        self._twidget = self.GetWidget()
+        self.widget = self.FormToPyQtWidget(form)
+        layout = QtWidgets.QGridLayout(self.widget)
+
+        self.curr_ea_button         = QtWidgets.QPushButton("Add function at current address", self.widget)
+        self.all_functions_button   = QtWidgets.QPushButton("Add all IDA-defined functions", self.widget)
+        self.lift_button            = QtWidgets.QPushButton("Lift and save to file", self.widget)
+
+        self.curr_ea_button.clicked.connect(self.controller.insertFunctionAtScreenEa)
+        self.all_functions_button.clicked.connect(self.controller.insertAllFunctions)
+        self.lift_button.clicked.connect(self.controller.save_to_file)
+
+        self.create_code_view()
+        self.create_function_settings()
+        self.create_function_list()
+
+        # arrange the widgets in a 'grid'         row  col  row span  col span
+        layout.addWidget(self.code_view,            0,   0,        0,        1)
+        layout.addWidget(self.function_list,        0,   1,        1,        1)
+        layout.addWidget(self.lifting_settings,     1,   1,        1,        1)
+        layout.addWidget(self.curr_ea_button,       2,   1,        1,        1)
+        layout.addWidget(self.all_functions_button, 3,   1,        1,        1)
+        layout.addWidget(self.lift_button,          4,   1,        1,        1)
+
+        self.widget.setLayout(layout)
+        self.created = True
+        self.refresh()
+```
+
+`run.sh`:
+
+```sh
+#!/bin/bash
+
+# Select file from test/idb
+files="$(ls -A ./tests/idb)"
+echo "Select an valid idb:"
+
+# Use the select statement to present the user with a numbered list of files
+select filename in ${files}; do
+    # If the user selects a valid file, echo its name
+    if [[ -n "$filename" ]]; then
+        # Make directory for script output
+        mkdir -p ./tests/ll ./tests/log
+
+        wine ~/.wine/ida/idat64.exe -A -S"./docker_entrypoint.py" "./tests/idb/$filename" -t 2>/dev/null
+    else
+        echo "Invalid selection"
+    fi
+    break
+done
+
+# Display results
+echo 'results written to ./tests/ll'
+```
+
+`tests/src/romannumeral.cpp`:
+
+```cpp
+#include<stdio.h>
+#include<vector>
+#include<string>
+
+using namespace std;
+
+class Solution {
+public:
+    string intToRoman(int num) {
+        vector<pair<int,string>> p={{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"}, {100, "C"}, {90, "XC"}, {50, "L"}, {40, "XL"}, {10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"}};
+        string roman="";
+        for(int i=0;i<p.size();i++){
+            while(p[i].first<=num){
+                roman=roman+p[i].second;
+                num=num-p[i].first;
+            }
+        }
+        return roman;
+    }
+};
+
+int main() {
+    int inputs[] = {1, 4, 123, 5123, 123, 6345, 7481, 13231, 21, 12321, 12315};
+    for (int i = 0; i < 11; i++) {
+        Solution sol;
+        auto output = sol.intToRoman(inputs[i]);
+        printf("%s\n", output.c_str());
+    }
+}
+```
