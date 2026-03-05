@@ -1,0 +1,1158 @@
+Project Path: arc_gmh5225_PyClassInformer_dgm7z5q_
+
+Source Tree:
+
+```txt
+arc_gmh5225_PyClassInformer_dgm7z5q_
+├── LICENSE.txt
+├── README.md
+├── images
+│   ├── class_hierarchy.png
+│   ├── orig_class_informer.png
+│   └── result.png
+├── pyclassinformer
+│   ├── pci_chooser.py
+│   ├── pci_icon.png
+│   ├── pci_utils.py
+│   ├── pyclassinformer.py
+│   └── qtutils.py
+└── pyclassinformer_plugin.py
+
+```
+
+`LICENSE.txt`:
+
+```txt
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source
+   distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`README.md`:
+
+```md
+# PyClassInformer #
+#### Yet Another RTTI Parsing IDA plugin ####
+![PyClassInformer Icon](/pyclassinformer/pci_icon.png)
+
+PyClassInformer is an RTTI parser. Although there are several RTTI parsers such as Class Informer and SusanRTTI, and even IDA can also parse RTTI, I created this tool. It is because they cannot be used as libraries for parsing RTTI. IDA cannot show class hierarchies, either.
+
+PyClassInformer can parse RTTI for Windows on x86 and x64. Since it is written in IDAPython, you can run it on IDA for Mac OS and Linux as well as Windows. You can also use results of parsing RTTI in your python code by importing this tool as a library.
+
+### Usage ###
+Launch it by pressing Alt+Shift+L. Or navigate to Edit -> Plugins -> PyClassInformer.
+
+### Installation ###
+Put "pyclassinformer_plugin.py" and "pyclassinformer" folder including the files under it into the "plugins" folder of IDA's user directory ($IDAUSR).
+
+See the URL if you don't know about "$IDAUSR".  
+[https://hex-rays.com/blog/igors-tip-of-the-week-33-idas-user-directory-idausr/](https://hex-rays.com/blog/igors-tip-of-the-week-33-idas-user-directory-idausr/)  
+[https://www.hex-rays.com/products/ida/support/idadoc/1375.shtml](https://www.hex-rays.com/products/ida/support/idadoc/1375.shtml)
+
+### Requirements ###
+- IDA Pro 7.4 or later (I tested on 7.4 SP1, 7.5 SP3, 8.0 and 9.0 SP1)
+- Python 3.x (I tested on Python 3.8 and 3.10)
+
+You will need at least IDA Pro 7.4 or later because of the APIs that I use.
+
+### Example Results ###
+![PyClassInformer Result](/images/result.png)
+The figure above is an example of PyClassInformer result. And the figure below is an example of the original Class Informer result.  
+As you see, almost all columns are matched with the original ones.   
+  
+In addition, PyClassInformer has two more columns. One is "offset", which shows the offset of a vftable in a class layout.  
+  
+Another one named "Hierarchy Order" shows class hierarchy information related to a vftable of a line. The column shows the order of  inheritance from the class to the top-most super class.  
+  
+These are useful for grasping class layouts and class hierarchies. Double-clicking a line navigates to its vftable address as weiil.
+
+![Original ClassInformer Result](/images/orig_class_informer.png)
+If you check the Output subview, you will also see parsed RTTI information such as Complete Object Locator as COL, Class Hierarchy Descriptor as CHD and Base Class Descriptor as BCD with their addresses. They are useful for checking more details and debugging.
+
+![Class Hierarchy](/images/class_hierarchy.png)  
+You will also see class hierarchies by checking indents of BCDs. For example, CMFCComObject, which is the class for the vftable at 0x530fcc, inherits ATL::CAccessibleProxy. And ATL::CAccessibleProxy inherits three super classes, ATL::CComObjectRootEx, ATL::IAccessibleProxyImpl and IOleWindow. Like this, you can get class hierarchy information as a form of a tree.
+
+### Note ###
+- I **WILL NOT** support parsing GCC's RTTI. **DO NOT** open an issue about it.
+- I **WILL NOT** support beta versions of IDA. **DO NOT** open an issue about it.
+- Some code is from SusanRTTI and the output table is similar to Class Informer.  
+[https://github.com/nccgroup/SusanRTTI](https://github.com/nccgroup/SusanRTTI)  
+[https://sourceforge.net/projects/classinformer/](https://sourceforge.net/projects/classinformer/)
+
+```
+
+`pyclassinformer/pci_chooser.py`:
+
+```py
+import idc
+import ida_kernwin
+import ida_idaapi
+
+ida_idaapi.require("pci_utils")
+u = pci_utils.utils()
+
+class pci_chooser_t(ida_kernwin.Choose):
+
+    def __init__(self, title, data, icon=-1):
+        ida_kernwin.Choose.__init__(
+            self,
+            title,
+            [
+                ["Vftable",   10 | ida_kernwin.Choose.CHCOL_HEX],
+                ["Methods",   4  | ida_kernwin.Choose.CHCOL_DEC],
+                ["Flags",     4  | ida_kernwin.Choose.CHCOL_PLAIN],
+                ["Type",      30 | ida_kernwin.Choose.CHCOL_PLAIN],
+                ["Hierarchy", 50 | ida_kernwin.Choose.CHCOL_PLAIN],
+                ["Offset",    4  | ida_kernwin.Choose.CHCOL_HEX],
+                ["Hierarchy Order", 50  | ida_kernwin.Choose.CHCOL_PLAIN],
+            ],
+            flags=ida_kernwin.CH_MULTI,
+            icon=icon
+        )
+        self.items = [
+            [
+                hex(vftable_ea),
+                "{}".format(len([x for x in pci_utils.get_vtbl_methods(vftable_ea)])),
+                data[vftable_ea].chd.flags,
+                data[vftable_ea].name,
+                self.get_hierarychy(data, vftable_ea),
+                hex(data[vftable_ea].offset),
+                self.get_hierarychy_order(data, vftable_ea),
+                vftable_ea
+            ] for vftable_ea in data
+        ]
+            
+    def get_hierarychy(self, data, vftable_ea):
+        col = data[vftable_ea]
+        col_offs, curr_off = u.get_col_offs(col, data)
+        result = "{}: ".format(col.name)
+        if len(col.chd.bases) > 0:
+            idx = 0
+            if col.chd.bases[0].name == col.name:
+                idx = 1
+            # get the result related to the offset of the COL
+            result += ", ".join([x.name for x in col.chd.bases[idx:] if u.does_bcd_append(col_offs, x, curr_off)]) + ";" if len(col.chd.bases) > 1 else ""
+        return result
+        
+    def get_hierarychy_order(self, data, vftable_ea):
+        col = data[vftable_ea]
+        col_offs, curr_off = u.get_col_offs(col, data)
+        result = []
+        if len(col.chd.bases) > 0:
+            for off in col.chd.paths:
+                target_off = off
+                if off not in col_offs:
+                    # sometimes, mdisp is not included in COLs.
+                    # in those cases, get the least offset in COLs and it is treated as the offset.
+                    target_off = 0
+                    if len(col_offs) > 0:
+                        target_off = sorted(col_offs)[0]
+                for p in col.chd.paths[off]:
+                    #if curr_off == target_off or col.chd.flags.find("V") >= 0 or len(list(filter(lambda x: x.pdisp >= 0, p))) > 0:
+                    if curr_off == target_off:
+                        result.append("{:#x}: ".format(off) + " -> ".join([x.name + " ({},{},{})".format(x.mdisp, x.pdisp, x.vdisp) for x in p]))
+
+        return ", ".join(result)
+        
+    def OnInit(self):
+        return True
+
+    def OnGetSize(self):
+        return len(self.items)
+
+    def OnGetLine(self, n):
+        if isinstance(n, list):
+            n = n[0]
+        return self.items[n]
+    
+    # for old versions of IDA
+    def OnSelectLine(self, n):
+        # CH_MULTI passes a list.
+        # Change it to integer before passing to jumpto.
+        if isinstance(n, list):
+            n = n[0]
+        idc.jumpto(self.items[n][-1])
+        return (ida_kernwin.Choose.NOTHING_CHANGED, )
+
+    def OnGetEA(self, n):
+        if isinstance(n, list):
+            n = n[0]
+        return self.items[n][-1]
+    
+
+def show_pci_chooser_t(data, icon=-1, modal=False):
+    c = pci_chooser_t("[PyClassInformer]", data, icon)
+    c.Show(modal=modal)
+
+
+```
+
+`pyclassinformer/pci_utils.py`:
+
+```py
+import struct
+
+import idc
+import idautils
+import ida_bytes
+import ida_search
+import ida_idaapi
+import ida_segment
+import ida_xref
+import ida_typeinf
+import ida_nalt
+import ida_offset
+import ida_name
+import ida_ida
+
+try:
+    from ida_struct import get_member_by_name
+except ModuleNotFoundError:
+    # for IDA 9.0
+    def get_member_by_name(tif, name):
+        if not tif.is_struct():
+            return None
+    
+        udm = ida_typeinf.udm_t()
+        udm.name = name
+        idx = tif.find_udm(udm, ida_typeinf.STRMEM_NAME)
+        if idx != -1:
+            return udm
+        return None
+
+
+class utils(object):
+    text = 0
+    data = 0
+    rdata = 0
+    valid_ranges = []
+    within = lambda self, x, rl: any([True for r in rl if r[0]<=x<=r[1]])
+
+    REF_OFF = 0
+    x64 = 0
+    PTR_TYPE = 0
+    PTR_SIZE = 0
+
+    def __init__(self):
+        self.text = ida_segment.get_segm_by_name(".text")
+        self.data = ida_segment.get_segm_by_name(".data")
+        self.rdata = ida_segment.get_segm_by_name(".rdata")
+        # try to use rdata if there actually is an rdata segment, otherwise just use data
+        if self.rdata is not None:
+            self.valid_ranges = [(self.rdata.start_ea, self.rdata.end_ea), (self.data.start_ea, self.data.end_ea)]
+        else:
+            self.valid_ranges = [(self.data.start_ea, self.data.end_ea)]
+
+        self.x64 = (ida_segment.getnseg(0).bitness == 2)
+        if self.x64:
+            self.PTR_TYPE = ida_bytes.FF_QWORD
+            self.REF_OFF = ida_nalt.REF_OFF64
+            self.PTR_SIZE = 8
+            self.get_ptr = ida_bytes.get_64bit
+        else:
+            self.PTR_TYPE = ida_bytes.FF_DWORD
+            self.REF_OFF = ida_nalt.REF_OFF32
+            self.PTR_SIZE = 4
+            self.get_ptr = ida_bytes.get_32bit
+
+    # for 32-bit binaries, the RTTI structs contain absolute addresses, but for
+    # 64-bit binaries, they're offsets from the image base.
+    def x64_imagebase(self):
+        if self.x64:
+            return ida_nalt.get_imagebase()
+        else:
+            return 0
+
+    def mt_rva(self):
+        ri = ida_nalt.refinfo_t()
+        ri.flags = self.REF_OFF|ida_nalt.REFINFO_RVAOFF
+        ri.target = 0
+        mt = ida_nalt.opinfo_t()
+        mt.ri = ri
+        return mt
+
+    def mt_address(self):
+        ri = ida_nalt.refinfo_t()
+        ri.flags = self.REF_OFF
+        ri.target = 0
+        mt = ida_nalt.opinfo_t()
+        mt.ri = ri
+        return mt
+
+    def mt_ascii(self):
+        ri = ida_nalt.refinfo_t()
+        ri.flags = ida_nalt.STRTYPE_C
+        ri.target = -1
+        mt = ida_nalt.opinfo_t()
+        mt.ri = ri
+        return mt
+
+    def get_strlen(self, addr, max_len=500):
+        # 50 is sometimes too short. I increased a number here.
+        strlen = 0
+        #while get_byte(addr+strlen) != 0x0 and strlen < 50:
+        while ida_bytes.get_byte(addr+strlen) != 0x0 and strlen < max_len:
+            strlen+=1
+        #assume no names will ever be longer than 50 bytes
+        #if strlen == 50:
+        if strlen == max_len:
+            return None
+        return strlen
+
+    def is_vtable(self, addr):
+        function = self.get_ptr(addr)
+        # Check if vtable has ref and its first pointer lies within code segment
+        if ida_bytes.has_xref(ida_bytes.get_full_flags(addr)) and function >= self.text.start_ea and function <= self.text.end_ea:
+            return True
+        return False
+
+    @staticmethod
+    def to_signed32(n):
+        n = n & 0xffffffff
+        return n | (-(n & 0x80000000))
+
+    @staticmethod
+    def get_refs_to(ea):
+        for xref in idautils.XrefsTo(ea, 0):
+            yield xref.frm
+
+    @staticmethod
+    def get_refs_to_by_type_name(name):
+        tif = ida_typeinf.tinfo_t()
+        if tif.get_named_type(None, name, ida_typeinf.BTF_STRUCT):
+            for xref in utils.get_refs_to(tif.get_tid()):
+                yield xref
+                
+    def add_ptr_or_rva_member(self, sid, name):
+        if self.x64:
+            idc.add_struc_member(sid, name, ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD|ida_bytes.FF_0OFF, self.mt_rva().tid, 4, reftype=ida_nalt.REFINFO_RVAOFF|self.REF_OFF)
+        else:
+            idc.add_struc_member(sid, name, ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD|ida_bytes.FF_0OFF, self.mt_address().tid, 4)
+        
+    @staticmethod
+    def get_moff_by_name(struc, name):
+        try:
+            offset = get_member_by_name(struc, name).soff
+        except AttributeError:
+            # for ida 9.0
+            offset = get_member_by_name(struc, name).offset // 8
+        return offset
+        
+    @staticmethod
+    def does_bcd_append(col_offs, bcd, curr_off):
+        append = False
+        # for single inheritance
+        if len(col_offs) <= 1:
+            append = True
+        # for multiple inheritance
+        elif bcd.mdisp in col_offs:
+            if bcd.mdisp == curr_off:
+                append = True
+        # for items that are not matched with COL offsets
+        # they are treated as a part of COL offset 0
+        elif curr_off == 0:
+            append = True
+        return append
+        
+    @staticmethod
+    def get_col_offs(col, vftables):
+        # get offsets in COLs by finding xrefs for multiple inheritance
+        x = set([xrea for xrea in utils.get_refs_to(col.tdea)])
+        y = set([xrea for xrea in utils.get_refs_to(col.tid)])
+        # If the target is a multi inheritance class, TD or CHD has multiple xrefs from multiple COLs.
+        # Here, get the COLs
+        coleas = (x&y)
+        cols = list(filter(lambda x: x.ea in coleas, vftables.values()))
+        # get the offsets in COLs
+        col_offs = [ida_bytes.get_32bit(x.ea+utils.get_moff_by_name(x.struc, "offset")) for x in cols]
+        curr_off = col.offset
+        return col_offs, curr_off
+
+
+def build_udm(name, msize=0, mtype=ida_typeinf.BTF_INT, moffset=-1):
+    # create a struct member
+    udm = ida_typeinf.udm_t()
+    udm.name = name
+    if msize > 0:
+        udm.size = msize * 8
+        
+    udm.offset = tif.get_unpadded_size() * 8
+    if moffset > 0:
+        udm.offset = moffset * 8
+        
+    udm.type = ida_typeinf.tinfo_t(mtype)
+        
+    return udm
+
+
+def _add_struc_member(tif, name, msize=0, mtype=None, moffset=-1):
+    udm = build_udm(name, msize, mtype, moffset)
+    tif.add_udm(udm, ida_typeinf.ETF_MAY_DESTROY|ida_typeinf.ETF_FORCENAME)
+    return udm
+
+
+def create_ptr_attr(data_type=ida_typeinf.BTF_INT, attr=ida_typeinf.TAPTR_PTR32):
+    mtif = ida_typeinf.tinfo_t(data_type)
+    mtif.create_ptr(mtif)
+    pi = ida_typeinf.ptr_type_data_t()
+    mtif.get_ptr_details(pi)
+    pi.taptr_bits = ida_typeinf.TAPTR_PTR32
+    mtif.create_ptr(pi)
+    return mtif
+
+
+def get_ptr_type(type_name, ptr_size=ida_typeinf.TAPTR_PTR32):
+    mtif = ida_typeinf.tinfo_t()
+    if mtif.get_named_type(None, type_name):
+        mtif = create_ptr_attr(ida_typeinf.BTF_INT, ptr_size)
+        return mtif
+    return None
+
+
+def get_refinfo(reftype=ida_nalt.REF_OFF64, flags=ida_nalt.REFINFO_RVAOFF):
+    ri = ida_nalt.refinfo_t()
+    ri.flags = flags
+    ri.target = 0
+    ri.set_type(reftype)
+    return ri
+
+
+def get_offset_refinfo(reftype=ida_nalt.REF_OFF64, flags=ida_nalt.REFINFO_RVAOFF):
+    ri = get_refinfo(reftype, flags)
+    vr = ida_typeinf.value_repr_t()
+    vr.set_vtype(ida_typeinf.FRB_OFFSET)
+    vr.ri = ri
+    return vr
+
+
+def set_opinfo(tif, udt, udt_idx):
+    oi = ida_nalt.opinfo_t()
+    oi.ri = get_refinfo(reftype=ida_nalt.REF_OFF64, flags=ida_nalt.REFINFO_RVAOFF)
+    mtif = create_ptr_attr(ida_typeinf.BTF_INT, ida_typeinf.TAPTR_PTR32)
+    flags = ida_bytes.off_flag()
+    # Apply the offset and RVA attributes to udm target.
+    udt[udt_idx].repr.from_opinfo(flags, 0, oi, None)
+    tif.set_udm_repr(udt_idx, udt[udt_idx].repr)
+    tif.set_udm_type(udt_idx, mtif)
+
+
+def get_value_with_size(val, vsize):
+    off_v = ida_idaapi.BADADDR
+    if vsize == 8:
+        off_v = ida_bytes.get_qword(val)
+    elif vsize == 4:
+        off_v = ida_bytes.get_dword(val)
+    elif vsize == 2:
+        off_v = ida_bytes.get_word(val)
+    elif vsize == 1:
+        off_v = ida_bytes.get_byte(val)
+    return off_v
+
+
+def get_offset_ptr(v, force_bitness=False):
+    target_ea = ida_idaapi.BADADDR
+    if v == ida_idaapi.BADADDR:
+        return target_ea
+    flags = ida_bytes.get_full_flags(v)
+    if not force_bitness and ida_bytes.is_qword(flags):
+        target_ea = get_value_with_size(v, 8)
+    elif not force_bitness and ida_bytes.is_dword(flags):
+        target_ea = get_value_with_size(v, 4)
+    else:
+        seg = ida_segment.getseg(v)
+        if seg is None:
+            return target_ea
+        off_size = 1<<(seg.bitness+1)
+        target_ea = get_value_with_size(v, off_size)
+    return target_ea
+
+
+def get_offset_fptr(v, force_bitness=False):
+    target_ea = ida_idaapi.BADADDR
+    tmp_ea = get_offset_ptr(v, force_bitness)
+    flags = ida_bytes.get_full_flags(tmp_ea)
+    if ida_bytes.is_code(flags):
+        target_ea = tmp_ea
+    return target_ea
+
+
+def get_vtbl_methods(target_ea):
+    orig_target_ea = target_ea
+    prev_target_ea = target_ea
+    item_diff = 8
+    seg = ida_segment.getseg(target_ea)
+    next_name_ea = ida_ida.inf_get_max_ea()
+    if seg:
+        item_diff = 1<<(seg.bitness+1)
+        # get next label that has a xref
+        next_name_ea = ida_bytes.next_that(target_ea, seg.end_ea, ida_bytes.has_xref)
+        if next_name_ea == ida_idaapi.BADADDR:
+            next_name_ea = seg.end_ea
+    
+    ea = get_offset_fptr(target_ea, force_bitness=True)
+    while target_ea != ida_idaapi.BADADDR and target_ea < next_name_ea and ea != ida_idaapi.BADADDR:
+        flags = ida_bytes.get_full_flags(ea)
+        if ida_bytes.is_code(flags):
+            yield ea
+        else:
+            break
+        
+        prev_target_ea = target_ea
+        target_ea = ida_search.find_data(target_ea, ida_search.SEARCH_DOWN|ida_search.SEARCH_NEXT)
+        if target_ea - prev_target_ea != item_diff:
+            break
+        ea = get_offset_fptr(target_ea, force_bitness=True)
+
+
+```
+
+`pyclassinformer/pyclassinformer.py`:
+
+```py
+import idc
+import ida_idaapi
+import ida_typeinf
+import ida_offset
+import ida_bytes
+import ida_nalt
+import ida_xref
+import ida_kernwin
+import ida_auto
+import ida_name
+
+ida_9_or_later = False
+try:
+    from ida_struct import get_struc
+except ModuleNotFoundError:
+    ida_9_or_later = True
+    # for IDA 9.0
+    def get_struc(struct_tid):
+        tif = ida_typeinf.tinfo_t()
+        if tif.get_type_by_tid(struct_tid):
+            if tif.is_struct():
+                return tif
+        return None
+
+
+ida_idaapi.require("pci_chooser")
+ida_idaapi.require("pci_utils")
+u = pci_utils.utils()
+
+
+class RTTIStruc:
+    tid = 0
+    struc = 0
+    size = 0
+    
+
+def strip(name):
+    if name.startswith("class ") and name.endswith("`RTTI Type Descriptor'"):
+        return name[6:-23]
+    elif name.startswith("struct ") and name.endswith("`RTTI Type Descriptor'"):
+        return name[7:-23]
+    else:
+        return name
+
+
+class RTTITypeDescriptor(RTTIStruc):
+    # create structure
+    msid = idc.get_struc_id("RTTITypeDescriptor")
+    if msid != ida_idaapi.BADADDR:
+        idc.del_struc(msid)
+    msid = idc.add_struc(0xFFFFFFFF, "RTTITypeDescriptor", False)
+    
+    # add members
+    if u.x64:
+        idc.add_struc_member(msid, "pVFTable", ida_idaapi.BADADDR, ida_bytes.FF_DATA|u.PTR_TYPE|ida_bytes.FF_0OFF, u.mt_address().tid, u.PTR_SIZE, reftype=u.REF_OFF)
+    else:
+        idc.add_struc_member(msid, "pVFTable", ida_idaapi.BADADDR, ida_bytes.FF_DATA|u.PTR_TYPE|ida_bytes.FF_0OFF, u.mt_address().tid, u.PTR_SIZE)
+    idc.add_struc_member(msid, "spare", ida_idaapi.BADADDR, ida_bytes.FF_DATA|u.PTR_TYPE, -1, u.PTR_SIZE)
+    idc.add_struc_member(msid, "name", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_STRLIT, u.mt_ascii().tid, 0)
+    
+    # get structure related info
+    tid = msid
+    struc = get_struc(tid)
+    size = idc.get_struc_size(tid)
+    print("Completed Registering RTTITypeDescriptor")
+
+    def __init__(self, ea):
+        self.class_name = None
+        self.ea = ea
+        
+        # get name and len
+        name = ea + u.get_moff_by_name(self.struc, "name")
+        strlen = u.get_strlen(name)
+        if strlen is None:
+            # not a real vtable
+            return
+        self.size = self.size + strlen
+        
+        # get mangled name
+        bmangled = ida_bytes.get_strlit_contents(name, strlen, 0)
+        if bmangled is None:
+            # not a real function name
+            return
+        mangled = bmangled.decode('UTF-8')
+        
+        # get demangled name
+        #print("Mangled: " + mangled)
+        demangled = ida_name.demangle_name('??_R0' + mangled[1:] , 0)
+        if demangled:
+            # apply structure type to bytes
+            #print("Demangled: " + demangled)
+            ida_bytes.del_items(ea, ida_bytes.DELIT_DELNAMES, self.size)
+            if ida_bytes.create_struct(ea, self.size, self.tid):
+                #print("  Made td at 0x%x: %s" % (ea, demangled))
+                self.class_name = demangled
+                return
+        print("  FAIL :(")
+        return
+
+
+class RTTIBaseClassDescriptor(RTTIStruc):
+    BCD_NOTVISIBLE = 0x00000001
+    BCD_AMBIGUOUS = 0x00000002
+    BCD_PRIVORPROTBASE = 0x00000004
+    BCD_PRIVORPROTINCOMPOBJ = 0x00000008
+    BCD_VBOFCONTOBJ = 0x00000010
+    BCD_NONPOLYMORPHIC = 0x00000020
+    BCD_HASPCHD = 0x00000040 # pClassDescriptor field is present
+    
+    # create structure
+    msid = idc.get_struc_id("RTTIBaseClassDescriptor")
+    if msid != ida_idaapi.BADADDR:
+        idc.del_struc(msid)
+    msid = idc.add_struc(0xFFFFFFFF, "RTTIBaseClassDescriptor", False)
+    
+    # add members
+    u.add_ptr_or_rva_member(msid, "pTypeDescriptor")
+    idc.add_struc_member(msid, "numContainerBases", ida_idaapi.BADADDR, ida_bytes.FF_DWORD|ida_bytes.FF_DATA, -1, 4)
+    idc.add_struc_member(msid, "mdisp", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4) # 00 PMD Vftable displacement inside class layout
+    idc.add_struc_member(msid, "pdisp", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4) # 04 PMD Vbtable displacement
+    idc.add_struc_member(msid, "vdisp", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4) # 08 PMD Vftable displacement inside vbtable
+    idc.add_struc_member(msid, "attributes", ida_idaapi.BADADDR, ida_bytes.FF_DWORD|ida_bytes.FF_DATA, -1, 4)
+    u.add_ptr_or_rva_member(msid, "pClassDescriptor")
+    
+    # get structure related info
+    tid = msid
+    struc = get_struc(tid)
+    size = idc.get_struc_size(tid)
+    print("Completed Registering RTTIBaseClassDescriptor")
+    
+    def __init__(self, ea):
+        self.ea = ea
+        # apply structure type to bytes
+        ida_bytes.del_items(ea, ida_bytes.DELIT_DELNAMES, self.size)
+        if ida_bytes.create_struct(ea, self.size, self.tid):
+            # Get members of BCD
+            self.td = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pTypeDescriptor")) + u.x64_imagebase()
+            self.nb_cbs = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "numContainerBases"))
+            self.mdisp = u.to_signed32(ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "mdisp")))
+            self.pdisp = u.to_signed32(ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pdisp")))
+            self.vdisp = u.to_signed32(ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "vdisp")))
+            self.attributes = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "attributes"))
+            self.rcd = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pClassDescriptor"))
+                
+
+class RTTIClassHierarchyDescriptor(RTTIStruc):
+    bases = None
+    CHD_MULTINH   = 0x01 # Multiple inheritance
+    CHD_VIRTINH   = 0x02 # Virtual inheritance
+    CHD_AMBIGUOUS = 0x04 # Ambiguous inheritance
+    
+    # create structure
+    msid = idc.get_struc_id("RTTIClassHierarchyDescriptor")
+    if msid != ida_idaapi.BADADDR:
+        idc.del_struc(msid)
+    msid = idc.add_struc(0xFFFFFFFF, "RTTIClassHierarchyDescriptor", False)
+
+    # add members
+    idc.add_struc_member(msid, "signature", ida_idaapi.BADADDR, ida_bytes.FF_DWORD|ida_bytes.FF_DATA, -1, 4)
+    idc.add_struc_member(msid, "attribute", ida_idaapi.BADADDR, ida_bytes.FF_DWORD|ida_bytes.FF_DATA, -1, 4)
+    idc.add_struc_member(msid, "numBaseClasses", ida_idaapi.BADADDR, ida_bytes.FF_DWORD|ida_bytes.FF_DATA, -1, 4)
+    u.add_ptr_or_rva_member(msid, "pBaseClassArray")
+    
+    # get structure related info
+    tid = msid
+    struc = get_struc(tid)
+    size = idc.get_struc_size(tid)
+    print("Completed Registering RTTIClassHierarchyDescriptor")
+
+    def __init__(self, ea):
+        self.ea = ea
+        self.sig = 0
+        self.bcaea = ida_idaapi.BADADDR
+        self.nb_classes = 0
+        self.flags = ""
+        self.bases = []
+        self.paths = {}
+        self.depth = 0
+        
+        # apply structure type to bytes
+        ida_bytes.del_items(ea, ida_bytes.DELIT_DELNAMES, self.size)
+        if ida_bytes.create_struct(ea, self.size, self.tid):
+            # Get members of CHD
+            self.sig = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "signature"))
+            self.bcaea = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pBaseClassArray")) + u.x64_imagebase()
+            self.nb_classes = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "numBaseClasses"))
+            self.attribute = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "attribute"))
+            
+            # parse flags
+            if self.attribute & self.CHD_MULTINH:
+                self.flags += "M"
+            if self.attribute & self.CHD_VIRTINH:
+                self.flags += "V"
+            if self.attribute & self.CHD_AMBIGUOUS:
+                self.flags += "A"
+            #self.flags += " {:#x}".format(self.attribute)
+            
+    def parse_bca(self, ea):
+        result_paths = {}
+        curr_path = []
+        n_processed = {}
+        for i in range(0, self.nb_classes):
+            bcdoff = self.bcaea+i*4
+            
+            # apply data type to items in BCA
+            ida_bytes.create_dword(bcdoff, 4)
+            if u.x64:
+                ida_offset.op_offset(bcdoff, ida_bytes.OPND_MASK, u.REF_OFF|ida_nalt.REFINFO_RVAOFF, -1, 0, 0)
+            else:
+                ida_offset.op_offset(bcdoff, ida_bytes.OPND_MASK, u.REF_OFF, -1, 0, 0)
+                    
+            # get relevant structures
+            bcdea = ida_bytes.get_32bit(bcdoff) + u.x64_imagebase()
+            bcd = RTTIBaseClassDescriptor(bcdea)
+            tdea = ida_bytes.get_32bit(bcdea) + u.x64_imagebase()
+            td = RTTITypeDescriptor(tdea)
+            
+            # add to result and filter out None entries
+            if td.class_name:
+                bcd.name = strip(td.class_name)
+                self.bases.append(bcd)
+                n_processed[bcd.nb_cbs] = 0
+                
+                # find a path to an offset for multiple inheritance
+                curr_path.append(bcd)
+                curr_depth = len(curr_path) - 1
+                if bcd.nb_cbs == 0:
+                    # append result according to the current mdisp
+                    if bcd.mdisp in result_paths:
+                        result_paths[bcd.mdisp].append(curr_path.copy())
+                    else:
+                        result_paths[bcd.mdisp] = [curr_path.copy()]
+                        
+                    # rewind current result for next inheritance
+                    while True:
+                        # compare the number of bases to be processed in the current path with the number processed so far.
+                        # if they are maatched, the base class must have been processed. So remove it.
+                        if n_processed[curr_path[-1].nb_cbs] == curr_path[-1].nb_cbs:
+                            # pop the record of the last bcd from the n_processed. and pop the last bcd itself from the current path.
+                            #print("before:", [x.name for x in curr_path], n_processed[curr_path[-1].nb_cbs], n_processed)
+                            del n_processed[curr_path[-1].nb_cbs]
+                            prev_bcd = curr_path.pop()
+                            
+                            # set the number processed so far to the new tail.
+                            if len(curr_path) > 0:
+                                n_processed[curr_path[-1].nb_cbs] += prev_bcd.nb_cbs + 1
+                            #print("after: ", [x.name for x in curr_path], n_processed[curr_path[-1].nb_cbs] if len(curr_path) > 0 else -1, n_processed)
+                                
+                        # quit the loop if finished, or no need to unwind for next bcd.
+                        if len(curr_path) == 0 or (len(curr_path) > 0 and n_processed[curr_path[-1].nb_cbs] != curr_path[-1].nb_cbs):
+                            break
+                    #print("out of loop:", [x.name for x in curr_path], n_processed[curr_path[-1].nb_cbs] if len(curr_path) > 0 else -1, n_processed)
+                        
+                yield bcd, curr_depth
+                
+                # update the base class depth
+                self.bases[-1].depth = curr_depth
+        
+        #print({x:[[z.name for z in y] for y in result_paths[x]] for x in result_paths})
+        self.paths = result_paths
+        
+
+class RTTICompleteObjectLocator(RTTIStruc):
+
+    # create structure
+    msid = idc.get_struc_id("RTTICompleteObjectLocator")
+    if msid != ida_idaapi.BADADDR:
+        idc.del_struc(msid)
+    msid = idc.add_struc(0xFFFFFFFF, "RTTICompleteObjectLocator", False)
+    
+    # add members
+    idc.add_struc_member(msid, "signature", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4)
+    idc.add_struc_member(msid, "offset", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4)
+    idc.add_struc_member(msid, "cdOffset", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD, -1, 4)
+    u.add_ptr_or_rva_member(msid, "pTypeDescriptor")
+    u.add_ptr_or_rva_member(msid, "pClassDescriptor")
+    if u.x64:
+        idc.add_struc_member(msid, "pSelf", ida_idaapi.BADADDR, ida_bytes.FF_DATA|ida_bytes.FF_DWORD|ida_bytes.FF_0OFF, u.mt_rva().tid, 4, reftype=ida_nalt.REFINFO_RVAOFF|u.REF_OFF)
+            
+    # get structure related info
+    tid = msid
+    struc = get_struc(tid)
+    size = idc.get_struc_size(tid)
+    print("Completed Registering RTTICompleteObjectLocator")
+    
+    def __init__(self, ea, vtable):
+        self.ea = ea
+        self.name = None
+        self.chd = None
+        self.td = None
+        self.offset = 0
+        self.cdOffset = 0
+        
+        # apply structure type to bytes at ea
+        ida_bytes.del_items(ea, ida_bytes.DELIT_DELNAMES, self.size)
+        if ida_bytes.create_struct(ea, self.size, self.tid):
+            # Get members of COL
+            self.sig = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "signature"))
+            self.offset = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "offset"))
+            self.cdOffset = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "cdOffset"))
+            self.tdea = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pTypeDescriptor")) + u.x64_imagebase()
+            self.chdea = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pClassDescriptor")) + u.x64_imagebase()
+            self.selfea = 0
+            if u.x64:
+                self.selfea = ida_bytes.get_32bit(ea+u.get_moff_by_name(self.struc, "pSelf")) + u.x64_imagebase()
+                
+            # get TD to get the class name
+            td = RTTITypeDescriptor(self.tdea)
+            # validate the COL if the TD has a valid class name or not
+            if td.class_name:
+                # parse relevant structures
+                self.td = td
+                self.chd = RTTIClassHierarchyDescriptor(self.chdea)
+                
+                # set class name
+                self.name = strip(self.td.class_name)
+                
+                # set vftable name
+                if ida_name.get_name(vtable).startswith("off_"):
+                    ida_name.set_name(vtable, "vtable__" + self.name, ida_name.SN_NOWARN)
+            else:
+                # if the RTTITypeDescriptor doesn't have a valid name for us to
+                # read, then this wasn't a valid RTTICompleteObjectLocator
+                ida_bytes.del_items(ea, ida_bytes.DELIT_SIMPLE, self.size)
+                
+
+def parse_msvc_vftable():
+    start = u.rdata.start_ea
+    end = u.rdata.end_ea
+    rdata_size = end-start
+    
+    # for RTTI relevant structures creation
+    ida_auto.auto_wait()
+    
+    # get COLs with CHDs and TDs
+    result = {}
+    for offset in range(0, rdata_size-u.PTR_SIZE, u.PTR_SIZE):
+        vtable = start+offset
+        if u.is_vtable(vtable):
+            colea = u.get_ptr(vtable-u.PTR_SIZE)
+            if u.within(colea, u.valid_ranges):
+                col = RTTICompleteObjectLocator(colea, vtable)
+                # add rcol to the results
+                if col.name is not None:
+                    result[vtable] = col
+                    
+    # may be this is a bug on IDA.
+    # ida fails to apply a structure type to bytes under some conditions, although create_struct returns True.
+    # to avoid that, apply them again.
+    ida_auto.auto_wait()
+    if len([xrea for xrea in u.get_refs_to(RTTICompleteObjectLocator.tid)]) == 0:
+        [ida_bytes.create_struct(result[x].ea, RTTICompleteObjectLocator.size, RTTICompleteObjectLocator.tid, True) for x in result]
+    if len([xrea for xrea in u.get_refs_to(RTTIClassHierarchyDescriptor.tid)]) == 0:
+        [ida_bytes.create_struct(result[x].chd.ea, RTTIClassHierarchyDescriptor.size, RTTIClassHierarchyDescriptor.tid, True) for x in result]
+    if len([xrea for xrea in u.get_refs_to(RTTITypeDescriptor.tid)]) == 0:
+        [ida_bytes.create_struct(result[x].td.ea, RTTITypeDescriptor.size, RTTITypeDescriptor.tid, True) for x in result]
+        
+    # for refreshing xrefs to get xrefs from COLs to TDs
+    ida_auto.auto_wait()
+    
+    # parse BCA
+    for vtable in result:
+        col = result[vtable]
+        
+        # get BCDs
+        for bcd, depth in col.chd.parse_bca(col.chd.bcaea):
+            pass
+            
+    return result
+
+
+def display_result(result):
+    for vtable in result:
+        col = result[vtable]
+        print("vtable at : " + hex(vtable))
+        print("  COL at {:#x}:".format(col.ea), col.name, col.sig, col.offset, col.cdOffset, hex(col.tdea), hex(col.chdea), hex(col.selfea))
+        print("  CHD at {:#x}:".format(col.chd.ea), hex(col.chd.sig), hex(col.chd.bcaea), col.chd.nb_classes, col.chd.flags)
+        
+        # get BCDs
+        for bcd in col.chd.bases:
+            print("    {}BCD at {:#x}:".format(" " *bcd.depth*2, bcd.ea), bcd.name, bcd.nb_cbs, bcd.mdisp, bcd.pdisp, bcd.vdisp, bcd.attributes)
+
+
+def run_pci(icon=-1):
+    print("Starting PyClassInformer")
+    
+    # find vftables with relevant structures
+    result = parse_msvc_vftable()
+        
+    # show results
+    if result:
+        pci_chooser.show_pci_chooser_t(result, icon=icon)
+        display_result(result)
+    else:
+        print("Nothing found. RTTI might be disabled or it is not a Windows C++ program.")
+    print("Done")
+
+
+def main():
+    run_pci()
+
+if __name__ == '__main__':
+    main()
+
+```
+
+`pyclassinformer/qtutils.py`:
+
+```py
+import ida_kernwin
+
+
+def can_use_qt():
+    try:
+        import sip
+        from PyQt5 import QtCore
+        from PyQt5 import QtWidgets
+        from PyQt5 import QtGui
+    except ImportError:
+        return False
+    return True
+    
+
+def get_qver():
+    from PyQt5 import QtCore
+    v = QtCore.qVersion()
+    maj, mnr, _ =[int(x) for x in v.split(".")]
+    return maj, mnr
+
+def get_widget(w, widget_types=None, title=None, max_try=100):
+    
+    import sip
+    from PyQt5 import QtWidgets
+    
+    if widget_types is None:
+        widget_types = set([QtWidgets.QWidget,QtWidgets.QSplitter])
+        
+    widget = sip.wrapinstance(int(w), QtWidgets.QWidget)
+    i = 0
+    while i < max_try and widget and type(widget) != QtWidgets.QMainWindow:
+        if type(widget) in widget_types:
+            #print(widget.windowTitle(), type(widget))
+            if title is not None:
+                if title == widget.windowTitle():
+                    find_flag = True
+                    break
+            else:
+                find_flag = True
+                break
+        widget = widget.parent()
+        i += 1
+    return widget
+
+def get_qmain_window(w, max_try = 100):
+    if not can_use_qt():
+        return None
+    import sip
+    from PyQt5 import QtWidgets
+    if w is None:
+        return None
+    widget = sip.wrapinstance(int(w), QtWidgets.QWidget)
+    find_flag = False
+    i = 0
+    while i < max_try and widget:
+        if  type(widget) == QtWidgets.QMainWindow:
+            return widget
+        widget = widget.parent()
+        i += 1
+    return None
+
+def find_toolbar(widget, toolbar_name):
+    if not can_use_qt():
+        return None
+    from PyQt5 import QtWidgets
+    for cwidget in widget.children():
+        if type(cwidget) == QtWidgets.QToolBar:
+            #print(cwidget.objectName())
+            #print(cwidget.accessibleName())
+            if cwidget.objectName() == toolbar_name:
+                return cwidget
+    return None
+
+def set_toobar_visible(w, toolbar_name):
+    if not can_use_qt():
+        return False
+    from PyQt5 import QtCore
+    widget = get_qmain_window(w)
+    if widget:
+        tb_widget = find_toolbar(widget, toolbar_name)
+        if tb_widget and not tb_widget.isVisible():
+            tb_widget.setEnabled(True)
+            tb_widget.setVisible(True)
+            return True
+        widget.addToolBar(QtCore.Qt.TopToolBarArea, tb_widget)
+    return False
+
+class enable_toolbar_t(ida_kernwin.UI_Hooks):
+    def __init__(self, toolbar_name):
+        self.toolbar_name = toolbar_name
+        ida_kernwin.UI_Hooks.__init__(self)
+        self.hook()
+        
+    def ready_to_run(self):
+        self.enable_toolbar()
+        
+    def enable_toolbar(self):
+        widget = ida_kernwin.open_navband_window(ida_kernwin.get_screen_ea(),1)
+        set_toobar_visible(widget, self.toolbar_name)
+        
+    def __del__(self):
+        self.unhook()
+
+```
+
+`pyclassinformer_plugin.py`:
+
+```py
+import ida_idaapi
+import ida_kernwin
+
+import os
+import sys
+
+dirpath = os.path.dirname(os.path.abspath(__file__))
+script_dir = os.path.join(dirpath, "pyclassinformer")
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
+ida_idaapi.require("qtutils")
+import qtutils
+
+class pci_plugin_t(ida_idaapi.plugin_t):
+    flags = ida_idaapi.PLUGIN_KEEP
+    comment = "Yet Another RTTI Parser"
+    wanted_name = "PyClassInformer"
+    wanted_hotkey = "Alt-Shift-L"
+    help = "Press '" + wanted_hotkey + "' to display the " + wanted_name + " result."
+    
+    toolbar_displayed_name = wanted_name
+    toolbar_name = toolbar_displayed_name + 'Toolbar'
+    
+    action_name = "pyclassinformer:execute"
+    menu_path = "Edit/Plugins/"
+    
+    icon_data = open(os.path.join(script_dir, "pci_icon.png"), "rb").read()
+    act_icon = ida_kernwin.load_custom_icon(data=icon_data, format="png")
+    
+    class exec_from_toolbar(ida_kernwin.action_handler_t):
+        action_name = "pyclassinformer:execute_toolbar"
+        def __init__(self, plugin):
+            ida_kernwin.action_handler_t.__init__(self)
+            import weakref
+            self.v = weakref.ref(plugin)
+        
+        def activate(self, ctx):
+            run_pci(self.v().act_icon)
+            
+        def update(self, ctx):
+            return ida_kernwin.AST_ENABLE_ALWAYS
+        
+    def attach_to_toolbar(self):
+        # attach to menu
+        ida_kernwin.attach_action_to_menu(
+            self.menu_path,
+            self.action_name,
+            ida_kernwin.SETMENU_APP)
+
+        # attach to toolbar
+        ida_kernwin.register_action(
+            ida_kernwin.action_desc_t(
+            pci_plugin_t.exec_from_toolbar.action_name,
+            pci_plugin_t.comment,
+            pci_plugin_t.exec_from_toolbar(self),
+            None,
+            self.wanted_name,
+            self.act_icon))
+        
+        # Insert the action in a toolbar
+        ida_kernwin.create_toolbar(self.toolbar_name, self.toolbar_displayed_name)
+        ida_kernwin.attach_action_to_toolbar(self.toolbar_name, pci_plugin_t.exec_from_toolbar.action_name)
+        
+        # install ui hook to enable toolbar later
+        self.ph = qtutils.enable_toolbar_t(self.toolbar_name)
+        
+    def init(self):
+        ida_kernwin.msg("############### %s (%s) ###############%s" % (self.wanted_name, self.comment, os.linesep))
+        ida_kernwin.msg("%s%s" % (self.help, os.linesep))
+
+        # attach to menu
+        self.attach_to_toolbar()
+
+        return self.flags
+
+    def run(self, arg):
+        run_pci(icon=self.act_icon)
+        
+    def term(self):
+        ida_kernwin.detach_action_from_menu(self.menu_path, self.action_name)
+
+
+def run_pci(icon=-1):
+    ida_idaapi.require("pyclassinformer")
+    import pyclassinformer
+    pyclassinformer.run_pci(icon)
+
+
+class RegisterIcon(ida_kernwin.UI_Hooks):
+    def updated_actions(self):
+        if ida_kernwin.update_action_icon(pci_plugin_t.menu_path + pci_plugin_t.wanted_name, pci_plugin_t.act_icon):
+            # unhook this if it's successful
+            self.unhook()
+
+
+def PLUGIN_ENTRY():
+    ri = RegisterIcon()
+    ri.hook()
+    return pci_plugin_t()
+
+
+
+```
