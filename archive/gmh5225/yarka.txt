@@ -1,0 +1,1438 @@
+Project Path: arc_gmh5225_yarka_175r8ggn
+
+Source Tree:
+
+```txt
+arc_gmh5225_yarka_175r8ggn
+├── README.MD
+├── images
+│   └── screenshot_1.webp
+├── yarka
+│   ├── __init__.py
+│   ├── adapter.py
+│   ├── extractor.py
+│   ├── types.py
+│   ├── ui
+│   │   ├── __init__.py
+│   │   ├── action.py
+│   │   ├── components.py
+│   │   ├── dialog.py
+│   │   ├── highlighter.py
+│   │   └── styles.py
+│   ├── utils.py
+│   ├── wrappers.py
+│   └── yara.py
+└── yarka.py
+
+```
+
+`README.MD`:
+
+```MD
+## Yarka - create YARA signatures from selection
+
+IDA plugin with no dependencies to easily create YARA signatures 
+by selecting a set of instructions, strings or binary data. 
+Just select chunk and press `Ctrl+Y` to make the rule
+
+![Screenshot of opened editor dialog](images/screenshot_1.webp "Yarka editor dialog")
+
+### Features
+- Make rule from any entities in selection in "**Disassembly**" and "**Decompile**" views
+- Make rule from selection in "**Strings**" view
+- Make "hunting" ruleset from selection in "**Functions**" view, 
+  rule contains basic blocks and data refs content (strings, constants, etc...)
+- Yara syntax highlighting
+- Easy customization (see "[Customization](#customization)" section)
+
+### Installation
+Copy `yarka.py` and `yarka` to your IDA plugins directory (`%IDA_HOME%/plugins`).
+
+### Customization
+You can customize the rules format to suit your needs.
+To do this, replace global parameters in header of `yarka.py` file
+
+Rule style parameters:
+- `WRAP_CURLY_BRACE` - wrap curly brace on a new line (default: `False`)
+- `INDENT_HEADERS` - indent `meta`, `strings`, `condition` (default: `False`)
+
+Rule editor default parameters (also editable in the editor window):
+- `DEFAULT_SHOW_COMMENTS` - show comments (default: `True`) 
+- `DEFAULT_STRICT_RULE` - don't wildcard relative offsets (default: `False`)
+- `DEFAULT_INDENT` - rule indentation (default: `2`)
+
+Default fields in `meta` section. Values can be string or lambda functions
+```python
+DEFAULT_META_FIELDS = {
+    'company': 'Security Inc.',
+    'date': lambda: str(date.today()),
+}
+```
+
+Default fields in `conditions` section. 
+Values can be string or lambda functions (with optional argument - strings count): 
+```python
+DEFAULT_CONDITIONS = [
+    lambda: '(PE)' in idaapi.get_file_type_name() and 'uint16(0) == 0x5A4D',
+    lambda count: f'{2 * count // 3} of them' if count > 2 else 'all of them'
+]
+```
+
+### TODO
+- More entities for hunting ruleset (available now via hotkey `Ctrl+Alt+Y`)
+- Identify more bugs during use (waiting for your issues!)
+
+### Credits
+Thanks to [mkYARA](https://github.com/fox-it/mkYARA) IDA plugin, 
+which was the inspiration for this project
+
+```
+
+`yarka.py`:
+
+```py
+from itertools import chain
+
+import idaapi
+import ida_kernwin
+import ida_funcs
+
+from yarka.adapter import YaraExtractor
+from yarka.extractor import RangeExtractor, FunctionExtractor
+from yarka.yara import RuleBuilder, RulesetBuilder
+from yarka import ui
+from yarka import utils
+
+
+# rule parameters
+WRAP_CURLY_BRACE = False        # wrap curly brace on a new line
+INDENT_HEADERS = False          # indent for 'meta', 'strings', 'condition'
+
+# editor default settings
+DEFAULT_SHOW_COMMENTS = True    # show comments (checkbox)
+DEFAULT_STRICT_RULE = False     # don't wildcard relative offsets (checkbox)
+DEFAULT_INDENT = 2              # default indent
+
+# values can be string or lambda
+DEFAULT_META_FIELDS = {
+    'description': '',
+    'source': 'Internal research',
+    'date': lambda: utils.get_current_time('%Y-%m-%d'),
+    'hash': lambda: utils.get_file_md5(),
+    # 'hash': lambda: utils.get_file_sha256(),
+}
+
+# values can be string or lambda (optional argument - strings count)
+DEFAULT_CONDITIONS = [
+    lambda: '(PE)' in idaapi.get_file_type_name() and 'uint16(0) == 0x5A4D',
+    lambda: 'ELF' in idaapi.get_file_type_name() and 'uint32(0) == 0x464C457F',
+    lambda count: f'{count // 2} of them' if count > 2 else 'all of them'
+]
+
+
+def generate_rule(name, entities) -> RuleBuilder:
+    rule = RuleBuilder(
+        name,
+        indent_headers=INDENT_HEADERS,
+        wrap_curly_brace=WRAP_CURLY_BRACE,
+    )
+
+    for header, value in DEFAULT_META_FIELDS.items():
+        rule.add_meta(header, value)
+    
+    existing = set()
+    for i, entity in enumerate(entities, start=1):
+        if str(entity) not in existing:
+            rule.add_string(f's{i}', entity)
+            existing.add(str(entity))
+
+    for condition in DEFAULT_CONDITIONS:
+        rule.add_condition(condition)
+
+    return rule
+
+
+class YaraDialog(ui.ClosableDialog):
+    def __init__(self, rule: RuleBuilder):
+        self.rule = rule
+
+        self.strict_checkbox = ui.Checkbox(
+            label='strict',
+            default=DEFAULT_STRICT_RULE,
+            on_click=self.handle_strict_checkbox_click,
+        )
+        self.comments_checkbox = ui.Checkbox(
+            label='show comments',
+            default=DEFAULT_SHOW_COMMENTS,
+            on_click=self.handle_comments_checkbox_click,
+        )
+        self.indent_edit_label = ui.Label('indentation')
+        self.indent_edit = ui.NumberInput(
+            default=DEFAULT_INDENT,
+            min_value=2,
+            max_value=8,
+            step=2,
+            on_change=self.handle_indent_change,
+        )
+        self.text_edit = ui.YaraTextEdit(rule.build())
+
+        super().__init__(
+            title = 'Yarka - Generated Yara Rule',
+            width=800,
+            top_left_items=[self.strict_checkbox, self.comments_checkbox],
+            top_right_items=[self.indent_edit_label, self.indent_edit],
+            body_items=[self.text_edit]
+        )
+
+    def _rebuild_rule(self):
+        content = self.rule.build()
+        self.text_edit.set_content(content)
+
+    def handle_strict_checkbox_click(self):
+        self.rule.strict = self.strict_checkbox.is_checked()
+        self._rebuild_rule()
+
+    def handle_comments_checkbox_click(self):
+        self.rule.show_comments = self.comments_checkbox.is_checked()
+        self._rebuild_rule()
+
+    def handle_indent_change(self):
+        self.rule.indent = self.indent_edit.value()
+        self._rebuild_rule()
+
+
+class YarkaPlugin(idaapi.plugin_t):
+    flags = idaapi.PLUGIN_FIX
+    comment = 'Yarka Plugin'
+    help = 'Yarka Plugin'
+    wanted_name = 'Yarka'
+    wanted_hotkey = 'Ctrl+Alt+Y'
+    banner = (
+        " __     __        _         "
+        " \ \   / /       | |        "
+        "  \ \_/ /_ _ _ __| | ____ _ "
+        "   \   / _` | '__| |/ / _` |"
+        "    | | (_| | |  |   < (_| |"
+        "    |_|\__,_|_|  |_|\_\__,_|"
+        "                            "
+        "                            "
+    )
+
+    def init(self):
+        self.ui_hooks = YarkaUIHooks()
+        self.ui_hooks.hook()
+
+        label = 'Yarka: Generate Rule'
+        hotkey = 'Ctrl+Y'
+        YarkaRule.register(self, label, hotkey)
+        YarkaStrings.register(self, label, hotkey)
+        YarkaFunctions.register(self, label, hotkey)
+
+        idaapi.msg(f'[{self.wanted_name}] loaded, hotkey - {self.wanted_hotkey}')
+        return idaapi.PLUGIN_KEEP
+
+    def term(self):
+        self.ui_hooks.unhook()
+
+    def run(self, arg):
+        ida_kernwin.show_wait_box('Generating ruleset ...')
+
+        ruleset = RulesetBuilder()
+        functions = list(utils.get_custom_functions())
+        for i, function in enumerate(functions, start=1):
+            if ida_kernwin.user_cancelled():
+                ida_kernwin.hide_wait_box()
+                ida_kernwin.warning('Yarka - ruleset generation canceled')
+                return None
+
+            ida_kernwin.replace_wait_box(f'Processing ({i}/{len(functions)})')
+
+            try:
+                name = ida_funcs.get_func_name(function.start_ea)
+                entities = YaraExtractor(FunctionExtractor(function.start_ea))
+                rule = generate_rule(name=name, entities=list(entities))
+                if not rule.is_empty():
+                    ruleset.append(rule)
+            except Exception as e:
+                ida_kernwin.warning(f'Yarka - unexpected error {e}')
+
+        ida_kernwin.replace_wait_box(f'Building ruleset ...')
+
+        self.dialog = YaraDialog(ruleset)
+        self.dialog.show()
+        ida_kernwin.hide_wait_box()
+
+
+class YarkaRule(ui.ActionHandler):
+    __windows__ = [idaapi.BWN_DISASM, idaapi.BWN_PSEUDOCODE]
+
+    def activate(self, ctx):
+        start, end = utils.get_selection()
+        name = f'{utils.get_file_name()}_0x{start:08X}'
+        entities = YaraExtractor(RangeExtractor(start, end))
+        rule = generate_rule(name=name, entities=entities)
+
+        self.dialog = YaraDialog(rule)
+        self.dialog.show()
+
+
+class YarkaStrings(ui.ActionHandler):
+    __windows__ = [idaapi.BWN_STRINGS]
+
+    def activate(self, ctx):
+        strings = []
+        for idx in ctx.chooser_selection:
+            data = ida_kernwin.get_chooser_data(ctx.widget_title, idx)
+            location, *_ = data
+            address = int(location.split(':')[-1].lstrip('0'), 16)
+
+            string_gen = YaraExtractor(RangeExtractor(address, address + 1))
+            strings.append(string_gen)
+        
+        name = f'{utils.get_file_name()}_strings'
+        entities = chain.from_iterable(strings)
+        rule = generate_rule(name=name, entities=entities)
+
+        self.dialog = YaraDialog(rule)
+        self.dialog.show()
+
+
+class YarkaFunctions(ui.ActionHandler):
+    __windows__ = [idaapi.BWN_FUNCS]
+
+    def activate(self, ctx):
+        ruleset = RulesetBuilder()
+        for idx in ctx.chooser_selection:
+            _, _, location, *_ = ida_kernwin.get_chooser_data(ctx.widget_title, idx)
+            address = int(location.lstrip('0'), 16)
+
+            name = ida_funcs.get_func_name(address)
+            if not name:
+                continue
+
+            entities = YaraExtractor(FunctionExtractor(address))
+            rule = generate_rule(name=name, entities=list(entities))
+            if not rule.is_empty():
+                ruleset.append(rule)
+
+        self.dialog = YaraDialog(ruleset)
+        self.dialog.show()
+
+
+class YarkaUIHooks(idaapi.UI_Hooks):
+    def populating_widget_popup(self, form, popup):
+        pass
+
+    def finish_populating_widget_popup(self, form, popup):
+        YarkaRule.attach_ctx_menu(form, popup, 'Yarka')
+        YarkaStrings.attach_ctx_menu(form, popup, 'Yarka')
+        YarkaFunctions.attach_ctx_menu(form, popup, 'Yarka')
+
+
+plugin = YarkaPlugin()
+
+
+def PLUGIN_ENTRY():
+    global plugin
+    return plugin
+
+```
+
+`yarka/__init__.py`:
+
+```py
+from .yara import RuleBuilder, RulesetBuilder
+from .adapter import YaraExtractor
+from .extractor import RangeExtractor, FunctionExtractor, DataRefsExtractor
+
+```
+
+`yarka/adapter.py`:
+
+```py
+from typing import Generator, Iterable, Union
+
+from .types import String, Instruction
+from .wrappers import YaraEntity, YaraBytes, YaraInstructions, YaraString
+
+
+class YaraExtractor(object):
+    def __init__(self, iterable: Iterable[Union[bytes, Instruction, String]]):
+        self.iterable = iterable
+
+    @staticmethod
+    def _filter_byte_sequence(current_type, sequence: list) -> bool:
+        if current_type is not int:
+            return False
+
+        stripped = bytes(sequence).strip(b'\x00')
+        return len(stripped) > 3
+
+    def __iter__(self) -> Generator[YaraEntity, None, None]:
+        current_type = None
+        sequence = []
+
+        for entity in self.iterable:
+            if not entity:
+                continue
+
+            if current_type is not type(entity):
+                if current_type is Instruction:
+                    yield YaraInstructions(sequence)
+                elif self._filter_byte_sequence(current_type, sequence):
+                    yield YaraBytes(sequence)
+
+                sequence.clear()
+                current_type = type(entity)
+
+            if isinstance(entity, String):
+                if len(YaraString.escape(str(entity))) > 4:
+                    yield YaraString.from_object(entity)
+            else:
+                sequence.append(entity)
+
+        if sequence:
+            if current_type is Instruction:
+                yield YaraInstructions(sequence)
+            elif self._filter_byte_sequence(current_type, sequence):
+                yield YaraBytes(sequence)
+
+```
+
+`yarka/extractor.py`:
+
+```py
+from typing import Generator, Optional, Union
+
+from . import utils
+from .types import Instruction, String
+
+import idautils
+import idaapi
+import ida_funcs
+
+
+class RangeExtractor(object):
+    def __init__(self, start, end):
+        self.ea = start
+        self.end = end
+
+    def _process_insn(self) -> Optional[Instruction]:
+        entity = Instruction.from_ea(self.ea)
+        if entity is None:
+            return None
+
+        self.ea += entity.size
+        return entity
+
+    def _process_string(self) -> Optional[String]:
+        entity = String.from_ea(self.ea)
+        if entity is None:
+            return None
+
+        self.ea += entity.size
+        return entity
+
+    def _process_byte(self) -> Optional[int]:
+        x = idaapi.get_byte(self.ea)
+        self.ea += 1
+        return x
+
+    def __iter__(self) -> Generator[Union[bytes, String, Instruction], None, None]:
+        while self.ea < self.end:
+            if not idaapi.is_loaded(self.ea):
+                self.ea += 1
+                continue
+                
+            if idaapi.is_code(idaapi.get_flags(self.ea)):
+                insn = self._process_insn()
+                if insn:
+                    yield insn
+                    continue
+            elif idaapi.is_data(idaapi.get_flags(self.ea)):
+                string = self._process_string()
+                if string:
+                    yield string
+                    continue
+
+            yield self._process_byte()
+
+
+class DataRefsExtractor():
+    def __init__(self, ea):
+        self.ea = ea
+
+    @staticmethod
+    def get_ref_data(ea: int):
+        _ea = utils.resolve_ptr_until_data(ea)
+
+        entity = String.from_ea(_ea)
+        if entity:
+            yield entity
+        elif idaapi.is_loaded(_ea):
+            yield from idaapi.get_bytes(_ea, 8)
+
+    def __iter__(self) -> Generator[Union[bytes, String], None, None]:
+        for ref in idautils.DataRefsFrom(self.ea):
+            yield from self.get_ref_data(ref)
+
+
+class FunctionExtractor():
+    def __init__(self, ea, block_min_size: int = 16):
+        self.function = ida_funcs.get_func(ea)
+        if self.function is None:
+            raise ValueError(f'No function at 0x{ea:08X}')
+
+        self.block_min_size = block_min_size
+
+    def __iter__(self) -> Generator[Union[bytes, String, Instruction], None, None]:
+        blocks = idaapi.FlowChart(self.function)
+
+        for block in blocks:
+            size = block.end_ea - block.start_ea
+            if size >= self.block_min_size:
+                for entity in RangeExtractor(block.start_ea, block.end_ea):
+                    if isinstance(entity, Instruction):
+                        yield entity
+
+            for ea in range(block.start_ea, block.end_ea):
+                yield from DataRefsExtractor(ea)
+
+```
+
+`yarka/types.py`:
+
+```py
+from typing import Optional, List
+
+import idaapi
+import idc
+import ida_nalt
+
+
+class Operand(object):
+    def __init__(self, operand: idaapi.op_t):
+        self.operand = operand
+
+    def has_immediate_value(self) -> bool:
+        return self.operand.type == idaapi.o_imm
+
+    def has_relative_value(self) -> bool:
+        return self.operand.type in {
+            idaapi.o_far, idaapi.o_near, idaapi.o_mem, idaapi.o_displ
+        }
+         
+    def is_empty(self) -> bool:
+        return self.operand.type == idaapi.o_void
+                                                       
+    @property
+    def value(self) -> int:
+        if self.operand.addr:
+            value = self.operand.addr & 0xFFFFFFFF
+            is_signed = value & 0xF0000000
+            return value - 2 ** 32 if is_signed else value
+
+        return self.operand.value
+
+    @property
+    def byte_offset(self) -> int:
+        return self.operand.offb
+
+
+class Instruction(object):
+    def __init__(self, insn: idaapi.insn_t):
+        self.insn = insn
+
+    @classmethod
+    def from_ea(cls, ea) -> Optional["Instruction"]:
+        insn = idaapi.insn_t()
+        length = idaapi.decode_insn(insn, ea)
+        if not length:
+            return None
+
+        return cls(insn)
+    
+    def __eq__(self, other: "Instruction") -> bool:
+        return str(self) == str(other)
+
+    @property
+    def mnemonic(self) -> str:
+        return self.insn.get_canon_mnem()
+
+    @property
+    def size(self) -> int:
+        return self.insn.size
+    
+    @property
+    def address(self) -> int:
+        return self.insn.ea
+    
+    @property
+    def bytes(self) -> bytes:
+        return idaapi.get_bytes(self.insn.ea, self.insn.size)
+    
+    @property
+    def operands(self) -> List[Operand]:
+        total = [Operand(op) for op in self.insn.ops]
+        return [op for op in total if not op.is_empty()]
+
+    def escape(
+            self,
+            escape_immediate: bool = False,
+            escape_relative: bool = True) -> str:
+
+        data = self.bytes.hex(' ').split()
+        
+        operands = self.operands
+        for i, op in enumerate(operands):
+            if escape_relative and op.has_relative_value():
+                pass
+            elif escape_immediate and op.has_immediate_value():
+                pass
+            else:
+                continue
+
+            start = op.byte_offset
+            if i != len(operands) - 1:
+                next_start = operands[i + 1].byte_offset
+                end = max(next_start, self.insn.size)
+            else:
+                end = self.insn.size
+
+            if all((start, end)):
+                data[start:end] = ['??'] * (end - start)
+
+        return ' '.join(data)
+
+    def __str__(self) -> str:
+        flags = idaapi.GENDSM_REMOVE_TAGS
+        return idaapi.generate_disasm_line(self.address, flags)
+    
+    def __repr__(self) -> str:
+        insn = ' '.join(str(self).split())
+        return f'<Insn "{insn}">'
+
+
+class String(object):
+    def __init__(self, ea: int, string: str, bytes_per_char: int = 1):
+        self.ea = ea
+        self.string = string.decode() if hasattr(string, 'decode') else string
+        self.bytes_per_char = bytes_per_char
+
+    @classmethod
+    def from_ea(cls, ea) -> Optional["String"]:
+        size_adapter = {
+            ida_nalt.STRTYPE_C: 1,
+            ida_nalt.STRTYPE_C_16: 2,
+            ida_nalt.STRTYPE_C_32: 4,
+            0x2000001: 2,
+        }
+
+        str_type = idc.get_str_type(ea)
+        if str_type is None:
+            return None
+
+        string = idc.get_strlit_contents(ea, strtype=str_type)
+        if not string:
+            return None
+
+        bytes_per_char = size_adapter[str_type]
+
+        return cls(ea, string.decode(), bytes_per_char)
+
+    def __eq__(self, other: "String") -> bool:
+        return str(self) == str(other)
+
+    def __str__(self) -> str:
+        return self.string
+    
+    def __repr__(self) -> str:
+        return f'<String "{str(self)}">'
+
+    def __len__(self) -> int:
+        return len(str(self))
+
+    @property
+    def size(self) -> int:
+        return len(self) * self.bytes_per_char
+    
+    @property
+    def address(self) -> int:
+        return self.ea
+    
+    def __bytes__(self) -> bytes:
+        return idaapi.get_bytes(self.ea, self.size)
+
+```
+
+`yarka/ui/__init__.py`:
+
+```py
+from .action import ActionHandler
+from .dialog import ClosableDialog
+from .components import Button, Checkbox, NumberInput, Label, YaraTextEdit 
+
+```
+
+`yarka/ui/action.py`:
+
+```py
+import idaapi
+import ida_kernwin
+
+
+class ActionHandler(idaapi.action_handler_t):
+    __windows__ = []
+
+    @classmethod
+    def get_name(cls):
+        return cls.__name__
+
+    @classmethod
+    def get_label(cls):
+        return cls.label
+
+    @classmethod
+    def register(cls, plugin, label, hotkey=None):
+        cls.plugin = plugin
+        cls.label = label
+        instance = cls()
+
+        action = idaapi.action_desc_t(
+            cls.get_name(),
+            instance.get_label(),
+            instance,
+            hotkey
+        )
+
+        return idaapi.register_action(action)
+
+    @classmethod
+    def unregister(cls):
+        idaapi.unregister_action(cls.get_name())
+
+    @classmethod
+    def update(cls, ctx):
+        if hasattr(cls, '__windows__') and ctx.widget_type in cls.__windows__:
+            return ida_kernwin.AST_ENABLE_FOR_WIDGET
+
+        return ida_kernwin.AST_DISABLE_FOR_WIDGET
+
+    @classmethod
+    def attach_ctx_menu(cls, form, popup, tree: str):
+        tft = idaapi.get_widget_type(form)
+        if tft in cls.__windows__:
+            idaapi.attach_action_to_popup(
+                form, popup, cls.get_name(), tree, idaapi.SETMENU_APP
+            )
+```
+
+`yarka/ui/components.py`:
+
+```py
+from .highlighter import YaraHighlighter
+
+from PyQt5 import QtGui, QtWidgets
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import Qt
+
+
+class Checkbox(QtWidgets.QCheckBox):
+    def __init__(
+            self,
+            label: str,
+            default: bool = False,
+            on_click = None):
+        super().__init__(label)
+        
+        self.setCheckState(Qt.Checked if default else Qt.Unchecked)
+        if on_click:
+            self.clicked.connect(on_click)
+
+    def is_checked(self) -> bool:
+        return self.checkState() == Qt.Checked
+
+
+class Button(QtWidgets.QPushButton):
+    def __init__(self, label: str, on_click = None):
+        super().__init__(label)
+
+        self.setFixedWidth(100)
+        if on_click:
+            self.clicked.connect(on_click)
+
+
+class NumberInput(QtWidgets.QSpinBox):
+    def __init__(
+            self,
+            default: int = None,
+            min_value: int = 0,
+            max_value: int = 100,
+            step: int = 1,
+            on_change = None):
+
+        super().__init__()
+        self.setSingleStep(step)
+        self.setFixedWidth(48)
+        self.setRange(min_value, max_value)
+        if default and ((default - min_value) % step == 0):
+            self.setValue(default)
+        if on_change:
+            self.valueChanged.connect(on_change)
+
+
+class Label(QtWidgets.QLabel):
+    pass
+
+
+class YaraTextEdit(QtWidgets.QPlainTextEdit):
+    smarten_punctuation = pyqtSignal()
+
+    def __init__(self, default: str, highlighting: bool = True):
+        super().__init__(None)
+
+        if highlighting:
+            self.highlighter = YaraHighlighter(self.document())
+
+        font = QtGui.QFont()
+        font.setFamily("Consolas")
+        font.setStyleHint(QtGui.QFont.Monospace)
+        font.setFixedPitch(True)
+        font.setPointSize(10)
+        self.setFont(font)
+
+        metrics = QtGui.QFontMetrics(font)
+        self.setTabStopWidth(4 * metrics.width(' '))
+        self.set_content(default)
+
+    def set_content(self, text: str):
+        self.setPlainText(text)
+
+    def contextMenuEvent(self, ev):
+        m = self.createStandardContextMenu()
+        m.addSeparator()
+        m.addAction('Smarten punctuation', self.smarten_punctuation.emit)
+        m.exec(ev.globalPos())
+
+```
+
+`yarka/ui/dialog.py`:
+
+```py
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt
+
+from .components import Button
+
+
+class ClosableDialog(QtWidgets.QDialog):
+    def __init__(
+            self,
+            title: str = 'Dialog',
+            width: int = 800,
+            heihgt: int = 600,
+            top_left_items: list = None,
+            top_right_items: list = None,
+            body_items: list = None
+        ):
+
+        super().__init__(None)
+        self.setWindowTitle(title)
+        self.resize(width, heihgt)
+        self._build_dialog(top_left_items, top_right_items, body_items)
+
+    def handle_close_click(self):
+        self.close()
+
+    def _build_dialog(self, top_left: list, top_right: list, body: list):
+        self.close_btn = Button("OK", self.handle_close_click)
+
+        self.top_layout = QtWidgets.QHBoxLayout()
+        for element in top_left:
+            self.top_layout.addWidget(element)
+        self.top_layout.addStretch()
+        for element in top_right:
+            self.top_layout.addWidget(element)
+
+        self.layout = QtWidgets.QVBoxLayout(self)
+        self.layout.addLayout(self.top_layout)
+
+        for element in body:
+            self.layout.addWidget(element)
+
+        self.bottom_layout = QtWidgets.QHBoxLayout()
+        self.bottom_layout.setAlignment(Qt.AlignRight | Qt.AlignBottom)
+        self.bottom_layout.addWidget(self.close_btn)
+        self.layout.addLayout(self.bottom_layout)
+
+```
+
+`yarka/ui/highlighter.py`:
+
+```py
+from PyQt5.QtCore import QRegExp, QRegularExpressionMatch
+from PyQt5.QtGui import QSyntaxHighlighter
+
+from .styles import LIGHT_STYLES
+
+
+class YaraHighlighter(QSyntaxHighlighter):
+    """Syntax highlighter for the Yara language.
+    """
+    keywords = [
+        'import', 'include',
+        'global', 'rule', 'meta', 'strings', 'condition',
+        'all', 'any', 'none',
+        'them',  
+        'and', 'or', 'not',
+        'false', 'true',
+        'ascii', 'wide', 'base64', 'base64wide', 'fullword', 'nocase', 'xor', 'private',
+        'uint8', 'uint8be', 'uint16', 'uint16be', 'uint32', 'uint32be',
+        'icontains', 'iequals', 'matches',
+        'int8', 'int8be', 'int16', 'int16be', 'int32', 'int32be',
+        'startswith', 'istartswith', 'iendswith', 'endswith',
+        'at', 'filesize', 'entrypoint', 'defined',
+        'for', 'in', 'of',
+    ]
+
+    operators = [
+        r'=',
+        r'\band\b', r'\bor\b', r'\bnot\b',
+        r'==', r'!=', r'<', r'<=', r'>', r'>=',
+        r'\+', r'-', r'\*', r'/', r'\%',
+        r'\^', r'\|', r'\&', r'\~', r'>>', r'<<',
+    ]
+
+    braces = [
+        r'\{', r'\}', r'\(', r'\)', r'\[', r'\]',
+    ]
+
+    def __init__(self, document):
+        QSyntaxHighlighter.__init__(self, document)
+
+        rules = []
+
+        rules += [(rf'\b{w}\b', 0, 'keyword') for w in YaraHighlighter.keywords]
+        rules += [(o, 0, 'operator') for o in YaraHighlighter.operators]
+        rules += [(b, 0, 'brace') for b in YaraHighlighter.braces]
+
+        rules += [
+            # 'rule' followed by an rule name
+            (r'\brule\b\s*(\w+)', 1, 'rule'),
+
+            # Numeric literals
+            (r'\b[a-fA-F0-9]{2}\b', 0, 'numbers'),
+            (r'\b[+-]?[0-9]+[lL]?\b', 0, 'numbers'),
+            (r'\b[+-]?0[xX][0-9A-Fa-f]+[lL]?\b', 0, 'numbers'),
+            (r'\b[+-]?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?\b', 0, 'numbers'),
+
+            # Wildcards
+            (r'\b\?{2}\b', 0, 'numbers'),
+
+            # Double-quoted string, possibly containing escape sequences
+            (r'"[^"\\]*(\\.[^"\\]*)*"', 0, 'string'),
+
+            # From '//' until a newline
+            (r'//[^\n]*', 0, 'comment'),
+        ]
+
+        self.multiline_start = QRegExp(r'/\*')
+        self.multiline_end = QRegExp(r'\*/')
+
+        self.rules = [(QRegExp(pat), index, fmt) for (pat, index, fmt) in rules]
+
+    @property
+    def styles(self):
+        return LIGHT_STYLES
+
+    def highlightBlock(self, text):
+        """Apply syntax highlighting to the given block of text.
+        """
+        # Do other syntax formatting
+        for expression, nth, format in self.rules:
+            index = expression.indexIn(text, 0)
+            format = self.styles[format]
+
+            while index >= 0:
+                # We actually want the index of the nth match
+                index = expression.pos(nth)
+                length = len(expression.cap(nth))
+                self.setFormat(index, length, format)
+                index = expression.indexIn(text, index + length)
+
+        self.setCurrentBlockState(0)
+        self.match_multiline(text, 'string')
+
+    def match_multiline(self, text, style):
+        self.setCurrentBlockState(0)
+        start_index = 0
+        if self.previousBlockState() != 1:
+            start_index = self.multiline_start.indexIn(text)
+
+        while start_index >= 0:
+            end_index = self.multiline_end.indexIn(text, start_index)
+            if end_index == -1:
+                self.setCurrentBlockState(1)
+                length = len(text) - start_index
+            else:
+                pattern_length = len(self.multiline_end.pattern())
+                length = end_index - start_index + pattern_length
+
+            self.setFormat(start_index, length, self.styles[style])
+            start_index = self.multiline_start.indexIn(text, start_index + length)
+
+```
+
+`yarka/ui/styles.py`:
+
+```py
+from PyQt5.QtGui import QFont, QColor, QTextCharFormat
+
+
+def format(color, style=''):
+    """
+    Return a QTextCharFormat with the given attributes.
+    """
+    _color = QColor()
+    _color.setNamedColor(color)
+
+    _format = QTextCharFormat()
+    _format.setForeground(_color)
+    if 'bold' in style:
+        _format.setFontWeight(QFont.Weight.Bold)
+    if 'italic' in style:
+        _format.setFontItalic(True)
+
+    return _format
+
+
+class LightThemeColors:
+    Red = "#B71C1C"
+    Pink = "#FCE4EC"
+    Purple = "#4A148C"
+    DeepPurple = "#311B92"
+    Indigo = "#1A237E"
+    Blue = "#0D47A1"
+    LightBlue = "#01579B"
+    Cyan = "#006064"
+    Teal = "#004D40"
+    Green = "#1B5E20"
+    LightGreen = "#33691E"
+    Lime = "#827717"
+    Yellow = "#F57F17"
+    Amber = "#FF6F00"
+    Orange = "#E65100"
+    DeepOrange = "#BF360C"
+    Brown = "#3E2723"
+    Grey = "#212121"
+    BlueGrey = "#263238"
+
+
+LIGHT_STYLES = {
+    'keyword': format(LightThemeColors.LightBlue, 'bold'),
+    'operator': format(LightThemeColors.Red, 'bold'),
+    'brace': format(LightThemeColors.Purple),
+    'rule': format(LightThemeColors.Indigo, 'bold'),
+    'string': format(LightThemeColors.Amber),
+    'comment': format(LightThemeColors.Green, 'italic'),
+    'numbers': format(LightThemeColors.Grey),
+    'wildcard': format(LightThemeColors.Blue),
+}
+
+```
+
+`yarka/utils.py`:
+
+```py
+from datetime import datetime
+from typing import Generator
+
+import idaapi
+import idautils
+import ida_bytes
+import ida_funcs
+import ida_ida
+import ida_nalt
+import idc
+
+
+def get_file_md5():
+    return ida_nalt.retrieve_input_file_md5().hex()
+
+
+def get_file_sha256():
+    return ida_nalt.retrieve_input_file_sha256().hex()
+
+
+def get_file_name():
+    return ida_nalt.get_root_filename()
+
+
+def get_current_time(format: str = '%Y-%m-%d'):
+    return datetime.now().strftime(format)
+
+
+def get_selection():
+    start = idc.read_selection_start()
+    end = idc.read_selection_end()
+    if idaapi.BADADDR in (start, end):
+        ea = idc.here()
+        start = idaapi.get_item_head(ea)
+        end = idaapi.get_item_end(ea)
+    return start, end
+
+
+def resolve_ptr(ptr: int):
+    if ida_ida.inf_is_64bit():
+        return idaapi.get_qword(ptr)
+
+    return idaapi.get_dword(ptr)
+
+
+def resolve_ptr_until_data(ptr: int, max_depth: int = 3):
+    current = ptr
+    for _ in range(max_depth):
+        if not idc.is_off0(ida_bytes.get_full_flags(current)):
+            break
+        current = resolve_ptr(current)
+
+    return current
+
+
+def get_custom_functions(
+        min_size: int = 40,
+        prefix: str = '',
+        skip_lumina_functions: bool = False
+    ) -> Generator[ida_funcs.func_t, None, None]:
+
+    for ea in idautils.Functions():
+        function = idaapi.get_func(ea)
+
+        if function.flags & (idaapi.FUNC_LIB | idaapi.FUNC_THUNK):
+            continue
+
+        if skip_lumina_functions and function.flags & idaapi.FUNC_LUMINA:
+            continue
+
+        size = function.end_ea - function.start_ea
+        if size < min_size:
+            continue
+
+        if prefix:
+            name = idaapi.get_func_name(ea)
+            if not name.startswith(prefix):
+                continue
+        
+        yield function
+
+```
+
+`yarka/wrappers.py`:
+
+```py
+from abc import abstractmethod
+from typing import List, Optional, Iterable
+
+from .types import String, Instruction
+
+
+class YaraEntity(object):
+    @abstractmethod
+    def build(self, **kwargs) -> str:
+        pass
+
+
+class YaraString(YaraEntity):
+    def __init__(self, data: str, modifiers: Optional[list] = None):
+        self.data: str = self.escape(data)
+        self.modifiers = modifiers if modifiers else list()
+
+    @staticmethod
+    def escape(string: str) -> str:
+        stripped = str(string).strip('\r\n')
+        escaped = repr(stripped)[1:-1]
+        return escaped.replace('"', '\\\"')
+
+    @classmethod
+    def from_object(cls, string: String):
+        modifiers = []
+        if string.bytes_per_char == 2:
+            modifiers.append('wide')
+
+        converted = str(string)
+        if converted.strip('\r\n') == converted:
+            modifiers.append('fullword')
+
+        return cls(converted, modifiers)
+
+    def build(self, **kwargs) -> str:
+        modifiers = ' '.join(self.modifiers)
+        result = f'"{self.data}"'
+        if modifiers:
+            result += f' {modifiers}'
+
+        return result
+
+    def __hash__(self) -> int:
+        return hash(tuple(map(str, self.entities)))
+
+    def __eq__(self, other: "YaraString") -> bool:
+        return self.data == other.data
+
+    def __str__(self) -> str:
+        return self.data
+
+    def __repr__(self) -> str:
+        return f'<YaraString "{self.data}">'
+
+
+class YaraInstructions(YaraEntity):
+    def __init__(self, entities: Iterable[Instruction]):
+        self.entities: List[Instruction] = list(entities)
+
+    def build(
+            self,
+            show_comments: bool = True,
+            strict: bool = False,
+            indent: int = 2,
+            **kwargs) -> str:
+
+        if len(self.entities) == 1:
+            insn = self.entities[0]
+            data = insn.escape(escape_relative=not strict)
+
+            return f"{{ {data} }}" 
+
+        result = '{\n'
+        for insn in self.entities:
+            data = insn.escape(escape_relative=not strict)
+
+            result += ' ' * indent
+            if show_comments:
+                comment = str(insn)
+                comment = f'{comment[:48]}...' if len(comment) > 48 else comment
+                result += f'{data:30} // {comment}'
+            else:
+                result += data
+            result += '\n'
+
+        result += '}'
+        return result
+
+    def __hash__(self) -> int:
+        return hash(tuple(map(str, self.entities)))
+
+    def __eq__(self, other: "YaraInstructions") -> bool:
+        return tuple(self.entities) == tuple(other.entities)
+
+    def __len__(self) -> int:
+        return len(self.entities)
+
+    def __str__(self) -> str:
+        mnemonics = [str(insn) for insn in self.entities]
+        return ''.join(mnemonics)
+
+    def __repr__(self) -> str:
+        data = ' '.join([insn.mnemonic for insn in self.entities])
+        return f'<YaraInstructions "{data}">'
+               
+
+class YaraBytes(YaraEntity):
+    def __init__(self, data: bytes):
+        self.data = bytes(data)
+
+    def build(self, indent: int = 2, **kwargs) -> str:
+
+        if len(self.data) <= 16:
+            data = self.data.hex(' ').upper()
+            return f"{{ {data} }}" 
+
+        result = '{\n'
+        for i in range(0, len(self.data), 16):
+            data = self.data[i:i + 16].hex(' ').upper()
+            result += ' ' * indent
+            result += data
+            result += '\n'
+        result += '}'
+        return result
+
+    def __hash__(self) -> int:
+        return hash(self.data)
+
+    def __eq__(self, other: "YaraString") -> bool:
+        return self.data == other.data
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __str__(self) -> str:
+        return self.data.hex(' ')
+
+    def __repr__(self) -> str:
+        data = self.data[:10].hex(' ')
+        return f'<YaraBytes "{data}">'
+
+```
+
+`yarka/yara.py`:
+
+```py
+from collections import UserList
+import inspect
+from typing import Any, Dict, List, Union, Optional, Iterable, Callable
+import textwrap
+
+from .wrappers import YaraEntity
+
+
+class RuleBuilder(object):
+    def __init__(
+            self, 
+            name: str,
+            show_comments: bool = True,
+            strict: bool = False,
+            indent: int = 2,
+            indent_headers: bool = False,
+            wrap_curly_brace: bool = False,
+        ):
+        self.name = self._escape_name(name)
+
+        self.show_comments = show_comments
+        self.strict = strict
+        self.indent = indent
+        self.indent_headers = indent_headers
+        self.wrap_curly_brace = wrap_curly_brace
+
+        self.meta: Dict[str, Union[str, Callable]] = {}
+        self.strings: Dict[str, YaraEntity] = {}
+        self.conditions: List[Union[str, Callable]] = []
+
+    def _escape_name(self, name) -> str:
+        _name = ''.join(x if x.isalnum() else '_' for x in name)
+        _name = _name.replace('__', '_')
+
+        # hack for 80 symbols limit
+        if len(_name) >= 80:
+            _name = _name[:38] + '__' + _name[-38:]
+
+        return _name
+
+    def add_meta(self, name: str, value: Union[str, Callable]):
+        if not any((isinstance(value, str), callable(value))):
+            raise TypeError('Meta value must be str or callable object')
+
+        if callable(value) and len(inspect.signature(value).parameters):
+            raise TypeError('Callable meta value can take only 0 arguments')
+
+        self.meta[name] = value
+        return self
+
+    def add_string(self, name, value: YaraEntity):
+        self.strings[name] = value
+        return self
+
+    def add_condition(self, condition: Union[str, Callable]):
+        if not any((isinstance(condition, str), callable(condition))):
+            raise TypeError('Condition must be str or callable object')
+
+        if callable(condition):
+            if len(inspect.signature(condition).parameters) > 2:
+                raise TypeError('Callable condition can take 0 or 1 arguments')
+
+        self.conditions.append(condition)
+        return self
+
+    def build(self):
+        result = f"rule {self.name}"
+        result += '\n' if self.wrap_curly_brace else ' '
+        result += '{\n'
+
+        content = ''
+        content += self.build_meta()
+        content += self.build_strings()
+        content += self.build_condition()
+        
+        result += self._indent(content) if self.indent_headers else content
+        result += "}\n"
+        return result
+
+    def build_meta(self):
+        result = "meta:\n"
+        for key, value in self.meta.items():
+            _value = value() if callable(value) else value
+            result += self._indent(f'{key} = "{_value}"')
+            result += '\n'
+        result += "\n"
+        return result
+
+    def build_strings(self):
+        result = "strings:\n"
+        for key, value in self.strings.items():
+            content = value.build(
+                show_comments=self.show_comments,
+                strict=self.strict,
+                indent=self.indent,
+            )
+            result += self._indent(f'${key} = {content}')
+            result += '\n'
+        result += "\n"
+        return result
+
+    def build_condition(self) -> str:
+        result = "condition:\n"
+        total = []
+        for value in self.conditions:
+            if callable(value):
+                args = inspect.signature(value).parameters
+                if len(args) == 0:
+                    _value = value()
+                elif len(args) == 1:
+                    _value = value(len(self.strings))
+            else:
+                _value = value
+
+            if _value:
+                total.append(str(_value))
+
+        result += '\nand '.join(total)
+        result += '\n'
+
+        return self._indent(result).lstrip()
+
+    def is_empty(self) -> bool:
+        return len(self.strings) == 0
+
+    def _indent(self, value: str) -> str:
+        prefix = ' ' * self.indent
+        return textwrap.indent(value, prefix=prefix)
+
+    def _build_entity(self, entity: YaraEntity) -> str:
+        content = entity.build(
+            show_comments=self.show_comments,
+            strict=self.strict,
+            indent=self.indent,
+        )
+
+        return content
+
+
+class RulesetBuilder(UserList):
+    def __init__(self, rules: Optional[Iterable[RuleBuilder]] = None):
+        if not rules:
+            rules = list()
+
+        super().__init__(rules)
+
+    def build(self) -> str:
+        rules = [rule.build() for rule in iter(self)]
+
+        return '\n\n'.join(rules)
+
+    def __setattr__(self, name: str, value: Any):
+        if name in {'show_comments', 'strict', 'indent', 'indent_headers'}:
+            for rule in iter(self):
+                setattr(rule, name, value)
+        else:
+            super().__setattr__(name, value)
+
+```
