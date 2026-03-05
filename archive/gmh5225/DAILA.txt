@@ -1,0 +1,873 @@
+Project Path: arc_gmh5225_DAILA_dnmv98v_
+
+Source Tree:
+
+```txt
+arc_gmh5225_DAILA_dnmv98v_
+├── README.md
+├── assets
+│   ├── daila-ida.png
+│   └── daila_ida_2.png
+├── daila
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── controller.py
+│   ├── controller_server.py
+│   └── installer.py
+├── plugins
+│   ├── daila_binja.py
+│   ├── daila_ghidra.py
+│   └── daila_ida.py
+├── setup.cfg
+└── setup.py
+
+```
+
+`README.md`:
+
+```md
+# DAILA 
+Decompiler Artificial Intelligence Language Assistant - Built on OpenAI
+
+![](./assets/daila-ida.png)
+
+## Installation
+Clone down this repo and pip install and use the daila installer:
+```bash
+pip3 install -e . && daila --install 
+```
+
+Depending on your decompiler, this will attempt to copy the script files into your decompiler and install
+the DAILA core to your current Python. If you are using Binja or IDA, make sure your Python is the same 
+as the one you are using in your decompiler. 
+
+If you are using Ghidra, you may be required to enable the `$USER_HOME/ghidra_scripts` as a valid 
+scripts path. 
+
+If your decompiler does not have access to the `OPENAI_API_KEY`, then you must modify the code here:
+https://github.com/mahaloz/DAILA/blob/13ca044dd677d47dc50092651dcff96a3a9c1103/daila/controller.py#L13
+
+Simply place your key there. 
+
+
+### Manual Install
+If the above fails, you will need to manually install.
+To manually install, first `pip3 install -e .` on the repo, then copy the python file for your decompiler in your 
+decompilers plugins/scripts folder. 
+
+### Ghidra Gotchas
+You must have `python3` in your path for the Ghidra version to work. We quite literally call it from inside Python 2.
+
+## Usage
+In your decompiler you can access the DAILA options in one of two ways:
+1. If you are not in Ghidra, you can right-click a function and go to `Plugins` or directly use the `DAILA ...` menu.
+2. If you are in Ghidra, use `Tools->DAILA ...` when selected on a function
+
+Currently, we only support `Function Identification`, which can also be activated with `Ctrl+Alt+Shift+I`.
+![](./assets/daila_ida_2.png)
+
+Comments will appear in the function header with the identification or an error message.
+
+## Supported Decompilers
+- IDA
+- Binja
+- Ghidra
+
+## Features
+### Function Identification
+We use ChatGPT to attempt to:
+1. Identify which open-source project this decompilation could be a result of 
+2. Find a link to that said source if it exists 
+
+```
+
+`daila/__init__.py`:
+
+```py
+__version__ = "0.0.0"
+```
+
+`daila/__main__.py`:
+
+```py
+import argparse
+
+from .installer import DAILAInstaller
+from .controller_server import DAILAServer
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="""
+            The DAILA Command Line Util. 
+            """,
+        epilog="""
+            Examples:
+            daila --install
+            """
+    )
+    parser.add_argument(
+        "--install", action="store_true", help="""
+        Install the DAILA core to supported decompilers as plugins. This option will start an interactive
+        prompt asking for install paths for all supported decompilers. Each install path is optional and 
+        will be skipped if not path is provided during install. 
+        """
+    )
+    parser.add_argument(
+        "-server", action="store_true", help="""
+        Starts the DAILA Server for use with Ghidra
+        """
+    )
+    args = parser.parse_args()
+
+    if args.install:
+        DAILAInstaller().install()
+
+    if args.server:
+        DAILAServer().start_xmlrpc_server()
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`daila/controller.py`:
+
+```py
+import re
+from typing import Optional
+import os
+import textwrap
+
+import openai
+
+LINK_REGEX = r"""(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)/)(?:[^\s()<>{}\[\]]+|\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\))+(?:\([^\s()]*?\([^\s()]+\)[^\s()]*?\)|\([^\s]+?\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’])|(?:(?<!@)[a-z0-9]+(?:[.\-][a-z0-9]+)*[.](?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int|jobs|mobi|museum|name|post|pro|tel|travel|xxx|ac|ad|ae|af|ag|ai|al|am|an|ao|aq|ar|as|at|au|aw|ax|az|ba|bb|bd|be|bf|bg|bh|bi|bj|bm|bn|bo|br|bs|bt|bv|bw|by|bz|ca|cc|cd|cf|cg|ch|ci|ck|cl|cm|cn|co|cr|cs|cu|cv|cx|cy|cz|dd|de|dj|dk|dm|do|dz|ec|ee|eg|eh|er|es|et|eu|fi|fj|fk|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gp|gq|gr|gs|gt|gu|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|io|iq|ir|is|it|je|jm|jo|jp|ke|kg|kh|ki|km|kn|kp|kr|kw|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mk|ml|mm|mn|mo|mp|mq|mr|ms|mt|mu|mv|mw|mx|my|mz|na|nc|ne|nf|ng|ni|nl|no|np|nr|nu|nz|om|pa|pe|pf|pg|ph|pk|pl|pm|pn|pr|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|Ja|sk|sl|sm|sn|so|sr|ss|st|su|sv|sx|sy|sz|tc|td|tf|tg|th|tj|tk|tl|tm|tn|to|tp|tr|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|ye|yt|yu|za|zm|zw)\b/?(?!@)))"""
+
+
+class DAILAController:
+    def __init__(self, openai_api_key=None):
+        openai.api_key = os.getenv("OPENAI_API_KEY") or openai_api_key
+
+    #
+    # decompiler interface
+    #
+
+    def _cmt_func(self, func_addr: int, comment: str, **kwargs):
+        return False
+
+    def _decompile(self, func_addr: int, **kwargs):
+        return False
+
+    def _current_function_addr(self, **kwargs):
+        return None
+
+    #
+    # gpt interface
+    #
+
+    def _ask_gpt(self, question):
+        response = None
+        try:
+            response = openai.Completion.create(
+                model="text-davinci-003",
+                prompt=question,
+                temperature=0.6,
+                max_tokens=500,
+                top_p=1,
+                frequency_penalty=1,
+                presence_penalty=1
+            )
+        except openai.OpenAIError as e:
+            raise print(f"ChatGPT could not complete the request: {str(e)}")
+
+        answer = None
+        try:
+            answer = response["choices"][0]["text"]
+        except (KeyError, IndexError) as e:
+            pass
+
+        return answer
+
+    #
+    # identification public api
+    #
+
+    def id_current_function(self, **kwargs):
+        func_addr = self._current_function_addr(**kwargs)
+        if func_addr is None:
+            return False
+
+        success, id_str = self.identify_decompilation(func_addr, **kwargs)
+        if not success or id_str is None:
+            return False
+
+        return self._cmt_func(func_addr, id_str, **kwargs)
+
+    def identify_decompilation(self, func_addr, dec=None, **kwargs):
+        dec = dec or self._decompile(func_addr, **kwargs)
+        if not dec:
+            return False, None
+
+        response: Optional[str] = self._ask_gpt(
+            "What open source project is this code from. Please only give me the program name and package name:\n"
+            f'"{dec}"'
+        )
+
+        if response is None:
+            return False, None
+
+        # reduce the output text
+        from_str = response.split("from")[-1].strip()
+
+        # attempt a link lookup
+        link_response: Optional[str] = self._ask_gpt(
+            f"Where can I find {from_str}?"
+        )
+        if link_response is None:
+            return True, from_str
+
+        links = re.findall(LINK_REGEX, link_response)
+        id_str = f"""\
+        DAILA IDENTIFICATION:
+        {from_str}
+        
+        Links: {links}
+        """
+        return True, textwrap.dedent(id_str)
+```
+
+`daila/controller_server.py`:
+
+```py
+from daila.controller import DAILAController
+from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+
+"""
+What you want:
+- Start a server that allows somone to send decomplation
+- You send back identification string 
+"""
+
+
+class RequestHandler(SimpleXMLRPCRequestHandler):
+    rpc_paths = ("/RPC2",)
+
+
+class DAILAServer:
+    def __init__(self, host=None, port=None):
+        self.host = host
+        self.port = port
+        self.running = False
+        self.controller = DAILAController()
+
+    #
+    # Public API
+    #
+    def identify_function(self, decompilation: str):
+        if not decompilation:
+            print("NO DECOMPILATION")
+            return ""
+
+        success, result = self.controller.identify_decompilation(None, dec=decompilation)
+        if not success or not isinstance(result, str):
+            return ""
+
+        return result
+
+    #
+    # XMLRPC Server
+    #
+
+    def ping(self):
+        return True
+
+    def shutdown(self):
+        self.running = False
+
+    def start_xmlrpc_server(self, host="localhost", port=44414):
+        """
+        Initialize the XMLRPC thread.
+        """
+        host = host or self.host
+        port = port or self.port
+
+        print("[+] Starting XMLRPC server: {}:{}".format(host, port))
+        server = SimpleXMLRPCServer(
+            (host, port),
+            requestHandler=RequestHandler,
+            logRequests=False,
+            allow_none=True
+        )
+        server.register_introspection_functions()
+        server.register_function(self.identify_function)
+        server.register_function(self.ping)
+        server.register_function(self.shutdown)
+        print("[+] Registered decompilation server!")
+        self.running = True
+        while self.running:
+            server.handle_request()
+
+```
+
+`daila/installer.py`:
+
+```py
+import textwrap
+from pathlib import Path
+
+import pkg_resources
+from binsync.installer import Installer
+
+
+class DAILAInstaller(Installer):
+    def __init__(self):
+        super().__init__(targets=("ida", "ghidra", "binja"))
+        self.plugins_path = Path(
+            pkg_resources.resource_filename("daila", f"plugins")
+        )
+
+    def display_prologue(self):
+        print(textwrap.dedent("""
+         ▄▄▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄            ▄▄▄▄▄▄▄▄▄▄▄ 
+        ▐░░░░░░░░░░▌ ▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌          ▐░░░░░░░░░░░▌
+        ▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀█░█▀▀▀▀ ▐░▌          ▐░█▀▀▀▀▀▀▀█░▌
+        ▐░▌       ▐░▌▐░▌       ▐░▌     ▐░▌     ▐░▌          ▐░▌       ▐░▌
+        ▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄█░▌     ▐░▌     ▐░▌          ▐░█▄▄▄▄▄▄▄█░▌
+        ▐░▌       ▐░▌▐░░░░░░░░░░░▌     ▐░▌     ▐░▌          ▐░░░░░░░░░░░▌
+        ▐░▌       ▐░▌▐░█▀▀▀▀▀▀▀█░▌     ▐░▌     ▐░▌          ▐░█▀▀▀▀▀▀▀█░▌
+        ▐░▌       ▐░▌▐░▌       ▐░▌     ▐░▌     ▐░▌          ▐░▌       ▐░▌
+        ▐░█▄▄▄▄▄▄▄█░▌▐░▌       ▐░▌ ▄▄▄▄█░█▄▄▄▄ ▐░█▄▄▄▄▄▄▄▄▄ ▐░▌       ▐░▌
+        ▐░░░░░░░░░░▌ ▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
+         ▀▀▀▀▀▀▀▀▀▀   ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀         ▀ 
+                                                                 
+        Now installing DAILA...
+        Please input your decompiler install paths as prompted. Enter nothing to either use
+        the default install path if one exist, or to skip.
+        """))
+
+    def install_ida(self, path=None):
+        ida_plugin_path = super().install_ida(path=path)
+        if ida_plugin_path is None:
+            return
+
+        src_ida_py = self.plugins_path.joinpath("daila_ida.py").absolute()
+        dst_ida_py = ida_plugin_path.joinpath("daila_ida.py").absolute()
+        self.link_or_copy(src_ida_py, dst_ida_py)
+        return dst_ida_py
+
+    def install_ghidra(self, path=None):
+        ghidra_path = self.ask_path("Ghidra Install Path:") if path is None else path
+        if not ghidra_path:
+            return None
+
+        ghidra_path: Path = ghidra_path.expanduser().absolute()
+        if not path.exists():
+            return None
+
+        src_ghidra_py = self.plugins_path.joinpath("daila_ghidra.py").absolute()
+        dst_path = ghidra_path.expanduser().absolute()
+        if not dst_path.exists():
+            return None
+
+        self.link_or_copy(src_ghidra_py, dst_path)
+        return dst_path.joinpath(src_ghidra_py.name)
+
+    def install_binja(self, path=None):
+        binja_plugin_path = super().install_binja(path=path)
+        if binja_plugin_path is None:
+            return None
+
+        src_path = self.plugins_path.joinpath("daila_binja.py")
+        dst_path = binja_plugin_path.joinpath("daila_binja.py")
+        self.link_or_copy(src_path, dst_path)
+        return dst_path
+
+```
+
+`plugins/daila_binja.py`:
+
+```py
+from binaryninja import PluginCommand
+from binaryninja import lineardisassembly
+from binaryninja.function import DisassemblySettings
+from binaryninja.enums import DisassemblyOption, LinearDisassemblyLineType, InstructionTextTokenType
+from PySide6.QtWidgets import QProgressDialog
+
+
+from daila.controller import DAILAController
+
+
+class BinjaDAILAController(DAILAController):
+    def __init__(self, bv=None):
+        super().__init__()
+        self.bv = None
+
+    def _current_function_addr(self, **kwargs):
+        addr = kwargs.get("address", None)
+        if addr is None:
+            return None
+
+        return addr
+
+    def _decompile(self, func_addr: int, **kwargs):
+        bv = kwargs.get("bv", None)
+        if bv is None:
+            return None
+
+        func = DAILAPlugin.get_func(bv, func_addr)
+        if func is None:
+            return None
+
+        settings = DisassemblySettings()
+        settings.set_option(DisassemblyOption.ShowVariableTypesWhenAssigned)
+        settings.set_option(DisassemblyOption.GroupLinearDisassemblyFunctions)
+        settings.set_option(DisassemblyOption.WaitForIL)
+
+        decomp = ""
+        obj = lineardisassembly.LinearViewObject.single_function_language_representation(func, settings)
+        cursor = obj.cursor
+        while True:
+            for line in cursor.lines:
+                if line.type in [
+                    LinearDisassemblyLineType.FunctionHeaderStartLineType,
+                    LinearDisassemblyLineType.FunctionHeaderEndLineType,
+                    LinearDisassemblyLineType.AnalysisWarningLineType,
+                ]:
+                    continue
+                for i in line.contents.tokens:
+                    if i.type == InstructionTextTokenType.TagToken:
+                        continue
+
+                    decomp += str(i)
+                decomp += "\n"
+
+            if not cursor.next():
+                break
+
+        return decomp
+
+    def _cmt_func(self, func_addr: int, comment: str, **kwargs):
+        bv = kwargs.get("bv", None)
+        if bv is None:
+            return None
+
+        func = DAILAPlugin.get_func(bv, func_addr)
+        if func is None:
+            return None
+
+        func.comment = comment
+
+
+class DAILAPlugin:
+    def __init__(self):
+        self.controller = BinjaDAILAController()
+
+    @staticmethod
+    def get_func(bv, address):
+        funcs = bv.get_functions_containing(address)
+        try:
+            func = funcs[0]
+        except IndexError:
+            return None
+
+        return func
+
+    @staticmethod
+    def is_func(bv, address):
+        func = DAILAPlugin.get_func(bv, address)
+        return func is not None
+
+    def identify_function(self, bv, address):
+        print("[+] Identifying Function Now. Please Wait...")
+        prg = QProgressDialog("Querying AI...", "Stop", 0, 1, None)
+        prg.show()
+        self.controller.id_current_function(address=address, bv=bv)
+        prg.setValue(1)
+        prg.close()
+
+
+plugin = DAILAPlugin()
+PluginCommand.register_for_address(
+    "DAILA: Identify Function",
+    "Identifies the current function you are in and sets response in comment",
+    plugin.identify_function,
+    is_valid=plugin.is_func
+)
+
+```
+
+`plugins/daila_ghidra.py`:
+
+```py
+# Activates DAILA Identification on the current function you are viewing
+#@category AI
+#@menupath Tools.DAILA: Identify Function
+#@keybinding ctrl alt shift i
+
+import xmlrpclib
+from time import sleep
+import subprocess
+
+from ghidra.app.decompiler.flatapi import FlatDecompilerAPI
+from ghidra.program.flatapi import FlatProgramAPI
+
+fpapi = FlatProgramAPI(getState().getCurrentProgram())
+fdapi = FlatDecompilerAPI(fpapi)
+
+
+def current_func():
+    func = fpapi.getFunctionContaining(currentAddress)
+    return func if func else None
+
+
+def decompile_curr_func():
+    func = current_func()
+    if func is None:
+        return None
+
+    decomp = fdapi.decompile(func)
+    if not decomp:
+        return None
+
+    return str(decomp)
+
+
+def set_func_comment(comment):
+    func = current_func()
+    if func is None:
+        return False
+
+    func.setComment(comment)
+    return True
+
+
+def request_identification():
+    server = xmlrpclib.ServerProxy('http://localhost:44414')
+    try:
+        server.ping()
+    except Exception as e:
+        return None
+
+    decomp = decompile_curr_func()
+    if decomp is None:
+        return None
+
+    resp = server.identify_function(decomp)
+    if not resp:
+        return None
+
+    set_func_comment(resp)
+    server.shutdown()
+
+
+def start_server():
+    return subprocess.Popen(["python3", "-m", "daila", "-server"])
+
+
+def identify_function():
+    server_proc = start_server()
+    sleep(1)
+    request_identification()
+    server_proc.kill()
+
+
+if __name__ == "__main__":
+    print("[+] Starting identification of function " + str(current_func()))
+    identify_function()
+    print("[+] Finished")
+
+```
+
+`plugins/daila_ida.py`:
+
+```py
+import threading
+import functools
+from typing import Optional
+
+import idaapi
+import ida_hexrays
+import idc
+from PyQt5.QtWidgets import QProgressDialog
+
+from daila.controller import DAILAController
+
+controller: Optional["IDADAILAController"] = None
+
+
+#
+# IDA Threading
+#
+
+
+def is_mainthread():
+    """
+    Return a bool that indicates if this is the main application thread.
+    """
+    return isinstance(threading.current_thread(), threading._MainThread)
+
+
+def execute_sync(func, sync_type):
+    """
+    Synchronize with the disassembler for safe database access.
+    Modified from https://github.com/vrtadmin/FIRST-plugin-ida
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> object:
+        output = [None]
+
+        #
+        # this inline function definition is technically what will execute
+        # in the context of the main thread. we use this thunk to capture
+        # any output the function may want to return to the user.
+        #
+
+        def thunk():
+            output[0] = func(*args, **kwargs)
+            return 1
+
+        if is_mainthread():
+            thunk()
+        else:
+            idaapi.execute_sync(thunk, sync_type)
+
+        # return the output of the synchronized execution
+        return output[0]
+    return wrapper
+
+
+def execute_read(func):
+    return execute_sync(func, idaapi.MFF_READ)
+
+
+def execute_write(func):
+    return execute_sync(func, idaapi.MFF_WRITE)
+
+
+def execute_ui(func):
+    return execute_sync(func, idaapi.MFF_FAST)
+
+#
+# IDA PLUGIN
+#
+
+
+def PLUGIN_ENTRY(*args, **kwargs):
+    return DAILAPlugin(*args, **kwargs)
+
+
+class DAILAPlugin(idaapi.plugin_t):
+    flags = idaapi.PLUGIN_FIX
+    comment = "Start the DAILA Interface"
+    help = "DAILA Help"
+    wanted_name = "Identify the current function you are looking at!"
+
+    id_action_name = "daila:identify_function"
+    id_menu_path = "Edit/DAILA/Explain function"
+
+    def __init__(self, *args, **kwargs):
+        print("[DAILA] loaded!")
+
+
+    def init(self):
+        """
+        This init is highly inspired by the code here:
+        https://github.com/JusticeRage/Gepetto
+        """
+        global controller
+        controller = IDADAILAController()
+
+        # Check for whether the decompiler is available
+        if not ida_hexrays.init_hexrays_plugin():
+            return idaapi.PLUGIN_SKIP
+
+        # Function explaining action
+        explain_action = idaapi.action_desc_t(
+            self.id_action_name,
+            'ID Function',
+            IdentifyAction(),
+            "Ctrl+Alt+Shift+I",
+            'Use ChatGPT to identify the currently selected function',
+            199
+        )
+        idaapi.register_action(explain_action)
+        idaapi.attach_action_to_menu(self.id_menu_path, self.id_action_name, idaapi.SETMENU_APP)
+        
+        self.menu = ContextMenuHooks()
+        self.menu.hook()
+        return idaapi.PLUGIN_KEEP
+    
+    def run(self, arg):
+        pass
+
+    def term(self):
+        pass 
+
+
+class ContextMenuHooks(idaapi.UI_Hooks):
+    def finish_populating_widget_popup(self, form, popup):
+        # Add actions to the context menu of the Pseudocode view
+        if idaapi.get_widget_type(form) == idaapi.BWN_PSEUDOCODE or idaapi.get_widget_type(form) == idaapi.BWN_DISASM:
+            idaapi.attach_action_to_popup(form, popup, DAILAPlugin.id_action_name, "DAILA/")
+
+
+class IdentifyAction(idaapi.action_handler_t):
+    def __init__(self):
+        idaapi.action_handler_t.__init__(self)
+
+    def activate(self, ctx):
+        dec_view = ida_hexrays.get_widget_vdui(ctx.widget)
+
+        prg = QProgressDialog("Querying AI...", "Stop", 0, 1, None)
+        prg.show()
+        controller.id_current_function()
+        prg.setValue(1)
+        prg.close()
+
+        dec_view.refresh_view(False)
+        return 1
+
+    # This action is always available.
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
+    
+class IDADAILAController(DAILAController):
+    def _decompile(self, func_addr: int, **kwargs):
+        try:
+            cfunc = ida_hexrays.decompile(func_addr)
+        except Exception as e:
+            return None
+
+        return str(cfunc)
+
+    def _current_function_addr(self, **kwargs):
+        curr_ea = idaapi.get_screen_ea()
+        if curr_ea is None:
+            return None
+
+        func = idaapi.get_func(curr_ea)
+        if func is None:
+            return None
+
+        return func.start_ea
+    
+    def _cmt_func(self, func_addr: int, comment: str, **kwargs):
+        idc.set_func_cmt(func_addr, comment, 0)
+        return True
+
+    @execute_write
+    def id_current_function(self):
+        return super().id_current_function()
+
+
+```
+
+`setup.cfg`:
+
+```cfg
+[metadata]
+name = DAILA
+version = attr: daila.__version__
+url = https://github.com/mahaloz/DAILA
+classifiers =
+    License :: OSI Approved :: BSD License
+    Programming Language :: Python :: 3
+    Programming Language :: Python :: 3.6
+license = BSD 2 Clause
+license_files = LICENSE
+description = Decompiler Artificial Intelligence Language Assistant
+long_description = file: README.md
+long_description_content_type = text/markdown
+
+[options]
+install_requires =
+    openai
+    binsync
+    PySide6
+
+python_requires = >= 3.5
+include_package_data = True
+packages = find:
+
+[options.package_data]
+daila =
+    plugins/*.py
+
+[options.entry_points]
+console_scripts =
+    daila = daila.__main__:main
+
+```
+
+`setup.py`:
+
+```py
+# pylint: disable=missing-class-docstring
+import os
+import platform
+import shutil
+from pathlib import Path
+import sys
+from distutils.util import get_platform
+from distutils.command.build import build as st_build
+
+from setuptools import setup
+from setuptools.command.develop import develop as st_develop
+
+
+def _copy_plugins():
+    local_plugins = Path("plugins").absolute()
+    daila_loc = Path("daila").absolute()
+    pip_e_plugins = daila_loc.joinpath("plugins").absolute()
+
+    # clean the install location of symlink or folder
+    shutil.rmtree(pip_e_plugins, ignore_errors=True)
+    try:
+        os.unlink(pip_e_plugins)
+    except:
+        pass
+
+    # first attempt a symlink, if it works, exit early
+    try:
+        os.symlink(local_plugins, pip_e_plugins, target_is_directory=True)
+        return
+    except:
+        pass
+
+    # copy if symlinking is not available on target system
+    try:
+        shutil.copytree("plugins", "daila/plugins")
+    except:
+        pass
+
+class build(st_build):
+    def run(self, *args):
+        self.execute(_copy_plugins, (), msg="Copying plugins...")
+        super().run(*args)
+
+class develop(st_develop):
+    def run(self, *args):
+        self.execute(_copy_plugins, (), msg="Linking or copying local plugins folder...")
+        super().run(*args)
+
+
+cmdclass = {
+    "build": build,
+    "develop": develop,
+}
+
+if 'bdist_wheel' in sys.argv and '--plat-name' not in sys.argv:
+    sys.argv.append('--plat-name')
+    name = get_platform()
+    if 'linux' in name:
+        sys.argv.append('manylinux2014_' + platform.machine())
+    else:
+        # https://www.python.org/dev/peps/pep-0425/
+        sys.argv.append(name.replace('.', '_').replace('-', '_'))
+
+setup(cmdclass=cmdclass)
+
+```
