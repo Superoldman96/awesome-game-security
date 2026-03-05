@@ -1,0 +1,723 @@
+Project Path: arc_gmh5225_Kernel_driver_hack_e8xcnujd
+
+Source Tree:
+
+```txt
+arc_gmh5225_Kernel_driver_hack_e8xcnujd
+├── LICENSE
+├── README.md
+├── kernel
+│   ├── Kconfig
+│   ├── Makefile
+│   ├── comm.h
+│   ├── entry.c
+│   ├── memory.c
+│   ├── memory.h
+│   ├── process.c
+│   └── process.h
+└── user
+    ├── Makefile
+    ├── driver.hpp
+    ├── main.cpp
+    └── test.sh
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2023 JiangNight
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# Kernel_driver_hack
+> Android/Linux Kernel driver read and write  memory.
+
+##### ~~暂时无法读取bss段内存~~
+
+##### ~~读取内存过长时会出现错误~~
+
+使用相应型号的内核源码编译驱动文件
+
+使用`insmod xxx`命令即可加载驱动
+
+使用`rmmod xxx`命令即可卸载驱动
+
+使用`dmesg`查看驱动日志
+
+Google官方编译内核教程(只提供GKI内核编译)：`https://source.android.com/docs/setup/build/building-kernels?hl=zh-cn`
+
+现已在telegram中发现号称`小迷糊` `雪花`等群聊，滥用本项目模块，做各种游戏辅助外挂，并且一部分工作室拿本项目源码去收费，以及出现`wanbai`开源模块 皆是复制本项目源码以作者的名号到处宣传 本作者只有一个名字：`JiagNight`，共创者  [Rogo](https://github.com/rogxo/kernel_hack)。以及主要测试以及机型适配提供： [LuMing](https://github.com/smm800)，感谢大佬的帮助:[小黑](https://github.com/GameCheatExpert)
+
+请勿拿本项目用作非法用途或商用，本项目开源仅供学习交流，并且源码写的比较烂，还希望各位大佬提交fork优化本驱动模块
+
+```
+
+`kernel/Kconfig`:
+
+```
+config KERNEL_HACK
+    tristate "Kernel Hack Driver"
+    default y
+    help
+    This is the kernel hack driver for android system.
+
+
+```
+
+`kernel/Makefile`:
+
+```
+obj-y += memory.o
+obj-y += process.o
+obj-y += entry.o
+
+
+```
+
+`kernel/comm.h`:
+
+```h
+typedef struct _COPY_MEMORY {
+    pid_t pid;
+    uintptr_t addr;
+    void* buffer;
+    size_t size;
+} COPY_MEMORY, *PCOPY_MEMORY;
+
+typedef struct _MODULE_BASE {
+    pid_t pid;
+    char* name;
+    uintptr_t base;
+} MODULE_BASE, *PMODULE_BASE;
+
+enum OPERATIONS {
+    OP_INIT_KEY = 0x800,
+    OP_READ_MEM = 0x801,
+    OP_WRITE_MEM = 0x802,
+    OP_MODULE_BASE = 0x803,
+};
+```
+
+`kernel/entry.c`:
+
+```c
+#include <linux/module.h>
+#include <linux/tty.h>
+#include <linux/miscdevice.h>
+#include "comm.h"
+#include "memory.h"
+#include "process.h"
+
+#define DEVICE_NAME "JiangNight"
+
+int dispatch_open(struct inode *node, struct file *file)
+{
+    return 0;
+}
+
+int dispatch_close(struct inode *node, struct file *file)
+{
+    return 0;
+}
+
+long dispatch_ioctl(struct file* const file, unsigned int const cmd, unsigned long const arg)
+{
+    static COPY_MEMORY cm;
+    static MODULE_BASE mb;
+    static char key[0x100] = {0};
+    static char name[0x100] = {0};
+    static bool is_verified = false;
+
+    if(cmd == OP_INIT_KEY && !is_verified) {
+        if (copy_from_user(key, (void __user*)arg, sizeof(key)-1) != 0) {
+            return -1;
+        }
+    switch (cmd) {
+        case OP_READ_MEM:
+            {
+                if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
+                    return -1;
+                }
+                if (read_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
+                    return -1;
+                }
+            }
+            break;
+        case OP_WRITE_MEM:
+            {
+                if (copy_from_user(&cm, (void __user*)arg, sizeof(cm)) != 0) {
+                    return -1;
+                }
+                if (write_process_memory(cm.pid, cm.addr, cm.buffer, cm.size) == false) {
+                    return -1;
+                }
+            }
+            break;
+        case OP_MODULE_BASE:
+            {
+                if (copy_from_user(&mb, (void __user*)arg, sizeof(mb)) != 0 
+                ||  copy_from_user(name, (void __user*)mb.name, sizeof(name)-1) !=0) {
+                    return -1;
+                }
+                mb.base = get_module_base(mb.pid, name);
+                if (copy_to_user((void __user*)arg, &mb, sizeof(mb)) !=0) {
+                    return -1;
+                }
+            }
+            break;
+        default:
+            break;
+    }
+    return 0;
+  }
+}
+
+struct file_operations dispatch_functions = {
+    .owner   = THIS_MODULE,
+    .open    = dispatch_open,
+    .release = dispatch_close,
+    .unlocked_ioctl = dispatch_ioctl,
+};
+
+struct miscdevice misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = DEVICE_NAME,
+	.fops = &dispatch_functions,
+};
+
+int __init driver_entry(void)
+{
+    int ret;
+    printk("[+] driver_entry");
+	ret = misc_register(&misc);
+	return ret;
+}
+
+void __exit driver_unload(void)
+{
+    printk("[+] driver_unload");
+	misc_deregister(&misc);
+}
+
+module_init(driver_entry);
+module_exit(driver_unload);
+
+MODULE_DESCRIPTION("Linux Kernel.");
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("JiangNight");
+
+```
+
+`kernel/memory.c`:
+
+```c
+#include "memory.h"
+#include <linux/tty.h>
+#include <linux/io.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+
+#include <asm/cpu.h>
+#include <asm/io.h>
+#include <asm/page.h>
+#include <asm/pgtable.h>
+
+extern struct mm_struct *get_task_mm(struct task_struct *task);
+
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
+extern void mmput(struct mm_struct *);
+
+phys_addr_t translate_linear_address(struct mm_struct* mm, uintptr_t va) {
+
+    pgd_t *pgd;
+    p4d_t *p4d;
+    pmd_t *pmd;
+    pte_t *pte;
+    pud_t *pud;
+	
+    phys_addr_t page_addr;
+    uintptr_t page_offset;
+    
+    pgd = pgd_offset(mm, va);
+    if(pgd_none(*pgd) || pgd_bad(*pgd)) {
+        return 0;
+    }
+    p4d = p4d_offset(pgd, va);
+    if (p4d_none(*p4d) || p4d_bad(*p4d)) {
+    	return 0;
+    }
+	pud = pud_offset(p4d,va);
+	if(pud_none(*pud) || pud_bad(*pud)) {
+        return 0;
+    }
+	pmd = pmd_offset(pud,va);
+	if(pmd_none(*pmd)) {
+        return 0;
+    }
+	pte = pte_offset_kernel(pmd,va);
+	if(pte_none(*pte)) {
+        return 0;
+    }
+	if(!pte_present(*pte)) {
+        return 0;
+    }
+	//页物理地址
+	page_addr = (phys_addr_t)(pte_pfn(*pte) << PAGE_SHIFT);
+	//页内偏移
+	page_offset = va & (PAGE_SIZE-1);
+	
+	return page_addr + page_offset;
+}
+#else
+phys_addr_t translate_linear_address(struct mm_struct* mm, uintptr_t va) {
+
+    pgd_t *pgd;
+    pmd_t *pmd;
+    pte_t *pte;
+    pud_t *pud;
+	
+    phys_addr_t page_addr;
+    uintptr_t page_offset;
+    
+    pgd = pgd_offset(mm, va);
+    if(pgd_none(*pgd) || pgd_bad(*pgd)) {
+        return 0;
+    }
+	pud = pud_offset(pgd,va);
+	if(pud_none(*pud) || pud_bad(*pud)) {
+        return 0;
+    }
+	pmd = pmd_offset(pud,va);
+	if(pmd_none(*pmd)) {
+        return 0;
+    }
+	pte = pte_offset_kernel(pmd,va);
+	if(pte_none(*pte)) {
+        return 0;
+    }
+	if(!pte_present(*pte)) {
+        return 0;
+    }
+	//页物理地址
+	page_addr = (phys_addr_t)(pte_pfn(*pte) << PAGE_SHIFT);
+	//页内偏移
+	page_offset = va & (PAGE_SIZE-1);
+	
+	return page_addr + page_offset;
+}
+#endif
+
+#ifndef ARCH_HAS_VALID_PHYS_ADDR_RANGE
+static inline int valid_phys_addr_range(phys_addr_t addr, size_t count) {
+    return addr + count <= __pa(high_memory);
+}
+#endif
+
+bool read_physical_address(phys_addr_t pa, void* buffer, size_t size) {
+    void* mapped;
+
+    if (!pfn_valid(__phys_to_pfn(pa))) {
+        return false;
+    }
+    if (!valid_phys_addr_range(pa, size)) {
+        return false;
+    }
+    mapped = ioremap_cache(pa, size);
+    if (!mapped) {
+        return false;
+    }
+    if(copy_to_user(buffer, mapped, size)) {
+        iounmap(mapped);
+        return false;
+    }
+    iounmap(mapped);
+    return true;
+}
+
+bool write_physical_address(phys_addr_t pa, void* buffer, size_t size) {
+    void* mapped;
+
+    if (!pfn_valid(__phys_to_pfn(pa))) {
+        return false;
+    }
+    if (!valid_phys_addr_range(pa, size)) {
+        return false;
+    }
+    mapped = ioremap_cache(pa, size);
+    if (!mapped) {
+        return false;
+    }
+    if(copy_from_user(mapped, buffer, size)) {
+        iounmap(mapped);
+        return false;
+    }
+    iounmap(mapped);
+    return true;
+}
+
+bool read_process_memory(
+    pid_t pid, 
+    uintptr_t addr, 
+    void* buffer, 
+    size_t size) {
+    
+    struct task_struct* task;
+    struct mm_struct* mm;
+    struct pid* pid_struct;
+    phys_addr_t pa;
+
+    pid_struct = find_get_pid(pid);
+    if (!pid_struct) {
+        return false;
+    }
+	task = get_pid_task(pid_struct, PIDTYPE_PID);
+	if (!task) {
+        return false;
+    }
+	mm = get_task_mm(task);
+    if (!mm) {
+        return false;
+    }
+    mmput(mm);
+    pa = translate_linear_address(mm, addr);
+    if (!pa) {
+        return false;
+    }
+    return read_physical_address(pa, buffer, size);
+}
+
+bool write_process_memory(
+    pid_t pid, 
+    uintptr_t addr, 
+    void* buffer, 
+    size_t size) {
+    
+    struct task_struct* task;
+    struct mm_struct* mm;
+    struct pid* pid_struct;
+    phys_addr_t pa;
+
+    pid_struct = find_get_pid(pid);
+    if (!pid_struct) {
+        return false;
+    }
+    task = get_pid_task(pid_struct, PIDTYPE_PID);
+    if (!task) {
+        return false;
+    }
+    mm = get_task_mm(task);
+    if (!mm) {
+        return false;
+    }
+    mmput(mm);
+    pa = translate_linear_address(mm, addr);
+    if (!pa) {
+        return false;
+    }
+    return write_physical_address(pa,buffer,size);
+}
+
+```
+
+`kernel/memory.h`:
+
+```h
+#include <linux/kernel.h>
+#include <linux/sched.h>
+
+phys_addr_t translate_linear_address(struct mm_struct* mm, uintptr_t va);
+
+bool read_physical_address(phys_addr_t pa, void* buffer, size_t size);
+
+bool write_physical_address(phys_addr_t pa, void* buffer, size_t size);
+
+bool read_process_memory(pid_t pid, uintptr_t addr, void* buffer, size_t size);
+
+bool write_process_memory(pid_t pid, uintptr_t addr, void* buffer, size_t size);
+
+```
+
+`kernel/process.c`:
+
+```c
+#include "process.h"
+#include <linux/sched.h>
+#include <linux/module.h>
+#include <linux/tty.h>
+#include <linux/mm.h>
+#include <linux/version.h>
+
+#define ARC_PATH_MAX 256
+
+extern struct mm_struct *get_task_mm(struct task_struct *task);
+
+#if(LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 61))
+extern void mmput(struct mm_struct *);
+#endif
+
+uintptr_t get_module_base(pid_t pid, char* name) 
+{
+    struct pid* pid_struct;
+    struct task_struct* task;
+    struct mm_struct* mm;
+    struct vm_area_struct *vma;
+
+    pid_struct = find_get_pid(pid);
+    if (!pid_struct) {
+        return false;
+    }
+    task = get_pid_task(pid_struct, PIDTYPE_PID);
+    if (!task) {
+        return false;
+    }
+    mm = get_task_mm(task);
+    if (!mm) {
+        return false;
+    }
+    mmput(mm);
+
+    for (vma = mm->mmap; vma; vma = vma->vm_next) {
+        char buf[ARC_PATH_MAX];
+        char *path_nm = "";
+
+        if (vma->vm_file) {
+            path_nm = file_path(vma->vm_file, buf, ARC_PATH_MAX-1);
+            if (!strcmp(kbasename(path_nm), name)) {
+                return vma->vm_start;
+            }
+        }
+    }
+    return 0;
+}
+ 
+```
+
+`kernel/process.h`:
+
+```h
+#include <linux/kernel.h>
+
+uintptr_t get_module_base(pid_t pid, char* name);
+
+```
+
+`user/Makefile`:
+
+```
+CC := /home/rog/project/android_kernel/toolchain/gcc-arm-9.2-2019.12-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-g++
+CFLAGS := -g
+TARGET := main
+SRCS := $(wildcard *.cpp)
+OBJS := $(patsubst %cpp,%o,$(SRCS))
+all:$(TARGET)
+%.o:%.cpp
+	$(CC) $(CFLAGS) -static -c $<
+$(TARGET):$(OBJS)
+	$(CC) $(CFLAGS) -static -o $@ $^
+clean:
+	rm -rf $(TARGET) *.o
+```
+
+`user/driver.hpp`:
+
+```hpp
+#include <sys/fcntl.h>
+#include <sys/ioctl.h>
+
+#define DEVICE_NAME "/dev/JiangNight"
+
+class c_driver {
+private:
+    int fd;
+    pid_t pid;
+
+    typedef struct _COPY_MEMORY {
+        pid_t pid;
+        uintptr_t addr;
+        void* buffer;
+        size_t size;
+    } COPY_MEMORY, *PCOPY_MEMORY;
+
+    typedef struct _MODULE_BASE {
+        pid_t pid;
+        char* name;
+        uintptr_t base;
+    } MODULE_BASE, *PMODULE_BASE;
+
+    enum OPERATIONS {
+        OP_INIT_KEY = 0x800,
+        OP_READ_MEM = 0x801,
+        OP_WRITE_MEM = 0x802,
+        OP_MODULE_BASE = 0x803,
+    };
+
+public:
+    c_driver() {
+        fd = open(DEVICE_NAME, O_RDWR);
+        if (fd == -1) {
+            printf("[-] open driver failed\n");
+        }
+    }
+
+    ~c_driver() {
+        if (fd > 0)
+            close(fd);
+    }
+
+    void initialize(pid_t pid) {
+        this->pid = pid;
+    }
+
+
+    bool read(uintptr_t addr, void *buffer, size_t size) {
+        COPY_MEMORY cm;
+
+        cm.pid = this->pid;
+        cm.addr = addr;
+        cm.buffer = buffer;
+        cm.size = size;
+
+        if (ioctl(fd, OP_READ_MEM, &cm) != 0) {
+            return false;
+        }
+        return true;
+    }
+
+    bool write(uintptr_t addr, void *buffer, size_t size) {
+        COPY_MEMORY cm;
+
+        cm.pid = this->pid;
+        cm.addr = addr;
+        cm.buffer = buffer;
+        cm.size = size;
+
+        if (ioctl(fd, OP_WRITE_MEM, &cm) != 0) {
+            return false;
+        }
+        return true;
+    }
+
+    template <typename T>
+    T read(uintptr_t addr) {
+        T res;
+        if (this->read(addr, &res, sizeof(T)))
+            return res;
+        return {};
+    }
+
+    template <typename T>
+    bool write(uintptr_t addr,T value) {
+        return this->write(addr, &value, sizeof(T));
+    }
+
+    uintptr_t get_module_base(char* name) {
+        MODULE_BASE mb;
+        char buf[0x100];
+        strcpy(buf,name);
+        mb.pid = this->pid;
+        mb.name = buf;
+
+        if (ioctl(fd, OP_MODULE_BASE, &mb) != 0) {
+            return 0;
+        }
+        return mb.base;
+    }
+};
+
+static c_driver *driver = new c_driver();
+
+```
+
+`user/main.cpp`:
+
+```cpp
+#include <unistd.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+#include "driver.hpp"
+
+uint64_t get_tick_count64() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC,&ts);
+    return (ts.tv_sec*1000 + ts.tv_nsec/(1000*1000));
+}
+
+pid_t get_name_pid(char* name) {
+    FILE* fp;
+    pid_t pid;
+    char cmd[0x100] = "pidof ";
+
+    strcat(cmd, name);
+    fp = popen(cmd,"r");
+    fscanf(fp,"%d", &pid);
+    pclose(fp);
+    return pid;
+}
+
+int main(int argc, char const *argv[]) {
+
+    uintptr_t base = 0;
+    uint64_t result = 0;
+    char module_name[0x100] = "libunity.so"; 
+    pid_t pid = get_name_pid((char*)"com.tencent.tmgp.sgame");
+    printf("pid = %d\n", pid);
+
+    driver->initialize(pid);
+
+    base = driver->get_module_base(module_name);
+    printf("base = %lx\n", base);
+
+    {
+		size_t number = 1;
+		uint64_t now = get_tick_count64();
+		for (size_t i = 0; i < number; i++) {
+            result = driver->read<uint64_t>(base);
+		}
+		printf("Read %ld times cost = %lfs\n", number,
+			(double)(get_tick_count64() - now) / 1000);
+	}
+    printf("result = %lx\n", result);
+
+    return 0;
+}
+
+```
+
+`user/test.sh`:
+
+```sh
+make clean && make
+#sudo ./main
+#sudo dmesg
+adb push main /data/local/tmp
+#adb shell ./data/local/tmp/main
+
+```
