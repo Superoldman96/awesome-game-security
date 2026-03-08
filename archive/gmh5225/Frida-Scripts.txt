@@ -1,0 +1,409 @@
+Project Path: arc_gmh5225_Frida-Scripts_9onhruwi
+
+Source Tree:
+
+```txt
+arc_gmh5225_Frida-Scripts_9onhruwi
+├── DebugMenu
+│   └── Clash-of-Clans
+│       └── 5.113.2
+│           └── lib-arm.js
+└── HackTools
+    └── Brawl Stars
+        ├── ArxanKiller-v42.js
+        ├── ArxanKiller-v43.js
+        └── arxankiller-v41.js
+
+```
+
+`DebugMenu/Clash-of-Clans/5.113.2/lib-arm.js`:
+
+```js
+var base = Module.findBaseAddress("libg.so");
+
+var mallocPtr = Module.findExportByName("libc.so", "malloc");
+var freePtr = Module.findExportByName("libc.so", "free")
+var DebugMenuCtorPtr = 0x004BD40 + 1;
+var GameModeAddResourcesToLoadPtr = 0x00A2BB0 + 1;
+var ResourceListenerAddFilePtr = 0x01351B0 + 1;
+var StageAddChildPtr = 0x013EEB0 + 1;
+var StageRemoveChildPtr = 0x013EEC4 + 1;
+var StageCtorPtr = 0x013D310 + 1;
+var MoneyHudCtorPtr = 0x00705C0 + 1;
+var HudUpdatePtr = 0x0068568 + 1;
+var DebugMenuBaseUpdatePtr = 0x004CD84 + 1;
+var StringCtorPtr = 0x010D15C + 1;
+var ChatInputGlobalSendMessagePtr = 0x0041A94 + 1;
+var DebugInfoCtorPtr = 0x0049C24 + 1;
+var ToggleDebugMenuButtonButtonPressedPtr = 0x005016C + 1;
+
+var malloc = new NativeFunction(mallocPtr, 'pointer', ['int']);
+var free = new NativeFunction(freePtr, 'void', ['pointer']);
+var fDebugMenuCtor = new NativeFunction(base.add(DebugMenuCtorPtr), "void", ["pointer"]);
+var fDebugInfoCtor = new NativeFunction(base.add(DebugInfoCtorPtr), "void", ["pointer"]);
+var fResourceListenerAddFile = new NativeFunction(base.add(ResourceListenerAddFilePtr), "void", ["pointer", "pointer"]);
+var fStageAddChild = new NativeFunction(base.add(StageAddChildPtr), "int", ["pointer", "pointer"]);
+var fStageRemoveChild = new NativeFunction(base.add(StageRemoveChildPtr), "int", ["pointer", "pointer"]);
+var fDebugMenuBaseUpdate = new NativeFunction(base.add(DebugMenuBaseUpdatePtr), "int", ["pointer", "float"]);
+
+let DEBUG_MENU = 1;
+let INFO_MENU = 2;
+
+var stage_address;
+var chatLeave = 0;
+var dptr;
+var menuType = 0;
+base.add(0x03A96D8).writeU8(1); //offline mode
+
+var load = Interceptor.attach(base.add(GameModeAddResourcesToLoadPtr), {
+	onEnter: function(args) {
+		load.detach();
+		fResourceListenerAddFile(args[1], base.add(0x030BB9A)); //load debug.sc
+	}
+});
+
+var stage = Interceptor.attach(base.add(StageCtorPtr), {
+	onEnter: function(args) {
+		stage.detach();
+		stage_address = args[0];
+	}
+});
+
+var gameLoaded = Interceptor.attach(base.add(MoneyHudCtorPtr), {
+	onEnter: function(args) {
+		gameLoaded.detach();
+		menuType = DEBUG_MENU;
+		dptr = malloc(1000);
+		fDebugMenuCtor(dptr);
+		fStageAddChild(stage_address, dptr);
+	}
+});
+
+var hudUpdate = Interceptor.attach(base.add(HudUpdatePtr), {
+	onEnter: function(args) {
+		if (menuType > 0){
+			fDebugMenuBaseUpdate(dptr, 20);
+		}
+	}
+});
+
+var closeMenu = Interceptor.attach(base.add(ToggleDebugMenuButtonButtonPressedPtr), {
+	onEnter: function(args) {
+		switch(menuType) {
+			case DEBUG_MENU:
+				fStageRemoveChild(stage_address, dptr);
+				free(dptr);
+				menuType = 0;
+				break;
+			case INFO_MENU:
+				fStageRemoveChild(stage_address, dptr);
+				free(dptr);
+				menuType = 0;
+				break;
+		}
+	}
+});
+
+var sendMessage = Interceptor.attach(base.add(ChatInputGlobalSendMessagePtr), {
+	onEnter: function(args) {
+		chatLeave = 0;
+		var executeCmd = Interceptor.attach(base.add(StringCtorPtr), {
+			onEnter: function(args) {
+				let cmd = args[1].readUtf8String();
+				switch(cmd) {
+					case "/menu":
+						menuType = DEBUG_MENU;
+						dptr = malloc(1000);
+						fDebugMenuCtor(dptr);
+						fStageAddChild(stage_address, dptr);
+						executeCmd.detach();
+					break;
+					case "/debuginfo":
+						menuType = INFO_MENU;
+						dptr = malloc(1000);
+						fDebugInfoCtor(dptr);
+						fStageAddChild(stage_address, dptr);
+						executeCmd.detach();
+					break;
+				}
+				if(chatLeave === 1) {
+					executeCmd.detach();
+				}
+			}
+		});
+	},
+	onLeave: function(args) {
+		chatLeave = 1;
+	}
+});
+
+```
+
+`HackTools/Brawl Stars/ArxanKiller-v42.js`:
+
+```js
+const Libg = {
+	init() {
+		Libg.module = Process.findModuleByName('libg.so');
+		Libg.size = Libg.module.size;
+		Libg.begin = Libg.module.base;
+		Libg.end = ptr(Libg.begin.toInt32() + Libg.size);
+		
+		Libg.AntiCheat = {};
+		Libg.AntiCheat.addr = {};
+		Libg.AntiCheat.addr.guard_callback = Libg.offset(0xA802EC);
+	},
+	offset(value) {
+		return Libg.begin.add(value);
+	}
+}
+
+const Armceptor = {
+	replace(ptr, arr) {
+		Memory.protect(ptr, arr.length, "rwx");
+		Memory.writeByteArray(ptr, arr);
+		Memory.protect(ptr, arr.length, "rx");
+	},
+	nop(ptr) {
+		Armceptor.replace(ptr, [0x00, 0xF0, 0x20, 0xE3]);
+	},
+	ret(ptr) {
+		Armceptor.replace(ptr, [0x1E, 0xFF, 0x2F, 0xE1]); // put BX LR
+	}
+}
+
+const DoNotTrack = {
+	init() {
+		Armceptor.ret(Libg.offset(0x635750)); // 30000
+		Armceptor.ret(Libg.offset(0x4BFFEC)); // 17338
+	}
+}
+
+const ArxanKiller = {
+	init() {
+		ArxanKiller.kill_lv1_crc_checks();
+		ArxanKiller.kill_anticheat();
+	},
+	kill_lv1_crc_checks() {
+		Armceptor.replace(Libg.offset(0x3109B4), [0xBA, 0x36, 0x00, 0xEA]);
+		Armceptor.replace(Libg.offset(0xADBC90), [0x27, 0x04, 0x00, 0xEA]);
+		Armceptor.replace(Libg.offset(0x2CC538), [0xEF, 0x04, 0x00, 0xEA]);
+		Armceptor.replace(Libg.offset(0x85B8D0), [0x90, 0x04, 0x00, 0xEA]);
+		Armceptor.nop(Libg.offset(0x8D9B50));
+		
+		Armceptor.replace(Libg.offset(0x386550), [0x00, 0x00, 0xA0, 0xE3]);
+		Armceptor.replace(Libg.offset(0x386848), [0x00, 0x00, 0xA0, 0xE3]);
+	},
+	kill_anticheat() {
+		Interceptor.replace(Libg.AntiCheat.addr.guard_callback, new NativeCallback(function(action) {
+			console.log("guard callback was called at " + this.returnAddress.sub(Libg.begin) + " with action " + action);
+		}, 'void', ['int']));
+	}
+}
+
+function init() {
+	Libg.init();
+	ArxanKiller.init();
+	DoNotTrack.init();
+}
+
+rpc.exports.init = init;
+```
+
+`HackTools/Brawl Stars/ArxanKiller-v43.js`:
+
+```js
+/// <reference path="frida-gum.d.ts" />
+
+const Libg = {
+    init() {
+        let module = Process.findModuleByName('libg.so');
+        Libg.begin = module.base;
+        Libg.size = module.size;
+        Libg.end = Libg.begin.add(Libg.size);
+
+        Libg.AntiCheat = {
+            addr: {}
+        };
+
+        Libg.AntiCheat.addr.guard_callback = Libg.offset(0x82F868);
+        Libg.AntiCheat.addr.update = Libg.offset(0xAC92F0);
+    },
+    offset(addr) {
+        return Libg.begin.add(addr);
+    }
+};
+
+const Armceptor = {
+	nop: function(addr) {
+		Memory.patchCode(addr, Process.pageSize, function(code) {
+			var writer = new ArmWriter(code, {
+				pc: addr
+			});
+			
+			writer.putNop();
+			writer.flush();
+		});
+	},
+    ret: function(addr) {
+		Memory.patchCode(addr, Process.pageSize, function(code) {
+			var writer = new ArmWriter(code, {
+				pc: addr
+			});
+			
+			writer.putRet();
+			writer.flush();
+		});
+	},
+	jumpOffset: function(addr, target) {
+		Memory.patchCode(addr, Process.pageSize, function(code) {
+			var writer = new ArmWriter(code, {
+				pc: addr
+			});
+			
+			writer.putBImm(target);
+			writer.flush();
+		});
+	},
+	jumpout: function(addr, target) {
+		Memory.patchCode(addr, Process.pageSize, function(code) {
+			var writer = new ArmWriter(code, {
+				pc: addr
+			});
+			
+			writer.putBranchAddress(target);
+			writer.flush();
+		});
+	}
+}
+
+const ArxanKiller = {
+    init() {
+        ArxanKiller.kill_lv1_checksum_bitcode_checksum_guard();
+        ArxanKiller.kill_lv1_debugger_antidebug_guard_proc_tracerpid();
+        ArxanKiller.kill_lv1_checksum_bitcode_2_checksum_guard();
+        ArxanKiller.kill_titan_lv2_checksum_checksum_guard();
+        ArxanKiller.kill_lv2_checksum_exec_prob_timer();
+        ArxanKiller.kill_lv1_stack_verify();
+    },
+    kill_lv1_checksum_bitcode_checksum_guard() {
+        Armceptor.jumpout(Libg.offset(0x555DB4), Libg.offset(0x563E6C));
+    },
+    kill_lv1_debugger_antidebug_guard_proc_tracerpid() {
+        Interceptor.replace(Module.findExportByName('libc.so', 'openat'), new NativeCallback(function(dirfd, pathname) {
+            console.log("don't even try to open " + pathname.readUtf8String());
+            return -1;
+        }, 'int', ['int', 'pointer']));
+    },
+    kill_lv1_checksum_bitcode_2_checksum_guard() {
+        Armceptor.jumpout(Libg.offset(0x99304C), Libg.offset(0x994118));
+    },
+    kill_titan_lv2_checksum_checksum_guard() {
+        Armceptor.jumpout(Libg.offset(0x6B4B3C), Libg.offset(0x6B5F7C));
+    },
+    kill_lv2_checksum_exec_prob_timer() {
+        Armceptor.jumpout(Libg.offset(0x9E9278), Libg.offset(0x9EA548));
+    },
+    kill_lv1_stack_verify() {
+        Interceptor.replace(Libg.AntiCheat.addr.guard_callback, new NativeCallback(function(a1) {
+            console.log("guard_callback(" + a1 + ") was called at " + this.returnAddress.sub(Libg.begin));
+        }, 'void', ['int']));
+
+        Armceptor.ret(Libg.AntiCheat.addr.update);
+    }
+}
+
+rpc.exports.init = function() {
+    Libg.init();
+    ArxanKiller.init();
+}
+
+```
+
+`HackTools/Brawl Stars/arxankiller-v41.js`:
+
+```js
+const Libg = {
+	init: function() {
+		Libg.module = Process.findModuleByName('libg.so');
+		Libg.size = Libg.module.size;
+		Libg.begin = Libg.module.base;
+		Libg.lib = Libg.begin;
+		Libg.end = ptr(Libg.begin.toInt32() + Libg.size);
+		
+		Libg.AntiCheat = {};
+		Libg.AntiCheat.addr = {};
+		Libg.AntiCheat.addr.guard_callback = Libg.offset(0x3A9414);
+	},
+	offset: function(a) {
+		return Libg.lib.add(a);
+	}
+};
+
+const MemoryPatcher = {
+	patch: function(pointer, arr) {
+		Memory.protect(pointer, arr.length, "rwx");
+		Memory.writeByteArray(pointer, arr);
+	}
+}
+
+const ArxanPatcher = {
+	init: function() {
+		Interceptor.replace(Libg.AntiCheat.addr.guard_callback, new NativeCallback(function(t) {
+			console.log("guard_callback(" + t + ") : " + this.returnAddress.sub(Libg.begin));
+		}, 'void', ['int']));
+
+		Interceptor.attach(Libg.offset(0x6ED940), function() { // Messaging::connect
+			console.log("Messaging::connect - possible frida detection, bypassing.");
+			this.context.r0 = 0;
+			this.context.r3 = 0;
+		});
+
+		Interceptor.attach(Libg.offset(0x315248), function() { // createGameMain
+			console.log("Arxan random jump address " + this.context.r0.sub(Libg.begin) + ", setting valid address!");
+			this.context.r0 = Libg.offset(0x3152A0);
+		});
+		
+		Interceptor.attach(Libg.offset(0x312150), function() { // createGameMain - getaddrinfo protection
+			console.log("Arxan random jump address " + this.context.r0.sub(Libg.begin) + ", setting valid address!");
+			this.context.r0 = Libg.offset(0x3152A0);
+		});
+		
+		Interceptor.attach(Libg.offset(0x715C84), function() { // LoginMessage::encode
+			console.log("Login: Arxan random jump address " + this.context.r0.sub(Libg.begin) + ", setting valid address!");
+			this.context.r0 = Libg.offset(0x716AE4);
+		});
+		
+		Interceptor.attach(Libg.offset(0x66821C), function() { // InputSystem::update
+			console.log("InputSystem: random jump bypassed");
+			this.context.r0 = Libg.offset(0x669178);
+		});
+		
+		Interceptor.attach(Libg.offset(0x78D8C0), function() { // CombatHUD::ultiButtonActivated
+			console.log("Ulti: random jump bypassed");
+			this.context.r0 = Libg.offset(0x78DA9C);
+		});
+	}
+};
+
+const Core = {
+	init: function() {
+		Process.setExceptionHandler(function(trace) {
+			console.error('EXCEPTION:', trace, trace.address);
+			console.error('           Address:', trace.address + ' (' + trace.address.sub(Libg.begin) + ')');
+			console.error('           LR:', trace.context.lr + ' (' + trace.context.lr.sub(Libg.begin) + ')');
+			console.error('           LIBG:', Libg.begin);
+			return false;
+		});
+		try {
+			Libg.init();
+			ArxanPatcher.init();
+			console.log("Initialization complete");
+		} catch (exc) {
+			console.error('Initialization failed:', exc);
+		}
+	}
+}
+
+rpc.exports.init = Core.init;
+```
