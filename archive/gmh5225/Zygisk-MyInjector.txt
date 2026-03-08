@@ -1,0 +1,4081 @@
+Project Path: arc_gmh5225_Zygisk-MyInjector_so7xzzgn
+
+Source Tree:
+
+```txt
+arc_gmh5225_Zygisk-MyInjector_so7xzzgn
+├── LICENSE
+├── README.md
+├── build.gradle
+├── gradle
+│   └── wrapper
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+├── gradle.properties
+├── gradlew
+├── gradlew.bat
+├── module
+│   ├── build.gradle
+│   └── src
+│       └── main
+│           ├── AndroidManifest.xml
+│           └── cpp
+│               ├── CMakeLists.txt
+│               ├── game.h
+│               ├── hack.cpp
+│               ├── hack.h
+│               ├── log.h
+│               ├── main.cpp
+│               ├── newriruhide.cpp
+│               ├── newriruhide.h
+│               ├── pmparser.cpp
+│               ├── pmparser.h
+│               ├── xdl
+│               │   ├── include
+│               │   │   └── xdl.h
+│               │   ├── xdl.c
+│               │   ├── xdl_iterate.c
+│               │   ├── xdl_iterate.h
+│               │   ├── xdl_linker.c
+│               │   ├── xdl_linker.h
+│               │   ├── xdl_lzma.c
+│               │   ├── xdl_lzma.h
+│               │   ├── xdl_util.c
+│               │   └── xdl_util.h
+│               └── zygisk.hpp
+├── module.gradle
+├── settings.gradle
+└── template
+    └── magisk_module
+        ├── META-INF
+        │   └── com
+        │       └── google
+        │           └── android
+        │               ├── update-binary
+        │               └── updater-script
+        └── module.prop
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2020 Rikka
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`README.md`:
+
+```md
+# [Zygisk-MyInjector](https://github.com/jiqiu2022/Zygisk-MyInjector)
+
+
+
+最新开发进度：**多模块注入完成，maps隐藏注入完成**（并且修复了riru内存泄漏问题）     现在仍然面临soinfo链表遍历无法隐藏的情况
+
+我会初步进行框架层面的hook进行隐藏，进一步使用自定义linker来伪装成系统库的加载。
+
+原项目https://github.com/Perfare/Zygisk-Il2CppDumper
+
+本项目在原项目基础上做局部更改，请支持原项目作者劳动成果
+
+1. 安装[Magisk](https://github.com/topjohnwu/Magisk) v24以上版本并开启Zygisk
+
+2. 生成模块
+   - GitHub Actions
+     1. Fork这个项目
+     2. 在你fork的项目中选择**Actions**选项卡
+     3. 在左边的侧边栏中，单击**Build**
+     4. 选择**Run workflow**
+     5. 输入游戏包名并点击**Run workflow**
+     6. 等待操作完成并下载
+   - Android Studio
+     1. 下载源码
+     2. 编辑`game.h`, 修改`GamePackageName`为游戏包名
+     3. 使用Android Studio运行gradle任务`:module:assembleRelease`编译，zip包会生成在`out`文件夹下
+
+3. 在Magisk里安装模块
+
+4. 将要注入的so放入到/data/local/tmp下修改为test.so
+
+   (部分手机第一次注入不会成功，请重启，再之后的注入会成功)
+
+多模块注入已经开发完成：
+
+```
+void hack_start(const char *game_data_dir,JavaVM *vm) {
+    load_so(game_data_dir,vm,"test");
+    //如果要注入多个so，那么就在这里不断的添加load_so函数即可
+}
+```
+
+
+
+目前正在开发的分支：
+
+​	1. 使用Java的System.load加载so
+
+​	2. 注入多个so的分支(已完成)
+
+计划开发：
+
+1. 第一步，仿照Riru，将注入的so进行内存上的初步隐藏（可以对抗部分业务检测，游戏安全相关已经补齐，建议不要尝试）（已经开发完成）
+2. 第二步，实现一个自定义的linker，进行更深层次的注入隐藏
+3. 第三步，搭配对应配套手机的内核模块对注入的模块进行进一步完美擦除，达到完美注入的目的
+
+以此项目为脚手架的计划开发：
+
+1. 一个全新的Frida框架，保留大部分原生api，并可以过任何相关注入检测
+
+2. 一个全新的Trace框架，高性能Trace，速度是Stallker的60倍，并且支持更全面的信息打印。（具体效果可以参考看雪帖子）
+
+3. 一个全新的无痕调试框架，支持像GDB一样调试，没有ptrace痕迹，两种思路进行无痕调试（基于硬件断点以及基于VM）
+
+   
+```
+
+`build.gradle`:
+
+```gradle
+apply plugin: 'idea'
+
+idea.module {
+    excludeDirs += file('out')
+    resourceDirs += file('template')
+    resourceDirs += file('scripts')
+}
+
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.4.2'
+    }
+}
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
+}
+
+ext {
+    minSdkVersion = 23
+    targetSdkVersion = 32
+
+    outDir = file("$rootDir/out")
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir, outDir
+}
+
+```
+
+`gradle.properties`:
+
+```properties
+# Project-wide Gradle settings.
+# IDE (e.g. Android Studio) users:
+# Gradle settings configured through the IDE *will override*
+# any settings specified in this file.
+# For more details on how to configure your build environment visit
+# http://www.gradle.org/docs/current/userguide/build_environment.html
+# Specifies the JVM arguments used for the daemon process.
+# The setting is particularly useful for tweaking memory settings.
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+# When configured, Gradle will run in incubating parallel mode.
+# This option should only be used with decoupled projects. More details, visit
+# http://www.gradle.org/docs/current/userguide/multi_project_builds.html#sec:decoupled_projects
+# org.gradle.parallel=true
+# AndroidX package structure to make it clearer which packages are bundled with the
+# Android operating system, and which are packaged with your app"s APK
+# https://developer.android.com/topic/libraries/support-library/androidx-rn
+android.useAndroidX=true
+# Automatically convert third-party libraries to use AndroidX
+android.enableJetifier=true
+
+```
+
+`gradle/wrapper/gradle-wrapper.properties`:
+
+```properties
+#Mon May 22 11:22:38 CST 2023
+distributionBase=GRADLE_USER_HOME
+distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-bin.zip
+distributionPath=wrapper/dists
+zipStorePath=wrapper/dists
+zipStoreBase=GRADLE_USER_HOME
+
+```
+
+`gradlew`:
+
+```
+#!/usr/bin/env sh
+
+##############################################################################
+##
+##  Gradle start up script for UN*X
+##
+##############################################################################
+
+# Attempt to set APP_HOME
+# Resolve links: $0 may be a link
+PRG="$0"
+# Need this for relative symlinks.
+while [ -h "$PRG" ] ; do
+    ls=`ls -ld "$PRG"`
+    link=`expr "$ls" : '.*-> \(.*\)$'`
+    if expr "$link" : '/.*' > /dev/null; then
+        PRG="$link"
+    else
+        PRG=`dirname "$PRG"`"/$link"
+    fi
+done
+SAVED="`pwd`"
+cd "`dirname \"$PRG\"`/" >/dev/null
+APP_HOME="`pwd -P`"
+cd "$SAVED" >/dev/null
+
+APP_NAME="Gradle"
+APP_BASE_NAME=`basename "$0"`
+
+# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+DEFAULT_JVM_OPTS=""
+
+# Use the maximum available, or set MAX_FD != -1 to use that value.
+MAX_FD="maximum"
+
+warn () {
+    echo "$*"
+}
+
+die () {
+    echo
+    echo "$*"
+    echo
+    exit 1
+}
+
+# OS specific support (must be 'true' or 'false').
+cygwin=false
+msys=false
+darwin=false
+nonstop=false
+case "`uname`" in
+  CYGWIN* )
+    cygwin=true
+    ;;
+  Darwin* )
+    darwin=true
+    ;;
+  MINGW* )
+    msys=true
+    ;;
+  NONSTOP* )
+    nonstop=true
+    ;;
+esac
+
+CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        # IBM's JDK on AIX uses strange locations for the executables
+        JAVACMD="$JAVA_HOME/jre/sh/java"
+    else
+        JAVACMD="$JAVA_HOME/bin/java"
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD="java"
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+fi
+
+# Increase the maximum file descriptors if we can.
+if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
+    MAX_FD_LIMIT=`ulimit -H -n`
+    if [ $? -eq 0 ] ; then
+        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+            MAX_FD="$MAX_FD_LIMIT"
+        fi
+        ulimit -n $MAX_FD
+        if [ $? -ne 0 ] ; then
+            warn "Could not set maximum file descriptor limit: $MAX_FD"
+        fi
+    else
+        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+    fi
+fi
+
+# For Darwin, add options to specify how the application appears in the dock
+if $darwin; then
+    GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
+fi
+
+# For Cygwin, switch paths to Windows format before running java
+if $cygwin ; then
+    APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+    CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
+    JAVACMD=`cygpath --unix "$JAVACMD"`
+
+    # We build the pattern for arguments to be converted via cygpath
+    ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
+    SEP=""
+    for dir in $ROOTDIRSRAW ; do
+        ROOTDIRS="$ROOTDIRS$SEP$dir"
+        SEP="|"
+    done
+    OURCYGPATTERN="(^($ROOTDIRS))"
+    # Add a user-defined pattern to the cygpath arguments
+    if [ "$GRADLE_CYGPATTERN" != "" ] ; then
+        OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
+    fi
+    # Now convert the arguments - kludge to limit ourselves to /bin/sh
+    i=0
+    for arg in "$@" ; do
+        CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
+        CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
+
+        if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
+            eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
+        else
+            eval `echo args$i`="\"$arg\""
+        fi
+        i=$((i+1))
+    done
+    case $i in
+        (0) set -- ;;
+        (1) set -- "$args0" ;;
+        (2) set -- "$args0" "$args1" ;;
+        (3) set -- "$args0" "$args1" "$args2" ;;
+        (4) set -- "$args0" "$args1" "$args2" "$args3" ;;
+        (5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
+        (6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
+        (7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
+        (8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
+        (9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
+    esac
+fi
+
+# Escape application args
+save () {
+    for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
+    echo " "
+}
+APP_ARGS=$(save "$@")
+
+# Collect all arguments for the java command, following the shell quoting and substitution rules
+eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
+
+# by default we should be in the correct project dir, but when run from Finder on Mac, the cwd is wrong
+if [ "$(uname)" = "Darwin" ] && [ "$HOME" = "$PWD" ]; then
+  cd "$(dirname "$0")"
+fi
+
+exec "$JAVACMD" "$@"
+
+```
+
+`gradlew.bat`:
+
+```bat
+@if "%DEBUG%" == "" @echo off
+@rem ##########################################################################
+@rem
+@rem  Gradle startup script for Windows
+@rem
+@rem ##########################################################################
+
+@rem Set local scope for the variables with windows NT shell
+if "%OS%"=="Windows_NT" setlocal
+
+set DIRNAME=%~dp0
+if "%DIRNAME%" == "" set DIRNAME=.
+set APP_BASE_NAME=%~n0
+set APP_HOME=%DIRNAME%
+
+@rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
+set DEFAULT_JVM_OPTS=
+
+@rem Find java.exe
+if defined JAVA_HOME goto findJavaFromJavaHome
+
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if "%ERRORLEVEL%" == "0" goto init
+
+echo.
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+
+if exist "%JAVA_EXE%" goto init
+
+echo.
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+
+goto fail
+
+:init
+@rem Get command-line arguments, handling Windows variants
+
+if not "%OS%" == "Windows_NT" goto win9xME_args
+
+:win9xME_args
+@rem Slurp the command line arguments.
+set CMD_LINE_ARGS=
+set _SKIP=2
+
+:win9xME_args_slurp
+if "x%~1" == "x" goto execute
+
+set CMD_LINE_ARGS=%*
+
+:execute
+@rem Setup the command line
+
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+
+@rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %CMD_LINE_ARGS%
+
+:end
+@rem End local scope for the variables with windows NT shell
+if "%ERRORLEVEL%"=="0" goto mainEnd
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code!
+if  not "" == "%GRADLE_EXIT_CONSOLE%" exit 1
+exit /b 1
+
+:mainEnd
+if "%OS%"=="Windows_NT" endlocal
+
+:omega
+
+```
+
+`module.gradle`:
+
+```gradle
+ext {
+    moduleLibraryName = "myinjector"
+    magiskModuleId = "zygisk_myinjector"
+    moduleName = "myinjector"
+    moduleAuthor = "jiqiu2021"
+    moduleDescription = "注入任意SO到指定APP内"
+    moduleVersion = "v0.01"
+    moduleVersionCode = 1
+}
+
+```
+
+`module/build.gradle`:
+
+```gradle
+import org.apache.tools.ant.filters.FixCrLfFilter
+
+import java.nio.file.Paths
+import java.nio.file.Files
+
+apply plugin: 'com.android.library'
+apply from: file(rootProject.file('module.gradle'))
+
+android {
+    compileSdkVersion rootProject.ext.targetSdkVersion
+    ndkVersion '25.2.9519653'
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        externalNativeBuild {
+            cmake {
+                arguments "-DMODULE_NAME:STRING=$moduleLibraryName"
+            }
+        }
+    }
+    buildFeatures {
+        prefab true
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+}
+
+repositories {
+    mavenLocal()
+}
+
+afterEvaluate {
+    android.libraryVariants.forEach { variant ->
+        def variantCapped = variant.name.capitalize()
+        def variantLowered = variant.name.toLowerCase()
+
+        def zipName = "${magiskModuleId.replace('_', '-')}-${moduleVersion}-${variantLowered}.zip"
+        def magiskDir = file("$outDir/magisk_module_$variantLowered")
+
+        task("prepareMagiskFiles${variantCapped}", type: Sync) {
+            dependsOn("assemble$variantCapped")
+
+            def templatePath = "$rootDir/template/magisk_module"
+
+            into magiskDir
+            from(templatePath) {
+                exclude 'module.prop'
+            }
+            from(templatePath) {
+                include 'module.prop'
+                expand([
+                        id         : magiskModuleId,
+                        name       : moduleName,
+                        version    : moduleVersion,
+                        versionCode: moduleVersionCode.toString(),
+                        author     : moduleAuthor,
+                        description: moduleDescription,
+                ])
+                filter(FixCrLfFilter.class,
+                        eol: FixCrLfFilter.CrLf.newInstance("lf"))
+            }
+            from("$buildDir/intermediates/stripped_native_libs/$variantLowered/out/lib") {
+                into 'lib'
+            }
+            doLast {
+                file("$magiskDir/zygisk").mkdir()
+                fileTree("$magiskDir/lib").visit { f ->
+                    if (!f.directory) return
+                    def srcPath = Paths.get("${f.file.absolutePath}/lib${moduleLibraryName}.so")
+                    def dstPath = Paths.get("$magiskDir/zygisk/${f.path}.so")
+                    Files.move(srcPath, dstPath)
+                }
+                new File("$magiskDir/lib").deleteDir()
+            }
+        }
+
+        task("zip${variantCapped}", type: Zip) {
+            dependsOn("prepareMagiskFiles${variantCapped}")
+            from magiskDir
+            archiveFileName.set(zipName)
+            destinationDirectory.set(outDir)
+        }
+
+        task("push${variantCapped}", type: Exec) {
+            dependsOn("zip${variantCapped}")
+            workingDir outDir
+            commandLine android.adbExecutable, "push", zipName, "/data/local/tmp/"
+        }
+
+        task("flash${variantCapped}", type: Exec) {
+            dependsOn("push${variantCapped}")
+            commandLine android.adbExecutable, "shell", "su", "-c",
+                    "magisk --install-module /data/local/tmp/${zipName}"
+        }
+
+        task("flashAndReboot${variantCapped}", type: Exec) {
+            dependsOn("flash${variantCapped}")
+            commandLine android.adbExecutable, "shell", "reboot"
+        }
+
+        variant.assembleProvider.get().finalizedBy("zip${variantCapped}")
+    }
+}
+
+```
+
+`module/src/main/AndroidManifest.xml`:
+
+```xml
+<manifest package="zygisk.il2cppdumper" />
+
+```
+
+`module/src/main/cpp/CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.18.1)
+
+if (NOT DEFINED MODULE_NAME)
+    message(FATAL_ERROR "MODULE_NAME is not set")
+else ()
+    project(${MODULE_NAME})
+endif ()
+
+message("Build type: ${CMAKE_BUILD_TYPE}")
+
+set(CMAKE_CXX_STANDARD 20)
+
+set(LINKER_FLAGS "-ffixed-x18 -Wl,--hash-style=both")
+set(C_FLAGS "-Werror=format -fdata-sections -ffunction-sections")
+set(CXX_FLAGS "${CXX_FLAGS} -fno-exceptions -fno-rtti")
+
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(C_FLAGS "${C_FLAGS} -O2 -fvisibility=hidden -fvisibility-inlines-hidden")
+    set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,-exclude-libs,ALL -Wl,--gc-sections -Wl,--strip-all")
+else ()
+    set(C_FLAGS "${C_FLAGS} -O0")
+endif ()
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${C_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${C_FLAGS} ${CXX_FLAGS}")
+
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${LINKER_FLAGS}")
+set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${LINKER_FLAGS}")
+
+include_directories(
+        xdl/include
+)
+
+aux_source_directory(xdl xdl-src)
+
+add_library(${MODULE_NAME} SHARED
+        main.cpp
+        hack.cpp
+        newriruhide.cpp
+        pmparser.cpp
+        ${xdl-src})
+target_link_libraries(${MODULE_NAME} log)
+
+if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_custom_command(TARGET ${MODULE_NAME} POST_BUILD
+            COMMAND ${CMAKE_STRIP} --strip-all --remove-section=.comment "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/lib${MODULE_NAME}.so")
+endif ()
+
+```
+
+`module/src/main/cpp/game.h`:
+
+```h
+//
+// Created by Perfare on 2020/7/4.
+//
+
+#ifndef ZYGISK_IL2CPPDUMPER_GAME_H
+#define ZYGISK_IL2CPPDUMPER_GAME_H
+
+#define AimPackageName "com.tencent.mobileqq"
+
+#endif //ZYGISK_IL2CPPDUMPER_GAME_H
+
+```
+
+`module/src/main/cpp/hack.cpp`:
+
+```cpp
+//
+// Created by Perfare on 2020/7/4.
+//
+
+#include "hack.h"
+#include "log.h"
+#include "xdl.h"
+#include <cstring>
+#include <cstdio>
+#include <unistd.h>
+#include <sys/system_properties.h>
+#include <dlfcn.h>
+#include <jni.h>
+#include <thread>
+#include <sys/mman.h>
+#include <linux/unistd.h>
+#include <array>
+#include <sys/stat.h>
+//#include <asm-generic/fcntl.h>
+#include <fcntl.h>
+#include "newriruhide.h"
+void load_so(const char *game_data_dir, JavaVM *vm, const char *soname) {
+    bool load = false;
+    LOGI("hack_start %s", game_data_dir);
+
+    // 构建新文件路径，使用传入的 soname 参数
+    char new_so_path[256];
+    snprintf(new_so_path, sizeof(new_so_path), "%s/files/%s.so", game_data_dir, soname);
+
+    // 构建源文件路径
+    char src_path[256];
+    snprintf(src_path, sizeof(src_path), "/data/local/tmp/%s.so", soname);
+
+    // 打开源文件
+    int src_fd = open(src_path, O_RDONLY);
+    if (src_fd < 0) {
+        LOGE("Failed to open %s: %s (errno: %d)", src_path, strerror(errno), errno);
+        return;
+    }
+
+    // 打开目标文件
+    int dest_fd = open(new_so_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (dest_fd < 0) {
+        LOGE("Failed to open %s", new_so_path);
+        close(src_fd);
+        return;
+    }
+
+    // 复制文件内容
+    char buffer[4096];
+    ssize_t bytes;
+    while ((bytes = read(src_fd, buffer, sizeof(buffer))) > 0) {
+        if (write(dest_fd, buffer, bytes) != bytes) {
+            LOGE("Failed to write to %s", new_so_path);
+            close(src_fd);
+            close(dest_fd);
+            return;
+        }
+    }
+
+    // 关闭文件描述符
+    close(src_fd);
+    close(dest_fd);
+
+    // 修改文件权限
+    if (chmod(new_so_path, 0755) != 0) {
+        LOGE("Failed to change permissions on %s: %s (errno: %d)", new_so_path, strerror(errno), errno);
+        return;
+    } else {
+        LOGI("Successfully changed permissions to 755 on %s", new_so_path);
+    }
+
+    // 加载 .so 文件
+    void *handle;
+    for (int i = 0; i < 10; i++) {
+        handle = dlopen(new_so_path, RTLD_NOW | RTLD_LOCAL);
+        if (handle) {
+            LOGI("Successfully loaded %s", new_so_path);
+            load = true;
+            char new_soname[256];
+            sprintf(new_soname, "%s.so", soname);
+            riru_hide(new_soname);
+            break;
+        } else {
+            LOGE("Failed to load %s: %s", new_so_path, dlerror());
+            sleep(1);
+        }
+    }
+
+    // 如果加载失败
+    if (!load) {
+        LOGI("%s.so not found in thread %d", soname, gettid());
+    }
+
+    // 查找 JNI_OnLoad 并调用
+//    void (*setupSignalHandler)();
+//    *(void **) (&setupSignalHandler) = dlsym(handle, "setupSignalHandler");
+//
+//    if (setupSignalHandler) {
+//        LOGI("setupSignalHandler symbol found, calling setupSignalHandler.");
+//        setupSignalHandler();  // 调用找到的函数
+//    } else {
+//        LOGE("setupSignalHandler symbol not found in %s", new_so_path);
+//    }
+}
+void hack_start(const char *game_data_dir,JavaVM *vm) {
+    load_so(game_data_dir,vm,"test");
+    //如果要注入多个so，那么就在这里不断的添加load_so函数即可
+}
+
+std::string GetLibDir(JavaVM *vms) {
+    JNIEnv *env = nullptr;
+    vms->AttachCurrentThread(&env, nullptr);
+    jclass activity_thread_clz = env->FindClass("android/app/ActivityThread");
+    if (activity_thread_clz != nullptr) {
+        jmethodID currentApplicationId = env->GetStaticMethodID(activity_thread_clz,
+                                                                "currentApplication",
+                                                                "()Landroid/app/Application;");
+        if (currentApplicationId) {
+            jobject application = env->CallStaticObjectMethod(activity_thread_clz,
+                                                              currentApplicationId);
+            jclass application_clazz = env->GetObjectClass(application);
+            if (application_clazz) {
+                jmethodID get_application_info = env->GetMethodID(application_clazz,
+                                                                  "getApplicationInfo",
+                                                                  "()Landroid/content/pm/ApplicationInfo;");
+                if (get_application_info) {
+                    jobject application_info = env->CallObjectMethod(application,
+                                                                     get_application_info);
+                    jfieldID native_library_dir_id = env->GetFieldID(
+                            env->GetObjectClass(application_info), "nativeLibraryDir",
+                            "Ljava/lang/String;");
+                    if (native_library_dir_id) {
+                        auto native_library_dir_jstring = (jstring) env->GetObjectField(
+                                application_info, native_library_dir_id);
+                        auto path = env->GetStringUTFChars(native_library_dir_jstring, nullptr);
+                        LOGI("lib dir %s", path);
+                        std::string lib_dir(path);
+                        env->ReleaseStringUTFChars(native_library_dir_jstring, path);
+                        return lib_dir;
+                    } else {
+                        LOGE("nativeLibraryDir not found");
+                    }
+                } else {
+                    LOGE("getApplicationInfo not found");
+                }
+            } else {
+                LOGE("application class not found");
+            }
+        } else {
+            LOGE("currentApplication not found");
+        }
+    } else {
+        LOGE("ActivityThread not found");
+    }
+    return {};
+}
+
+static std::string GetNativeBridgeLibrary() {
+    auto value = std::array<char, PROP_VALUE_MAX>();
+    __system_property_get("ro.dalvik.vm.native.bridge", value.data());
+    return {value.data()};
+}
+
+struct NativeBridgeCallbacks {
+    uint32_t version;
+    void *initialize;
+
+    void *(*loadLibrary)(const char *libpath, int flag);
+
+    void *(*getTrampoline)(void *handle, const char *name, const char *shorty, uint32_t len);
+
+    void *isSupported;
+    void *getAppEnv;
+    void *isCompatibleWith;
+    void *getSignalHandler;
+    void *unloadLibrary;
+    void *getError;
+    void *isPathSupported;
+    void *initAnonymousNamespace;
+    void *createNamespace;
+    void *linkNamespaces;
+
+    void *(*loadLibraryExt)(const char *libpath, int flag, void *ns);
+};
+
+bool NativeBridgeLoad(const char *game_data_dir, int api_level, void *data, size_t length) {
+    //TODO 等待houdini初始化
+    sleep(5);
+
+    auto libart = dlopen("libart.so", RTLD_NOW);
+    auto JNI_GetCreatedJavaVMs = (jint (*)(JavaVM **, jsize, jsize *)) dlsym(libart,
+                                                                             "JNI_GetCreatedJavaVMs");
+    LOGI("JNI_GetCreatedJavaVMs %p", JNI_GetCreatedJavaVMs);
+    JavaVM *vms_buf[1];
+    JavaVM *vms;
+    jsize num_vms;
+    jint status = JNI_GetCreatedJavaVMs(vms_buf, 1, &num_vms);
+    if (status == JNI_OK && num_vms > 0) {
+        vms = vms_buf[0];
+    } else {
+        LOGE("GetCreatedJavaVMs error");
+        return false;
+    }
+
+    auto lib_dir = GetLibDir(vms);
+    if (lib_dir.empty()) {
+        LOGE("GetLibDir error");
+        return false;
+    }
+    if (lib_dir.find("/lib/x86") != std::string::npos) {
+        LOGI("no need NativeBridge");
+        munmap(data, length);
+        return false;
+    }
+
+    auto nb = dlopen("libhoudini.so", RTLD_NOW);
+    if (!nb) {
+        auto native_bridge = GetNativeBridgeLibrary();
+        LOGI("native bridge: %s", native_bridge.data());
+        nb = dlopen(native_bridge.data(), RTLD_NOW);
+    }
+    if (nb) {
+        LOGI("nb %p", nb);
+        auto callbacks = (NativeBridgeCallbacks *) dlsym(nb, "NativeBridgeItf");
+        if (callbacks) {
+            LOGI("NativeBridgeLoadLibrary %p", callbacks->loadLibrary);
+            LOGI("NativeBridgeLoadLibraryExt %p", callbacks->loadLibraryExt);
+            LOGI("NativeBridgeGetTrampoline %p", callbacks->getTrampoline);
+            int fd = syscall(__NR_memfd_create, "anon", MFD_CLOEXEC);
+            ftruncate(fd, (off_t) length);
+            void *mem = mmap(nullptr, length, PROT_WRITE, MAP_SHARED, fd, 0);
+            memcpy(mem, data, length);
+            munmap(mem, length);
+            munmap(data, length);
+            char path[PATH_MAX];
+            snprintf(path, PATH_MAX, "/proc/self/fd/%d", fd);
+            LOGI("arm path %s", path);
+
+            void *arm_handle;
+            if (api_level >= 26) {
+                arm_handle = callbacks->loadLibraryExt(path, RTLD_NOW, (void *) 3);
+            } else {
+                arm_handle = callbacks->loadLibrary(path, RTLD_NOW);
+            }
+            if (arm_handle) {
+                LOGI("arm handle %p", arm_handle);
+                auto init = (void (*)(JavaVM *, void *)) callbacks->getTrampoline(arm_handle,
+                                                                                  "JNI_OnLoad",
+                                                                                  nullptr, 0);
+                LOGI("JNI_OnLoad %p", init);
+                init(vms, (void *) game_data_dir);
+                return true;
+            }
+            close(fd);
+        }
+    }
+    return false;
+}
+
+void hack_prepare(const char *_data_dir, void *data, size_t length) {
+    LOGI("hack thread: %d", gettid());
+    int api_level = android_get_device_api_level();
+    LOGI("api level: %d", api_level);
+
+#if defined(__i386__) || defined(__x86_64__)
+    if (!NativeBridgeLoad(_data_dir, api_level, data, length)) {
+#endif
+        hack_start(_data_dir, nullptr);
+#if defined(__i386__) || defined(__x86_64__)
+    }
+#endif
+}
+
+#if defined(__arm__) || defined(__aarch64__)
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+    auto game_data_dir = (const char *) reserved;
+    std::thread hack_thread(hack_start, game_data_dir,vm);
+    hack_thread.detach();
+    return JNI_VERSION_1_6;
+}
+
+#endif
+```
+
+`module/src/main/cpp/hack.h`:
+
+```h
+//
+// Created by Perfare on 2020/7/4.
+//
+
+#ifndef ZYGISK_IL2CPPDUMPER_HACK_H
+#define ZYGISK_IL2CPPDUMPER_HACK_H
+
+#include <stddef.h>
+
+void hack_prepare(const char *game_data_dir, void *data, size_t length);
+
+#endif //ZYGISK_IL2CPPDUMPER_HACK_H
+
+```
+
+`module/src/main/cpp/log.h`:
+
+```h
+//
+// Created by Perfare on 2020/7/4.
+//
+
+#ifndef ZYGISK_IL2CPPDUMPER_LOG_H
+#define ZYGISK_IL2CPPDUMPER_LOG_H
+
+#include <android/log.h>
+
+#define LOG_TAG "myinjector"
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define PLOGE(fmt, args...) LOGE(fmt " failed with %d: %s", ##args, errno, strerror(errno))
+#endif //ZYGISK_IL2CPPDUMPER_LOG_H
+
+```
+
+`module/src/main/cpp/main.cpp`:
+
+```cpp
+#include <cstring>
+#include <thread>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <cinttypes>
+#include "hack.h"
+#include "zygisk.hpp"
+#include "game.h"
+#include "log.h"
+#include "dlfcn.h"
+using zygisk::Api;
+using zygisk::AppSpecializeArgs;
+using zygisk::ServerSpecializeArgs;
+
+class MyModule : public zygisk::ModuleBase {
+public:
+    void onLoad(Api *api, JNIEnv *env) override {
+        this->api = api;
+        this->env = env;
+    }
+
+    void preAppSpecialize(AppSpecializeArgs *args) override {
+        auto package_name = env->GetStringUTFChars(args->nice_name, nullptr);
+        auto app_data_dir = env->GetStringUTFChars(args->app_data_dir, nullptr);
+//        if (strcmp(package_name, AimPackageName) == 0){
+//            args->runtime_flags=8451;
+//        }
+        LOGI("preAppSpecialize %s %s %d", package_name, app_data_dir,args->runtime_flags);
+
+        preSpecialize(package_name, app_data_dir);
+        env->ReleaseStringUTFChars(args->nice_name, package_name);
+        env->ReleaseStringUTFChars(args->app_data_dir, app_data_dir);
+    }
+
+    void postAppSpecialize(const AppSpecializeArgs *) override {
+        if (enable_hack) {
+            std::thread hack_thread(hack_prepare, _data_dir, data, length);
+            hack_thread.detach();
+        }
+    }
+
+private:
+    Api *api;
+    JNIEnv *env;
+    bool enable_hack;
+    char *_data_dir;
+    void *data;
+    size_t length;
+
+    void preSpecialize(const char *package_name, const char *app_data_dir) {
+        if (strcmp(package_name, AimPackageName) == 0) {
+            LOGI("成功注入目标进程: %s", package_name);
+            enable_hack = true;
+            _data_dir = new char[strlen(app_data_dir) + 1];
+            strcpy(_data_dir, app_data_dir);
+
+#if defined(__i386__)
+            auto path = "zygisk/armeabi-v7a.so";
+#endif
+#if defined(__x86_64__)
+            auto path = "zygisk/arm64-v8a.so";
+#endif
+#if defined(__i386__) || defined(__x86_64__)
+            int dirfd = api->getModuleDir();
+            int fd = openat(dirfd, path, O_RDONLY);
+            if (fd != -1) {
+                struct stat sb{};
+                fstat(fd, &sb);
+                length = sb.st_size;
+                data = mmap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, 0);
+                close(fd);
+            } else {
+                LOGW("Unable to open arm file");
+            }
+#endif
+        } else {
+            api->setOption(zygisk::Option::DLCLOSE_MODULE_LIBRARY);
+        }
+    }
+};
+
+REGISTER_ZYGISK_MODULE(MyModule)
+```
+
+`module/src/main/cpp/newriruhide.cpp`:
+
+```cpp
+//
+// Created by Mac on 2024/11/15.
+//
+// 给riru修复了内存泄漏的问题
+
+#include "newriruhide.h"
+
+/**
+ * Magic to hide from /proc/###/maps, the idea is from Haruue Icymoon (https://github.com/haruue)
+ */
+
+
+extern "C" {
+int riru_hide(const char *name) ;
+}
+
+#ifdef __LP64__
+#define LIB_PATH "/system/lib64/"
+#else
+#define LIB_PATH "/system/lib/"
+#endif
+
+struct hide_struct {
+    procmaps_struct *original;
+    uintptr_t backup_address;
+};
+
+static int get_prot(const procmaps_struct *procstruct) {
+    int prot = 0;
+    if (procstruct->is_r) {
+        prot |= PROT_READ;
+    }
+    if (procstruct->is_w) {
+        prot |= PROT_WRITE;
+    }
+    if (procstruct->is_x) {
+        prot |= PROT_EXEC;
+    }
+    return prot;
+}
+
+#define FAILURE_RETURN(exp, failure_value) ({   \
+    __typeof__(exp) _rc;                    \
+    _rc = (exp);                            \
+    if (_rc == failure_value) {             \
+        PLOGE(#exp);                        \
+        return 1;                           \
+    }                                       \
+    _rc; })
+
+static int do_hide(hide_struct *data) {
+    auto procstruct = data->original;
+    auto start = (uintptr_t) procstruct->addr_start;
+    auto end = (uintptr_t) procstruct->addr_end;
+    auto length = end - start;
+    int prot = get_prot(procstruct);
+
+    // backup
+    data->backup_address = (uintptr_t) FAILURE_RETURN(
+            mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0),
+            MAP_FAILED);
+    LOGD("%" PRIxPTR"-%" PRIxPTR" %s %ld %s is backup to %" PRIxPTR, start, end, procstruct->perm,
+         procstruct->offset,
+         procstruct->pathname, data->backup_address);
+
+    if (procstruct->is_r || procstruct->is_x) { // If readable or executable
+        LOGD("memcpy -> backup");
+        memcpy((void *) data->backup_address, (void *) start, length);
+
+        // Unmap original memory region
+        LOGD("munmap original");
+        FAILURE_RETURN(munmap((void *) start, length), -1);
+
+        // Remap backup memory to original location
+        LOGD("mmap original with backup");
+        FAILURE_RETURN(mmap((void *) start, length, prot, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0),
+                       MAP_FAILED);
+    }
+
+    return 0;
+}
+
+int riru_hide(const char *name) {
+    procmaps_iterator *maps = pmparser_parse(-1);
+    if (maps == nullptr) {
+        LOGE("cannot parse the memory map");
+        return false;
+    }
+
+    char buf[PATH_MAX];
+    hide_struct *data = nullptr;
+    size_t data_count = 0;
+    procmaps_struct *maps_tmp;
+    while ((maps_tmp = pmparser_next(maps)) != nullptr) {
+        bool matched = false;
+#ifdef DEBUG_APP
+        matched = strstr(maps_tmp->pathname, "libriru.so");
+#endif
+        matched = strstr(maps_tmp->pathname, name) != nullptr;
+
+        // Match the memory regions we want to hide
+        if (!matched) continue;
+        LOGI("matched %s", maps_tmp->pathname);
+        auto start = (uintptr_t) maps_tmp->addr_start;
+        auto end = (uintptr_t) maps_tmp->addr_end;
+        if (maps_tmp->is_r || maps_tmp->is_x) {  // If memory is readable or executable
+            if (data) {
+                data = (hide_struct *) realloc(data, sizeof(hide_struct) * (data_count + 1));
+            } else {
+                data = (hide_struct *) malloc(sizeof(hide_struct));
+            }
+            data[data_count].original = maps_tmp;
+            data_count += 1;
+        }
+        LOGD("%" PRIxPTR"-%" PRIxPTR" %s %ld %s", start, end, maps_tmp->perm, maps_tmp->offset,
+             maps_tmp->pathname);
+    }
+
+    for (int i = 0; i < data_count; ++i) {
+        LOGI("do_hide %d", i);
+        do_hide(&data[i]);
+    }
+
+    // Free backup memory to avoid leaks
+    for (int i = 0; i < data_count; ++i) {
+        FAILURE_RETURN(munmap((void *) data[i].backup_address,
+                              (uintptr_t) data[i].original->addr_end - (uintptr_t) data[i].original->addr_start), -1);
+    }
+
+
+    if (data) free(data);
+    pmparser_free(maps);
+    return 0;
+}
+
+```
+
+`module/src/main/cpp/newriruhide.h`:
+
+```h
+//
+// Created by Mac on 2024/11/15.
+//
+
+#ifndef ZYGISK_MYINJECTOR_NEWRIRUHIDE_H
+#define ZYGISK_MYINJECTOR_NEWRIRUHIDE_H
+#define EXPORT __attribute__((visibility("default"))) __attribute__((used))
+#include <cinttypes>
+#include <sys/mman.h>
+#include <set>
+#include <string_view>
+#include "pmparser.h"
+#include "android/log.h"
+#include "log.h"
+extern "C" {
+int riru_hide(const char *name) EXPORT;
+}
+
+#endif //ZYGISK_MYINJECTOR_NEWRIRUHIDE_H
+
+```
+
+`module/src/main/cpp/pmparser.cpp`:
+
+```cpp
+/*
+ @Author	: ouadimjamal@gmail.com
+ @date		: December 2015
+
+Permission to use, copy, modify, distribute, and sell this software and its
+documentation for any purpose is hereby granted without fee, provided that
+the above copyright notice appear in all copies and that both that
+copyright notice and this permission notice appear in supporting
+documentation.  No representations are made about the suitability of this
+software for any purpose.  It is provided "as is" without express or
+implied warranty.
+*/
+
+#include "pmparser.h"
+#include "log.h"
+
+/**
+ * gobal variables
+ */
+//procmaps_struct* g_last_head=NULL;
+//procmaps_struct* g_current=NULL;
+
+
+
+procmaps_iterator* pmparser_parse(int pid){
+    LOGI("pmparser_parse called with pid: %d", pid);
+
+    procmaps_iterator* maps_it = (procmaps_iterator *)malloc(sizeof(procmaps_iterator));
+    if (!maps_it) {
+        LOGI("Failed to allocate memory for procmaps_iterator");
+        return NULL;
+    }
+    LOGI("Allocated memory for procmaps_iterator: %p", maps_it);
+
+    char maps_path[500];
+    if(pid >= 0 ){
+        snprintf(maps_path, sizeof(maps_path), "/proc/%d/maps", pid);
+        LOGI("Constructed maps_path for pid: %s", maps_path);
+    } else {
+        snprintf(maps_path, sizeof(maps_path), "/proc/self/maps");
+        LOGI("Constructed maps_path for self: %s", maps_path);
+    }
+
+    FILE* file = fopen(maps_path, "r");
+    if(!file){
+        LOGI("pmparser: cannot open the memory maps, %s", strerror(errno));
+        free(maps_it);
+        return NULL;
+    }
+    LOGI("Opened maps file: %s", maps_path);
+
+    int ind = 0;
+    char buf[PROCMAPS_LINE_MAX_LENGTH];
+    procmaps_struct* list_maps = NULL;
+    procmaps_struct* tmp;
+    procmaps_struct* current_node = NULL;
+    char addr1[20], addr2[20], perm[8], offset[20], dev[10], inode[30], pathname[PATH_MAX];
+
+    while (fgets(buf, PROCMAPS_LINE_MAX_LENGTH, file)) {
+        LOGI("Read line %d: %s", ind + 1, buf);
+
+        // 分配一个新的节点
+        tmp = (procmaps_struct*)malloc(sizeof(procmaps_struct));
+        if (!tmp) {
+            LOGI("Failed to allocate memory for procmaps_struct at line %d", ind + 1);
+            fclose(file);
+            // 需要释放已分配的节点，避免内存泄漏
+            procmaps_struct* iter = list_maps;
+            while (iter) {
+                procmaps_struct* next = iter->next;
+                free(iter);
+                iter = next;
+            }
+            free(maps_it);
+            return NULL;
+        }
+        LOGI("Allocated memory for procmaps_struct: %p", tmp);
+
+        // 填充节点
+        _pmparser_split_line(buf, addr1, addr2, perm, offset, dev, inode, pathname);
+        LOGI("Parsed line %d - addr1: %s, addr2: %s, perm: %s, offset: %s, dev: %s, inode: %s, pathname: %s",
+             ind + 1, addr1, addr2, perm, offset, dev, inode, pathname);
+
+        // 使用临时变量解析地址
+        unsigned long tmp_addr_start_ul, tmp_addr_end_ul;
+        if (sscanf(addr1, "%lx", &tmp_addr_start_ul) != 1) {
+            LOGI("Failed to parse addr_start at line %d", ind + 1);
+            free(tmp);
+            continue;
+        }
+        if (sscanf(addr2, "%lx", &tmp_addr_end_ul) != 1) {
+            LOGI("Failed to parse addr_end at line %d", ind + 1);
+            free(tmp);
+            continue;
+        }
+        LOGI("Parsed addresses - addr_start: 0x%lx, addr_end: 0x%lx", tmp_addr_start_ul, tmp_addr_end_ul);
+
+        tmp->addr_start = (void*)tmp_addr_start_ul;
+        tmp->addr_end = (void*)tmp_addr_end_ul;
+
+        // size
+        tmp->length = (unsigned long)((char*)tmp->addr_end - (char*)tmp->addr_start);
+        LOGI("Calculated length: %lu", tmp->length);
+
+        // perm
+        strncpy(tmp->perm, perm, sizeof(tmp->perm) - 1);
+        tmp->perm[sizeof(tmp->perm) - 1] = '\0';
+        tmp->is_r = (perm[0] == 'r');
+        tmp->is_w = (perm[1] == 'w');
+        tmp->is_x = (perm[2] == 'x');
+        tmp->is_p = (perm[3] == 'p');
+        LOGI("Permissions - is_r: %d, is_w: %d, is_x: %d, is_p: %d", tmp->is_r, tmp->is_w, tmp->is_x, tmp->is_p);
+
+        // offset
+        if (sscanf(offset, "%lx", &tmp->offset) != 1) {
+            LOGI("Failed to parse offset at line %d", ind + 1);
+            free(tmp);
+            continue;
+        }
+        LOGI("Parsed offset: 0x%lx", tmp->offset);
+
+        // device
+        strncpy(tmp->dev, dev, sizeof(tmp->dev) - 1);
+        tmp->dev[sizeof(tmp->dev) - 1] = '\0';
+        LOGI("Device: %s", tmp->dev);
+
+        // inode
+        tmp->inode = atoi(inode);
+        LOGI("Inode: %d", tmp->inode);
+
+        // pathname
+        strncpy(tmp->pathname, pathname, sizeof(tmp->pathname) - 1);
+        tmp->pathname[sizeof(tmp->pathname) - 1] = '\0';
+        LOGI("Pathname: %s", tmp->pathname);
+
+        tmp->next = NULL;
+
+        // 连接节点到链表
+        if(ind == 0){
+            list_maps = tmp;
+            current_node = list_maps;
+            LOGI("Initialized list_maps with first node: %p", list_maps);
+        }
+        else{
+            current_node->next = tmp;
+            current_node = tmp;
+            LOGI("Appended node to list_maps: %p", tmp);
+        }
+        ind++;
+    }
+
+    if (ferror(file)) {
+        LOGI("Error occurred while reading the maps file");
+        // 释放已分配的节点和 maps_it
+        procmaps_struct* iter = list_maps;
+        while (iter) {
+            procmaps_struct* next = iter->next;
+            free(iter);
+            iter = next;
+        }
+        fclose(file);
+        free(maps_it);
+        return NULL;
+    }
+
+    // 关闭文件
+    fclose(file);
+    LOGI("Closed maps file: %s", maps_path);
+
+    // 设置迭代器
+    maps_it->head = list_maps;
+    maps_it->current = list_maps;
+    LOGI("Initialized procmaps_iterator - head: %p, current: %p", maps_it->head, maps_it->current);
+
+    return maps_it;
+}
+
+procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it){
+    if(p_procmaps_it->current == NULL)
+        return NULL;
+    procmaps_struct* p_current = p_procmaps_it->current;
+    p_procmaps_it->current = p_procmaps_it->current->next;
+    return p_current;
+    /*
+    if(g_current==NULL){
+        g_current=g_last_head;
+    }else
+        g_current=g_current->next;
+
+    return g_current;
+    */
+}
+
+
+
+void pmparser_free(procmaps_iterator* p_procmaps_it){
+    procmaps_struct* maps_list = p_procmaps_it->head;
+    if(maps_list==NULL) return ;
+    procmaps_struct* act=maps_list;
+    procmaps_struct* nxt=act->next;
+    while(act!=NULL){
+        free(act);
+        act=nxt;
+        if(nxt!=NULL)
+            nxt=nxt->next;
+    }
+    free(p_procmaps_it);
+}
+
+
+void _pmparser_split_line(
+        char*buf,char*addr1,char*addr2,
+        char*perm,char* offset,char* device,char*inode,
+        char* pathname){
+    //
+    int orig=0;
+    int i=0;
+    //addr1
+    while(buf[i]!='-'){
+        addr1[i-orig]=buf[i];
+        i++;
+    }
+    addr1[i]='\0';
+    i++;
+    //addr2
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' '){
+        addr2[i-orig]=buf[i];
+        i++;
+    }
+    addr2[i-orig]='\0';
+
+    //perm
+    while(buf[i]=='\t' || buf[i]==' ')
+        i++;
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' '){
+        perm[i-orig]=buf[i];
+        i++;
+    }
+    perm[i-orig]='\0';
+    //offset
+    while(buf[i]=='\t' || buf[i]==' ')
+        i++;
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' '){
+        offset[i-orig]=buf[i];
+        i++;
+    }
+    offset[i-orig]='\0';
+    //dev
+    while(buf[i]=='\t' || buf[i]==' ')
+        i++;
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' '){
+        device[i-orig]=buf[i];
+        i++;
+    }
+    device[i-orig]='\0';
+    //inode
+    while(buf[i]=='\t' || buf[i]==' ')
+        i++;
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' '){
+        inode[i-orig]=buf[i];
+        i++;
+    }
+    inode[i-orig]='\0';
+    //pathname
+    pathname[0]='\0';
+    while(buf[i]=='\t' || buf[i]==' ')
+        i++;
+    orig=i;
+    while(buf[i]!='\t' && buf[i]!=' ' && buf[i]!='\n'){
+        pathname[i-orig]=buf[i];
+        i++;
+    }
+    pathname[i-orig]='\0';
+
+}
+
+void pmparser_print(procmaps_struct* map, int order){
+
+    procmaps_struct* tmp=map;
+    int id=0;
+    if(order<0) order=-1;
+    while(tmp!=NULL){
+        //(unsigned long) tmp->addr_start;
+        if(order==id || order==-1){
+            printf("Backed by:\t%s\n",strlen(tmp->pathname)==0?"[anonym*]":tmp->pathname);
+            printf("Range:\t\t%p-%p\n",tmp->addr_start,tmp->addr_end);
+            printf("Length:\t\t%ld\n",tmp->length);
+            printf("Offset:\t\t%ld\n",tmp->offset);
+            printf("Permissions:\t%s\n",tmp->perm);
+            printf("Inode:\t\t%d\n",tmp->inode);
+            printf("Device:\t\t%s\n",tmp->dev);
+        }
+        if(order!=-1 && id>order)
+            tmp=NULL;
+        else if(order==-1){
+            printf("#################################\n");
+            tmp=tmp->next;
+        }else tmp=tmp->next;
+
+        id++;
+    }
+}
+```
+
+`module/src/main/cpp/pmparser.h`:
+
+```h
+/*
+ @Author	: ouadimjamal@gmail.com
+ @date		: December 2015
+
+Permission to use, copy, modify, distribute, and sell this software and its
+documentation for any purpose is hereby granted without fee, provided that
+the above copyright notice appear in all copies and that both that
+copyright notice and this permission notice appear in supporting
+documentation.  No representations are made about the suitability of this
+software for any purpose.  It is provided "as is" without express or
+implied warranty.
+
+ */
+
+#ifndef H_PMPARSER
+#define H_PMPARSER
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <linux/limits.h>
+
+//maximum line length in a procmaps file
+#define PROCMAPS_LINE_MAX_LENGTH  (PATH_MAX + 100)
+/**
+ * procmaps_struct
+ * @desc hold all the information about an area in the process's  VM
+ */
+typedef struct procmaps_struct{
+    void* addr_start; 	//< start address of the area
+    void* addr_end; 	//< end address
+    unsigned long length; //< size of the range
+
+    char perm[5];		//< permissions rwxp
+    short is_r;			//< rewrote of perm with short flags
+    short is_w;
+    short is_x;
+    short is_p;
+
+    long offset;	//< offset
+    char dev[12];	//< dev major:minor
+    int inode;		//< inode of the file that backs the area
+
+    char pathname[600];		//< the path of the file that backs the area
+    //chained list
+    struct procmaps_struct* next;		//<handler of the chinaed list
+} procmaps_struct;
+
+/**
+ * procmaps_iterator
+ * @desc holds iterating information
+ */
+typedef struct procmaps_iterator{
+    procmaps_struct* head;
+    procmaps_struct* current;
+} procmaps_iterator;
+/**
+ * pmparser_parse
+ * @param pid the process id whose memory map to be parser. the current process if pid<0
+ * @return an iterator over all the nodes
+ */
+procmaps_iterator* pmparser_parse(int pid);
+
+/**
+ * pmparser_next
+ * @description move between areas
+ * @param p_procmaps_it the iterator to move on step in the chained list
+ * @return a procmaps structure filled with information about this VM area
+ */
+procmaps_struct* pmparser_next(procmaps_iterator* p_procmaps_it);
+/**
+ * pmparser_free
+ * @description should be called at the end to free the resources
+ * @param p_procmaps_it the iterator structure returned by pmparser_parse
+ */
+void pmparser_free(procmaps_iterator* p_procmaps_it);
+
+/**
+ * _pmparser_split_line
+ * @description internal usage
+ */
+void _pmparser_split_line(char*buf,char*addr1,char*addr2,char*perm, char* offset, char* device,char*inode,char* pathname);
+
+/**
+ * pmparser_print
+ * @param map the head of the list
+ * @order the order of the area to print, -1 to print everything
+ */
+void pmparser_print(procmaps_struct* map,int order);
+
+
+
+
+
+#endif
+```
+
+`module/src/main/cpp/xdl/include/xdl.h`:
+
+```h
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+//
+// xDL version: 1.2.1
+//
+// xDL is an enhanced implementation of the Android DL series functions.
+// For more information, documentation, and the latest version please check:
+// https://github.com/hexhacking/xDL
+//
+
+#ifndef IO_HEXHACKING_XDL
+#define IO_HEXHACKING_XDL
+
+#include <dlfcn.h>
+#include <link.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct {
+  // same as Dl_info:
+  const char *dli_fname;  // Pathname of shared object that contains address.
+  void *dli_fbase;        // Address at which shared object is loaded.
+  const char *dli_sname;  // Name of nearest symbol with address lower than addr.
+  void *dli_saddr;        // Exact address of symbol named in dli_sname.
+  // added by xDL:
+  size_t dli_ssize;             // Symbol size of nearest symbol with address lower than addr.
+  const ElfW(Phdr) *dlpi_phdr;  // Pointer to array of ELF program headers for this object.
+  size_t dlpi_phnum;            // Number of items in dlpi_phdr.
+} xdl_info_t;
+
+//
+// Default value for flags in both xdl_open() and xdl_iterate_phdr().
+//
+#define XDL_DEFAULT 0x00
+
+//
+// Enhanced dlopen() / dlclose() / dlsym().
+//
+#define XDL_TRY_FORCE_LOAD    0x01
+#define XDL_ALWAYS_FORCE_LOAD 0x02
+void *xdl_open(const char *filename, int flags);
+void *xdl_close(void *handle);
+void *xdl_sym(void *handle, const char *symbol, size_t *symbol_size);
+void *xdl_dsym(void *handle, const char *symbol, size_t *symbol_size);
+
+//
+// Enhanced dladdr().
+//
+int xdl_addr(void *addr, xdl_info_t *info, void **cache);
+void xdl_addr_clean(void **cache);
+
+//
+// Enhanced dl_iterate_phdr().
+//
+#define XDL_FULL_PATHNAME 0x01
+int xdl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *data, int flags);
+
+//
+// Custom dlinfo().
+//
+#define XDL_DI_DLINFO 1  // type of info: xdl_info_t
+int xdl_info(void *handle, int request, void *info);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
+```
+
+`module/src/main/cpp/xdl/xdl.c`:
+
+```c
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+#include "xdl.h"
+
+#include <android/api-level.h>
+#include <elf.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <link.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/auxv.h>
+#include <sys/mman.h>
+#include <sys/prctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include "xdl_iterate.h"
+#include "xdl_linker.h"
+#include "xdl_lzma.h"
+#include "xdl_util.h"
+
+#ifndef __LP64__
+#define XDL_LIB_PATH "/system/lib"
+#else
+#define XDL_LIB_PATH "/system/lib64"
+#endif
+
+#define XDL_DYNSYM_IS_EXPORT_SYM(shndx) (SHN_UNDEF != (shndx))
+#define XDL_SYMTAB_IS_EXPORT_SYM(shndx) \
+  (SHN_UNDEF != (shndx) && !((shndx) >= SHN_LORESERVE && (shndx) <= SHN_HIRESERVE))
+
+extern __attribute((weak)) unsigned long int getauxval(unsigned long int);
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+
+typedef struct xdl {
+  char *pathname;
+  uintptr_t load_bias;
+  const ElfW(Phdr) *dlpi_phdr;
+  ElfW(Half) dlpi_phnum;
+
+  struct xdl *next;     // to next xdl obj for cache in xdl_addr()
+  void *linker_handle;  // hold handle returned by xdl_linker_load()
+
+  //
+  // (1) for searching symbols from .dynsym
+  //
+
+  bool dynsym_try_load;
+  ElfW(Sym) *dynsym;   // .dynsym
+  const char *dynstr;  // .dynstr
+
+  // .hash (SYSV hash for .dynstr)
+  struct {
+    const uint32_t *buckets;
+    uint32_t buckets_cnt;
+    const uint32_t *chains;
+    uint32_t chains_cnt;
+  } sysv_hash;
+
+  // .gnu.hash (GNU hash for .dynstr)
+  struct {
+    const uint32_t *buckets;
+    uint32_t buckets_cnt;
+    const uint32_t *chains;
+    uint32_t symoffset;
+    const ElfW(Addr) *bloom;
+    uint32_t bloom_cnt;
+    uint32_t bloom_shift;
+  } gnu_hash;
+
+  //
+  // (2) for searching symbols from .symtab
+  //
+
+  bool symtab_try_load;
+  uintptr_t base;
+
+  ElfW(Sym) *symtab;  // .symtab
+  size_t symtab_cnt;
+  char *strtab;  // .strtab
+  size_t strtab_sz;
+} xdl_t;
+
+#pragma clang diagnostic pop
+
+// load from memory
+static int xdl_dynsym_load(xdl_t *self) {
+  // find the dynamic segment
+  ElfW(Dyn) *dynamic = NULL;
+  for (size_t i = 0; i < self->dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(self->dlpi_phdr[i]);
+    if (PT_DYNAMIC == phdr->p_type) {
+      dynamic = (ElfW(Dyn) *)(self->load_bias + phdr->p_vaddr);
+      break;
+    }
+  }
+  if (NULL == dynamic) return -1;
+
+  // iterate the dynamic segment
+  for (ElfW(Dyn) *entry = dynamic; entry && entry->d_tag != DT_NULL; entry++) {
+    switch (entry->d_tag) {
+      case DT_SYMTAB:  //.dynsym
+        self->dynsym = (ElfW(Sym) *)(self->load_bias + entry->d_un.d_ptr);
+        break;
+      case DT_STRTAB:  //.dynstr
+        self->dynstr = (const char *)(self->load_bias + entry->d_un.d_ptr);
+        break;
+      case DT_HASH:  //.hash
+        self->sysv_hash.buckets_cnt = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[0];
+        self->sysv_hash.chains_cnt = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[1];
+        self->sysv_hash.buckets = &(((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[2]);
+        self->sysv_hash.chains = &(self->sysv_hash.buckets[self->sysv_hash.buckets_cnt]);
+        break;
+      case DT_GNU_HASH:  //.gnu.hash
+        self->gnu_hash.buckets_cnt = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[0];
+        self->gnu_hash.symoffset = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[1];
+        self->gnu_hash.bloom_cnt = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[2];
+        self->gnu_hash.bloom_shift = ((const uint32_t *)(self->load_bias + entry->d_un.d_ptr))[3];
+        self->gnu_hash.bloom = (const ElfW(Addr) *)(self->load_bias + entry->d_un.d_ptr + 16);
+        self->gnu_hash.buckets = (const uint32_t *)(&(self->gnu_hash.bloom[self->gnu_hash.bloom_cnt]));
+        self->gnu_hash.chains = (const uint32_t *)(&(self->gnu_hash.buckets[self->gnu_hash.buckets_cnt]));
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (NULL == self->dynsym || NULL == self->dynstr ||
+      (0 == self->sysv_hash.buckets_cnt && 0 == self->gnu_hash.buckets_cnt)) {
+    self->dynsym = NULL;
+    self->dynstr = NULL;
+    self->sysv_hash.buckets_cnt = 0;
+    self->gnu_hash.buckets_cnt = 0;
+    return -1;
+  }
+
+  return 0;
+}
+
+static void *xdl_read_file_to_heap(int file_fd, size_t file_sz, size_t data_offset, size_t data_len) {
+  if (0 == data_len) return NULL;
+  if (data_offset >= file_sz) return NULL;
+  if (data_offset + data_len > file_sz) return NULL;
+
+  if (data_offset != (size_t)lseek(file_fd, (off_t)data_offset, SEEK_SET)) return NULL;
+
+  void *data = malloc(data_len);
+  if (NULL == data) return NULL;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-statement-expression"
+  if ((ssize_t)data_len != XDL_UTIL_TEMP_FAILURE_RETRY(read(file_fd, data, data_len)))
+#pragma clang diagnostic pop
+  {
+    free(data);
+    return NULL;
+  }
+
+  return data;
+}
+
+static void *xdl_read_file_to_heap_by_section(int file_fd, size_t file_sz, ElfW(Shdr) *shdr) {
+  return xdl_read_file_to_heap(file_fd, file_sz, (size_t)shdr->sh_offset, shdr->sh_size);
+}
+
+static void *xdl_read_memory_to_heap(void *mem, size_t mem_sz, size_t data_offset, size_t data_len) {
+  if (0 == data_len) return NULL;
+  if (data_offset >= mem_sz) return NULL;
+  if (data_offset + data_len > mem_sz) return NULL;
+
+  void *data = malloc(data_len);
+  if (NULL == data) return NULL;
+
+  memcpy(data, (void *)((uintptr_t)mem + data_offset), data_len);
+  return data;
+}
+
+static void *xdl_read_memory_to_heap_by_section(void *mem, size_t mem_sz, ElfW(Shdr) *shdr) {
+  return xdl_read_memory_to_heap(mem, mem_sz, (size_t)shdr->sh_offset, shdr->sh_size);
+}
+
+static void *xdl_get_memory(void *mem, size_t mem_sz, size_t data_offset, size_t data_len) {
+  if (0 == data_len) return NULL;
+  if (data_offset >= mem_sz) return NULL;
+  if (data_offset + data_len > mem_sz) return NULL;
+
+  return (void *)((uintptr_t)mem + data_offset);
+}
+
+static void *xdl_get_memory_by_section(void *mem, size_t mem_sz, ElfW(Shdr) *shdr) {
+  return xdl_get_memory(mem, mem_sz, (size_t)shdr->sh_offset, shdr->sh_size);
+}
+
+// load from disk and memory
+static int xdl_symtab_load_from_debugdata(xdl_t *self, int file_fd, size_t file_sz,
+                                          ElfW(Shdr) *shdr_debugdata) {
+  void *debugdata = NULL;
+  ElfW(Shdr) *shdrs = NULL;
+  int r = -1;
+
+  // get zipped .gnu_debugdata
+  uint8_t *debugdata_zip = (uint8_t *)xdl_read_file_to_heap_by_section(file_fd, file_sz, shdr_debugdata);
+  if (NULL == debugdata_zip) return -1;
+
+  // get unzipped .gnu_debugdata
+  size_t debugdata_sz;
+  if (0 != xdl_lzma_decompress(debugdata_zip, shdr_debugdata->sh_size, (uint8_t **)&debugdata, &debugdata_sz))
+    goto end;
+
+  // get ELF header
+  ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)debugdata;
+  if (0 == ehdr->e_shnum || ehdr->e_shentsize != sizeof(ElfW(Shdr))) goto end;
+
+  // get section headers
+  shdrs = (ElfW(Shdr) *)xdl_read_memory_to_heap(debugdata, debugdata_sz, (size_t)ehdr->e_shoff,
+                                                ehdr->e_shentsize * ehdr->e_shnum);
+  if (NULL == shdrs) goto end;
+
+  // get .shstrtab
+  if (SHN_UNDEF == ehdr->e_shstrndx || ehdr->e_shstrndx >= ehdr->e_shnum) goto end;
+  char *shstrtab = (char *)xdl_get_memory_by_section(debugdata, debugdata_sz, shdrs + ehdr->e_shstrndx);
+  if (NULL == shstrtab) goto end;
+
+  // find .symtab & .strtab
+  for (ElfW(Shdr) *shdr = shdrs; shdr < shdrs + ehdr->e_shnum; shdr++) {
+    char *shdr_name = shstrtab + shdr->sh_name;
+
+    if (SHT_SYMTAB == shdr->sh_type && 0 == strcmp(".symtab", shdr_name)) {
+      // get & check associated .strtab section
+      if (shdr->sh_link >= ehdr->e_shnum) continue;
+      ElfW(Shdr) *shdr_strtab = shdrs + shdr->sh_link;
+      if (SHT_STRTAB != shdr_strtab->sh_type) continue;
+
+      // get .symtab & .strtab
+      ElfW(Sym) *symtab = (ElfW(Sym) *)xdl_read_memory_to_heap_by_section(debugdata, debugdata_sz, shdr);
+      if (NULL == symtab) continue;
+      char *strtab = (char *)xdl_read_memory_to_heap_by_section(debugdata, debugdata_sz, shdr_strtab);
+      if (NULL == strtab) {
+        free(symtab);
+        continue;
+      }
+
+      // OK
+      self->symtab = symtab;
+      self->symtab_cnt = shdr->sh_size / shdr->sh_entsize;
+      self->strtab = strtab;
+      self->strtab_sz = shdr_strtab->sh_size;
+      r = 0;
+      break;
+    }
+  }
+
+end:
+  free(debugdata_zip);
+  if (NULL != debugdata) free(debugdata);
+  if (NULL != shdrs) free(shdrs);
+  return r;
+}
+
+// load from disk and memory
+static int xdl_symtab_load(xdl_t *self) {
+  if ('[' == self->pathname[0]) return -1;
+
+  int r = -1;
+  ElfW(Shdr) *shdrs = NULL;
+  char *shstrtab = NULL;
+
+  // get base address
+  uintptr_t vaddr_min = UINTPTR_MAX;
+  for (size_t i = 0; i < self->dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(self->dlpi_phdr[i]);
+    if (PT_LOAD == phdr->p_type) {
+      if (vaddr_min > phdr->p_vaddr) vaddr_min = phdr->p_vaddr;
+    }
+  }
+  if (UINTPTR_MAX == vaddr_min) return -1;
+  self->base = self->load_bias + vaddr_min;
+
+  // open file
+  int flags = O_RDONLY | O_CLOEXEC;
+  int file_fd;
+  if ('/' == self->pathname[0]) {
+    file_fd = open(self->pathname, flags);
+  } else {
+    char full_pathname[1024];
+    // try the fast method
+    snprintf(full_pathname, sizeof(full_pathname), "%s/%s", XDL_LIB_PATH, self->pathname);
+    file_fd = open(full_pathname, flags);
+    if (file_fd < 0) {
+      // try the slow method
+      if (0 != xdl_iterate_get_full_pathname(self->base, full_pathname, sizeof(full_pathname))) return -1;
+      file_fd = open(full_pathname, flags);
+    }
+  }
+  if (file_fd < 0) return -1;
+  struct stat st;
+  if (0 != fstat(file_fd, &st)) goto end;
+  size_t file_sz = (size_t)st.st_size;
+
+  // get ELF header
+  ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)self->base;
+  if (0 == ehdr->e_shnum || ehdr->e_shentsize != sizeof(ElfW(Shdr))) goto end;
+
+  // get section headers
+  shdrs = (ElfW(Shdr) *)xdl_read_file_to_heap(file_fd, file_sz, (size_t)ehdr->e_shoff,
+                                              ehdr->e_shentsize * ehdr->e_shnum);
+  if (NULL == shdrs) goto end;
+
+  // get .shstrtab
+  if (SHN_UNDEF == ehdr->e_shstrndx || ehdr->e_shstrndx >= ehdr->e_shnum) goto end;
+  shstrtab = (char *)xdl_read_file_to_heap_by_section(file_fd, file_sz, shdrs + ehdr->e_shstrndx);
+  if (NULL == shstrtab) goto end;
+
+  // find .symtab & .strtab
+  for (ElfW(Shdr) *shdr = shdrs; shdr < shdrs + ehdr->e_shnum; shdr++) {
+    char *shdr_name = shstrtab + shdr->sh_name;
+
+    if (SHT_SYMTAB == shdr->sh_type && 0 == strcmp(".symtab", shdr_name)) {
+      // get & check associated .strtab section
+      if (shdr->sh_link >= ehdr->e_shnum) continue;
+      ElfW(Shdr) *shdr_strtab = shdrs + shdr->sh_link;
+      if (SHT_STRTAB != shdr_strtab->sh_type) continue;
+
+      // get .symtab & .strtab
+      ElfW(Sym) *symtab = (ElfW(Sym) *)xdl_read_file_to_heap_by_section(file_fd, file_sz, shdr);
+      if (NULL == symtab) continue;
+      char *strtab = (char *)xdl_read_file_to_heap_by_section(file_fd, file_sz, shdr_strtab);
+      if (NULL == strtab) {
+        free(symtab);
+        continue;
+      }
+
+      // OK
+      self->symtab = symtab;
+      self->symtab_cnt = shdr->sh_size / shdr->sh_entsize;
+      self->strtab = strtab;
+      self->strtab_sz = shdr_strtab->sh_size;
+      r = 0;
+      break;
+    } else if (SHT_PROGBITS == shdr->sh_type && 0 == strcmp(".gnu_debugdata", shdr_name)) {
+      if (0 == xdl_symtab_load_from_debugdata(self, file_fd, file_sz, shdr)) {
+        // OK
+        r = 0;
+        break;
+      }
+    }
+  }
+
+end:
+  close(file_fd);
+  if (NULL != shdrs) free(shdrs);
+  if (NULL != shstrtab) free(shstrtab);
+  return r;
+}
+
+static xdl_t *xdl_find_from_auxv(unsigned long type, const char *pathname) {
+  if (NULL == getauxval) return NULL;
+
+  uintptr_t val = (uintptr_t)getauxval(type);
+  if (0 == val) return NULL;
+
+  // get base
+  uintptr_t base = (AT_PHDR == type ? (val & (~0xffful)) : val);
+  if (0 != memcmp((void *)base, ELFMAG, SELFMAG)) return NULL;
+
+  // ELF info
+  ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)base;
+  const ElfW(Phdr) *dlpi_phdr = (const ElfW(Phdr) *)(base + ehdr->e_phoff);
+  ElfW(Half) dlpi_phnum = ehdr->e_phnum;
+
+  // get bias
+  uintptr_t min_vaddr = UINTPTR_MAX;
+  for (size_t i = 0; i < dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(dlpi_phdr[i]);
+    if (PT_LOAD == phdr->p_type) {
+      if (min_vaddr > phdr->p_vaddr) min_vaddr = phdr->p_vaddr;
+    }
+  }
+  if (UINTPTR_MAX == min_vaddr || base < min_vaddr) return NULL;
+  uintptr_t load_bias = base - min_vaddr;
+
+  // create xDL object
+  xdl_t *self;
+  if (NULL == (self = calloc(1, sizeof(xdl_t)))) return NULL;
+  if (NULL == (self->pathname = strdup(pathname))) {
+    free(self);
+    return NULL;
+  }
+  self->load_bias = load_bias;
+  self->dlpi_phdr = dlpi_phdr;
+  self->dlpi_phnum = dlpi_phnum;
+  self->dynsym_try_load = false;
+  self->symtab_try_load = false;
+  return self;
+}
+
+static int xdl_find_iterate_cb(struct dl_phdr_info *info, size_t size, void *arg) {
+  (void)size;
+
+  uintptr_t *pkg = (uintptr_t *)arg;
+  xdl_t **self = (xdl_t **)*pkg++;
+  const char *filename = (const char *)*pkg;
+
+  // check load_bias
+  if (0 == info->dlpi_addr || NULL == info->dlpi_name) return 0;
+
+  // check pathname
+  if ('[' == filename[0]) {
+    if (0 != strcmp(info->dlpi_name, filename)) return 0;
+  } else if ('/' == filename[0]) {
+    if ('/' == info->dlpi_name[0]) {
+      if (0 != strcmp(info->dlpi_name, filename)) return 0;
+    } else {
+      if (!xdl_util_ends_with(filename, info->dlpi_name)) return 0;
+    }
+  } else {
+    if ('/' == info->dlpi_name[0]) {
+      if (!xdl_util_ends_with(info->dlpi_name, filename)) return 0;
+    } else {
+      if (0 != strcmp(info->dlpi_name, filename)) return 0;
+    }
+  }
+
+  // found the target ELF
+  if (NULL == ((*self) = calloc(1, sizeof(xdl_t)))) return 1;  // return failed
+  if (NULL == ((*self)->pathname = strdup(info->dlpi_name))) {
+    free(*self);
+    *self = NULL;
+    return 1;  // return failed
+  }
+  (*self)->load_bias = info->dlpi_addr;
+  (*self)->dlpi_phdr = info->dlpi_phdr;
+  (*self)->dlpi_phnum = info->dlpi_phnum;
+  (*self)->dynsym_try_load = false;
+  (*self)->symtab_try_load = false;
+  return 1;  // return OK
+}
+
+static xdl_t *xdl_find(const char *filename) {
+  // from auxv (linker, vDSO)
+  xdl_t *self = NULL;
+  if (xdl_util_ends_with(filename, XDL_UTIL_LINKER_BASENAME))
+    self = xdl_find_from_auxv(AT_BASE, XDL_UTIL_LINKER_PATHNAME);
+  else if (xdl_util_ends_with(filename, XDL_UTIL_VDSO_BASENAME))
+    self = xdl_find_from_auxv(AT_SYSINFO_EHDR, XDL_UTIL_VDSO_BASENAME);
+
+  // from auxv (app_process)
+  const char *basename, *pathname;
+#if (defined(__arm__) || defined(__i386__)) && __ANDROID_API__ < __ANDROID_API_L__
+  if (xdl_util_get_api_level() < __ANDROID_API_L__) {
+    basename = XDL_UTIL_APP_PROCESS_BASENAME_K;
+    pathname = XDL_UTIL_APP_PROCESS_PATHNAME_K;
+  } else
+#endif
+  {
+    basename = XDL_UTIL_APP_PROCESS_BASENAME;
+    pathname = XDL_UTIL_APP_PROCESS_PATHNAME;
+  }
+  if (xdl_util_ends_with(filename, basename)) self = xdl_find_from_auxv(AT_PHDR, pathname);
+
+  if (NULL != self) return self;
+
+  // from dl_iterate_phdr
+  uintptr_t pkg[2] = {(uintptr_t)&self, (uintptr_t)filename};
+  xdl_iterate_phdr(xdl_find_iterate_cb, pkg, XDL_DEFAULT);
+  return self;
+}
+
+static void *xdl_open_always_force(const char *filename) {
+  // always force dlopen()
+  void *linker_handle = xdl_linker_load(filename);
+  if (NULL == linker_handle) return NULL;
+
+  // find
+  xdl_t *self = xdl_find(filename);
+  if (NULL == self)
+    dlclose(linker_handle);
+  else
+    self->linker_handle = linker_handle;
+
+  return (void *)self;
+}
+
+static void *xdl_open_try_force(const char *filename) {
+  // find
+  xdl_t *self = xdl_find(filename);
+  if (NULL != self) return (void *)self;
+
+  // try force dlopen()
+  void *linker_handle = xdl_linker_load(filename);
+  if (NULL == linker_handle) return NULL;
+
+  // find again
+  self = xdl_find(filename);
+  if (NULL == self)
+    dlclose(linker_handle);
+  else
+    self->linker_handle = linker_handle;
+
+  return (void *)self;
+}
+
+void *xdl_open(const char *filename, int flags) {
+  if (NULL == filename) return NULL;
+
+  if (flags & XDL_ALWAYS_FORCE_LOAD)
+    return xdl_open_always_force(filename);
+  else if (flags & XDL_TRY_FORCE_LOAD)
+    return xdl_open_try_force(filename);
+  else
+    return xdl_find(filename);
+}
+
+void *xdl_close(void *handle) {
+  if (NULL == handle) return NULL;
+
+  xdl_t *self = (xdl_t *)handle;
+  if (NULL != self->pathname) free(self->pathname);
+  if (NULL != self->symtab) free(self->symtab);
+  if (NULL != self->strtab) free(self->strtab);
+
+  void *linker_handle = self->linker_handle;
+  free(self);
+  return linker_handle;
+}
+
+static uint32_t xdl_sysv_hash(const uint8_t *name) {
+  uint32_t h = 0, g;
+
+  while (*name) {
+    h = (h << 4) + *name++;
+    g = h & 0xf0000000;
+    h ^= g;
+    h ^= g >> 24;
+  }
+  return h;
+}
+
+static uint32_t xdl_gnu_hash(const uint8_t *name) {
+  uint32_t h = 5381;
+
+  while (*name) {
+    h += (h << 5) + *name++;
+  }
+  return h;
+}
+
+static ElfW(Sym) *xdl_dynsym_find_symbol_use_sysv_hash(xdl_t *self, const char *sym_name) {
+  uint32_t hash = xdl_sysv_hash((const uint8_t *)sym_name);
+
+  for (uint32_t i = self->sysv_hash.buckets[hash % self->sysv_hash.buckets_cnt]; 0 != i;
+       i = self->sysv_hash.chains[i]) {
+    ElfW(Sym) *sym = self->dynsym + i;
+    if (0 != strcmp(self->dynstr + sym->st_name, sym_name)) continue;
+    return sym;
+  }
+
+  return NULL;
+}
+
+static ElfW(Sym) *xdl_dynsym_find_symbol_use_gnu_hash(xdl_t *self, const char *sym_name) {
+  uint32_t hash = xdl_gnu_hash((const uint8_t *)sym_name);
+
+  static uint32_t elfclass_bits = sizeof(ElfW(Addr)) * 8;
+  size_t word = self->gnu_hash.bloom[(hash / elfclass_bits) % self->gnu_hash.bloom_cnt];
+  size_t mask = 0 | (size_t)1 << (hash % elfclass_bits) |
+                (size_t)1 << ((hash >> self->gnu_hash.bloom_shift) % elfclass_bits);
+
+  // if at least one bit is not set, this symbol is surely missing
+  if ((word & mask) != mask) return NULL;
+
+  // ignore STN_UNDEF
+  uint32_t i = self->gnu_hash.buckets[hash % self->gnu_hash.buckets_cnt];
+  if (i < self->gnu_hash.symoffset) return NULL;
+
+  // loop through the chain
+  while (1) {
+    ElfW(Sym) *sym = self->dynsym + i;
+    uint32_t sym_hash = self->gnu_hash.chains[i - self->gnu_hash.symoffset];
+
+    if ((hash | (uint32_t)1) == (sym_hash | (uint32_t)1)) {
+      if (0 == strcmp(self->dynstr + sym->st_name, sym_name)) {
+        return sym;
+      }
+    }
+
+    // chain ends with an element with the lowest bit set to 1
+    if (sym_hash & (uint32_t)1) break;
+
+    i++;
+  }
+
+  return NULL;
+}
+
+void *xdl_sym(void *handle, const char *symbol, size_t *symbol_size) {
+  if (NULL == handle || NULL == symbol) return NULL;
+  if (NULL != symbol_size) *symbol_size = 0;
+
+  xdl_t *self = (xdl_t *)handle;
+
+  // load .dynsym only once
+  if (!self->dynsym_try_load) {
+    self->dynsym_try_load = true;
+    if (0 != xdl_dynsym_load(self)) return NULL;
+  }
+
+  // find symbol
+  if (NULL == self->dynsym) return NULL;
+  ElfW(Sym) *sym = NULL;
+  if (self->gnu_hash.buckets_cnt > 0) {
+    // use GNU hash (.gnu.hash -> .dynsym -> .dynstr), O(x) + O(1) + O(1)
+    sym = xdl_dynsym_find_symbol_use_gnu_hash(self, symbol);
+  }
+  if (NULL == sym && self->sysv_hash.buckets_cnt > 0) {
+    // use SYSV hash (.hash -> .dynsym -> .dynstr), O(x) + O(1) + O(1)
+    sym = xdl_dynsym_find_symbol_use_sysv_hash(self, symbol);
+  }
+  if (NULL == sym || !XDL_DYNSYM_IS_EXPORT_SYM(sym->st_shndx)) return NULL;
+
+  if (NULL != symbol_size) *symbol_size = sym->st_size;
+  return (void *)(self->load_bias + sym->st_value);
+}
+
+void *xdl_dsym(void *handle, const char *symbol, size_t *symbol_size) {
+  if (NULL == handle || NULL == symbol) return NULL;
+  if (NULL != symbol_size) *symbol_size = 0;
+
+  xdl_t *self = (xdl_t *)handle;
+
+  // load .symtab only once
+  if (!self->symtab_try_load) {
+    self->symtab_try_load = true;
+    if (0 != xdl_symtab_load(self)) return NULL;
+  }
+
+  // find symbol
+  if (NULL == self->symtab) return NULL;
+  for (size_t i = 0; i < self->symtab_cnt; i++) {
+    ElfW(Sym) *sym = self->symtab + i;
+
+    if (!XDL_SYMTAB_IS_EXPORT_SYM(sym->st_shndx)) continue;
+    if (0 != strncmp(self->strtab + sym->st_name, symbol, self->strtab_sz - sym->st_name)) continue;
+
+    if (NULL != symbol_size) *symbol_size = sym->st_size;
+    return (void *)(self->load_bias + sym->st_value);
+  }
+
+  return NULL;
+}
+
+static bool xdl_elf_is_match(uintptr_t load_bias, const ElfW(Phdr) *dlpi_phdr, ElfW(Half) dlpi_phnum,
+                             uintptr_t addr) {
+  if (addr < load_bias) return false;
+
+  uintptr_t vaddr = addr - load_bias;
+  for (size_t i = 0; i < dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(dlpi_phdr[i]);
+    if (PT_LOAD != phdr->p_type) continue;
+
+    if (phdr->p_vaddr <= vaddr && vaddr < phdr->p_vaddr + phdr->p_memsz) return true;
+  }
+
+  return false;
+}
+
+static int xdl_open_by_addr_iterate_cb(struct dl_phdr_info *info, size_t size, void *arg) {
+  (void)size;
+
+  uintptr_t *pkg = (uintptr_t *)arg;
+  xdl_t **self = (xdl_t **)*pkg++;
+  uintptr_t addr = *pkg;
+
+  if (xdl_elf_is_match(info->dlpi_addr, info->dlpi_phdr, info->dlpi_phnum, addr)) {
+    // found the target ELF
+    if (NULL == ((*self) = calloc(1, sizeof(xdl_t)))) return 1;  // failed
+    if (NULL == ((*self)->pathname = strdup(info->dlpi_name))) {
+      free(*self);
+      *self = NULL;
+      return 1;  // failed
+    }
+    (*self)->load_bias = info->dlpi_addr;
+    (*self)->dlpi_phdr = info->dlpi_phdr;
+    (*self)->dlpi_phnum = info->dlpi_phnum;
+    (*self)->dynsym_try_load = false;
+    (*self)->symtab_try_load = false;
+    return 1;  // OK
+  }
+
+  return 0;  // mismatch
+}
+
+static void *xdl_open_by_addr(void *addr) {
+  if (NULL == addr) return NULL;
+
+  xdl_t *self = NULL;
+  uintptr_t pkg[2] = {(uintptr_t)&self, (uintptr_t)addr};
+  xdl_iterate_phdr(xdl_open_by_addr_iterate_cb, pkg, XDL_DEFAULT);
+
+  return (void *)self;
+}
+
+static bool xdl_sym_is_match(ElfW(Sym) *sym, uintptr_t offset, bool is_symtab) {
+  if (is_symtab) {
+    if (!XDL_SYMTAB_IS_EXPORT_SYM(sym->st_shndx)) false;
+  } else {
+    if (!XDL_DYNSYM_IS_EXPORT_SYM(sym->st_shndx)) false;
+  }
+
+  return ELF_ST_TYPE(sym->st_info) != STT_TLS && offset >= sym->st_value &&
+         offset < sym->st_value + sym->st_size;
+}
+
+static ElfW(Sym) *xdl_sym_by_addr(void *handle, void *addr) {
+  xdl_t *self = (xdl_t *)handle;
+
+  // load .dynsym only once
+  if (!self->dynsym_try_load) {
+    self->dynsym_try_load = true;
+    if (0 != xdl_dynsym_load(self)) return NULL;
+  }
+
+  // find symbol
+  if (NULL == self->dynsym) return NULL;
+  uintptr_t offset = (uintptr_t)addr - self->load_bias;
+  if (self->gnu_hash.buckets_cnt > 0) {
+    const uint32_t *chains_all = self->gnu_hash.chains - self->gnu_hash.symoffset;
+    for (size_t i = 0; i < self->gnu_hash.buckets_cnt; i++) {
+      uint32_t n = self->gnu_hash.buckets[i];
+      if (n < self->gnu_hash.symoffset) continue;
+      do {
+        ElfW(Sym) *sym = self->dynsym + n;
+        if (xdl_sym_is_match(sym, offset, false)) return sym;
+      } while ((chains_all[n++] & 1) == 0);
+    }
+  } else if (self->sysv_hash.chains_cnt > 0) {
+    for (size_t i = 0; i < self->sysv_hash.chains_cnt; i++) {
+      ElfW(Sym) *sym = self->dynsym + i;
+      if (xdl_sym_is_match(sym, offset, false)) return sym;
+    }
+  }
+
+  return NULL;
+}
+
+static ElfW(Sym) *xdl_dsym_by_addr(void *handle, void *addr) {
+  xdl_t *self = (xdl_t *)handle;
+
+  // load .symtab only once
+  if (!self->symtab_try_load) {
+    self->symtab_try_load = true;
+    if (0 != xdl_symtab_load(self)) return NULL;
+  }
+
+  // find symbol
+  if (NULL == self->symtab) return NULL;
+  uintptr_t offset = (uintptr_t)addr - self->load_bias;
+  for (size_t i = 0; i < self->symtab_cnt; i++) {
+    ElfW(Sym) *sym = self->symtab + i;
+    if (xdl_sym_is_match(sym, offset, true)) return sym;
+  }
+
+  return NULL;
+}
+
+int xdl_addr(void *addr, xdl_info_t *info, void **cache) {
+  if (NULL == addr || NULL == info || NULL == cache) return 0;
+
+  memset(info, 0, sizeof(Dl_info));
+
+  // find handle from cache
+  xdl_t *handle = NULL;
+  for (handle = *((xdl_t **)cache); NULL != handle; handle = handle->next)
+    if (xdl_elf_is_match(handle->load_bias, handle->dlpi_phdr, handle->dlpi_phnum, (uintptr_t)addr)) break;
+
+  // create new handle, save handle to cache
+  if (NULL == handle) {
+    handle = (xdl_t *)xdl_open_by_addr(addr);
+    if (NULL == handle) return 0;
+    handle->next = *(xdl_t **)cache;
+    *(xdl_t **)cache = handle;
+  }
+
+  // we have at least: load_bias, pathname, dlpi_phdr, dlpi_phnum
+  info->dli_fbase = (void *)handle->load_bias;
+  info->dli_fname = handle->pathname;
+  info->dli_sname = NULL;
+  info->dli_saddr = 0;
+  info->dli_ssize = 0;
+  info->dlpi_phdr = handle->dlpi_phdr;
+  info->dlpi_phnum = (size_t)handle->dlpi_phnum;
+
+  // keep looking for: symbol name, symbol offset, symbol size
+  ElfW(Sym) *sym;
+  if (NULL != (sym = xdl_sym_by_addr((void *)handle, addr))) {
+    info->dli_sname = handle->dynstr + sym->st_name;
+    info->dli_saddr = (void *)(handle->load_bias + sym->st_value);
+    info->dli_ssize = sym->st_size;
+  } else if (NULL != (sym = xdl_dsym_by_addr((void *)handle, addr))) {
+    info->dli_sname = handle->strtab + sym->st_name;
+    info->dli_saddr = (void *)(handle->load_bias + sym->st_value);
+    info->dli_ssize = sym->st_size;
+  }
+
+  return 1;
+}
+
+void xdl_addr_clean(void **cache) {
+  if (NULL == cache) return;
+
+  xdl_t *handle = *((xdl_t **)cache);
+  while (NULL != handle) {
+    xdl_t *tmp = handle;
+    handle = handle->next;
+    xdl_close(tmp);
+  }
+  *cache = NULL;
+}
+
+int xdl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *data, int flags) {
+  if (NULL == callback) return 0;
+
+  return xdl_iterate_phdr_impl(callback, data, flags);
+}
+
+int xdl_info(void *handle, int request, void *info) {
+  if (NULL == handle || XDL_DI_DLINFO != request || NULL == info) return -1;
+
+  xdl_t *self = (xdl_t *)handle;
+  xdl_info_t *dlinfo = (xdl_info_t *)info;
+
+  dlinfo->dli_fbase = (void *)self->load_bias;
+  dlinfo->dli_fname = self->pathname;
+  dlinfo->dli_sname = NULL;
+  dlinfo->dli_saddr = 0;
+  dlinfo->dli_ssize = 0;
+  dlinfo->dlpi_phdr = self->dlpi_phdr;
+  dlinfo->dlpi_phnum = (size_t)self->dlpi_phnum;
+  return 0;
+}
+
+```
+
+`module/src/main/cpp/xdl/xdl_iterate.c`:
+
+```c
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+#include "xdl_iterate.h"
+
+#include <android/api-level.h>
+#include <ctype.h>
+#include <dlfcn.h>
+#include <elf.h>
+#include <inttypes.h>
+#include <link.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/auxv.h>
+
+#include "xdl.h"
+#include "xdl_linker.h"
+#include "xdl_util.h"
+
+/*
+ * =========================================================================================================
+ * API-LEVEL  ANDROID-VERSION  SOLUTION
+ * =========================================================================================================
+ * 16         4.1              /proc/self/maps
+ * 17         4.2              /proc/self/maps
+ * 18         4.3              /proc/self/maps
+ * 19         4.4              /proc/self/maps
+ * 20         4.4W             /proc/self/maps
+ * ---------------------------------------------------------------------------------------------------------
+ * 21         5.0              dl_iterate_phdr() + __dl__ZL10g_dl_mutex + linker/linker64 from getauxval(3)
+ * 22         5.1              dl_iterate_phdr() + __dl__ZL10g_dl_mutex + linker/linker64 from getauxval(3)
+ * ---------------------------------------------------------------------------------------------------------
+ * 23         >= 6.0           dl_iterate_phdr() + linker/linker64 from getauxval(3)
+ * =========================================================================================================
+ */
+
+extern __attribute((weak)) int dl_iterate_phdr(int (*)(struct dl_phdr_info *, size_t, void *), void *);
+extern __attribute((weak)) unsigned long int getauxval(unsigned long int);
+
+static uintptr_t xdl_iterate_get_min_vaddr(struct dl_phdr_info *info) {
+  uintptr_t min_vaddr = UINTPTR_MAX;
+  for (size_t i = 0; i < info->dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(info->dlpi_phdr[i]);
+    if (PT_LOAD == phdr->p_type) {
+      if (min_vaddr > phdr->p_vaddr) min_vaddr = phdr->p_vaddr;
+    }
+  }
+  return min_vaddr;
+}
+
+static int xdl_iterate_open_or_rewind_maps(FILE **maps) {
+  if (NULL == *maps) {
+    *maps = fopen("/proc/self/maps", "r");
+    if (NULL == *maps) return -1;
+  } else
+    rewind(*maps);
+
+  return 0;
+}
+
+static int xdl_iterate_get_pathname_from_maps(uintptr_t base, char *buf, size_t buf_len, FILE **maps) {
+  // open or rewind maps-file
+  if (0 != xdl_iterate_open_or_rewind_maps(maps)) return -1;  // failed
+
+  char line[1024];
+  while (fgets(line, sizeof(line), *maps)) {
+    // check base address
+    uintptr_t start, end;
+    if (2 != sscanf(line, "%" SCNxPTR "-%" SCNxPTR " r", &start, &end)) continue;
+    if (base < start) break;  // failed
+    if (base >= end) continue;
+
+    // get pathname
+    char *pathname = strchr(line, '/');
+    if (NULL == pathname) break;  // failed
+    xdl_util_trim_ending(pathname);
+
+    // found it
+    strlcpy(buf, pathname, buf_len);
+    return 0;  // OK
+  }
+
+  return -1;  // failed
+}
+
+static int xdl_iterate_by_linker_cb(struct dl_phdr_info *info, size_t size, void *arg) {
+  uintptr_t *pkg = (uintptr_t *)arg;
+  xdl_iterate_phdr_cb_t cb = (xdl_iterate_phdr_cb_t)*pkg++;
+  void *cb_arg = (void *)*pkg++;
+  FILE **maps = (FILE **)*pkg++;
+  uintptr_t linker_load_bias = *pkg++;
+  int flags = (int)*pkg;
+
+  // ignore invalid ELF
+  if (0 == info->dlpi_addr || NULL == info->dlpi_name || '\0' == info->dlpi_name[0]) return 0;
+
+  // ignore linker if we have returned it already
+  if (linker_load_bias == info->dlpi_addr) return 0;
+
+  struct dl_phdr_info info_fixed;
+  info_fixed.dlpi_addr = info->dlpi_addr;
+  info_fixed.dlpi_name = info->dlpi_name;
+  info_fixed.dlpi_phdr = info->dlpi_phdr;
+  info_fixed.dlpi_phnum = info->dlpi_phnum;
+  info = &info_fixed;
+
+  // fix dlpi_phdr & dlpi_phnum (from memory)
+  if (NULL == info->dlpi_phdr || 0 == info->dlpi_phnum) {
+    ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)info->dlpi_addr;
+    info->dlpi_phdr = (ElfW(Phdr) *)(info->dlpi_addr + ehdr->e_phoff);
+    info->dlpi_phnum = ehdr->e_phnum;
+  }
+
+  // fix dlpi_name (from /proc/self/maps)
+  if ('/' != info->dlpi_name[0] && '[' != info->dlpi_name[0] && (0 != (flags & XDL_FULL_PATHNAME))) {
+    // get base address
+    uintptr_t min_vaddr = xdl_iterate_get_min_vaddr(info);
+    if (UINTPTR_MAX == min_vaddr) return 0;  // ignore this ELF
+    uintptr_t base = (uintptr_t)(info->dlpi_addr + min_vaddr);
+
+    char buf[1024];
+    if (0 != xdl_iterate_get_pathname_from_maps(base, buf, sizeof(buf), maps)) return 0;  // ignore this ELF
+
+    info->dlpi_name = (const char *)buf;
+  }
+
+  // callback
+  return cb(info, size, cb_arg);
+}
+
+static uintptr_t xdl_iterate_get_linker_base(void) {
+  if (NULL == getauxval) return 0;
+
+  uintptr_t base = (uintptr_t)getauxval(AT_BASE);
+  if (0 == base) return 0;
+  if (0 != memcmp((void *)base, ELFMAG, SELFMAG)) return 0;
+
+  return base;
+}
+
+static int xdl_iterate_do_callback(xdl_iterate_phdr_cb_t cb, void *cb_arg, uintptr_t base,
+                                   const char *pathname, uintptr_t *load_bias) {
+  ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)base;
+
+  struct dl_phdr_info info;
+  info.dlpi_name = pathname;
+  info.dlpi_phdr = (const ElfW(Phdr) *)(base + ehdr->e_phoff);
+  info.dlpi_phnum = ehdr->e_phnum;
+
+  // get load bias
+  uintptr_t min_vaddr = xdl_iterate_get_min_vaddr(&info);
+  if (UINTPTR_MAX == min_vaddr) return 0;  // ignore invalid ELF
+  info.dlpi_addr = (ElfW(Addr))(base - min_vaddr);
+  if (NULL != load_bias) *load_bias = info.dlpi_addr;
+
+  return cb(&info, sizeof(struct dl_phdr_info), cb_arg);
+}
+
+static int xdl_iterate_by_linker(xdl_iterate_phdr_cb_t cb, void *cb_arg, int flags) {
+  if (NULL == dl_iterate_phdr) return 0;
+
+  int api_level = xdl_util_get_api_level();
+  FILE *maps = NULL;
+  int r;
+
+  // dl_iterate_phdr(3) does NOT contain linker/linker64 when Android version < 8.1 (API level 27).
+  // Here we always try to get linker base address from auxv.
+  uintptr_t linker_load_bias = 0;
+  uintptr_t linker_base = xdl_iterate_get_linker_base();
+  if (0 != linker_base) {
+    if (0 !=
+        (r = xdl_iterate_do_callback(cb, cb_arg, linker_base, XDL_UTIL_LINKER_PATHNAME, &linker_load_bias)))
+      return r;
+  }
+
+  // for other ELF
+  uintptr_t pkg[5] = {(uintptr_t)cb, (uintptr_t)cb_arg, (uintptr_t)&maps, linker_load_bias, (uintptr_t)flags};
+  if (__ANDROID_API_L__ == api_level || __ANDROID_API_L_MR1__ == api_level) xdl_linker_lock();
+  r = dl_iterate_phdr(xdl_iterate_by_linker_cb, pkg);
+  if (__ANDROID_API_L__ == api_level || __ANDROID_API_L_MR1__ == api_level) xdl_linker_unlock();
+
+  if (NULL != maps) fclose(maps);
+  return r;
+}
+
+#if (defined(__arm__) || defined(__i386__)) && __ANDROID_API__ < __ANDROID_API_L__
+static int xdl_iterate_by_maps(xdl_iterate_phdr_cb_t cb, void *cb_arg) {
+  FILE *maps = fopen("/proc/self/maps", "r");
+  if (NULL == maps) return 0;
+
+  int r = 0;
+  char buf1[1024], buf2[1024];
+  char *line = buf1;
+  uintptr_t prev_base = 0;
+  bool try_next_line = false;
+
+  while (fgets(line, sizeof(buf1), maps)) {
+    // Try to find an ELF which loaded by linker.
+    uintptr_t base, offset;
+    char exec;
+    if (3 != sscanf(line, "%" SCNxPTR "-%*" SCNxPTR " r%*c%cp %" SCNxPTR " ", &base, &exec, &offset)) goto clean;
+
+    if ('-' == exec && 0 == offset) {
+      // r--p
+      prev_base = base;
+      line = (line == buf1 ? buf2 : buf1);
+      try_next_line = true;
+      continue;
+    }
+    else if (exec == 'x') {
+      // r-xp
+      char *pathname = NULL;
+      if (try_next_line && 0 != offset) {
+        char *prev = (line == buf1 ? buf2 : buf1);
+        char *prev_pathname = strchr(prev, '/');
+        if (NULL == prev_pathname) goto clean;
+
+        pathname = strchr(line, '/');
+        if (NULL == pathname) goto clean;
+
+        xdl_util_trim_ending(prev_pathname);
+        xdl_util_trim_ending(pathname);
+        if (0 != strcmp(prev_pathname, pathname)) goto clean;
+
+        // we found the line with r-xp in the next line
+        base = prev_base;
+        offset = 0;
+      }
+
+      if (0 != offset) goto clean;
+
+      // get pathname
+      if (NULL == pathname) {
+        pathname = strchr(line, '/');
+        if (NULL == pathname) goto clean;
+        xdl_util_trim_ending(pathname);
+      }
+
+      if (0 != memcmp((void *)base, ELFMAG, SELFMAG)) goto clean;
+      ElfW(Ehdr) *ehdr = (ElfW(Ehdr) *)base;
+      struct dl_phdr_info info;
+      info.dlpi_name = pathname;
+      info.dlpi_phdr = (const ElfW(Phdr) *)(base + ehdr->e_phoff);
+      info.dlpi_phnum = ehdr->e_phnum;
+
+      // callback
+      if (0 != (r = xdl_iterate_do_callback(cb, cb_arg, base, pathname, NULL))) break;
+    }
+
+ clean:
+    try_next_line = false;
+  }
+
+  fclose(maps);
+  return r;
+}
+#endif
+
+int xdl_iterate_phdr_impl(xdl_iterate_phdr_cb_t cb, void *cb_arg, int flags) {
+  // iterate by /proc/self/maps in Android 4.x (Android 4.x only supports arm32 and x86)
+#if (defined(__arm__) || defined(__i386__)) && __ANDROID_API__ < __ANDROID_API_L__
+  if (xdl_util_get_api_level() < __ANDROID_API_L__) return xdl_iterate_by_maps(cb, cb_arg);
+#endif
+
+  // iterate by dl_iterate_phdr()
+  return xdl_iterate_by_linker(cb, cb_arg, flags);
+}
+
+int xdl_iterate_get_full_pathname(uintptr_t base, char *buf, size_t buf_len) {
+  FILE *maps = NULL;
+  int r = xdl_iterate_get_pathname_from_maps(base, buf, buf_len, &maps);
+  if (NULL != maps) fclose(maps);
+  return r;
+}
+
+```
+
+`module/src/main/cpp/xdl/xdl_iterate.h`:
+
+```h
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+#ifndef IO_HEXHACKING_XDL_ITERATE
+#define IO_HEXHACKING_XDL_ITERATE
+
+#include <link.h>
+#include <stddef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef int (*xdl_iterate_phdr_cb_t)(struct dl_phdr_info *info, size_t size, void *arg);
+int xdl_iterate_phdr_impl(xdl_iterate_phdr_cb_t cb, void *cb_arg, int flags);
+
+int xdl_iterate_get_full_pathname(uintptr_t base, char *buf, size_t buf_len);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
+```
+
+`module/src/main/cpp/xdl/xdl_linker.c`:
+
+```c
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2021-02-21.
+
+#include "xdl_linker.h"
+
+#include <dlfcn.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+#include "xdl.h"
+#include "xdl_iterate.h"
+#include "xdl_util.h"
+
+#define XDL_LINKER_SYM_MUTEX           "__dl__ZL10g_dl_mutex"
+#define XDL_LINKER_SYM_DLOPEN_EXT_N    "__dl__ZL10dlopen_extPKciPK17android_dlextinfoPv"
+#define XDL_LINKER_SYM_DO_DLOPEN_N     "__dl__Z9do_dlopenPKciPK17android_dlextinfoPv"
+#define XDL_LINKER_SYM_DLOPEN_O        "__dl__Z8__dlopenPKciPKv"
+#define XDL_LINKER_SYM_LOADER_DLOPEN_P "__loader_dlopen"
+
+typedef void *(*xdl_linker_dlopen_n_t)(const char *, int, const void *, void *);
+typedef void *(*xdl_linker_dlopen_o_t)(const char *, int, const void *);
+
+static pthread_mutex_t *xdl_linker_mutex = NULL;
+static void *xdl_linker_dlopen = NULL;
+
+static void *xdl_linker_caller_addr[] = {
+    NULL,  // default
+    NULL,  // art
+    NULL   // vendor
+};
+
+#ifndef __LP64__
+#define XDL_LINKER_LIB "lib"
+#else
+#define XDL_LINKER_LIB "lib64"
+#endif
+static const char *xdl_linker_vendor_path[] = {
+    // order is important
+    "/vendor/" XDL_LINKER_LIB "/egl/",     "/vendor/" XDL_LINKER_LIB "/hw/",
+    "/vendor/" XDL_LINKER_LIB "/",         "/odm/" XDL_LINKER_LIB "/",
+    "/vendor/" XDL_LINKER_LIB "/vndk-sp/", "/odm/" XDL_LINKER_LIB "/vndk-sp/"};
+
+static void xdl_linker_init(void) {
+  static bool inited = false;
+  if (inited) return;
+  inited = true;
+
+  void *handle = xdl_open(XDL_UTIL_LINKER_BASENAME, XDL_DEFAULT);
+  if (NULL == handle) return;
+
+  int api_level = xdl_util_get_api_level();
+  if (__ANDROID_API_L__ == api_level || __ANDROID_API_L_MR1__ == api_level) {
+    // == Android 5.x
+    xdl_linker_mutex = (pthread_mutex_t *)xdl_dsym(handle, XDL_LINKER_SYM_MUTEX, NULL);
+  } else if (__ANDROID_API_N__ == api_level || __ANDROID_API_N_MR1__ == api_level) {
+    // == Android 7.x
+    xdl_linker_dlopen = xdl_dsym(handle, XDL_LINKER_SYM_DLOPEN_EXT_N, NULL);
+    if (NULL == xdl_linker_dlopen) {
+      xdl_linker_dlopen = xdl_dsym(handle, XDL_LINKER_SYM_DO_DLOPEN_N, NULL);
+      xdl_linker_mutex = (pthread_mutex_t *)xdl_dsym(handle, XDL_LINKER_SYM_MUTEX, NULL);
+    }
+  } else if (__ANDROID_API_O__ == api_level || __ANDROID_API_O_MR1__ == api_level) {
+    // == Android 8.x
+    xdl_linker_dlopen = xdl_dsym(handle, XDL_LINKER_SYM_DLOPEN_O, NULL);
+  } else if (api_level >= __ANDROID_API_P__) {
+    // >= Android 9.0
+    xdl_linker_dlopen = xdl_sym(handle, XDL_LINKER_SYM_LOADER_DLOPEN_P, NULL);
+  }
+
+  xdl_close(handle);
+}
+
+void xdl_linker_lock(void) {
+  xdl_linker_init();
+
+  if (NULL != xdl_linker_mutex) pthread_mutex_lock(xdl_linker_mutex);
+}
+
+void xdl_linker_unlock(void) {
+  if (NULL != xdl_linker_mutex) pthread_mutex_unlock(xdl_linker_mutex);
+}
+
+static void *xdl_linker_get_caller_addr(struct dl_phdr_info *info) {
+  for (size_t i = 0; i < info->dlpi_phnum; i++) {
+    const ElfW(Phdr) *phdr = &(info->dlpi_phdr[i]);
+    if (PT_LOAD == phdr->p_type) {
+      return (void *)(info->dlpi_addr + phdr->p_vaddr);
+    }
+  }
+  return NULL;
+}
+
+static int xdl_linker_get_caller_addr_cb(struct dl_phdr_info *info, size_t size, void *arg) {
+  (void)size;
+
+  size_t *vendor_match = (size_t *)arg;
+
+  if (0 == info->dlpi_addr || NULL == info->dlpi_name) return 0;  // continue
+
+  if (NULL == xdl_linker_caller_addr[0] && xdl_util_ends_with(info->dlpi_name, "/libc.so"))
+    xdl_linker_caller_addr[0] = xdl_linker_get_caller_addr(info);
+
+  if (NULL == xdl_linker_caller_addr[1] && xdl_util_ends_with(info->dlpi_name, "/libart.so"))
+    xdl_linker_caller_addr[1] = xdl_linker_get_caller_addr(info);
+
+  if (0 != *vendor_match) {
+    for (size_t i = 0; i < *vendor_match; i++) {
+      if (xdl_util_starts_with(info->dlpi_name, xdl_linker_vendor_path[i])) {
+        void *caller_addr = xdl_linker_get_caller_addr(info);
+        if (NULL != caller_addr) {
+          xdl_linker_caller_addr[2] = caller_addr;
+          *vendor_match = i;
+        }
+      }
+    }
+  }
+
+  if (NULL != xdl_linker_caller_addr[0] && NULL != xdl_linker_caller_addr[1] && 0 == *vendor_match) {
+    return 1;  // finish
+  } else {
+    return 0;  // continue
+  }
+}
+
+static void xdl_linker_load_caller_addr(void) {
+  if (NULL == xdl_linker_caller_addr[0]) {
+    size_t vendor_match = sizeof(xdl_linker_vendor_path) / sizeof(xdl_linker_vendor_path[0]);
+    xdl_iterate_phdr_impl(xdl_linker_get_caller_addr_cb, &vendor_match, XDL_DEFAULT);
+  }
+}
+
+void *xdl_linker_load(const char *filename) {
+  int api_level = xdl_util_get_api_level();
+
+  if (api_level <= __ANDROID_API_M__) {
+    // <= Android 6.0
+    return dlopen(filename, RTLD_NOW);
+  } else {
+    xdl_linker_init();
+    if (NULL == xdl_linker_dlopen) return NULL;
+    xdl_linker_load_caller_addr();
+
+    void *handle = NULL;
+    if (__ANDROID_API_N__ == api_level || __ANDROID_API_N_MR1__ == api_level) {
+      // == Android 7.x
+      xdl_linker_lock();
+      for (size_t i = 0; i < sizeof(xdl_linker_caller_addr) / sizeof(xdl_linker_caller_addr[0]); i++) {
+        if (NULL != xdl_linker_caller_addr[i]) {
+          handle =
+              ((xdl_linker_dlopen_n_t)xdl_linker_dlopen)(filename, RTLD_NOW, NULL, xdl_linker_caller_addr[i]);
+          if (NULL != handle) break;
+        }
+      }
+      xdl_linker_unlock();
+    } else {
+      // >= Android 8.0
+      for (size_t i = 0; i < sizeof(xdl_linker_caller_addr) / sizeof(xdl_linker_caller_addr[0]); i++) {
+        if (NULL != xdl_linker_caller_addr[i]) {
+          handle = ((xdl_linker_dlopen_o_t)xdl_linker_dlopen)(filename, RTLD_NOW, xdl_linker_caller_addr[i]);
+          if (NULL != handle) break;
+        }
+      }
+    }
+    return handle;
+  }
+}
+
+```
+
+`module/src/main/cpp/xdl/xdl_linker.h`:
+
+```h
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2021-02-21.
+
+#ifndef IO_HEXHACKING_XDL_LINKER
+#define IO_HEXHACKING_XDL_LINKER
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void xdl_linker_lock(void);
+void xdl_linker_unlock(void);
+
+void *xdl_linker_load(const char *filename);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
+```
+
+`module/src/main/cpp/xdl/xdl_lzma.c`:
+
+```c
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-11-08.
+
+#include "xdl_lzma.h"
+
+#include <ctype.h>
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#include "xdl.h"
+#include "xdl_util.h"
+
+// LZMA library pathname & symbol names
+#ifndef __LP64__
+#define XDL_LZMA_PATHNAME "/system/lib/liblzma.so"
+#else
+#define XDL_LZMA_PATHNAME "/system/lib64/liblzma.so"
+#endif
+#define XDL_LZMA_SYM_CRCGEN     "CrcGenerateTable"
+#define XDL_LZMA_SYM_CRC64GEN   "Crc64GenerateTable"
+#define XDL_LZMA_SYM_CONSTRUCT  "XzUnpacker_Construct"
+#define XDL_LZMA_SYM_ISFINISHED "XzUnpacker_IsStreamWasFinished"
+#define XDL_LZMA_SYM_FREE       "XzUnpacker_Free"
+#define XDL_LZMA_SYM_CODE       "XzUnpacker_Code"
+
+// LZMA data type definition
+#define SZ_OK 0
+typedef struct ISzAlloc ISzAlloc;
+typedef const ISzAlloc *ISzAllocPtr;
+struct ISzAlloc {
+  void *(*Alloc)(ISzAllocPtr p, size_t size);
+  void (*Free)(ISzAllocPtr p, void *address); /* address can be 0 */
+};
+typedef enum {
+  CODER_STATUS_NOT_SPECIFIED,      /* use main error code instead */
+  CODER_STATUS_FINISHED_WITH_MARK, /* stream was finished with end mark. */
+  CODER_STATUS_NOT_FINISHED,       /* stream was not finished */
+  CODER_STATUS_NEEDS_MORE_INPUT    /* you must provide more input bytes */
+} ECoderStatus;
+typedef enum {
+  CODER_FINISH_ANY, /* finish at any point */
+  CODER_FINISH_END  /* block must be finished at the end */
+} ECoderFinishMode;
+
+// LZMA function type definition
+typedef void (*xdl_lzma_crcgen_t)(void);
+typedef void (*xdl_lzma_crc64gen_t)(void);
+typedef void (*xdl_lzma_construct_t)(void *, ISzAllocPtr);
+typedef int (*xdl_lzma_isfinished_t)(const void *);
+typedef void (*xdl_lzma_free_t)(void *);
+typedef int (*xdl_lzma_code_t)(void *, uint8_t *, size_t *, const uint8_t *, size_t *, ECoderFinishMode,
+                               ECoderStatus *);
+typedef int (*xdl_lzma_code_q_t)(void *, uint8_t *, size_t *, const uint8_t *, size_t *, int,
+                                 ECoderFinishMode, ECoderStatus *);
+
+// LZMA function pointor
+static xdl_lzma_construct_t xdl_lzma_construct = NULL;
+static xdl_lzma_isfinished_t xdl_lzma_isfinished = NULL;
+static xdl_lzma_free_t xdl_lzma_free = NULL;
+static void *xdl_lzma_code = NULL;
+
+// LZMA init
+static void xdl_lzma_init() {
+  void *lzma = xdl_open(XDL_LZMA_PATHNAME, XDL_TRY_FORCE_LOAD);
+  if (NULL == lzma) return;
+
+  xdl_lzma_crcgen_t crcgen = NULL;
+  xdl_lzma_crc64gen_t crc64gen = NULL;
+  if (NULL == (crcgen = (xdl_lzma_crcgen_t)xdl_sym(lzma, XDL_LZMA_SYM_CRCGEN, NULL))) goto end;
+  if (NULL == (crc64gen = (xdl_lzma_crc64gen_t)xdl_sym(lzma, XDL_LZMA_SYM_CRC64GEN, NULL))) goto end;
+  if (NULL == (xdl_lzma_construct = (xdl_lzma_construct_t)xdl_sym(lzma, XDL_LZMA_SYM_CONSTRUCT, NULL)))
+    goto end;
+  if (NULL == (xdl_lzma_isfinished = (xdl_lzma_isfinished_t)xdl_sym(lzma, XDL_LZMA_SYM_ISFINISHED, NULL)))
+    goto end;
+  if (NULL == (xdl_lzma_free = (xdl_lzma_free_t)xdl_sym(lzma, XDL_LZMA_SYM_FREE, NULL))) goto end;
+  if (NULL == (xdl_lzma_code = xdl_sym(lzma, XDL_LZMA_SYM_CODE, NULL))) goto end;
+  crcgen();
+  crc64gen();
+
+end:
+  xdl_close(lzma);
+}
+
+// LZMA internal alloc / free
+static void *xdl_lzma_internal_alloc(ISzAllocPtr p, size_t size) {
+  (void)p;
+  return malloc(size);
+}
+static void xdl_lzma_internal_free(ISzAllocPtr p, void *address) {
+  (void)p;
+  free(address);
+}
+
+int xdl_lzma_decompress(uint8_t *src, size_t src_size, uint8_t **dst, size_t *dst_size) {
+  size_t src_offset = 0;
+  size_t dst_offset = 0;
+  size_t src_remaining;
+  size_t dst_remaining;
+  ISzAlloc alloc = {.Alloc = xdl_lzma_internal_alloc, .Free = xdl_lzma_internal_free};
+  long long state[4096 / sizeof(long long)];  // must be enough, 8-bit aligned
+  ECoderStatus status;
+  int api_level = xdl_util_get_api_level();
+
+  // init and check
+  static bool inited = false;
+  if (!inited) {
+    xdl_lzma_init();
+    inited = true;
+  }
+  if (NULL == xdl_lzma_code) return -1;
+
+  xdl_lzma_construct(&state, &alloc);
+
+  *dst_size = 2 * src_size;
+  *dst = NULL;
+  do {
+    *dst_size *= 2;
+    if (NULL == (*dst = realloc(*dst, *dst_size))) {
+      xdl_lzma_free(&state);
+      return -1;
+    }
+
+    src_remaining = src_size - src_offset;
+    dst_remaining = *dst_size - dst_offset;
+
+    int result;
+    if (api_level >= __ANDROID_API_Q__) {
+      xdl_lzma_code_q_t lzma_code_q = (xdl_lzma_code_q_t)xdl_lzma_code;
+      result = lzma_code_q(&state, *dst + dst_offset, &dst_remaining, src + src_offset, &src_remaining, 1,
+                           CODER_FINISH_ANY, &status);
+    } else {
+      xdl_lzma_code_t lzma_code = (xdl_lzma_code_t)xdl_lzma_code;
+      result = lzma_code(&state, *dst + dst_offset, &dst_remaining, src + src_offset, &src_remaining,
+                         CODER_FINISH_ANY, &status);
+    }
+    if (SZ_OK != result) {
+      free(*dst);
+      xdl_lzma_free(&state);
+      return -1;
+    }
+
+    src_offset += src_remaining;
+    dst_offset += dst_remaining;
+  } while (status == CODER_STATUS_NOT_FINISHED);
+
+  xdl_lzma_free(&state);
+
+  if (!xdl_lzma_isfinished(&state)) {
+    free(*dst);
+    return -1;
+  }
+
+  *dst_size = dst_offset;
+  *dst = realloc(*dst, *dst_size);
+  return 0;
+}
+
+```
+
+`module/src/main/cpp/xdl/xdl_lzma.h`:
+
+```h
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-11-08.
+
+#ifndef IO_HEXHACKING_XDL_LZMA
+#define IO_HEXHACKING_XDL_LZMA
+
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int xdl_lzma_decompress(uint8_t *src, size_t src_size, uint8_t **dst, size_t *dst_size);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
+```
+
+`module/src/main/cpp/xdl/xdl_util.c`:
+
+```c
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+#include "xdl_util.h"
+
+#include <android/api-level.h>
+#include <ctype.h>
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+bool xdl_util_starts_with(const char *str, const char *start) {
+  while (*str && *str == *start) {
+    str++;
+    start++;
+  }
+
+  return '\0' == *start;
+}
+
+bool xdl_util_ends_with(const char *str, const char *ending) {
+  size_t str_len = strlen(str);
+  size_t ending_len = strlen(ending);
+
+  if (ending_len > str_len) return false;
+
+  return 0 == strcmp(str + (str_len - ending_len), ending);
+}
+
+size_t xdl_util_trim_ending(char *start) {
+  char *end = start + strlen(start);
+  while (start < end && isspace((int)(*(end - 1)))) {
+    end--;
+    *end = '\0';
+  }
+  return (size_t)(end - start);
+}
+
+static int xdl_util_get_api_level_from_build_prop(void) {
+  char buf[128];
+  int api_level = -1;
+
+  FILE *fp = fopen("/system/build.prop", "r");
+  if (NULL == fp) goto end;
+
+  while (fgets(buf, sizeof(buf), fp)) {
+    if (xdl_util_starts_with(buf, "ro.build.version.sdk=")) {
+      api_level = atoi(buf + 21);
+      break;
+    }
+  }
+  fclose(fp);
+
+end:
+  return (api_level > 0) ? api_level : -1;
+}
+
+int xdl_util_get_api_level(void) {
+  static int xdl_util_api_level = -1;
+
+  if (xdl_util_api_level < 0) {
+    int api_level = android_get_device_api_level();
+    if (api_level < 0)
+      api_level = xdl_util_get_api_level_from_build_prop();  // compatible with unusual models
+    if (api_level < __ANDROID_API_J__) api_level = __ANDROID_API_J__;
+
+    __atomic_store_n(&xdl_util_api_level, api_level, __ATOMIC_SEQ_CST);
+  }
+
+  return xdl_util_api_level;
+}
+
+```
+
+`module/src/main/cpp/xdl/xdl_util.h`:
+
+```h
+// Copyright (c) 2020-2021 HexHacking Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//
+
+// Created by caikelun on 2020-10-04.
+
+#ifndef IO_HEXHACKING_XDL_UTIL
+#define IO_HEXHACKING_XDL_UTIL
+
+#include <errno.h>
+#include <stdbool.h>
+#include <stddef.h>
+
+#ifndef __LP64__
+#define XDL_UTIL_LINKER_BASENAME        "linker"
+#define XDL_UTIL_LINKER_PATHNAME        "/system/bin/linker"
+#define XDL_UTIL_APP_PROCESS_BASENAME   "app_process32"
+#define XDL_UTIL_APP_PROCESS_PATHNAME   "/system/bin/app_process32"
+#define XDL_UTIL_APP_PROCESS_BASENAME_K "app_process"
+#define XDL_UTIL_APP_PROCESS_PATHNAME_K "/system/bin/app_process"
+#else
+#define XDL_UTIL_LINKER_BASENAME      "linker64"
+#define XDL_UTIL_LINKER_PATHNAME      "/system/bin/linker64"
+#define XDL_UTIL_APP_PROCESS_BASENAME "app_process64"
+#define XDL_UTIL_APP_PROCESS_PATHNAME "/system/bin/app_process64"
+#endif
+#define XDL_UTIL_VDSO_BASENAME "[vdso]"
+
+#define XDL_UTIL_TEMP_FAILURE_RETRY(exp)   \
+  ({                                       \
+    __typeof__(exp) _rc;                   \
+    do {                                   \
+      errno = 0;                           \
+      _rc = (exp);                         \
+    } while (_rc == -1 && errno == EINTR); \
+    _rc;                                   \
+  })
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+bool xdl_util_starts_with(const char *str, const char *start);
+bool xdl_util_ends_with(const char *str, const char *ending);
+
+size_t xdl_util_trim_ending(char *start);
+
+int xdl_util_get_api_level(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
+```
+
+`module/src/main/cpp/zygisk.hpp`:
+
+```hpp
+// This is the public API for Zygisk modules.
+// DO NOT MODIFY ANY CODE IN THIS HEADER.
+
+#pragma once
+
+#include <jni.h>
+
+#define ZYGISK_API_VERSION 2
+
+/*
+
+Define a class and inherit zygisk::ModuleBase to implement the functionality of your module.
+Use the macro REGISTER_ZYGISK_MODULE(className) to register that class to Zygisk.
+
+Please note that modules will only be loaded after zygote has forked the child process.
+THIS MEANS ALL OF YOUR CODE RUNS IN THE APP/SYSTEM SERVER PROCESS, NOT THE ZYGOTE DAEMON!
+
+Example code:
+
+static jint (*orig_logger_entry_max)(JNIEnv *env);
+static jint my_logger_entry_max(JNIEnv *env) { return orig_logger_entry_max(env); }
+
+static void example_handler(int socket) { ... }
+
+class ExampleModule : public zygisk::ModuleBase {
+public:
+    void onLoad(zygisk::Api *api, JNIEnv *env) override {
+        this->api = api;
+        this->env = env;
+    }
+    void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        JNINativeMethod methods[] = {
+            { "logger_entry_max_payload_native", "()I", (void*) my_logger_entry_max },
+        };
+        api->hookJniNativeMethods(env, "android/util/Log", methods, 1);
+        *(void **) &orig_logger_entry_max = methods[0].fnPtr;
+    }
+private:
+    zygisk::Api *api;
+    JNIEnv *env;
+};
+
+REGISTER_ZYGISK_MODULE(ExampleModule)
+
+REGISTER_ZYGISK_COMPANION(example_handler)
+
+*/
+
+namespace zygisk {
+
+struct Api;
+struct AppSpecializeArgs;
+struct ServerSpecializeArgs;
+
+class ModuleBase {
+public:
+
+    // This function is called when the module is loaded into the target process.
+    // A Zygisk API handle will be sent as an argument; call utility functions or interface
+    // with Zygisk through this handle.
+    virtual void onLoad([[maybe_unused]] Api *api, [[maybe_unused]] JNIEnv *env) {}
+
+    // This function is called before the app process is specialized.
+    // At this point, the process just got forked from zygote, but no app specific specialization
+    // is applied. This means that the process does not have any sandbox restrictions and
+    // still runs with the same privilege of zygote.
+    //
+    // All the arguments that will be sent and used for app specialization is passed as a single
+    // AppSpecializeArgs object. You can read and overwrite these arguments to change how the app
+    // process will be specialized.
+    //
+    // If you need to run some operations as superuser, you can call Api::connectCompanion() to
+    // get a socket to do IPC calls with a root companion process.
+    // See Api::connectCompanion() for more info.
+    virtual void preAppSpecialize([[maybe_unused]] AppSpecializeArgs *args) {}
+
+    // This function is called after the app process is specialized.
+    // At this point, the process has all sandbox restrictions enabled for this application.
+    // This means that this function runs as the same privilege of the app's own code.
+    virtual void postAppSpecialize([[maybe_unused]] const AppSpecializeArgs *args) {}
+
+    // This function is called before the system server process is specialized.
+    // See preAppSpecialize(args) for more info.
+    virtual void preServerSpecialize([[maybe_unused]] ServerSpecializeArgs *args) {}
+
+    // This function is called after the system server process is specialized.
+    // At this point, the process runs with the privilege of system_server.
+    virtual void postServerSpecialize([[maybe_unused]] const ServerSpecializeArgs *args) {}
+};
+
+struct AppSpecializeArgs {
+    // Required arguments. These arguments are guaranteed to exist on all Android versions.
+    jint &uid;
+    jint &gid;
+    jintArray &gids;
+    jint &runtime_flags;
+    jint &mount_external;
+    jstring &se_info;
+    jstring &nice_name;
+    jstring &instruction_set;
+    jstring &app_data_dir;
+
+    // Optional arguments. Please check whether the pointer is null before de-referencing
+    jboolean *const is_child_zygote;
+    jboolean *const is_top_app;
+    jobjectArray *const pkg_data_info_list;
+    jobjectArray *const whitelisted_data_info_list;
+    jboolean *const mount_data_dirs;
+    jboolean *const mount_storage_dirs;
+
+    AppSpecializeArgs() = delete;
+};
+
+struct ServerSpecializeArgs {
+    jint &uid;
+    jint &gid;
+    jintArray &gids;
+    jint &runtime_flags;
+    jlong &permitted_capabilities;
+    jlong &effective_capabilities;
+
+    ServerSpecializeArgs() = delete;
+};
+
+namespace internal {
+struct api_table;
+template <class T> void entry_impl(api_table *, JNIEnv *);
+}
+
+// These values are used in Api::setOption(Option)
+enum Option : int {
+    // Force Magisk's denylist unmount routines to run on this process.
+    //
+    // Setting this option only makes sense in preAppSpecialize.
+    // The actual unmounting happens during app process specialization.
+    //
+    // Set this option to force all Magisk and modules' files to be unmounted from the
+    // mount namespace of the process, regardless of the denylist enforcement status.
+    FORCE_DENYLIST_UNMOUNT = 0,
+
+    // When this option is set, your module's library will be dlclose-ed after post[XXX]Specialize.
+    // Be aware that after dlclose-ing your module, all of your code will be unmapped from memory.
+    // YOU MUST NOT ENABLE THIS OPTION AFTER HOOKING ANY FUNCTIONS IN THE PROCESS.
+    DLCLOSE_MODULE_LIBRARY = 1,
+};
+
+// Bit masks of the return value of Api::getFlags()
+enum StateFlag : uint32_t {
+    // The user has granted root access to the current process
+    PROCESS_GRANTED_ROOT = (1u << 0),
+
+    // The current process was added on the denylist
+    PROCESS_ON_DENYLIST = (1u << 1),
+};
+
+// All API functions will stop working after post[XXX]Specialize as Zygisk will be unloaded
+// from the specialized process afterwards.
+struct Api {
+
+    // Connect to a root companion process and get a Unix domain socket for IPC.
+    //
+    // This API only works in the pre[XXX]Specialize functions due to SELinux restrictions.
+    //
+    // The pre[XXX]Specialize functions run with the same privilege of zygote.
+    // If you would like to do some operations with superuser permissions, register a handler
+    // function that would be called in the root process with REGISTER_ZYGISK_COMPANION(func).
+    // Another good use case for a companion process is that if you want to share some resources
+    // across multiple processes, hold the resources in the companion process and pass it over.
+    //
+    // The root companion process is ABI aware; that is, when calling this function from a 32-bit
+    // process, you will be connected to a 32-bit companion process, and vice versa for 64-bit.
+    //
+    // Returns a file descriptor to a socket that is connected to the socket passed to your
+    // module's companion request handler. Returns -1 if the connection attempt failed.
+    int connectCompanion();
+
+    // Get the file descriptor of the root folder of the current module.
+    //
+    // This API only works in the pre[XXX]Specialize functions.
+    // Accessing the directory returned is only possible in the pre[XXX]Specialize functions
+    // or in the root companion process (assuming that you sent the fd over the socket).
+    // Both restrictions are due to SELinux and UID.
+    //
+    // Returns -1 if errors occurred.
+    int getModuleDir();
+
+    // Set various options for your module.
+    // Please note that this function accepts one single option at a time.
+    // Check zygisk::Option for the full list of options available.
+    void setOption(Option opt);
+
+    // Get information about the current process.
+    // Returns bitwise-or'd zygisk::StateFlag values.
+    uint32_t getFlags();
+
+    // Hook JNI native methods for a class
+    //
+    // Lookup all registered JNI native methods and replace it with your own functions.
+    // The original function pointer will be saved in each JNINativeMethod's fnPtr.
+    // If no matching class, method name, or signature is found, that specific JNINativeMethod.fnPtr
+    // will be set to nullptr.
+    void hookJniNativeMethods(JNIEnv *env, const char *className, JNINativeMethod *methods, int numMethods);
+
+    // For ELFs loaded in memory matching `regex`, replace function `symbol` with `newFunc`.
+    // If `oldFunc` is not nullptr, the original function pointer will be saved to `oldFunc`.
+    void pltHookRegister(const char *regex, const char *symbol, void *newFunc, void **oldFunc);
+
+    // For ELFs loaded in memory matching `regex`, exclude hooks registered for `symbol`.
+    // If `symbol` is nullptr, then all symbols will be excluded.
+    void pltHookExclude(const char *regex, const char *symbol);
+
+    // Commit all the hooks that was previously registered.
+    // Returns false if an error occurred.
+    bool pltHookCommit();
+
+private:
+    internal::api_table *impl;
+    template <class T> friend void internal::entry_impl(internal::api_table *, JNIEnv *);
+};
+
+// Register a class as a Zygisk module
+
+#define REGISTER_ZYGISK_MODULE(clazz) \
+void zygisk_module_entry(zygisk::internal::api_table *table, JNIEnv *env) { \
+    zygisk::internal::entry_impl<clazz>(table, env);                        \
+}
+
+// Register a root companion request handler function for your module
+//
+// The function runs in a superuser daemon process and handles a root companion request from
+// your module running in a target process. The function has to accept an integer value,
+// which is a socket that is connected to the target process.
+// See Api::connectCompanion() for more info.
+//
+// NOTE: the function can run concurrently on multiple threads.
+// Be aware of race conditions if you have a globally shared resource.
+
+#define REGISTER_ZYGISK_COMPANION(func) \
+void zygisk_companion_entry(int client) { func(client); }
+
+/************************************************************************************
+ * All the code after this point is internal code used to interface with Zygisk
+ * and guarantee ABI stability. You do not have to understand what it is doing.
+ ************************************************************************************/
+
+namespace internal {
+
+struct module_abi {
+    long api_version;
+    ModuleBase *_this;
+
+    void (*preAppSpecialize)(ModuleBase *, AppSpecializeArgs *);
+    void (*postAppSpecialize)(ModuleBase *, const AppSpecializeArgs *);
+    void (*preServerSpecialize)(ModuleBase *, ServerSpecializeArgs *);
+    void (*postServerSpecialize)(ModuleBase *, const ServerSpecializeArgs *);
+
+    module_abi(ModuleBase *module) : api_version(ZYGISK_API_VERSION), _this(module) {
+        preAppSpecialize = [](auto self, auto args) { self->preAppSpecialize(args); };
+        postAppSpecialize = [](auto self, auto args) { self->postAppSpecialize(args); };
+        preServerSpecialize = [](auto self, auto args) { self->preServerSpecialize(args); };
+        postServerSpecialize = [](auto self, auto args) { self->postServerSpecialize(args); };
+    }
+};
+
+struct api_table {
+    // These first 2 entries are permanent, shall never change
+    void *_this;
+    bool (*registerModule)(api_table *, module_abi *);
+
+    // Utility functions
+    void (*hookJniNativeMethods)(JNIEnv *, const char *, JNINativeMethod *, int);
+    void (*pltHookRegister)(const char *, const char *, void *, void **);
+    void (*pltHookExclude)(const char *, const char *);
+    bool (*pltHookCommit)();
+
+    // Zygisk functions
+    int  (*connectCompanion)(void * /* _this */);
+    void (*setOption)(void * /* _this */, Option);
+    int  (*getModuleDir)(void * /* _this */);
+    uint32_t (*getFlags)(void * /* _this */);
+};
+
+template <class T>
+void entry_impl(api_table *table, JNIEnv *env) {
+    ModuleBase *module = new T();
+    if (!table->registerModule(table, new module_abi(module)))
+        return;
+    auto api = new Api();
+    api->impl = table;
+    module->onLoad(api, env);
+}
+
+} // namespace internal
+
+inline int Api::connectCompanion() {
+    return impl->connectCompanion ? impl->connectCompanion(impl->_this) : -1;
+}
+inline int Api::getModuleDir() {
+    return impl->getModuleDir ? impl->getModuleDir(impl->_this) : -1;
+}
+inline void Api::setOption(Option opt) {
+    if (impl->setOption) impl->setOption(impl->_this, opt);
+}
+inline uint32_t Api::getFlags() {
+    return impl->getFlags ? impl->getFlags(impl->_this) : 0;
+}
+inline void Api::hookJniNativeMethods(JNIEnv *env, const char *className, JNINativeMethod *methods, int numMethods) {
+    if (impl->hookJniNativeMethods) impl->hookJniNativeMethods(env, className, methods, numMethods);
+}
+inline void Api::pltHookRegister(const char *regex, const char *symbol, void *newFunc, void **oldFunc) {
+    if (impl->pltHookRegister) impl->pltHookRegister(regex, symbol, newFunc, oldFunc);
+}
+inline void Api::pltHookExclude(const char *regex, const char *symbol) {
+    if (impl->pltHookExclude) impl->pltHookExclude(regex, symbol);
+}
+inline bool Api::pltHookCommit() {
+    return impl->pltHookCommit != nullptr && impl->pltHookCommit();
+}
+
+} // namespace zygisk
+
+[[gnu::visibility("default")]] [[gnu::used]]
+extern "C" void zygisk_module_entry(zygisk::internal::api_table *, JNIEnv *);
+
+[[gnu::visibility("default")]] [[gnu::used]]
+extern "C" void zygisk_companion_entry(int);
+
+```
+
+`settings.gradle`:
+
+```gradle
+include ':module'
+
+import org.apache.tools.ant.DirectoryScanner
+
+DirectoryScanner.removeDefaultExclude('**/.gitattributes')
+
+```
+
+`template/magisk_module/META-INF/com/google/android/update-binary`:
+
+```
+#!/sbin/sh
+
+#################
+# Initialization
+#################
+
+umask 022
+
+# echo before loading util_functions
+ui_print() { echo "$1"; }
+
+require_new_magisk() {
+  ui_print "*******************************"
+  ui_print " Please install Magisk v20.4+! "
+  ui_print "*******************************"
+  exit 1
+}
+
+#########################
+# Load util_functions.sh
+#########################
+
+OUTFD=$2
+ZIPFILE=$3
+
+mount /data 2>/dev/null
+
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+
+install_module
+exit 0
+
+```
+
+`template/magisk_module/META-INF/com/google/android/updater-script`:
+
+```
+#MAGISK
+
+```
+
+`template/magisk_module/module.prop`:
+
+```prop
+id=${id}
+name=${name}
+version=${version}
+versionCode=${versionCode}
+author=${author}
+description=${description}
+
+```

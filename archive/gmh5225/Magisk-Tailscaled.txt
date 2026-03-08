@@ -1,0 +1,422 @@
+Project Path: arc_gmh5225_Magisk-Tailscaled_yw8aerq3
+
+Source Tree:
+
+```txt
+arc_gmh5225_Magisk-Tailscaled_yw8aerq3
+├── CHANGELOG.txt
+├── LICENSE
+├── META-INF
+│   └── com
+│       └── google
+│           └── android
+│               ├── update-binary
+│               └── updater-script
+├── README.md
+├── customize.sh
+├── files
+│   ├── VERSION.txt
+│   ├── tailscale-arm
+│   ├── tailscale-arm64
+│   ├── tailscaled-arm
+│   └── tailscaled-arm64
+├── module.prop
+├── service.sh
+└── update.json
+
+```
+
+`CHANGELOG.txt`:
+
+```txt
+Please read from here : https://github.com/anasfanani/Magisk-Tailscaled/releases/latest
+```
+
+`LICENSE`:
+
+```
+BSD 3-Clause License
+
+Copyright (c) 2023 ANASFANANI & AUTHORS.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+BSD 3-Clause License
+
+Copyright (c) 2020 Tailscale Inc & AUTHORS.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+`META-INF/com/google/android/update-binary`:
+
+```
+#!/sbin/sh
+
+#################
+# Initialization
+#################
+
+umask 022
+
+# echo before loading util_functions
+ui_print() { echo "$1"; }
+
+require_new_magisk() {
+  ui_print "*******************************"
+  ui_print " Please install Magisk v20.4+! "
+  ui_print "*******************************"
+  exit 1
+}
+
+#########################
+# Load util_functions.sh
+#########################
+
+OUTFD=$2
+ZIPFILE=$3
+
+mount /data 2>/dev/null
+
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+
+install_module
+exit 0
+```
+
+`META-INF/com/google/android/updater-script`:
+
+```
+#MAGISK
+```
+
+`README.md`:
+
+```md
+[![anasfanani - Magisk-Tailscaled](https://img.shields.io/static/v1?label=anasfanani&message=Magisk-Tailscaled&color=blue&logo=github)](https://github.com/anasfanani/Magisk-Tailscaled "Go to GitHub repo")
+[![Check and Update Tailscale Binary](https://github.com/anasfanani/Magisk-Tailscaled/actions/workflows/update.yml/badge.svg)](https://github.com/anasfanani/Magisk-Tailscaled/actions/workflows/update.yml)
+[![Github All Releases](https://img.shields.io/github/downloads/anasfanani/Magisk-Tailscaled/total.svg)]()
+[![GitHub release](https://img.shields.io/github/release/anasfanani/Magisk-Tailscaled?include_prereleases=&sort=semver&color=blue)](https://github.com/anasfanani/Magisk-Tailscaled/releases/)
+[![issues - Magisk-Tailscaled](https://img.shields.io/github/issues/anasfanani/Magisk-Tailscaled)](https://github.com/anasfanani/Magisk-Tailscaled/issues)
+
+# Magisk Tailscaled
+
+This repository contains a Magisk module for running Tailscale on rooted Android devices.
+
+## What is Tailscale?
+
+Tailscale is a networking tool that allows you to connect each of your devices as if they were on the same VPN. For example, an Android phone connected to the Tailscale network can communicate with any other device connected to Tailscale. You can install it on your PC and Android device and then connect them using the Tailscale IP. For more information, check out [How Tailscale Works](https://tailscale.com/blog/how-tailscale-works).
+
+## Difference between this Magisk module and the Tailscale app on Play Store
+
+The [Tailscale app](https://play.google.com/store/apps/details?id=com.tailscale.ipn) on the Play Store runs with Android's VPN, which means you can't use Tailscale while another VPN is active. This Magisk module, on the other hand, allows you to use both an Android VPN and Tailscale at the same time.
+
+## Requirements
+
+- An Android device with Magisk root installed.
+- Currently only support for `arm` or `arm64` architecture.
+
+## Installation
+
+1. Download the latest zip file from the [Releases](https://github.com/anasfanani/Magisk-Tailscaled/releases/latest) page.
+2. Install the downloaded zip file using Magisk.
+3. Reboot your phone.
+
+After installation, the Tailscale daemon (`tailscaled`) will run automatically on boot.
+
+## Atention
+
+Due to many people have problem with run command `tailscale` you must go to `/data/local/tmp/` directory first, then type `tailscale ip` or `tailscale status`
+Example : `cd /data/local/tmp/ && tailscale ip`
+
+## Usage
+
+This module runs `tailscaled` with the following command:
+
+```bash
+tailscaled -tun=userspace-networking -statedir=/data/local/tmp/ -state=/data/local/tmp/tailscaled.state -socket=/data/local/tmp/tailscaled.sock -port=41641
+```
+This command uses a userspace network stack instead of the kernel's network stack, which can be useful on devices where the kernel's network stack is not compatible with Tailscale. The state file for tailscaled is stored at `/data/local/tmp/tailscaled.state`, and the log output is written to `/data/local/tmp/tailscaled.log`.
+
+## Instructions
+
+1. Open the Terminal.
+2. Run 'su' to gain root access.
+3. Run 'tailscale login' to login to your Tailscale account.
+4. Open the URL in a browser to authorize your device.
+5. Run 'tailscale status' to check the Tailscale connection.
+6. Alternatively, you can open the [Tailscale Admin Dashboard](https://login.tailscale.com/admin/machines) to manage your devices.
+
+## Example of Using Tailscale
+
+You can use Tailscale to connect SSH from Termux on Android to a Windows PC. Here's how:
+
+### On your Android device:
+
+1. Set up SSHD:
+
+```bash
+apt update && apt upgrade
+apt install openssh
+passwd
+```
+
+Enter your password when prompted, for example, `123`.
+
+2. Run ssh daemon with command `sshd`
+3. Get your IP with the command `tailscale ip` or check your IP in the [Tailscale Admin Dashboard](https://login.tailscale.com/admin/machines).
+
+### On your Windows PC:
+
+1. Open the terminal.
+2. SSH to your Android IP:
+
+```bash
+ssh [randomuser]@[android ip tailscale] -p 8022
+```
+
+For example:
+
+```bash
+ssh user@100.95.95.95 -p 8022
+```
+
+## Avalilable command
+
+```
+USAGE
+  tailscale [flags] <subcommand> [command flags]
+
+For help on subcommands, add --help after: "tailscale status --help".
+
+This CLI is still under active development. Commands and flags will
+change in the future.
+
+SUBCOMMANDS
+  up         Connect to Tailscale, logging in if needed
+  down       Disconnect from Tailscale
+  set        Change specified preferences
+  login      Log in to a Tailscale account
+  logout     Disconnect from Tailscale and expire current node key
+  switch     Switches to a different Tailscale account
+  configure  [ALPHA] Configure the host to enable more Tailscale features
+  netcheck   Print an analysis of local network conditions
+  ip         Show Tailscale IP addresses
+  status     Show state of tailscaled and its connections
+  ping       Ping a host at the Tailscale layer, see how it routed
+  nc         Connect to a port on a host, connected to stdin/stdout
+  ssh        SSH to a Tailscale machine
+  funnel     Turn on/off Funnel service
+  serve      Serve content and local servers
+  version    Print Tailscale version
+  web        Run a web server for controlling Tailscale
+  file       Send or receive files
+  bugreport  Print a shareable identifier to help diagnose issues
+  cert       Get TLS certs
+  lock       Manage tailnet lock
+  licenses   Get open source license information
+  exit-node
+
+FLAGS
+  --socket string
+        path to tailscaled socket (default /var/run/tailscale/tailscaled.sock)
+```
+
+For more details about CLI commands, check out the [Tailscale CLI documentation](https://tailscale.com/kb/1080/cli#using-the-cli).
+
+## Troubleshooting
+
+Tailscale has some known issues. You can check them out [here](https://github.com/tailscale/tailscale/issues?q=no+safe+place+found+to+store+log+state).
+
+In order to execute any Tailscale command on the terminal, you must navigate to the directory `/data/local/tmp/` and then execute the Tailscale command. For example, `cd /data/local/tmp/` then `tailscale login`, or `tailscale status`.
+
+If you encounter any problems, take a look at the `service.sh` file. You can modify the commands that are not necessary. If you make some modifications to the commands and they work, please open an issue and make a report.
+
+Currently, this module does not support KernelSU as the author has not used it. Therefore, the author cannot create a module for KernelSU. 
+
+If you encounter any issues, you can check the logs at `/data/local/tmp/tailscaled.log`.
+
+For more information, check out the links below:
+
+## Links
+
+- [Tailscale Userspace Networking](https://tailscale.com/kb/1112/userspace-networking/)
+- [Termux Issue #10166](https://github.com/termux/termux-packages/issues/10166)
+- [Tailscale Static Packages](https://pkgs.tailscale.com/stable/#static)
+- [Tailscale Knowledge Base](https://tailscale.com/kb)
+
+## Credits
+
+- [Tailscale Inc & AUTHORS](https://github.com/tailscale/tailscale). for the static binaries of tailscale & tailscaled
+- [John Wu & Authors](https://github.com/topjohnwu/Magisk). for The Magic Mask for Android
+
+## Disclaimer
+
+This module is not affiliated with the official Tailscale. It is a third-party implementation and the author is not responsible for any damage to your device that may occur from its use. Use at your own risk.
+
+## License
+
+Released under [BSD 3-Clause License](/LICENSE).
+```
+
+`customize.sh`:
+
+```sh
+case $ARCH in
+    arm)   F_ARCH=$ARCH;;
+    arm64)   F_ARCH=$ARCH;;
+    *)     ui_print "Unsupported architecture: $ARCH"; abort;;
+esac
+
+ui_print "- Detected architecture: $F_ARCH"
+ui_print "- Extracting module files"
+
+F_TARGETDIR="$MODPATH/system/bin"
+
+mkdir -p "$F_TARGETDIR"
+unzip -qq -o "$ZIPFILE" "files/tailscaled-$F_ARCH" -j -d "$F_TARGETDIR"
+unzip -qq -o "$ZIPFILE" "files/tailscale-$F_ARCH" -j -d "$F_TARGETDIR"
+
+mv "$F_TARGETDIR/tailscaled-$F_ARCH" "$F_TARGETDIR/tailscaled"
+mv "$F_TARGETDIR/tailscale-$F_ARCH" "$F_TARGETDIR/tailscale"
+
+ui_print "- Extracted files to $F_TARGETDIR"
+
+ui_print "- Setting permissions"
+
+#set_perm_recursive $F_TARGETDIR 0 2000 0644 0755
+set_perm $MODPATH/system/bin/tailscale 0 0 0755
+set_perm $MODPATH/system/bin/tailscaled 0 0 0755
+
+ui_print "- Cleaning up"
+
+rm -r "$MODPATH/files" # cleanup
+
+ui_print "*******************"
+ui_print " Instructions       "
+ui_print "*******************"
+ui_print "1. Reboot your device."
+ui_print "2. Open the Teminal and type 'cd /data/local/tmp/'."
+ui_print "3. Run 'su' to gain root access."
+ui_print "4. Run 'tailscale login' to login to your Tailscale account."
+ui_print "5. Open url in browser to authorize your device."
+ui_print "6. Run 'tailscale status' to check Tailscale connection."
+ui_print "*******************"
+ui_print " Troubleshooting    "
+ui_print "*******************"
+ui_print "1. Check logs in /data/local/tmp/tailscaled.log."
+ui_print "2. Read the docs."
+
+
+
+
+```
+
+`files/VERSION.txt`:
+
+```txt
+v1.56.1
+
+```
+
+`module.prop`:
+
+```prop
+id=magisk-tailscaled
+name=Magisk-Tailscaled
+version=1.56.1.1
+versionCode=01560101
+author=anasfanani
+description=Run Tailscaled with magisk.
+updateJson=https://raw.githubusercontent.com/anasfanani/Magisk-Tailscaled/master/update.json
+```
+
+`service.sh`:
+
+```sh
+# wait for boot to complete
+while [ "$(getprop sys.boot_completed)" != 1 ]; do
+    sleep 1
+done
+# wait for network to be available
+echo "Waiting network to be available">/data/local/tmp/tailscaled.log
+while true; do
+    curl -Is 1.1.1.1 > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        break
+    else
+        echo "Network not available">>/data/local/tmp/tailscaled.log
+        sleep 2
+    fi
+done
+# ensure boot has actually completed & network is ready
+sleep 5
+# start tailscaled
+echo "Starting tailscaled">>/data/local/tmp/tailscaled.log
+while true;do
+    # https://github.com/tailscale/tailscale/issues?q=no+safe+place+found+to+store+log+state
+    cd /data/local/tmp/ && tailscaled -tun=userspace-networking -statedir=/data/local/tmp/ -state=/data/local/tmp/tailscaled.state -socket=/data/local/tmp/tailscaled.sock -port=41641 >> /data/local/tmp/tailscaled.log 2>&1
+    sleep 5
+    echo "Tailscaled restarting">>/data/local/tmp/tailscaled.log
+done
+```
+
+`update.json`:
+
+```json
+{
+  "version": "v1.56.1.1",
+  "versionCode": "01560101",
+  "zipUrl": "https://github.com/anasfanani/Magisk-Tailscaled/releases/download/v1.56.1.1/Magisk-Tailscaled-v1.56.1.1.zip",
+  "changelog": "https://raw.githubusercontent.com/anasfanani/Magisk-Tailscaled/master/CHANGELOG.txt"
+}
+
+```
