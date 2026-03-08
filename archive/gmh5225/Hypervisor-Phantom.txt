@@ -1,0 +1,682 @@
+Project Path: arc_gmh5225_Hypervisor-Phantom_lw2mwsvg
+
+Source Tree:
+
+```txt
+arc_gmh5225_Hypervisor-Phantom_lw2mwsvg
+├── QEMU-KVM-Undetected.xml
+├── README.md
+├── VM-External-Modifer.ps1
+└── VM-Internal-Modifier.ps1
+
+```
+
+`QEMU-KVM-Undetected.xml`:
+
+```xml
+  <os>
+    <bootmenu enable="no"/>
+    <smbios mode="host"/>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <hyperv mode="custom">
+      <relaxed state="on"/>
+      <vapic state="on"/>
+      <spinlocks state="on" retries="8191"/>
+      <vendor_id state="on" value="AuthenticAMD"/>
+    </hyperv>
+    <kvm>
+      <hidden state="on"/>
+    </kvm>
+    <vmport state="off"/>
+  </features>
+  <cpu mode="host-passthrough" check="none" migratable="on">
+    <topology sockets="1" dies="1" cores="8" threads="2"/>
+    <feature policy="disable" name="hypervisor"/>
+  </cpu>
+
+```
+
+`README.md`:
+
+```md
+## ExecutionPolicy Modifier:
+```
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+```
+
+## Todo List:
+- Fix:
+    - RDTSC force VM Exit check
+    - Vbox failed to query monitor/displays via SEB [Code Reference](https://github.com/SafeExamBrowser/seb-win-refactoring/blob/master/SafeExamBrowser.Monitoring/Display/DisplayMonitor.cs)
+
+## Proctor Info
+<details>
+<summary>Proctoring Software</summary>
+
+| Software | Browser Extension | System Test | Bypassed | Difficulty |
+| - | - | - | - | - |
+| Pafish |  | [Link](https://github.com/a0rtega/pafish/releases/download/v0.6/pafish64.exe) | ✅ |  |
+| Al-Khaser |  | [Link](https://github.com/LordNoteworthy/al-khaser) | ❔ |  |
+| Safe Exam Browser |  | [Link](https://github.com/SafeExamBrowser/seb-win-refactoring) | ❔ | 😤 |
+| Pearson VUE |  | [Link](https://system-test.onvue.com/system_test?customer=pearson_vue) | ❔ | 🤬 |
+| ProctorU | ✅ | [FF Addon](https://s3-us-west-2.amazonaws.com/proctoru-assets/extension/firefox-extension-latest.xpi) or [Chrome Addon](https://chrome.google.com/webstore/detail/proctoru/goobgennebinldhonaajgafidboenlkl) | ✅ | 🤨 |
+| ProctorU: Guardian Browser |  | [Link](https://guardian.meazurelearning.com/) | ❔ |  |
+| Proctorio | ✅ | [Link](https://getproctorio.com/) | ✅ | 😂 |
+| Examity |  |  | ❔ |  |
+| Respondus (LockDown Browser) | ✅ | [Link](https://download.respondus.com/lockdown/download.php) | ❔ |  |
+| Kryterion |  |  | ❔ |  |
+| Honorlock | ✅ | [Link](https://app.honorlock.com/install/extension) | ✅ | 😂 |
+
+</details>
+
+<details>
+<summary>Anti-Cheat Software</summary>
+
+| Software | Bypassed | Difficulty |
+| - | - | - |
+| Easy Anti-Cheat (EAC) |  |  |
+| BattlEye |  |  |
+| Vanguard |  |  |
+
+</details>
+
+<details>
+<summary>Proctoring Functions</summary>
+<details>
+<summary>Honorlock</summary>
+    
+| **Function** | **Description** |
+|-|-|
+| Record Webcam | Record student's testing enviroment using webcam |
+| Record Screen | Record student's screen during exam |
+| Record Web Traffic | Log student's internet activity |
+| Room Scan | Record a 360 degree enviroment scan before the assessment begins |
+| Disable Copy/Paste | Block clipboard actions |
+| Disable Printing | Block printing exam content |
+| Browser Guard | Limit browser activity to exam content and allowed site URLs only |
+| Allowed Site URLs | Allow access to specific websites during an exam session |
+| Student Photo | Capture student photo before the assessment begins |
+| Student ID | Capture ID photo before the assessment begins |
+  
+</details>
+
+<details>
+<summary>Proctorio</summary>
+  
+| **Recording Settings** | **Verification Settings** | **Lock Down Settings** |
+|-|-|-|
+| Record Video | Verify Video | Force Full Screen |
+| Record Audio | Verify Audio | Only One Screen |
+| Record Screen | Verify Identity | Disable New Tabs |
+| Record Web Traffic | Verify Desktop | Close Open Tabs |
+| Record Desk | Verify Signature | Disable Printing |
+|  |  | Disable Clipboard |
+|  |  | Clear Cache |
+|  |  | Disable Right Click |
+|  |  | Prevent Re-Entry |
+
+</details>
+</details>
+
+<details>
+<summary>Hypervisor Setup Guide</summary>
+<details>
+<summary>VirtualBox</summary>
+
+### Virtual Box - VBoxManage Tool Location:
+```
+Linux: /usr/bin/VBoxManage
+Mac OS X: /Applications/VirtualBox.app/Contents/MacOS/VBoxManage
+Oracle Solaris: /opt/VirtualBox/bin/VBoxManage
+Windows: C:\Program Files\Oracle\VirtualBox\VBoxManage.exe
+```
+
+### Run these scripts:
+* Configure the VM: `VM-External-Modifer.ps1`
+* Spoof Windows: `VM-Internal-Modifier.ps1`
+
+</details>
+
+<details>
+<summary>VMware</summary>
+
+### VMware PRO License Key:
+```
+MC60H-DWHD5-H80U9-6V85M-8280D
+```
+
+### Patching BIOS ROM
+1. Locate file `BIOS.440.ROM` within `%PROGRAMFILES(X86)%\VMware\VMware Workstation\x64`.
+2. Utilize [Phoenix BIOS Editor](https://mega.nz/file/cek3ARwR#0L3mXNAlknF0zJQPOmtqPoyAvF5exviI3zw_BfRixOk) to modify compromising DMI Strings, like `VMware` or `Virtual Platform`.
+3. Once completed, go to `File` then `Build BIOS` and save the patched BIOS somewhere. **Don't overwrite the original file!**
+4. Now within the `*.vmx` config file, make sure to add the new patched BIOS location for the `bios440.filename` argument line.
+
+### Add the following into your *.vmx
+```
+bios440.filename = "C:\<path_to_your_bios_file>\BIOS.440.PATCH.ROM"
+hypervisor.cpuid.v0 = "FALSE"
+smbios.reflectHost = "TRUE"
+ethernet0.address = "00:C0:CA:A7:2B:9E"
+monitor_control.virtual_rdtsc = "FALSE"
+monitor_control.restrict_backdoor = "TRUE"
+isolation.tools.getPtrLocation.disable = "TRUE"
+isolation.tools.setPtrLocation.disable = "TRUE"
+isolation.tools.setVersion.disable = "TRUE"
+isolation.tools.getVersion.disable = "TRUE"
+monitor_control.disable_directexec = "TRUE"
+```
+
+### **IMPORTANT**
+* `smbios.reflectHost` will NOT function properly if UEFI is utilized instead of BIOS firmware! If you utilize a patched BIOS firmware image, then you can use UEFI without issues.
+
+### Run these scripts:
+* Spoof Windows: `VM-Internal-Modifier.ps1`
+
+</details>
+
+<details>
+<summary>QEMU</summary>
+      
+### QEMU + Virt-Manager Setup
+```
+sudo apt update && sudo apt upgrade
+sudo apt install qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager
+sudo adduser $USER libvirt && sudo adduser $USER kvm
+sudo systemctl status libvirtd
+sudo systemctl start libvirtd && sudo systemctl enable libvirtd
+virt-manager
+```
+
+### QEMU libvert: Domain XML format
+* [Domain XML format](https://libvirt.org/formatdomain.html)
+
+### QEMU Strings Patch
+* [qemu-patch-bypass](https://github.com/zhaodice/qemu-anti-detection)
+
+### QEMU RDTSC Kernal Patch
+* [RDTSC-KVM-Handler](https://github.com/WCharacter/RDTSC-KVM-Handler)
+
+### PCIe Passthrough
+* [GPU Pass-through On Linux/Virt-Manager](https://www.youtube.com/watch?v=KVDUs019IB8)
+* First Make sure `Intel vt-d` or `amd-vi` and `IOMMU` are enabled in the UEFI/BIOS.
+      
+```
+# Check if your system has virtualization enabled
+LC_ALL=C lscpu | grep Virtualization
+egrep -c '(vmx|svm)' /proc/cpuinfo
+
+Add "amd_iommu=on" or "intel_iommu=on" to line "GRUB_CMDLINE_LINUX_DEFAULT"
+sudo vim /etc/default/grub
+
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+Search all installed PCI devices (look for VGA):
+lspci -nn | grep "VGA"
+
+sudo vim /etc/modprobe.d/vfio.conf
+
+sudo mkinitcpio -p linux
+```
+
+</details>
+</details>
+
+<details>
+<summary>Important Tips</summary>
+    
+* **Avoid NAT Similarities**: Ensure your host and VM have distinct IPv4 addresses within the LAN to prevent obvious signs of VM activity, as identical addresses could signal VM use.
+* **Encrypt DNS Queries**: Utilize DNS-over-HTTPS (DoH) to encrypt your DNS queries. Unlike unencrypted DNS, DoH conceals the websites you visit, leaving only the external IP address visible to observers.
+* **Opt for a VPN**: Use a VPN to obscure all your internet traffic. However, be cautious with popular VPN services as their IP ranges may be blacklisted by certain proctoring or anti-cheat systems.
+* **Allocate Sufficient VM Storage**: Equip your VM with at least 128GB of storage. VMs with lower storage capacities may be more easily identified or flagged by monitoring systems.
+
+</details>
+
+## Spoofed Information
+| Feature                           | VirtualBox | VMware  | QEMU   |
+|-----------------------------------|------------|---------|--------|
+| **CPUID**                         | ✅         | ✅      | ✅    |
+| **SMBIOS DMI**                    | ✅         | ✅      | ✅    |
+| - BIOS Information                | ✅         | ✅      | ✅    |
+| - System Information              | ✅         | ✅      | ✅    |
+| - Board Information               | ✅         | ✅      | ✅    |
+| - System Enclosure or Chassis     | ✅         | ✅      | ✅    |
+| - Processor Information           | ✅         | ✅      | ✅    |
+| - OEM Strings                     | ✅         | ✅      | ✅    |
+| **MAC Address**                   | ✅         | ✅      | ✅    |
+| **Hard Drives**                   | ✅         | ✅      | ✅    |
+| **DVD/CD-ROM drives**             | ✅         | ✅      | ✅    |
+| **Registry**                      | ✅         | ✅      | ✅    |
+| **Device Manager**                | ✅         | ✅      | ✅    |
+| **Hardware**                      | ✅         | ✅      | ✅    |
+| **Passthrough Capabilities**      | ❌         | ❌      | ✅    |
+
+## References & Help
+<details>
+<summary>General</summary>
+    
+* [https://evasions.checkpoint.com/](https://evasions.checkpoint.com/)
+* [https://bannedit.github.io/Virtual-Machine-Detection-In-The-Browser.html](https://bannedit.github.io/Virtual-Machine-Detection-In-The-Browser.html)
+
+</details>
+
+<details>
+<summary>VirtualBox</summary>
+    
+* [VirtualBox RDTSC Fix](https://www.reddit.com/r/virtualbox/comments/g6ky8a/disabling_vm_exit_for_rdtsc_access/)
+* [https://forums.virtualbox.org/viewtopic.php?t=78859](https://forums.virtualbox.org/viewtopic.php?t=78859)
+* [https://forums.virtualbox.org/viewtopic.php?t=81600](https://forums.virtualbox.org/viewtopic.php?t=81600)
+* [https://superuser.com/questions/625648/virtualbox-how-to-force-a-specific-cpu-to-the-guest](https://superuser.com/questions/625648/virtualbox-how-to-force-a-specific-cpu-to-the-guest)
+* [https://berhanbingol.medium.com/virtualbox-detection-anti-detection-30614691f108](https://berhanbingol.medium.com/virtualbox-detection-anti-detection-30614691f108)
+* [https://github.com/d4rksystem/VBoxCloak](https://github.com/d4rksystem/VBoxCloak)
+* [https://github.com/nsmfoo/antivmdetection](https://github.com/nsmfoo/antivmdetection)
+    
+</details>
+
+<details>
+<summary>VMware</summary>
+    
+* [https://www.hexacorn.com/blog/2014/08/25/protecting-vmware-from-cpuid-hypervisor-detection/](https://www.hexacorn.com/blog/2014/08/25/protecting-vmware-from-cpuid-hypervisor-detection/)
+* [https://rayanfam.com/topics/defeating-malware-anti-vm-techniques-cpuid-based-instructions/](https://rayanfam.com/topics/defeating-malware-anti-vm-techniques-cpuid-based-instructions/)
+* [https://tulach.cc/bypassing-vmprotect-themida-vm-checks-in-vmware/](https://tulach.cc/bypassing-vmprotect-themida-vm-checks-in-vmware/)
+    
+</details>
+
+<details>
+<summary>QEMU</summary>
+
+* [Spoof and make your VM Undetectable - No more bullsh*t bans](https://www.reddit.com/r/VFIO/comments/i071qx/spoof_and_make_your_vm_undetectable_no_more/)
+* [BE is banning KVM on R6](https://www.reddit.com/r/VFIO/comments/hts1o1/be_is_banning_kvm_on_r6/)
+* [KVM Detection fixes](https://www.unknowncheats.me/forum/escape-from-tarkov/418885-kvm-detection-fixes.html)
+
+</details>
+
+```
+
+`VM-External-Modifer.ps1`:
+
+```ps1
+# ==================================================
+# Admin Check
+# ==================================================
+
+
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"cd '$($PWD.Path)' ; & '$($myInvocation.InvocationName)'`"" -Verb RunAs
+    Exit
+}
+
+
+# ==================================================
+# External Modifiers
+# ==================================================
+
+
+$Hypervisor = Read-Host "`n  # Enter a hypervisor 'vmware' or 'vbox'"
+$CPUID_String = Read-Host "`n  # Enter a CPUID string 'GenuineIntel' or 'AuthenticAMD'"
+
+if ($Hypervisor -eq "vbox") {
+    $VBoxManager = "$env:ProgramFiles\Oracle\VirtualBox\VBoxManage.exe"
+    Write-Host "`n  # Available VMs:`n"
+    & $VBoxManager list vms
+
+    $VM = Read-Host "`n  # Enter VM Name"
+	$VDI = "$env:USERPROFILE\VirtualBox VMs\$VM\$VM.vdi"
+
+    if (-not (Test-Path $VBoxManager)) {
+        Write-Host "  # VirtualBox is not installed." -ForegroundColor Red
+        exit 1
+    }
+
+    try {
+		# ===== Misc. =====
+		& $VBoxManager modifyvm $VM --clipboard-mode "bidirectional" --drag-and-drop "bidirectional"
+		& $VBoxManager modifyvm $VM --mouse "ps2" --keyboard "ps2"
+		& $VBoxManager modifyvm $VM --pae "on" --nested-hw-virt "on"
+		& $VBoxManager modifyvm $VM --paravirtprovider "none" --nested-paging "on"
+		& $VBoxManager modifyvm $VM --audio-out "on" --audio-in "on"
+		& $VBoxManager modifyvm $VM --nic1 "bridged" --mac-address1 "428D5C257A8B"
+		& $VBoxManager modifyvm $VM --hwvirtex "on" --vtx-ux "on"
+		& $VBoxManager modifyvm $VM --large-pages "on"
+		
+		# ===== Storage Config [SATA > NVMe] =====
+		# Important: Must install Windows on the .vdi attachment before switching to a NVMe Controller.
+		# & $VBoxManager storagectl $VM --name "NVMe" --add "pcie" --controller "NVMe" --bootable "on"
+		# & $VBoxManager storageattach $VM --storagectl "SATA" --port "0" --device "0" --medium "none"
+		# & $VBoxManager storageattach $VM --storagectl "NVMe" --port "0" --device "0" --type "hdd" --medium "$VDI" --nonrotational "on"
+		# NVMe Fix
+		# & $VBoxManager setextradata $VM "VBoxInternal/Devices/nvme/0/Config/MsiXSupported" "0"
+		# & $VBoxManager setextradata $VM "VBoxInternal/Devices/nvme/0/Config/CtrlMemBufSize" "0"
+		
+		# ===== CPU =====
+		# CPUID
+		& $VBoxManager modifyvm $VM --cpu-profile "AMD Ryzen 7 1800X Eight-Core"
+		# RDTSC (Read Time-Stamp Counter)
+		& $VBoxManager setextradata $VM "VBoxInternal/TM/TSCMode" "RealTSCOffset"
+		& $VBoxManager setextradata $VM "VBoxInternal/CPUM/SSE4.1" "1"
+		& $VBoxManager setextradata $VM "VBoxInternal/CPUM/SSE4.2" "1"
+		# RDTSC VM Exit (Read Time-Stamp Counter)
+		
+
+		# ===== SMBIOS DMI =====
+		# DMI BIOS Information (type 0)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSVendor" "American Megatrends International, LLC."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSVersion" "1.A0"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSReleaseDate" "11/23/2023"
+		# DMI System Information (type 1)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiSystemVendor" "Micro-Star International Co., Ltd."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiSystemProduct" "MS-7D78"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiSystemVersion" "1.0"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiSystemSerial" "To be filled by O.E.M."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiSystemFamily" "To be filled by O.E.M."
+		# DMI Base Board/Module Information (type 2)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBoardVendor" "Micro-Star International Co., Ltd."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBoardProduct" "PRO B650-P WIFI (MS-7D78)"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBoardVersion" "1.0"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiBoardSerial" "To be filled by O.E.M."
+		# DMI System Enclosure or Chassis (type 3)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiChassisVendor" "Micro-Star International Co., Ltd."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiChassisType" "03"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiChassisVersion" "1.0"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiChassisSerial" "To be filled by O.E.M."
+		# DMI Processor Information (type 4)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiProcManufacturer" "Advanced Micro Devices, Inc."
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiProcVersion" "AMD Ryzen 7 1800X Eight-Core Processor"
+		# DMI OEM strings (type 11)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiOEMVBoxVer" "<EMPTY>"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/pcbios/0/Config/DmiOEMVBoxRev" "<EMPTY>"
+		# Configuring the Hard Disk Vendor Product Data (VPD)
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port0/ModelNumber" "Samsung SSD 980 EVO"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port0/FirmwareRevision" "L4Q8G9Y1"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port0/SerialNumber" "J8R9H3P5N4Q7W0X2Y9A5"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/ModelNumber" "HL-DT-ST BD-RE WH16NS60"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/FirmwareRevision" "P2K9W6X5"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/SerialNumber" "Q2W3E4R5T6Y7U8I9O0PA"
+		# CD/DVD drives
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIProductId" "DVD A DS8A8SH"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIRevision" "KAA2"
+		& $VBoxManager setextradata $VM "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIVendorId" "Slimtype"
+
+		# & $VBoxManager startvm $VM
+        Write-Host "`n  # Success" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "`n  # An error occurred: $_" -ForegroundColor Red
+    }
+}
+elseif ($Hypervisor -eq "vmware") {
+	# vmware-kvm.exe [OPTIONS] vmx-file.vmx
+	# acpi.passthru.slic = "TRUE"
+	# acpi.passthru.slicvendor = "TRUE"
+	
+}
+else {
+    Write-Host "`n  # Invalid hypervisor selected. Please choose 'vmware' or 'vbox'." -ForegroundColor Red
+}
+
+
+# https://en.wikipedia.org/wiki/CPUID
+# "%ProgramFiles%\Oracle\VirtualBox\VBoxManage.exe" list cpu-profiles
+# "%ProgramFiles%\Oracle\VirtualBox\VBoxManage.exe" list hostcpuids
+
+# & $VBoxManager modifyvm $VM --cpuid-set "00000001", "00a60f12", "02100800", "7ed8320b", "178bfbff"
+# & $VBoxManager modifyvm $VM --paravirtdebug "enabled=1,vendor=AuthenticAMD"
+# & $VBoxManager modifyvm $VM --paravirtdebug "enabled=1,vendor=GenuineIntel"
+
+# --long-mode "off"
+# --vtx-vpid "off"
+
+```
+
+`VM-Internal-Modifier.ps1`:
+
+```ps1
+# ==================================================
+# Admin Check
+# ==================================================
+
+
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"cd '$($PWD.Path)' ; & '$($myInvocation.InvocationName)'`"" -Verb RunAs
+    Exit
+}
+
+
+# ==================================================
+# Random Host and NetBIOS name
+# ==================================================
+
+
+$RandomString = -join ((48..57) + (65..90) | Get-Random -Count '7' | % {[char]$_})
+
+# Local Computer Name (Device Name) & Network Computer Name (NetBIOS Name)
+Rename-Computer -NewName "DESKTOP-$RandomString" -Force *>$null
+
+
+# ==================================================
+# Legit Install Date & Time (https://www.epochconverter.com/ldap)
+# ==================================================
+
+
+# Generate random values for month, day, year, hour, minute, and second
+$month = Get-Random -Minimum 1 -Maximum 13
+$day = Get-Random -Minimum 1 -Maximum 32
+$year = Get-Random -Minimum 2011 -Maximum 2023
+$hour = Get-Random -Minimum 0 -Maximum 24
+$minute = Get-Random -Minimum 0 -Maximum 60
+$second = Get-Random -Minimum 0 -Maximum 60
+
+# Construct the DateTime object
+$dateTime = Get-Date -Year $year -Month $month -Day $day -Hour $hour -Minute $minute -Second $second
+
+# Convert the DateTime object to Unix timestamp and LDAP/FILETIME timestamp
+$unixTimestamp = [int]((Get-Date $dateTime).ToUniversalTime()-[datetime]'1970-01-01 00:00:00').TotalSeconds
+$LDAP_FILETIME_timestamp = ($unixTimestamp + 11644473600) * 10000000
+
+# Set the Custom Inputted Date & Time in the registry
+try {
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "InstallDate" -Value "$unixTimestamp" -Force
+    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "InstallTime" -Value "$LDAP_FILETIME_timestamp" -Force
+} catch {
+    Write-Error "Failed to set registry values: $_"
+}
+
+
+# ==================================================
+# Device Manager: 'Friendly name' Spoofing
+# ==================================================
+
+
+$deviceIDs = (Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -like '*VBOX*' -or $_.Name -like '*VMware*' -or $_.PNPDeviceID -like '*VBOX*' -or $_.PNPDeviceID -like '*VMware*' }).DeviceID
+
+foreach ($deviceID in $deviceIDs) {
+	$registryPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$deviceID"
+	Set-ItemProperty -Path "$registryPath" -Name "FriendlyName" -Value "Samsung 980 SSD" -Force
+	Write-Host "Set FriendlyName for $deviceID to 'Samsung 980 SSD'"
+}
+
+
+# ==================================================
+# Removes Flagged/Detected VBox Device(s) from Device Manager
+# ==================================================
+
+
+$devices = Get-PnpDevice | Where-Object { $_.FriendlyName -match "Base System Device|Unknown Device" }
+
+if ($devices) {
+    foreach ($device in $devices) {
+        $null = pnputil /remove-driver $device.InstanceId /uninstall /force; pnputil /scan-devices
+        Write-Host "Removed device: $($device.FriendlyName)"
+    }
+} else {
+    Write-Host "No devices found with names matching 'Base System Device' or 'Unknown Device'."
+}
+
+
+# ==================================================
+# HKLM:\HARDWARE\ACPI
+# ==================================================
+
+
+function vbox {
+	# DSDT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\DSDT\VBOX__" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\DSDT\ALASKA\VBOXBIOS" -NewName "A_M_I_" -Force
+
+	# FADT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\FADT\VBOX__" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\FADT\ALASKA\VBOXFACP" -NewName "A_M_I_" -Force
+
+	# RSDT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\RSDT\VBOX__" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\RSDT\ALASKA\VBOXXSDT" -NewName "A_M_I_" -Force
+
+	# SSDT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\SSDT\VBOX__" -NewName "AMD" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\SSDT\AMD\VBOXCPUT" -NewName "AmdTable" -Force
+
+	# System
+	Remove-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "SystemBiosDate" -Force
+	Remove-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "SystemBiosVersion" -Force
+	Remove-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "VideoBiosVersion" -Force
+
+	# SystemInformation
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SystemInformation" -Name "BIOSReleaseDate" -Value "11/23/2023" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SystemInformation" -Name "BIOSVersion" -Value "1.A0" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SystemInformation" -Name "SystemManufacturer" -Value "Micro-Star International Co., Ltd." -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\SystemInformation" -Name "SystemProductName" -Value "MS-7D78" -Force
+
+	# HardwareConfig
+	$lastConfig = Get-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig" -Name "LastConfig"
+	$guidValue = $lastConfig.LastConfig
+
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "SystemBiosVersion" -Value "ALASKA - 1072009", "01.A0", "American Megatrends - 50020" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "SystemFamily" -Value "To be filled by O.E.M." -Force
+	
+	# Monitor
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "DriverDesc" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.AdapterString" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.BiosString" -Value "Version94.6.37.0.40" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.ChipType" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.DacType" -Value "Integrated RAMDAC" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "ProviderName" -Value "NVIDIA" -Force
+}
+
+function vmware {
+	# System
+	Remove-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "SystemBiosVersion" -Force
+	
+	# BIOS
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "BaseBoardManufacturer" -Value "Micro-Star International Co., Ltd." -Force
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "BaseBoardProduct" -Value "PRO B650-P WIFI (MS-7D78)" -Force
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "BIOSVendor" -Value "American Megatrends International, LLC." -Force
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "BIOSVersion" -Value "1.A0" -Force
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System\BIOS" -Name "SystemFamily" -Value "To be filled by O.E.M." -Force
+
+	# HardwareConfig
+	$lastConfig = Get-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig" -Name "LastConfig"
+	$guidValue = $lastConfig.LastConfig
+
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "BIOSVendor" -Value "American Megatrends International, LLC." -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "BIOSVersion" -Value "1.A0" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "SystemBiosVersion" -Value "ALASKA - 1072009", "01.A0", "American Megatrends - 50020" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\HardwareConfig\$guidValue" -Name "SystemFamily" -Value "To be filled by O.E.M." -Force
+	
+	# Monitor
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "DriverDesc" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.AdapterString" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.BiosString" -Value "Version94.6.37.0.40" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.ChipType" -Value "NVIDIA GeForce RTX 3050" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "HardwareInformation.DacType" -Value "Integrated RAMDAC" -Force
+	Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000" -Name "ProviderName" -Value "NVIDIA" -Force
+}
+
+function QEMU {
+	# DSDT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\DSDT\BOCHS_" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\DSDT\ALASKA\BXPC____" -NewName "A_M_I_" -Force
+
+	# FADT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\FADT\BOCHS_" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\FADT\ALASKA\BXPC____" -NewName "A_M_I_" -Force
+
+	# RSDT
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\RSDT\BOCHS_" -NewName "ALASKA" -Force
+	Rename-Item -Path "HKLM:\HARDWARE\ACPI\RSDT\ALASKA\BXPC____" -NewName "A_M_I_" -Force
+
+ 	# System
+	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "SystemBiosDate" -Value "11/23/2023" -Force
+ 	Set-ItemProperty -Path "HKLM:\HARDWARE\DESCRIPTION\System" -Name "SystemBiosVersion" -Value "1.A0" -Force
+}
+
+# ==================================================
+# HKLM:\HARDWARE\DEVICEMAP\Scsi
+# ==================================================
+
+
+function Get-UpperRandomString {
+    $Identifier = -join (1..20 | ForEach {[char]((65..90) + (48..57) | Get-Random)})
+    return $Identifier
+}
+
+# Physical Drives (SATA/NVMe)
+foreach ($PortNumber in 0..9) {
+    foreach ($BusNumber in 0..9) {
+		foreach ($LogicalUnitIdNumber in 0..9) {
+			$registryPath = "HKLM:\HARDWARE\DEVICEMAP\Scsi\Scsi Port $PortNumber\Scsi Bus $BusNumber\Target Id 0\Logical Unit Id $LogicalUnitIdNumber"
+
+			if (Test-Path -Path $registryPath) {
+				$NewString = Get-UpperRandomString
+				Set-ItemProperty -Path "$registryPath" -Name 'Identifier' -Type String -Value "Samsung 980 SSD" -Force
+				Set-ItemProperty -Path "$registryPath" -Name 'SerialNumber' -Type String -Value "$NewString" -Force
+			}
+		}
+    }
+}
+
+
+# ==================================================
+# Hide Guest Additions (if installed)
+# ==================================================
+
+
+if (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Oracle VM VirtualBox Guest Additions") {
+    Remove-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Oracle VM VirtualBox Guest Additions" -Recurse -Force
+}
+
+
+# ==================================================
+# Custom DNS
+# ==================================================
+
+
+# Quad9 DNS servers
+$Ipv4PrimaryDns = '9.9.9.9'
+$Ipv4BackupDns = '149.112.112.112'
+$Ipv6PrimaryDns = '2620:fe::fe'
+$Ipv6BackupDns = '2620:fe::9'
+
+Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
+    Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ServerAddresses $Ipv4PrimaryDns, $Ipv4BackupDns, $Ipv6PrimaryDns, $Ipv6BackupDns
+}
+
+Clear-DnsClientCache
+
+
+# ==================================================
+# Restart System to Apply changes
+# ==================================================
+
+
+$choice = Read-Host "Do you want to restart the computer? (Y/N)"
+if ($choice -eq "Y" -or $choice -eq "y") {
+    Restart-Computer -Force
+} elseif ($choice -eq "N" -or $choice -eq "n") {
+    Write-Host "Restart aborted."
+} else {
+    Write-Host "Invalid choice. Please enter Y or N."
+}
+
+```
