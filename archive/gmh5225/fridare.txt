@@ -1,0 +1,5022 @@
+Project Path: arc_gmh5225_fridare_bx1z_7qr
+
+Source Tree:
+
+```txt
+arc_gmh5225_fridare_bx1z_7qr
+├── CHANGELOG
+├── LICENSE
+├── Makefile
+├── README.md
+├── autoinstall.sh
+├── docs
+│   ├── android.md
+│   ├── install.md
+│   ├── ios.md
+│   └── patch-tools.md
+├── fridare.sh
+├── hexreplace
+│   ├── Makefile
+│   ├── go.mod
+│   ├── go.sum
+│   └── main.go
+├── screenshots
+│   ├── 1.png
+│   ├── 2.png
+│   ├── 3.png
+│   ├── 555354813.jpg
+│   └── md5.png
+├── toolkit
+│   ├── generate_frida_modules.py
+│   ├── manifest.txt
+│   └── merge.py
+└── win
+    ├── README.md
+    ├── hexreplace_windows_amd64.exe
+    ├── patch-frida-tools.cmd
+    └── patch-frida.cmd
+
+```
+
+`CHANGELOG`:
+
+```
+# CHANGELOG
+所有值得注意的更改都将记录在此文件中。
+格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)，并且本项目遵循 [语义化版本](https://semver.org/spec/v2.0.0.html)。
+
+## v3.1.2 - 2024-07-17
+
+### Added
+- 增加对多平台的支持：现在支持 `macOS`、`iOS`、`Android`、`Linux` 和 `Windows`
+- 新增 `upgrade` 命令：用于自动更新 Fridare 脚本
+- 新增一键安装功能：
+  ```shell
+  curl -s https://raw.githubusercontent.com/suifei/fridare/main/fridare.sh | bash -s install
+  ```
+
+### Changed
+- 优化版本检查和更新流程
+
+### Fixed
+- 修复了在 Windows 系统上无法正确识别和安装 Frida 工具的问题
+- 修复了在 macOS 系统上无法正确下载 Frida 工具的问题
+
+### Other Changes
+- 更新版本号至 3.1.2
+- 代码重构和优化，提高整体性能和稳定性
+
+## [3.1.0] - 2024-07-16
+### Added
+- 增加了 `patch` 命令，用于修补指定的 Frida 模块
+- 增加了对 `patch` 命令的帮助信息
+- 增加对 ELF 和 PE 文件格式的支持(支持 Windows,Linux,MacOS,Android,IOS)
+
+### Changed
+- 更新了 `build`、`download` 等命令的用法说明
+
+### Fixed
+- 修复了一些小的 Bug 并改进了脚本的稳定性
+
+
+## [3.0.1] - 2024-07-11
+### Added
+- 新增 `is_conda_env()` 函数用于检测 Conda 环境
+- 新增 `get_python_cmd()` 函数用于选择正确的 Python 解释器
+- 新增 `log_environment_info()` 函数，详细输出运行环境信息
+
+### Changed
+- 重构 `modify_frida_tools()` 函数，以支持 Conda 环境
+- 优化 Golang 环境检查，利用现有的 `check_and_install_tool` 函数
+- 更新 `build_frida` 函数，简化 Golang 环境检查
+- 改进环境检测逻辑，优先使用 Conda 环境中的 Python
+
+### Fixed
+- 修复在 Conda 环境中无法正确识别和修改 Frida 工具的问题
+- 解决多个 Python 环境共存时的兼容性问题
+
+### Improved
+- 提升脚本对不同 Python 环境的适应性
+- 增强环境信息输出，便于调试和问题排查
+- 简化用户使用流程，无需手动指定 Frida 工具路径
+
+## [3.0.0] - 2024-07-11
+### Added
+- 新增 `fridare.sh` 脚本，整合所有功能，提供更完整的命令行界面
+- 新增 `build`, `ls`, `download`, `lm`, `setup`, `config`, 和 `help` 命令
+- 新增配置文件支持，可以保存和加载用户设置
+- 新增颜色输出，提升用户体验
+- 新增自动检查和安装依赖功能
+- 新增下载特定 Frida 模块的功能
+- 新增列出可用 Frida 版本和模块的功能
+
+### Changed
+- 重构了整个项目结构，提高代码可维护性
+- 改进了错误处理和日志输出
+- 优化了 Frida 构建过程，提高效率
+- 更新了二进制修改逻辑，提高兼容性
+
+### Removed
+- 移除了旧的 `build.sh` 脚本
+
+## [2.2.0] - 2024-07-04
+### Added
+- 新增加 frida-tools 补丁，适配 `frida:rpc` 特征魔改
+   - 解决 Android 内存扫描该字符串问题
+   - 自动扫描本地 pip 安装 frida-tools 的位置，对 `core.py` 文件进行魔改，对 `_frida.abi3.so` 文件进行魔改
+- 新增加 frida-agent.dylib 魔改，从文件名称，加载位置进行隐藏
+   - 解决 agent 加载未隐藏问题
+
+## [2.1.1] - 2024-06-26
+### Changed
+- 修正了二进制替换可能失败的问题。
+
+## [2.1] - 2024-06-26
+### Added
+- 新增 `autoinstall.sh` 脚本，结合 `issh` 命令自动部署最新 Frida 插件版本。
+- 新增 `Makefile`，提供帮助、清理、构建和部署项目的便捷命令。
+
+### Changed
+- 更新 `build.sh` 脚本，以支持新脚本和 Makefile 的集成。
+- 增强了错误处理和日志记录，改善用户体验。
+
+### Fixed
+- 修正了在特定情况下二进制替换可能失败的问题。
+
+## [2.0] - 2024-06-25
+### Added
+- 支持多种架构，增加更多的 ARM 和 ARM64 子类型。
+- 增加了更多的替换项。
+- `macho.File.Section()` 现在返回一个指向 `macho.Section` 的指针。
+- 增加了更多的错误处理。
+
+## 1.0 - 初始版本
+- 初始发布，提供了修改和定制 Frida 服务器的基本功能。
+
+# Change Log
+All notable changes to this project will be documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.1.0] - 2024-07-16
+### Added
+- Added `patch` command to patch specified Frida modules
+- Added help information for `patch` command
+- Added support for ELF and PE file formats
+
+### Changed
+- Updated usage instructions for `build`, `download`, and other commands
+
+### Fixed
+- Fixed minor bugs and improved script stability
+
+## [3.0.1] - 2024-07-11
+### Added
+- Added the `is_conda_env()` function for detecting Conda environments
+- Added the `get_python_cmd()` function for selecting the correct Python interpreter
+- Added the `log_environment_info()` function to output detailed information about the running environment
+
+### Changed
+- Refactored the `modify_frida_tools()` function to support Conda environments
+- Optimized the Golang environment check by utilizing the existing `check_and_install_tool` function
+- Updated the `build_frida` function to simplify the Golang environment check
+- Improved the environment detection logic to prioritize the use of Python in the Conda environment
+
+### Fixed
+- Fixed the issue where Frida tools could not be correctly identified and modified in Conda environments
+- Resolved compatibility issues when multiple Python environments coexist
+
+### Improved
+- Enhanced the script's adaptability to different Python environments
+- Enhanced the output of environment information for easier debugging and troubleshooting
+- Simplified the user process, eliminating the need to manually specify the path to Frida tools
+
+## [3.0.0] - 2024-07-11
+### Added
+- add `fridare.sh` script, integrate all functions, provide a more complete command line interface
+- add `build`, `ls`, `download`, `lm`, `setup`, `config`, and `help` commands
+- add configuration file support, can save and load user settings
+- add color output, improve user experience
+- add automatic dependency check and installation
+- add download specific Frida module
+- add list available Frida versions and modules
+
+### Changed
+- refactor the entire project structure, improve code maintainability
+- improve error handling and log output
+- optimize Frida build process, improve efficiency
+- update binary modification logic, improve compatibility
+
+### Removed
+- remove old `build.sh` script
+
+### Changed
+
+## [2.2.0] - 2024-07-04
+### Added
+- add frida-tools patch, adapt to `frida:rpc` feature modification
+   - solve the problem of scanning this string in Android memory
+   - automatically scan the location of the locally installed pip frida-tools, modify the `core.py` file, and modify the `_frida.abi3.so` file
+- add frida-agent.dylib modification, hide from file name and loading location
+    - solve the problem of agent loading not hidden
+
+## [2.1.1] - 2024-06-26
+### Changed
+- fix the issue that binary replacement may fail in specific cases.
+
+## [2.1] - 2024-06-26
+### Added
+- add `autoinstall.sh` script, auto deploy the latest Frida plugin version with `issh` command
+- add `Makefile`, provide convenient commands for help, clean, build and deploy the project
+
+### Changed
+- update `build.sh` script to support the integration of new scripts and Makefile
+- enhance error handling and log recording, improve user experience
+
+### Fixed
+- fix the issue that binary replacement may fail in specific cases
+## [2.0] - 2024-06-25
+
+### Added
+- support multiple architectures, add more ARM and ARM64 subtypes
+- add more replacements
+- `macho.File.Section()` returns a pointer to `macho.Section`
+- add more error handling
+
+## 1.0 - Initial Version
+- initial release, provide basic functions to modify and customize Frida server
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2024 SuiFei
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+```
+
+`Makefile`:
+
+```
+.PHONY: help clean build deploy
+
+help:
+	@echo "make help - Show this help"
+	@echo "make clean - Clean the project"
+	@echo "make deploy - Deploy the project"
+	@echo "make build - Build the project"
+
+clean:
+	@rm -rf dist
+
+build:
+	@./fridare.sh build -latest -y
+
+deploy:
+	./autoinstall.sh
+	@echo "Please run 'frida -H <iPhone IP>:8899 -F' to connect to the device"
+
+all: clean build deploy
+```
+
+`README.md`:
+
+```md
+# Fridare
+
+[English](#Features) | [中文](#特性)
+
+[![GitHub Streak](https://streak-stats.demolab.com?user=suifei&theme=dark&locale=zh_Hans&date_format=%5BY.%5Dn.j)](https://git.io/streak-stats)
+<img src="screenshots/555354813.jpg" width="156" alt="QQ群二维码"> 
+
+![Github stars](https://img.shields.io/github/stars/suifei/fridare?style=social)
+![Github forks](https://img.shields.io/github/forks/suifei/fridare?style=social)
+![Github watchers](https://img.shields.io/github/watchers/suifei/fridare?style=social)
+![Github license](https://img.shields.io/github/license/suifei/fridare)
+![Github issues](https://img.shields.io/github/issues/suifei/fridare)
+![Github pull requests](https://img.shields.io/github/issues-pr/suifei/fridare)
+![Github contributors](https://img.shields.io/github/contributors/suifei/fridare)
+![Github last commit](https://img.shields.io/github/last-commit/suifei/fridare)
+![Github repo size](https://img.shields.io/github/repo-size/suifei/fridare)
+![Github code size](https://img.shields.io/github/languages/code-size/suifei/fridare)
+![Github language count](https://img.shields.io/github/languages/count/suifei/fridare)
+![Github top language](https://img.shields.io/github/languages/top/suifei/fridare)
+![Github tag](https://img.shields.io/github/v/tag/suifei/fridare)
+[![GitHub followers](https://img.shields.io/github/followers/suifei.svg?style=social&label=Follow&maxAge=2592000)](https://github.com/suifei?tab=followers)
+[![Twitter Follow](https://img.shields.io/twitter/follow/csuifei?style=social)](https://twitter.com/csuifei)
+
+Fridare 是一个用于 iOS frida 插件、Android,linux,Windows 等平台 frida-server 的自动化魔改工具。它允许用户更改名称和端口，以增强安全性和灵活性。免除了很多越狱检测frida的情况。
+
+**[Windows 下使用](win/README.md)|[Android 文档](docs/android.md)|[iOS 文档](docs/ios.md)|[frida-tools 文档](docs/patch-tools.md)|[安装指北](docs/install.md)|[CHANGELOG](CHANGELOG)**
+
+欢迎大家入QQ群讨论：[QQ 555354813](screenshots/555354813.jpg) ，如本项目对你有所帮助，记得给作者加星鼓励哦！
+
+## 特性
+
+- 自动下载并修改指定版本的 frida-server 
+- 随机生成新的 frida-server 名称
+- 自定义 frida-server 端口
+- 支持 arm 和 arm64 架构
+- 二进制替换修改
+   - frida-server
+   - frida-agent.dylib
+   - frida-tools
+- 生成可直接安装的修改版 .deb 包
+- 一体化命令行界面，提供多种功能
+- 配置文件支持，可保存用户设置
+- 自动检查和安装依赖
+- 下载特定 Frida 模块
+- 列出可用 Frida 版本和模块
+- 支持 Conda 环境
+- 支持 macho, elf, pe 文件格式
+- 支持 Windows,Linux,MacOS,Android,IOS 的patch
+- 支持自更新
+
+欢迎使用新的一键安装功能快速开始使用 Fridare！
+
+```shell
+ curl -s https://raw.githubusercontent.com/suifei/fridare/main/fridare.sh | bash -s install
+```
+
+## [v3.1.5] - 2024-07-29 Windows 支持
+
+### Added
+- 新增 `patch-frida.cmd` 脚本,用于在 Windows 环境下修改 frida-server
+- 新增 `patch-frida-tools.cmd` 脚本,用于在 Windows 环境下修改 frida-tools
+- 增加对 Windows 平台的全面支持
+- 更新了使用说明,增加了 Windows 平台的详细教程
+
+## [v3.1.4] - 2024-07-18
+
+### Added
+- 增加 `patch-tools` 命令，用于修补 frida-tools 模块
+- 新增 `render_markdown` 函数，用于在终端中渲染简单的 Markdown 格式
+- 添加 `generate_random_name` 函数，用于生成随机的 Frida 魔改名
+- 实现 `move_file` 函数，用于处理文件移动时的 "are identical" 错误
+
+### Improved 
+- 优化 `list_frida_versions` 函数，现在能够渲染 Markdown 格式的版本说明
+- 改进 `build_frida` 函数，支持使用本地 deb 文件进行构建
+- 增强 `patch_frida_tools` 和 `restore_frida_tools` 函数的功能和错误处理
+- 优化 `modify_frida_tools` 函数，提高修改 frida-tools 的可靠性
+- 改进 `download_frida_module` 函数，增加对特定操作系统和架构的支持
+
+### Fixed
+- 修复了在某些情况下无法正确获取 Frida 路径的问题
+- 解决了移动文件时可能遇到的 "are identical" 错误
+
+### Changed
+- 更新 `show_main_usage` 和其他使用说明函数，以反映新增的功能
+- 调整 `parse_arguments` 函数，支持新增的 `patch-tools` 命令
+- 修改配置文件的处理方式，增加了对 `FRIDA_NAME` 的支持
+
+### Other Changes
+- 代码结构优化，提高了整体可读性和可维护性
+- 增加了更多的日志输出，提供更详细的执行信息
+- 更新了版本号至 3.1.4
+
+## v3.1.2 - 2024-07-17
+
+### Added
+- 增加对多平台的支持：现在支持 `macOS`、`iOS`、`Android`、`Linux` 和 `Windows`
+- 新增 `upgrade` 命令：用于自动更新 Fridare 脚本
+- 新增一键安装功能
+
+### Changed
+- 优化版本检查和更新流程
+
+### Fixed
+- 修复了在 Windows 系统上无法正确识别和安装 Frida 工具的问题
+- 修复了在 macOS 系统上无法正确下载 Frida 工具的问题
+
+### Other Changes
+- 更新版本号至 3.1.2
+- 代码重构和优化，提高整体性能和稳定性
+
+### v3.1.1
+- 增加了 `upgrade` 命令，用于自动更新 Fridare 脚本
+
+### v3.1.0
+- 增加了 `patch` 命令，用于修补指定的 Frida 模块
+   - 例如：`安卓 frida-server` `./fridare.sh p -m frida-server -latest -os android -arch arm64 -o ./patched`
+- 增加了对 `patch` 命令的帮助信息
+- 增加对 ELF 和 PE 文件格式的支持(支持 Windows,Linux,MacOS,Android,IOS)
+- 更新了 `build`、`download` 等命令的用法说明
+- 修复了一些小的 Bug 并改进了脚本的稳定性
+
+![v3.1.0](screenshots/3.png)
+
+### v3.0.1 Fixed
+- 修复在 Conda 环境中无法正确识别和修改 Frida 工具的问题
+- 解决多个 Python 环境共存时的兼容性问题
+
+### 新增特性 v3.0.0
+- 新增 `fridare.sh` 脚本，整合所有功能，提供更完整的命令行界面
+- 新增 `build`, `ls`, `download`, `lm`, `setup`, `config`, 和 `help` 命令
+- 新增配置文件支持，可以保存和加载用户设置
+- 新增颜色输出，提升用户体验
+- 新增自动检查和安装依赖功能
+- 新增下载特定 Frida 模块的功能
+- 新增列出可用 Frida 版本和模块的功能
+
+### v2.2.0 (仅测试 macOS arm 架构，其它架构未测试)
+- 新增加 frida-tools 补丁，适配 `frida:rpc` 特征魔改
+   - 解决 Android 内存扫描该字符串问题
+   - 自动扫描本地 pip 安装 frida-tools 的位置，对 `core.py` 文件进行魔改，对 `_frida.abi3.so` 文件进行魔改
+- 新增加 frida-agent.dylib 魔改，从文件名称，加载位置进行隐藏
+   - 解决 agent 加载未隐藏问题
+
+### v2.1.1
+
+- 引入 `autoinstall.sh` 脚本，实现 Frida 插件的自动部署。
+- 引入 `Makefile`，简化项目的构建和部署流程。
+- 运行之前请确保本机已经安装了 [issh](https://github.com/4ch12dy/issh) 命令。并配置好了 ssh 的免密登录。
+   > 配置 issh 的 ssh 免密登陆
+   ```shell
+   # 生成 keygen 密钥，如果已生成可以跳过
+   ssh-keygen -t rsa -b 4096 -C "<EMAIL>"
+   # 配置手机IP，如果USB连接可以不配置
+   issh ip set <iPhone-IP>     
+   # 拷贝公钥到手机 /var/root ，需要 root 密码 alpine
+   issh scp ~/.ssh/id_rsa.pub  
+   # 远程服务器添加公钥到 authorized_keys 文件
+   issh run "mkdir -p ~/.ssh && cat /var/root/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
+   ```
+
+## Frida 魔改脚本的结构和功能
+```shell
+fridare.sh - Frida 魔改脚本
+│
+├── 主要功能
+│   ├── 构建魔改版 Frida (build)
+│   │   ├── 支持指定版本或最新版本
+│   │   ├── 自动生成随机5字符名称
+│   │   ├── 自定义端口设置
+│   │   └── 支持 arm 和 arm64 架构
+│   ├── 列出可用 Frida 版本 (ls, list)
+│   │   └── 从 GitHub API 获取版本信息
+│   ├── 下载特定版本 Frida (download)
+│   │   ├── 支持下载单个或所有模块
+│   │   └── 可选的自动解压功能
+│   ├── 列出可用 Frida 模块 (lm, list-modules)
+│   ├── 检查并安装系统依赖 (setup)
+│   │   ├── 自动检测缺失依赖
+│   │   └── 使用包管理器安装依赖
+│   └── 配置选项设置 (config)
+│       ├── 设置 HTTP 代理
+│       ├── 设置 Frida 服务器端口
+│       └── 设置 Frida 魔改名称
+│
+├── 脚本结构
+│   ├── 初始化配置 (initialize_config)
+│   │   └── 读取和创建配置文件
+│   ├── 参数解析 (parse_arguments)
+│   │   └── 支持多种命令行选项
+│   ├── 命令处理
+│   │   ├── build: 构建魔改版 Frida
+│   │   ├── patch: 修补指定的 Frida 模块
+│   │   ├── setup: 设置环境
+│   │   ├── config: 管理配置
+│   │   ├── list: 列出版本
+│   │   ├── download: 下载模块
+│   │   └── list-modules: 列出模块
+│   └── 主函数 (main)
+│       └── 整合所有功能的入口点
+│
+├── 构建过程 (build_frida)
+│   ├── 版本检查
+│   │   └── 支持最新版本自动检测
+│   ├── 环境准备
+│   │   ├── 检查 Python 环境 (包括 Conda)
+│   │   └── 检查 Golang 环境
+│   ├── 下载 Frida (download_frida)
+│   ├── 解包 deb 文件
+│   ├── 修改文件
+│   │   ├── 修改启动守护程序 (modify_launch_daemon)
+│   │   │   └── 更新 plist 文件
+│   │   ├── 修改 Debian 文件 (modify_debian_files)
+│   │   │   ├── 更新 control 文件
+│   │   │   ├── 更新 extrainst_ 文件
+│   │   │   └── 更新 prerm 文件
+│   │   └── 修改二进制文件 (modify_binary)
+│   │       ├── 修改 frida-server
+│   │       ├── 修改 frida-agent.dylib
+│   │       └── 使用 hexreplace 工具
+│   ├── 重新打包 deb 文件 (repackage_deb)
+│   └── 修改 frida-tools (modify_frida_tools)
+│       ├── 修改 Python 库文件
+│       └── 更新 core.py 中的字符串
+│
+├── 辅助功能
+│   ├── 日志输出 (log_info, log_success, log_warning, log_error)
+│   │   └── 支持彩色输出
+│   ├── 用户确认 (confirm_execution)
+│   │   └── 可选的自动确认模式
+│   ├── 依赖检查 (check_dependencies)
+│   ├── 依赖安装 (install_dependencies)
+│   ├── 配置管理 (set_config, unset_config, list_config)
+│   └── Frida 版本和模块列表 (list_frida_versions, list_frida_modules)
+│
+├── 下载功能 (download_frida_module)
+│   ├── 版本选择 (最新版或指定版本)
+│   ├── 模块选择 (单个模块或全部模块)
+│   ├── 下载过程
+│   │   └── 支持 HTTP 代理
+│   └── 解压处理
+│       └── 可选的自动解压功能
+│
+└── 安全和权限
+    ├── sudo 权限保持 (sudo_keep_alive)
+    └── 清理过程 (cleanup)
+```
+
+## 前提条件
+
+- macOS 操作系统（用于运行构建脚本）
+- Homebrew
+- Python 3
+- Go (用于编译 hexreplace 工具)
+- 越狱的 iOS 设备
+- 在 iOS 设备上安装 OpenSSH
+
+## 安装
+
+1. 克隆此仓库：
+```shell
+git clone https://github.com/suifei/fridare.git
+cd fridare
+```
+
+2. 运行设置命令
+```shell
+./fridare.sh setup
+```
+此命令将检查并安装所需的依赖项。
+
+3. 查看帮助
+```shell
+./fridare.sh help
+```
+
+## 使用方法
+Fridare 提供了多个命令来满足不同的需求：
+
+### 命令清单
+
+1. `build`: 重新打包 Frida
+2. `ls` 或 `list`: 列出可用的 Frida 版本
+3. `download`: 下载特定版本的 Frida
+4. `lm` 或 `list-modules`: 列出可用的 Frida 模块
+5. `setup`: 检查并安装系统依赖
+6. `config`: 设置配置选项
+7. `help`: 显示帮助信息
+
+### 使用范例
+
+1. 构建魔改版 Frida
+```shell
+./fridare.sh build -v 16.0.19 -p 8899 -y
+```
+这个命令会构建版本 16.0.19 的 Frida，设置端口为 8899，并自动确认所有提示。
+
+2. 列出可用的 Frida 版本
+```shell
+./fridare.sh ls
+```
+
+3. 下载特定版本的 Frida
+```shell
+./fridare.sh download -v 16.0.19 -m frida-server ./output
+```
+这个命令会下载版本 16.0.19 的 frida-server 模块到 ./output 目录。
+
+4. 下载最新版本的所有 Frida 模块
+```shell
+./fridare.sh download -latest -all ./output
+```
+
+5. 列出可用的 Frida 模块
+```shell
+./fridare.sh lm
+```
+
+6. 设置环境
+```shell
+./fridare.sh setup
+```
+这个命令会检查并安装所需的系统依赖。
+
+7. 配置设置
+```shell
+./fridare.sh config set proxy http://127.0.0.1:7890
+./fridare.sh config set port 9999
+./fridare.sh config set frida-name abcde
+```
+这些命令分别设置代理、端口和 Frida 魔改名。
+
+8. 列出当前配置
+```shell
+./fridare.sh config ls
+```
+
+9. 获取特定命令的帮助信息
+```shell
+./fridare.sh help build
+```
+这个命令会显示 build 命令的详细用法。
+
+10. 使用最新版本构建 Frida
+```shell
+./fridare.sh build -latest -p 9999 -y
+```
+这个命令会使用最新版本的 Frida 进行构建，设置端口为 9999，并自动确认所有提示。
+
+11. 下载但不解压 Frida 模块
+```shell
+./fridare.sh download -latest -m frida-gadget --no-extract ./output
+```
+这个命令会下载最新版本的 frida-gadget 模块到 ./output 目录，但不会自动解压。
+
+12. 安装 frida-tools
+```shell
+./fridare.sh config frida-tools
+```
+这个命令会安装或更新 frida-tools。
+
+13. 将生成的 .deb 包传输到您的 iOS 设备：
+```shell
+scp ./dist/frida_16.3.3_iphoneos-arm_tcp.deb root@<iPhone-IP>:/var/root/
+```
+
+14. SSH 进入您的 iOS 设备并安装修改后的包：
+```shell
+ssh root@<iPhone-IP>
+dpkg -i /var/root/frida_16.3.3_iphoneos-arm_tcp.deb
+```
+
+这些示例涵盖了脚本的主要功能和常见使用场景。可帮助您快速上手使用。
+
+## 安装兼容版本的 Frida 工具
+
+为确保兼容性，请安装与修改后的服务器版本相匹配的 Frida 工具：
+```shell
+pip install frida-tools==12.4.3
+```
+对于 Node.js 用户：
+```shell
+npm install frida@16.3.3
+```
+
+## 访问 frida-server
+如果您的设备通过 USB 访问，您可以使用以下命令连接到本地 frida-server：
+```shell
+frida -U -f <target-process>
+```
+## 使用远程 frida-server
+如果不使用usb数据线时，可以使用以下命令连接到远程 frida-server ：
+```shell
+frida -H <iPhone-IP>:8899 -U
+frida-trace -H <iPhone-IP>:8899 ...
+frida-ps -H <iPhone-IP>:8899
+frida-inject -H <iPhone-IP>:8899 ...
+```
+
+## 原理
+Fridare 项目的核心原理：
+
+### 1. frida-server 修改原理
+
+Fridare 的核心思想是修改 frida-server ，使其更难被检测。这主要通过以下几个方面实现：
+
+- 重命名服务器文件：
+   将 `frida-server` 重命名为随机生成的名称（如 `abcde`），这样可以避免简单的名称检测。
+
+- 修改启动配置：
+   更新 LaunchDaemons plist 文件，使其使用新的服务器名称和自定义端口。这样可以改变服务器的启动方式和监听端口。
+
+- 二进制文件修改：
+   使用二进制替换技术，将服务器二进制文件中的 "frida" 相关字符串替换为自定义字符串。这可以避免通过扫描二进制文件来检测 Frida。
+
+### 2. deb 包修改和重打包
+
+项目使用 dpkg-deb 工具解包和重新打包 deb 文件。这允许我们修改包的内容，包括：
+
+- 更新 DEBIAN/control 文件中的包名
+- 修改 DEBIAN/extrainst_ 和 DEBIAN/prerm 脚本以使用新的服务器名称
+- 替换和重命名实际的服务器二进制文件
+
+### 3. 自动化流程
+
+fridare.sh 脚本自动化了整个过程：
+
+- 下载指定版本的 frida-server 
+- 生成随机名称
+- 修改所有必要的文件
+- 重新打包 deb 文件
+
+### 4. 兼容性考虑
+
+脚本同时处理 arm 和 arm64 架构的包，确保在不同的 iOS 设备上的兼容性。
+
+### 5. 安全性增强
+
+通过更改服务器名称、端口和内部字符串，这个项目使得通过常规方法检测 Frida 的存在变得更加困难。这对于在某些可能会主动检测和阻止 Frida 的应用中使用 Frida 非常有用。
+
+### 6. 灵活性
+
+通过允许用户指定 Frida 版本和端口，该工具提供了很大的灵活性，可以适应不同的需求和环境。
+
+### 7. 二进制修改技术
+
+使用 [hexreplace](hexreplace/main.go) 来执行二进制替换，在不重新编译 Frida 的情况下修改二进制文件。这种方法虽然有效，但也有局限性，因为它只能替换固定长度的字符串。
+
+## 注意事项
+
+- 默认的 root 用户密码为 "alpine"。出于安全考虑，强烈建议更改此密码。
+- 请确保您的 iOS 设备已越狱并安装了 OpenSSH。
+- 此工具仅用于教育和研究目的。请遵守所有适用的法律和条款。
+
+## 贡献
+
+欢迎提交问题和拉取请求。对于重大更改，请先开issue讨论您想要更改的内容。
+
+## 许可证
+
+[MIT LICENSE](LICENSE)
+
+---
+
+# Fridare
+
+Fridare is a modification tool designed for customizing Frida-server, specifically for jailbroken iOS devices. It allows users to change names and ports, enhancing security and flexibility. It eliminates many jailbreak detection scenarios for Frida.
+[CHANGELOG](CHANGELOG)
+
+## Features
+
+Here's the English version of the changelog:
+
+## [v3.1.4] - 2024-07-18
+
+### Added
+- Introduced new `patch-tools` command for modifying the frida-tools module
+- Implemented `render_markdown` function to display simple Markdown formatting in the terminal
+- Added `generate_random_name` function to create random Frida modification names
+- Created `move_file` function to handle "are identical" errors during file moves
+
+### Improved
+- Enhanced `list_frida_versions` function to render Markdown-formatted version descriptions
+- Upgraded `build_frida` function to support building from local deb files
+- Expanded functionality and error handling in `patch_frida_tools` and `restore_frida_tools` functions
+- Optimized `modify_frida_tools` function for more reliable frida-tools modifications
+- Enhanced `download_frida_module` function with support for specific OS and architecture
+
+### Fixed
+- Resolved issues with incorrect Frida path detection in certain scenarios
+- Addressed "are identical" errors that could occur during file moves
+
+### Changed
+- Updated `show_main_usage` and other usage instruction functions to reflect new features
+- Adjusted `parse_arguments` function to accommodate the new `patch-tools` command
+- Modified configuration file handling to include support for `FRIDA_NAME`
+
+### Other
+- Improved overall code structure for better readability and maintainability
+- Added more detailed log outputs for enhanced execution information
+- Updated version number to 3.1.4
+
+### New Features v3.0.0
+- Added `fridare.sh` script, integrating all functionalities and providing a more complete command-line interface
+- Added `build`, `ls`, `download`, `lm`, `setup`, `config`, and `help` commands
+- Added configuration file support for saving and loading user settings
+- Added color output to enhance user experience
+- Added automatic dependency checking and installation
+- Added functionality to download specific Frida modules
+- Added listing of available Frida versions and modules
+
+### New Features v2.2.0 (Tested only on macOS arm architecture, other architectures not tested)
+- Added frida-tools patch, adapting to `frida:rpc` feature modification
+   - Resolves the issue of Android memory scanning for this string
+   - Automatically scans the local pip installation location of frida-tools, modifies the `core.py` file, and modifies the `_frida.abi3.so` file
+- Added frida-agent.dylib modification, hiding from filename and load location
+   - Resolves the issue of unhidden agent loading
+
+### New Features v2.1.1
+
+- Introduced `autoinstall.sh` script for automatic deployment of Frida plugins.
+- Introduced `Makefile` to simplify the project build and deployment process.
+- Before running, please ensure that the [issh](https://github.com/4ch12dy/issh) command is installed on your machine. And configure password-free SSH login.
+   > Configure password-free SSH login for issh
+   ```shell
+   # Generate keygen, skip if already generated
+   ssh-keygen -t rsa -b 4096 -C "<EMAIL>"
+   # Configure iPhone IP, can be skipped if using USB connection
+   issh ip set <iPhone-IP>     
+   # Copy public key to /var/root on the phone, requires root password alpine
+   issh scp ~/.ssh/id_rsa.pub  
+   # Add public key to authorized_keys file on remote server
+   issh run "mkdir -p ~/.ssh && cat /var/root/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && chmod 700 ~/.ssh"
+   ```
+
+## Features
+
+- Automatically download and modify specified versions of frida-server
+- Randomly generate new frida-server names
+- Customize frida-server ports
+- Support for arm and arm64 architectures
+- Binary replacement modification
+   - frida-server
+   - frida-agent.dylib
+   - frida-tools
+- Generate modified .deb packages ready for direct installation
+- Integrated command-line interface providing multiple functionalities
+- Configuration file support for saving user settings
+- Automatic dependency checking and installation
+- Download specific Frida modules
+- List available Frida versions and modules
+
+## Structure and Functionality of the Frida Modification Script
+```shell
+fridare.sh - Frida Modification Script
+│
+├── Main Functions
+│   ├── Build Modified Frida (build)
+│   │   ├── Support for specified version or latest version
+│   │   ├── Auto-generate random 5-character name
+│   │   ├── Custom port setting
+│   │   └── Support for arm and arm64 architectures
+│   ├── List Available Frida Versions (ls, list)
+│   │   └── Fetch version info from GitHub API
+│   ├── Download Specific Frida Version (download)
+│   │   ├── Support for downloading single or all modules
+│   │   └── Optional auto-extraction feature
+│   ├── List Available Frida Modules (lm, list-modules)
+│   ├── Check and Install System Dependencies (setup)
+│   │   ├── Auto-detect missing dependencies
+│   │   └── Install dependencies using package manager
+│   └── Configure Options (config)
+│       ├── Set HTTP proxy
+│       ├── Set Frida server port
+│       └── Set Frida modification name
+│
+├── Script Structure
+│   ├── Initialize Configuration (initialize_config)
+│   │   └── Read and create configuration file
+│   ├── Parse Arguments (parse_arguments)
+│   │   └── Support various command-line options
+│   ├── Command Processing
+│   │   ├── build: Build modified Frida
+│   │   ├── setup: Set up environment
+│   │   ├── config: Manage configuration
+│   │   ├── list: List versions
+│   │   ├── download: Download modules
+│   │   └── list-modules: List modules
+│   └── Main Function (main)
+│       └── Entry point integrating all functionalities
+│
+├── Build Process (build_frida)
+│   ├── Version Check
+│   │   └── Support for latest version auto-detection
+│   ├── Environment Preparation
+│   │   ├── Check Python environment (including Conda)
+│   │   └── Check Golang environment
+│   ├── Download Frida (download_frida)
+│   ├── Unpack deb File
+│   ├── Modify Files
+│   │   ├── Modify Launch Daemon (modify_launch_daemon)
+│   │   │   └── Update plist file
+│   │   ├── Modify Debian Files (modify_debian_files)
+│   │   │   ├── Update control file
+│   │   │   ├── Update extrainst_ file
+│   │   │   └── Update prerm file
+│   │   └── Modify Binary Files (modify_binary)
+│   │       ├── Modify frida-server
+│   │       ├── Modify frida-agent.dylib
+│   │       └── Use hexreplace tool
+│   ├── Repackage deb File (repackage_deb)
+│   └── Modify frida-tools (modify_frida_tools)
+│       ├── Modify Python library files
+│       └── Update strings in core.py
+│
+├── Auxiliary Functions
+│   ├── Log Output (log_info, log_success, log_warning, log_error)
+│   │   └── Support for colored output
+│   ├── User Confirmation (confirm_execution)
+│   │   └── Optional auto-confirm mode
+│   ├── Dependency Check (check_dependencies)
+│   ├── Dependency Installation (install_dependencies)
+│   ├── Configuration Management (set_config, unset_config, list_config)
+│   └── Frida Version and Module Lists (list_frida_versions, list_frida_modules)
+│
+├── Download Functionality (download_frida_module)
+│   ├── Version Selection (latest or specified version)
+│   ├── Module Selection (single module or all modules)
+│   ├── Download Process
+│   │   └── Support for HTTP proxy
+│   └── Extraction Processing
+│       └── Optional auto-extraction feature
+│
+└── Security and Permissions
+    ├── Maintain sudo Privileges (sudo_keep_alive)
+    └── Cleanup Process (cleanup)
+```
+
+## Prerequisites
+
+- macOS operating system (for running build scripts)
+- Homebrew
+- Python 3
+- Go (for compiling the hexreplace tool)
+- Jailbroken iOS device
+- OpenSSH installed on iOS device
+
+## Installation
+
+1. Clone this repository:
+```shell
+git clone https://github.com/suifei/fridare.git
+cd fridare
+```
+
+2. Run the setup command:
+```shell
+./fridare.sh setup
+```
+This command will check and install the required dependencies.
+
+3. View the help information:
+```shell
+./fridare.sh help
+```
+
+## Usage
+Fridare provides multiple commands to meet different needs:
+
+### Command List
+
+1. `build`: Repackage Frida
+2. `ls` or `list`: List available Frida versions
+3. `download`: Download a specific version of Frida
+4. `lm` or `list-modules`: List available Frida modules
+5. `setup`: Check and install system dependencies
+6. `config`: Set configuration options
+7. `help`: Display help information
+
+### Usage Examples
+
+1. Build a modified version of Frida
+```shell
+./fridare.sh build -v 16.0.19 -p 8899 -y
+```
+This command will build Frida version 16.0.19, set the port to 8899, and automatically confirm all prompts.
+
+2. List available Frida versions
+```shell
+./fridare.sh ls
+```
+
+3. Download a specific version of Frida
+```shell
+./fridare.sh download -v 16.0.19 -m frida-server ./output
+```
+This command will download the frida-server module of version 16.0.19 to the ./output directory.
+
+4. Download all Frida modules of the latest version
+```shell
+./fridare.sh download -latest -all ./output
+```
+
+5. List available Frida modules
+```shell
+./fridare.sh lm
+```
+
+6. Set up the environment
+```shell
+./fridare.sh setup
+```
+This command will check and install the required system dependencies.
+
+7. Configure settings
+```shell
+./fridare.sh config set proxy http://127.0.0.1:7890
+./fridare.sh config set port 9999
+./fridare.sh config set frida-name abcde
+```
+These commands set the proxy, port, and Frida modification name respectively.
+
+8. List current configuration
+```shell
+./fridare.sh config ls
+```
+
+9. Get help information for a specific command
+```shell
+./fridare.sh help build
+```
+This command will display detailed usage for the build command.
+
+10. Build Frida using the latest version
+```shell
+./fridare.sh build -latest -p 9999 -y
+```
+This command will build using the latest version of Frida, set the port to 9999, and automatically confirm all prompts.
+
+11. Download but don't extract Frida module
+```shell
+./fridare.sh download -latest -m frida-gadget --no-extract ./output
+```
+This command will download the latest version of the frida-gadget module to the ./output directory but won't automatically extract it.
+
+12. Install frida-tools
+```shell
+./fridare.sh config frida-tools
+```
+This command will install or update frida-tools.
+
+13. Transfer the generated .deb package to your iOS device:
+```shell
+scp ./dist/frida_16.3.3_iphoneos-arm_tcp.deb root@<iPhone-IP>:/var/root/
+```
+
+14. SSH into your iOS device and install the modified package:
+```shell
+ssh root@<iPhone-IP>
+dpkg -i /var/root/frida_16.3.3_iphoneos-arm_tcp.deb
+```
+
+These examples cover the main functionalities and common usage scenarios of the script. They can help you quickly get started with using it.
+
+## Installing Compatible Frida Tools
+
+To ensure compatibility, please install Frida tools that match the modified server version:
+```shell
+pip install frida-tools==12.4.3
+```
+For Node.js users:
+```shell
+npm install frida@16.3.3
+```
+
+## Accessing frida-server
+If your device is accessed via USB, you can use the following command to connect to the local frida-server:
+```shell
+frida -U -f <target-process>
+```
+## Using Remote frida-server
+If not using a USB data cable, you can use the following commands to connect to the remote frida-server:
+```shell
+frida -H <iPhone-IP>:8899 -U
+frida-trace -H <iPhone-IP>:8899 ...
+frida-ps -H <iPhone-IP>:8899
+frida-inject -H <iPhone-IP>:8899 ...
+```
+
+## Principles
+Core principles of the Fridare project:
+
+### 1. frida-server Modification Principle
+
+The core idea of Fridare is to modify frida-server to make it harder to detect. This is mainly achieved through the following aspects:
+
+- Renaming the server file:
+   Rename `frida-server` to a randomly generated name (e.g., `abcde`), which avoids simple name detection.
+
+- Modifying startup configuration:
+   Update the LaunchDaemons plist file to use the new server name and custom port. This changes the way the server starts and the port it listens on.
+
+- Binary file modification:
+   Use binary replacement techniques to replace "frida" related strings in the server binary file with custom strings. This can avoid detection of Frida by scanning the binary file.
+
+### 2. deb Package Modification and Repackaging
+
+The project uses the dpkg-deb tool to unpack and repack deb files. This allows us to modify the contents of the package, including:
+
+- Updating the package name in the DEBIAN/control file
+- Modifying DEBIAN/extrainst_ and DEBIAN/prerm scripts to use the new server name
+- Replacing and renaming the actual server binary file
+
+### 3. Automated Process
+
+The fridare.sh script automates the entire process:
+
+- Downloading the specified version of frida-server
+- Generating random names
+- Modifying all necessary files
+- Repacking the deb file
+
+### 4. Compatibility Considerations
+
+The script handles packages for both arm and arm64 architectures, ensuring compatibility on different iOS devices.
+
+### 5. Enhanced Security
+
+By changing the server name, port, and internal strings, this project makes it more difficult to detect the presence of Frida through conventional methods. This is particularly useful for using Frida in applications that might actively detect and block Frida.
+
+### 6. Flexibility
+
+By allowing users to specify the Frida version and port, the tool provides great flexibility to adapt to different needs and environments.
+
+### 7. Binary Modification Technique
+
+Using [hexreplace](hexreplace/main.go) to perform binary replacements, modifying binary files without recompiling Frida. While effective, this method has limitations as it can only replace fixed-length strings.
+
+## Notes
+
+- The default root user password is "alpine". For security reasons, it is strongly recommended to change this password.
+- Please ensure your iOS device is jailbroken and has OpenSSH installed.
+- This tool is for educational and research purposes only. Please comply with all applicable laws and terms.
+
+## Contributing
+
+Issues and pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
+## License
+
+[MIT LICENSE](LICENSE)
+
+```
+
+`autoinstall.sh`:
+
+```sh
+#!/bin/bash
+iSSH_ROOT_DIR=`cat ~/.issh/rootdir`
+if [ -z "$iSSH_ROOT_DIR" ]; then
+  echo "issh not found in PATH"
+  echo "Please install issh from https://github.com/4ch12dy/issh"
+  exit 1
+fi
+
+DEB_NAME=$(cd dist && ls -lt *-arm_*.deb | head -n 1 | awk '{print $9}' && cd ..)
+INSTALL_NAME=$(echo $DEB_NAME | awk -F'_' '{print $4}')
+INSTANCE_NAME=$(source $iSSH_ROOT_DIR/issh.sh && issh run "apt install gawk -y --allow-unauthenticated" && issh run "ps -e | grep 0.0.0.0:8899 | grep /usr/sbin/ | grep -v grep | awk '{n=split(\$0,a,\"/\");n2=split(a[n],b,\" \"); print b[n2-2]}'")
+INSTANCE_NAME=$(echo $INSTANCE_NAME | awk '{print $NF}')
+echo "DEB File: $DEB_NAME"
+echo "Frida Instance: $INSTANCE_NAME"
+echo "Install Name: $INSTALL_NAME"
+
+source $iSSH_ROOT_DIR/issh.sh && issh scp dist/$DEB_NAME
+
+if [ -n "$INSTANCE_NAME" ]; then
+    source $iSSH_ROOT_DIR/issh.sh && issh run "dpkg -r re.$INSTANCE_NAME.server"  
+fi
+source $iSSH_ROOT_DIR/issh.sh && issh run "dpkg -i /var/root/$DEB_NAME"
+source $iSSH_ROOT_DIR/issh.sh && issh run "rm -rf /var/root/$DEB_NAME"
+source $iSSH_ROOT_DIR/issh.sh && issh run "ps -e|grep $INSTALL_NAME"
+```
+
+`docs/android.md`:
+
+```md
+# Android frida-server 魔改教程
+
+## 前提条件
+
+- 安装 fridare.sh 脚本
+- 确保系统中已安装 Python 3 和 Golang
+- 确保已安装 Frida
+
+## 步骤
+
+### 1. 检查环境
+
+首先，运行 `fridare.sh upgrade` 命令来检查环境并更新 FRIDA_MODULES：
+
+```bash
+$ ./fridare.sh upgrade
+```
+
+这将显示您的环境信息，包括 Python 版本、Frida 版本、Go 版本等。
+
+### 2. 配置代理（可选）
+
+如果需要使用代理，可以通过以下命令设置：
+
+```bash
+$ ./fridare.sh conf edit
+```
+
+选择选项 1 来编辑 HTTP 代理，输入代理地址（例如：socks5://localhost:1080）。
+
+### 3. 查看可用的 Frida 模块
+
+运行以下命令来查看所有可用的 Frida 模块：
+
+```bash
+$ ./fridare.sh lm
+```
+
+这将列出所有可用的 Frida 模块，包括它们支持的操作系统和架构。
+
+### 4. 魔改 frida-server
+
+使用以下命令来修补 frida-server：
+
+```bash
+$ ./fridare.sh patch -m frida-server -latest -os android -arch arm64 -o ./patched
+```
+
+参数说明：
+- `-m frida-server`: 指定要修补的模块
+- `-latest`: 使用最新版本的 Frida
+- `-os android`: 指定操作系统为 Android
+- `-arch arm64`: 指定架构为 arm64
+- `-o ./patched`: 指定输出目录
+
+### 5. 输入魔改名称
+
+在执行过程中，脚本会提示您输入一个魔改名称。这个名称应该是 5 个字母（a-z 或 A-Z）。例如：
+
+```
+请输入本次所采用的 Frida 魔改名: axjdf
+```
+
+### 6. 等待修补完成
+
+脚本会自动下载指定的 frida-server，解压，然后进行修补。整个过程包括：
+
+- 下载 frida-server
+- 解压文件
+- 修补二进制文件
+- 替换字符串
+
+### 7. 查看输出
+
+修补完成后，您会看到类似以下的输出：
+
+```
+[SUCC] 模块修补完成: ./patched/frida-server_axjdf
+```
+
+这表示魔改后的 frida-server 已经生成，文件名为 `frida-server_axjdf`。
+
+## 使用魔改后的 frida-server
+
+1. 将修补后的 `frida-server_axjdf` 文件传输到 Android 设备上。
+2. 赋予文件执行权限：`chmod +x frida-server_axjdf`
+3. 在 Android 设备上运行魔改后的 frida-server：`./frida-server_axjdf`
+
+注意：使用魔改后的 frida-server 时，确保客户端代码中使用了相同的魔改名称（本例中为 "axjdf"）。
+
+通过这个教程，您可以成功地魔改 Android 版本的 frida-server，使其更难被检测到。记得每次使用时都更换魔改名称，以提高隐蔽性。
+```
+
+`docs/install.md`:
+
+```md
+# Fridare 安装说明
+
+Fridare 是一个用于魔改 Frida 的工具，可以帮助你绕过一些基本的检测机制。以下是安装和配置 Fridare 的步骤。
+
+## 快速安装
+
+使用以下命令可以快速安装 Fridare：
+
+```bash
+curl -s https://raw.githubusercontent.com/suifei/fridare/main/fridare.sh | bash -s install
+```
+
+这个命令会在当前目录下创建一个 `fridare` 文件夹，其中包含了安装好的 Fridare 工具。
+
+## 配置环境变量
+
+安装完成后，你需要将 Fridare 添加到系统的环境变量中，以便可以在任何位置使用 `fridare` 命令。
+
+### 对于 Bash 用户
+
+1. 编辑你的 `.bashrc` 文件：
+
+   ```bash
+   nano ~/.bashrc
+   ```
+
+2. 在文件末尾添加以下行：
+
+   ```bash
+   export PATH=$PATH:/path/to/fridare
+   ```
+
+   请将 `/path/to/fridare` 替换为实际的 Fridare 安装路径。
+
+3. 保存并关闭文件，然后运行：
+
+   ```bash
+   source ~/.bashrc
+   ```
+
+### 对于 Zsh 用户
+
+1. 编辑你的 `.zshrc` 文件：
+
+   ```bash
+   nano ~/.zshrc
+   ```
+
+2. 在文件末尾添加以下行：
+
+   ```bash
+   export PATH=$PATH:/path/to/fridare
+   ```
+
+   请将 `/path/to/fridare` 替换为实际的 Fridare 安装路径。
+
+3. 保存并关闭文件，然后运行：
+
+   ```bash
+   source ~/.zshrc
+   ```
+
+## 验证安装
+
+安装完成后，你可以通过运行以下命令来验证 Fridare 是否已正确安装：
+
+```bash
+fridare.sh help
+```
+
+如果安装成功，你应该能看到 Fridare 的版本信息。
+
+## 使用 Fridare
+
+现在你可以在终端的任何位置使用 `fridare.sh` 命令来运行 Fridare 工具。例如：
+
+```bash
+fridare.sh build -latest
+```
+
+这个命令会下载并魔改最新版本的 Frida。
+
+## 注意事项
+
+- 确保你有足够的权限来修改系统环境变量。
+- 如果你使用的是其他 shell，请相应地修改相关的配置文件。
+- 定期检查 Fridare 的更新，以获得最新的功能和安全修复。
+
+现在你已经成功安装了 Fridare，可以开始使用它来魔改 Frida 了。请确保在合法和授权的情况下使用此工具。
+```
+
+`docs/ios.md`:
+
+```md
+# iOS frida-server 魔改教程
+
+## 前提条件
+
+- 安装 fridare.sh 脚本
+- 确保系统中已安装 Python 3 和 Golang
+- 确保已安装 Frida 和相关依赖
+
+## 步骤
+
+### 1. 运行魔改脚本
+
+使用以下命令开始魔改过程：
+
+```bash
+$ ./fridare.sh build -latest
+```
+
+这个命令会自动下载最新版本的 Frida，并开始魔改过程。
+
+### 2. 确认免责声明
+
+脚本会显示一个免责声明。仔细阅读并确认是否同意：
+
+```
+您是否同意以上免责声明并允许使用sudo权限？(y/N) y
+```
+
+输入 `y` 并按回车以继续。
+
+### 3. 等待下载和修改过程
+
+脚本会自动完成以下步骤：
+
+- 下载最新版本的 Frida deb 包（适用于 arm 和 arm64 架构）
+- 修改 plist 文件
+- 修改 DEBIAN 文件夹中的文件
+- 修改二进制文件
+- 重新打包 deb 文件
+
+### 4. 查看输出信息
+
+魔改完成后，脚本会显示重要信息：
+
+```
+[INFO] 新版本名：duquj
+[INFO] 请使用新版本名：duquj 进行调试
+[INFO] 请使用端口：8899 进行调试
+[INFO] 新版本 deb 文件：../dist/frida_16.4.4_iphoneos-arm64_duquj_tcp.deb
+```
+
+记下新的版本名（本例中为 "duquj"）和端口号，这些在之后的使用中会用到。
+
+### 5. 安装到 iOS 设备
+
+按照脚本提供的说明，将魔改后的 deb 文件安装到 iOS 设备上：
+
+```
+[INFO] iPhone 安装：
+[INFO] scp dist/frida_16.4.4_iphoneos-arm64_duquj_tcp.deb root@<iPhone-IP>:/var/root
+[INFO] ssh root@<iPhone-IP>
+[INFO] dpkg -i /var/root/frida_16.4.4_iphoneos-arm64_duquj_tcp.deb
+```
+
+替换 `<iPhone-IP>` 为你的 iOS 设备实际 IP 地址。
+
+### 6. 连接和使用
+
+使用以下命令连接到魔改后的 frida-server：
+
+```
+[INFO] PC 连接：
+[INFO] frida -U -f com.xxx.xxx -l
+[INFO] frida -H <iPhone-IP>:8899 -f com.xxx.xxx --no-pause
+```
+
+将 `com.xxx.xxx` 替换为目标应用的包名，`<iPhone-IP>` 替换为 iOS 设备的 IP 地址。
+
+### 7. 修改 frida-tools（可选）
+
+脚本会询问是否要修改本地的 frida-tools 以适配魔改版本：
+
+```
+本脚本将自动修改本地 frida-tools，以适配魔改版本的 Frida。（跳过 frida-tools 魔改。某些功能可能无法使用，建议修改）
+您是否同意？(y/N)
+```
+
+如果需要完整功能，建议输入 `y` 同意修改。
+
+## 注意事项
+
+1. 每次运行脚本都会生成新的魔改名称，确保使用最新生成的名称和端口号。
+2. 魔改后的 frida-server 可能会绕过一些基本的检测，但不保证能绕过所有检测机制。
+3. 使用魔改版本可能会影响某些 Frida 功能，特别是如果没有修改 frida-tools。
+4. 确保在合法和授权的情况下使用此工具。
+
+
+```
+
+`docs/patch-tools.md`:
+
+```md
+# Frida-tools 魔改指南
+
+fridare.sh 脚本提供了 `patch-tools` 命令，允许您修改 frida-tools 以适配魔改版本的 Frida。本指南将帮助您使用这个功能。
+
+## 1. 修改 frida-tools
+
+### 使用配置的魔改名
+
+如果您已经在配置中设置了 `FRIDA_NAME`，可以直接使用：
+
+```bash
+./fridare.sh patch-tools name
+```
+
+这将使用配置中的魔改名来修改 frida-tools。
+
+### 指定新的魔改名
+
+如果您想使用一个不同的魔改名，可以直接在命令中指定：
+
+```bash
+./fridare.sh patch-tools name abcde
+```
+
+这里的 `abcde` 就是您指定的新魔改名。请确保使用恰好 5 个字母（a-z 或 A-Z）。
+
+### 使用随机生成的魔改名
+
+如果您既没有在配置中设置 `FRIDA_NAME`，也没有在命令中指定，脚本会随机生成一个魔改名：
+
+```bash
+./fridare.sh patch-tools name
+```
+
+## 2. 确认操作
+
+执行命令后，脚本会显示找到的 frida-tools 路径，并询问您是否确认使用此路径。输入 'y' 确认，或 'n' 取消操作。
+
+## 3. 查看结果
+
+脚本会显示修改过程的详细信息，包括：
+
+- 创建备份文件
+- 修改 Python 库文件
+- 更新 core.py 文件中的相关字符串
+
+## 4. 恢复原版
+
+如果您需要恢复 frida-tools 到原版，可以使用以下命令：
+
+```bash
+./fridare.sh patch-tools restore
+```
+
+这将使用之前创建的备份文件来恢复原始的 frida-tools 文件。
+
+## 注意事项
+
+1. 请确保在修改 frida-tools 之前已经成功构建了魔改版本的 Frida。
+2. 修改操作会创建备份文件，以便于日后恢复。
+3. 如果遇到权限问题，可能需要使用 sudo 运行脚本。
+4. 修改后，建议测试 frida-tools 的功能，确保一切正常工作。
+
+通过使用 `patch-tools` 命令，您可以轻松地将 frida-tools 与您的魔改版 Frida 保持同步，确保整个工具链的兼容性。
+```
+
+`fridare.sh`:
+
+```sh
+#!/bin/bash
+
+# Frida 魔改脚本，用于修改 frida-server 的名称和端口
+# 作者：suifei@gmail.com
+
+set -e # 遇到错误立即退出
+
+VERSION="3.1.7"
+# 默认值设置
+DEF_FRIDA_SERVER_PORT=8899
+DEF_AUTO_CONFIRM="false"
+
+readonly COLOR_YELLOW='\033[33m'
+readonly COLOR_RED='\033[31m'
+readonly COLOR_PINK='\033[95m'
+readonly COLOR_MAGENTA='\033[95m'
+readonly COLOR_ORANGE='\033[33m'
+readonly COLOR_PURPLE='\033[35m'
+readonly COLOR_GREEN='\033[32m'
+readonly COLOR_BLUE='\033[34m'
+readonly COLOR_SKYBLUE='\033[36m'
+readonly COLOR_WHITE='\033[37m'
+readonly COLOR_BLACK='\033[30m'
+readonly COLOR_GRAY='\033[90m'
+readonly COLOR_CYAN='\033[96m'
+readonly COLOR_BOLD='\033[1m'
+readonly COLOR_DIM='\033[2m'
+readonly COLOR_ITALIC='\033[3m'
+readonly COLOR_UNDERLINE='\033[4m'
+readonly COLOR_BLINK='\033[5m'
+readonly COLOR_REVERSE='\033[7m'
+readonly COLOR_STRIKETHROUGH='\033[9m'
+
+readonly COLOR_RESET='\033[0m'
+readonly COLOR_BG_WHITE='\033[47m'
+readonly COLOR_BG_BLACK='\033[40m'
+readonly COLOR_BG_RED='\033[41m'
+readonly COLOR_BG_GREEN='\033[42m'
+readonly COLOR_BG_YELLOW='\033[43m'
+readonly COLOR_BG_BLUE='\033[44m'
+readonly COLOR_BG_PURPLE='\033[45m'
+readonly COLOR_BG_SKYBLUE='\033[46m'
+
+# 初始化变量
+FRIDA_VERSION=""
+FRIDA_SERVER_PORT=""
+CURL_PROXY=""
+AUTO_CONFIRM=""
+CONFIG_FILE="${HOME}/.fridare.conf"
+
+# 免责声明
+DISCLAIMER="${COLOR_BG_WHITE}${COLOR_BLACK}${COLOR_BLINK} 本脚本仅供${COLOR_BLUE}学习使用，${COLOR_RED}请勿用于非法用途。${COLOR_RESET}
+免责声明:
+1. 本脚本仅供学习和研究使用，不得用于商业或非法目的。
+2. 使用本脚本修改Frida可能违反Frida的使用条款或版权规定。
+3. 用户应自行承担使用本脚本的所有风险和法律责任。
+4. 脚本作者不对因使用本脚本而导致的任何损失或法律问题负责。
+5. 使用本脚本即表示您已阅读并同意以上声明。
+
+Disclaimer:
+1. This script is for learning and research purposes only and may not be used 
+   for commercial or illegal purposes.
+2. Using this script to modify Frida may violate Frida's terms of use or 
+   copyright regulations.
+3. Users should bear all risks and legal responsibilities of using this script.
+4. The script author is not responsible for any losses or legal issues caused 
+   by the use of this script.
+5. Using this script means that you have read and agree to the above statement.
+"
+
+# 日志函数
+log_info() {
+    echo -e "${COLOR_WHITE}[INFO] $1${COLOR_RESET}"
+}
+
+log_success() {
+    echo -e "${COLOR_GREEN}[SUCC] $1${COLOR_RESET}"
+}
+
+log_warning() {
+    echo -e "${COLOR_YELLOW}[WARN] $1${COLOR_RESET}"
+}
+
+log_error() {
+    echo -e "${COLOR_BG_WHITE}${COLOR_RED}[ERRO] $1${COLOR_RESET}"
+}
+
+log_cinfo() {
+    echo -e "$1[INFO] $2${COLOR_RESET}"
+}
+
+log_color() {
+    echo -e "$1$2${COLOR_RESET}"
+}
+
+log_skyblue() {
+    echo -e "${COLOR_SKYBLUE}$1${COLOR_RESET}"
+}
+download_with_progress() {
+    local url="$1"
+    local output_file="$2"
+    local description="$3"
+    local retry_count=3
+    local temp_file="${output_file}.tmp"
+
+    local curl_cmd="curl -L --progress-bar --fail --show-error"
+    if [ -n "$CURL_PROXY" ]; then
+        case "$CURL_PROXY" in
+        socks4://*)
+            local proxy=${CURL_PROXY#socks4://}
+            curl_cmd+=" --socks4 $proxy"
+            ;;
+        socks4a://*)
+            local proxy=${CURL_PROXY#socks4a://}
+            curl_cmd+=" --socks4a $proxy"
+            ;;
+        socks5://*)
+            local proxy=${CURL_PROXY#socks5://}
+            curl_cmd+=" --socks5 $proxy"
+            ;;
+        socks5h://*)
+            local proxy=${CURL_PROXY#socks5h://}
+            curl_cmd+=" --socks5-hostname $proxy"
+            ;;
+        http://*)
+            curl_cmd+=" --proxy $CURL_PROXY"
+            ;;
+        https://*)
+            curl_cmd+=" --proxy $CURL_PROXY"
+            ;;
+        *)
+            log_warning "未知的代理协议，将作为 HTTP 代理使用: $CURL_PROXY"
+            curl_cmd+=" --proxy $CURL_PROXY"
+            ;;
+        esac
+    fi
+
+    while [ $retry_count -gt 0 ]; do
+        echo -e "${COLOR_SKYBLUE}正在下载 $description...${COLOR_RESET}"
+
+        if $curl_cmd "$url" -o "$temp_file" 2>&1 | tee /dev/stderr |
+            sed -u 's/^[# ]*\([0-9]*\.[0-9]%\).*\([ 0-9.]*\(KiB\|MiB\|GiB\)\/s\).*$/\1\n速度: \2/' |
+            while IFS= read -r line; do
+                if [[ $line =~ ^[0-9]+\.[0-9]% ]]; then
+                    percent=${line%\%*}
+                    completed=$(printf "%.0f" $percent)
+                    printf "\r进度: [%-50s] %d%%" $(printf "=%.0s" $(seq 1 $((completed / 2)))) "$completed"
+                elif [[ $line =~ ^速度: ]]; then
+                    printf " %s" "$line"
+                fi
+            done; then
+            echo # 换行
+            mv "$temp_file" "$output_file"
+            local file_size=$(wc -c <"$output_file")
+            echo -e "${COLOR_GREEN}下载完成: $output_file (大小: $file_size 字节)${COLOR_RESET}"
+            return 0
+        else
+            echo # 换行
+            local curl_exit_code=$?
+            log_error "下载失败: $output_file (curl exit code: $curl_exit_code)"
+            if [ -f "$temp_file" ]; then
+                log_error "临时文件大小: $(wc -c <"$temp_file") 字节"
+                rm -f "$temp_file"
+            fi
+            retry_count=$((retry_count - 1))
+            if [ $retry_count -gt 0 ]; then
+                log_warning "检查网络连接..."
+                if ! ping -c 1 github.com &>/dev/null; then
+                    log_error "无法连接到 github.com，请检查网络连接"
+                    return 1
+                fi
+                log_warning "网络连接正常，5秒后重试..."
+                sleep 5
+            fi
+        fi
+    done
+
+    if [ $retry_count -eq 0 ]; then
+        log_error "达到最大重试次数，下载失败"
+        return 1
+    fi
+}
+show_main_usage() {
+    echo -e "${COLOR_SKYBLUE}Frida 重打包工具 v${VERSION}${COLOR_RESET}"
+    # 计算并显示当前脚本的 MD5 值
+    local script_path="$0"
+    local script_md5=$(md5 -q "$script_path" 2>/dev/null || md5sum "$script_path" | cut -d ' ' -f 1)
+    echo -e "${COLOR_GREEN}脚本 MD5: ${COLOR_YELLOW}${script_md5}${COLOR_RESET}"
+    echo -e "${COLOR_WHITE}用法: $0 <命令> [选项]${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}命令:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}q,    quickstart${COLOR_RESET}     显示快速开始指南"
+    echo -e "  ${COLOR_GREEN}b,    build${COLOR_RESET}          重新打包 Frida"
+    echo -e "  ${COLOR_GREEN}p,    patch${COLOR_RESET}          修补指定的 Frida 模块"
+    echo -e "  ${COLOR_GREEN}pt,   patch-tools${COLOR_RESET}    修补 frida-tools 模块"
+    echo -e "  ${COLOR_GREEN}pwt,  patch-wintools${COLOR_RESET} 修补 Windows frida-tools 模块"
+    echo -e "  ${COLOR_GREEN}ls,   list${COLOR_RESET}           列出可用的 Frida 版本"
+    echo -e "  ${COLOR_GREEN}dl,   download${COLOR_RESET}       下载特定版本的 Frida"
+    echo -e "  ${COLOR_GREEN}lm,   list-modules${COLOR_RESET}   列出可用的 Frida 模块"
+    echo -e "  ${COLOR_GREEN}s,    setup${COLOR_RESET}          检查并安装系统依赖"
+    echo -e "  ${COLOR_GREEN}conf, config${COLOR_RESET}         设置配置选项"
+    echo -e "  ${COLOR_GREEN}u,    upgrade${COLOR_RESET}        更新配置，检查新版本"
+    echo -e "  ${COLOR_GREEN}h,    help${COLOR_RESET}           显示帮助信息"
+    echo
+    echo -e "${COLOR_WHITE}运行 '$0 help <命令>' 以获取特定命令的更多信息。${COLOR_RESET}"
+    echo -e "${COLOR_WHITE}新用户？ 运行 '$0 quickstart' 获取快速入门指南。${COLOR_RESET}"
+    echo -e "${COLOR_GRAY}    suifei@gmail.com${COLOR_RESET}"
+    echo -e "${COLOR_GRAY}    https://github.com/suifei/fridare${COLOR_RESET}"
+}
+
+show_build_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 b|build [选项]${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}选项:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}-c clean${COLOR_RESET}                                     清理构建目录"
+    echo -e "  ${COLOR_GREEN}-v VERSION${COLOR_RESET}                                   指定 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-latest${COLOR_RESET}                                      使用最新的 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-p, --port PORT${COLOR_RESET}                              指定 Frida 服务器端口 (默认: $DEF_FRIDA_SERVER_PORT)"
+    echo -e "  ${COLOR_GREEN}-y, --yes${COLOR_RESET}                                    自动回答是以确认提示"
+    echo -e "  ${COLOR_GREEN}-l, --local archs[arm,arm64,arm64e] FILENAME${COLOR_RESET} 使用本地 deb 文件，指定构建架构"
+    echo
+    echo -e "${COLOR_BG_WHITE}${COLOR_RED}注意: -v, -latest 和 -l 不能同时使用${COLOR_RESET}"
+    echo -e "${COLOR_BG_WHITE}${COLOR_RED}注意: -l 使用本地 deb 文件时，请使用全路径，或者不要把原始包放到 build 目录，会导致路径冲突。${COLOR_RESET}"
+    echo -e "${COLOR_WHITE}示例:${COLOR_RESET}"
+    echo -e "  $0 build -v 16.4.2"
+    echo -e "  $0 build -latest"
+    echo -e "  $0 build -l arm64 frida-server_16.4.2_amd64.deb"
+    echo -e "  $0 build -c -l arm64 frida-server_16.4.2_amd64.deb "
+    echo -e "  $0 build -c -l arm64 frida-server_16.4.2_amd64.deb" -p 8000"
+    echo -e " $0 build -c -l arm64 frida-server_16.4.2_amd64.deb" -p 8000 -y"
+}
+
+show_patch_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 patch [选项]${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}选项:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}-m, --module NAME${COLOR_RESET}        指定要修补的 Frida 模块名称"
+    echo -e "  ${COLOR_GREEN}-v, --version VERSION${COLOR_RESET}    指定 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-latest${COLOR_RESET}                  使用最新的 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-os OS${COLOR_RESET}                   指定操作系统 (可选)"
+    echo -e "  ${COLOR_GREEN}-arch ARCH${COLOR_RESET}               指定处理器架构 (可选)"
+    echo -e "  ${COLOR_GREEN}-o, --output DIR${COLOR_RESET}         指定输出目录 (默认: ./patched_output)"
+    echo -e "  ${COLOR_GREEN}-n, --no-backup${COLOR_RESET}          不保留源文件 (默认保留)"
+    echo -e "  ${COLOR_GREEN}-a, --auto-package${COLOR_RESET}       自动打包修补后的模块 (默认不打包)"
+    echo -e "  ${COLOR_GREEN}-f, --force${COLOR_RESET}              覆盖已存在的文件 (默认跳过)"
+    echo
+    echo -e "${COLOR_WHITE}示例:${COLOR_RESET}"
+    echo -e "  $0 patch -m frida-server -v 14.2.18 -os android -arch arm64 -o ./patched -a"
+    echo -e "  $0 patch -m frida-gadget -latest -os ios -arch arm64 -k -a -f"
+}
+show_patch_tools_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 patch-tools <操作> [选项]${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}操作:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}name${COLOR_RESET}                     配置 frida-tools 魔改名，5个（a-zA-Z）字符，留空则读取配置的名称\"${COLOR_GREEN}${FRIDA_NAME}${COLOR_RESET}\"，否则随机生成"
+    echo -e "  ${COLOR_GREEN}restore${COLOR_RESET}                  恢复 frida-tools 到原版"
+    echo
+    echo -e "${COLOR_WHITE}示例:${COLOR_RESET}"
+    echo -e "  $0 patch-tools name abcde"
+    echo -e "  $0 patch-tools restore"
+}
+show_patch_wintools_usage(){
+    echo -e "${COLOR_SKYBLUE}用法: $0 需要到windows系统下，使用win子目录内的工具进行处理${COLOR_RESET}"
+}
+show_config_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 config <操作> <选项> [<值>]${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}操作:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}set <选项> <值>${COLOR_RESET}    设置配置"
+    echo -e "  ${COLOR_GREEN}unset <选项>${COLOR_RESET}       取消设置"
+    echo -e "  ${COLOR_GREEN}ls, list${COLOR_RESET}          列出所有配置"
+    echo -e "  ${COLOR_GREEN}edit${COLOR_RESET}              启动交互式配置编辑器"
+    echo -e "  ${COLOR_GREEN}frida-tools${COLOR_RESET}       安装 frida-tools"
+    echo
+    echo -e "${COLOR_YELLOW}选项:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}proxy${COLOR_RESET}              HTTP 代理"
+    echo -e "  ${COLOR_GREEN}port${COLOR_RESET}               Frida 服务器端口"
+    echo -e "  ${COLOR_GREEN}frida-name${COLOR_RESET}         Frida 魔改名"
+}
+
+show_download_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 dl|download [选项] <输出目录>${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_YELLOW}选项:${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}-v, --version VERSION${COLOR_RESET}    指定要下载的 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-latest${COLOR_RESET}                  下载最新的 Frida 版本"
+    echo -e "  ${COLOR_GREEN}-m, --module MODULE${COLOR_RESET}      指定要下载的模块名称"
+    echo -e "  ${COLOR_GREEN}-all${COLOR_RESET}                     下载所有模块"
+    echo -e "  ${COLOR_GREEN}--no-extract${COLOR_RESET}             不自动解压文件"
+    echo -e "  ${COLOR_GREEN}-f, --force${COLOR_RESET}              覆盖已存在的文件 (默认跳过)"
+    echo -e "  ${COLOR_GREEN}lm, list-modules${COLOR_RESET}         列出所有可用的模块"
+    echo
+    echo -e "${COLOR_WHITE}示例:${COLOR_RESET}"
+    echo -e "  $0 download -v 16.4.2 -m frida-server ./output"
+    echo -e "  $0 download -latest -m frida-gadget ./output"
+    echo -e "  $0 download -latest -all ./output -f"
+    echo -e "  $0 download -latest -all --no-extract ./output"
+}
+
+show_setup_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 s|setup${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_WHITE}检查并安装系统依赖。这个命令将：${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 检查所有必要的依赖是否已安装"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 如果缺少任何依赖，尝试安装它们"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 创建必要的目录结构（如 build 和 dist 目录）"
+    echo
+    echo -e "${COLOR_YELLOW}此命令不需要任何额外的参数。${COLOR_RESET}"
+}
+
+show_upgrade_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 u|upgrade${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_WHITE}更新配置并检查新版本。这个命令将：${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 更新 FRIDA_MODULES 配置"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 检查 fridare.sh 脚本的新版本"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 如果有新版本可用，提示用户是否要更新"
+    echo
+    echo -e "${COLOR_YELLOW}此命令不需要任何额外的参数。${COLOR_RESET}"
+}
+
+show_list_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 ls|list${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_WHITE}列出可用的 Frida 版本。这个命令将：${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 从 GitHub 获取最新的 Frida 发布版本信息"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 显示最近的 10 个版本，包括版本号、发布日期和下载次数"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 为每个版本显示简短的更新说明"
+    echo
+    echo -e "${COLOR_YELLOW}此命令不需要任何额外的参数。${COLOR_RESET}"
+}
+
+show_list_modules_usage() {
+    echo -e "${COLOR_SKYBLUE}用法: $0 lm|list-modules${COLOR_RESET}"
+    echo
+    echo -e "${COLOR_WHITE}列出可用的 Frida 模块。这个命令将：${COLOR_RESET}"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 显示所有可用的 Frida 模块"
+    echo -e "  ${COLOR_GREEN}•${COLOR_RESET} 包括模块名称、支持的操作系统和架构"
+    echo
+    echo -e "${COLOR_YELLOW}此命令不需要任何额外的参数。${COLOR_RESET}"
+}
+
+quick_start_guide() {
+    echo -e "${COLOR_SKYBLUE}快速开始指南${COLOR_RESET}"
+    echo -e "${COLOR_GREEN}1.${COLOR_RESET} 设置环境: $0 setup"
+    echo -e "${COLOR_GREEN}2.${COLOR_RESET} 查看可用的 Frida 版本: $0 list"
+    echo -e "${COLOR_GREEN}3.${COLOR_RESET} 构建 Frida: $0 build -v <版本> 或 $0 build -latest"
+    echo -e "${COLOR_GREEN}4.${COLOR_RESET} 下载 Frida 模块: $0 download -latest -m frida-server ./output"
+    echo -e "${COLOR_GREEN}5.${COLOR_RESET} 修补 Frida 模块: $0 patch -m frida-server -latest"
+    echo -e "${COLOR_GREEN}6.${COLOR_RESET} 配置设置: $0 config edit"
+    echo -e "\n${COLOR_YELLOW}详细使用说明请运行: $0 help <命令>${COLOR_RESET}"
+}
+# 函数：解析命令行参数
+parse_arguments() {
+    if [ $# -eq 0 ]; then
+        show_main_usage
+        exit 0
+    fi
+
+    command="$1"
+    shift
+
+    case "$command" in
+    b | build)
+        parse_build_args "$@"
+        ;;
+    p | patch)
+        parse_patch_args "$@"
+        ;;
+    s | setup)
+        setup_environment
+        ;;
+    conf | config)
+        parse_config_args "$@"
+        ;;
+    ls | list)
+        list_frida_versions
+        ;;
+    dl | download)
+        parse_download_args "$@"
+        ;;
+    lm | list-modules)
+        list_frida_modules
+        ;;
+    u | upgrade)
+        update_frida_modules
+        check_version "false"
+        ;;
+    q | quickstart)
+        quick_start_guide
+        ;;
+    h | help)
+        if [ $# -eq 0 ]; then
+            show_main_usage
+        else
+            case "$1" in
+            b | build) show_build_usage ;;
+            p | patch) show_patch_usage ;;
+            conf | config) show_config_usage ;;
+            dl | download) show_download_usage ;;
+            s | setup) show_setup_usage ;;
+            u | upgrade) show_upgrade_usage ;;
+            ls | list) show_list_usage ;;
+            lm | list-modules) show_list_modules_usage ;;
+            *)
+                log_error "未知命令: $1"
+                show_main_usage
+                ;;
+            esac
+        fi
+        ;;
+    install)
+        update_frida_modules
+        is_install="true"
+        check_version $is_install
+        ;;
+    pt | patch-tools)
+        parse_patch_tools_args "$@"
+        ;;
+    pwt | patch-wintools)
+        parse_patch_wintools_args "$@"
+        ;;
+    *)
+        log_error "未知命令: $command"
+        show_main_usage
+        exit 1
+        ;;
+    esac
+}
+parse_patch_wintools_args(){
+    show_patch_wintools_usage
+}
+parse_patch_tools_args() {
+    local action=""
+    local new_name=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        name)
+            action="name"
+            if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                new_name="$2"
+                shift
+            fi
+            shift
+            ;;
+        restore)
+            action="restore"
+            shift
+            ;;
+        *)
+            log_error "无效的参数: $1"
+            show_patch_tools_usage
+            exit 1
+            ;;
+        esac
+    done
+
+    if [ -z "$action" ]; then
+        log_error "必须指定 name 或 restore 操作"
+        show_patch_tools_usage
+        exit 1
+    fi
+
+    local python_cmd=$(get_python_cmd)
+    if [ -z "$python_cmd" ]; then
+        log_error "未找到 Python 解释器"
+        return 1
+    fi
+
+    local pylib_path=$($python_cmd -c "import os, frida; print(os.path.dirname(frida.__file__))" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        log_error "执行 Python 命令失败，请确保 frida 已正确安装"
+        return 1
+    fi
+
+    log_success "找到 frida-tools 路径: $pylib_path"
+    log_skyblue "是否确认使用此路径？"
+    read -p "请输入 (y/n)" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "操作已取消"
+        exit 0
+    fi
+
+    if [ "$action" = "name" ]; then
+        patch_frida_tools "$new_name"
+    elif [ "$action" = "restore" ]; then
+        restore_frida_tools "$pylib_path"
+    fi
+}
+get_latest_frida_version() {
+    local latest_version=$(curl -s "https://api.github.com/repos/frida/frida/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -z "$latest_version" ]; then
+        log_error "无法获取最新的 Frida 版本"
+        exit 1
+    fi
+    echo "$latest_version"
+}
+parse_build_args() {
+    FRIDA_SERVER_PORT="$DEF_FRIDA_SERVER_PORT"
+    AUTO_CONFIRM="false"
+    USE_LATEST="false"
+    FRIDA_VERSION=""
+    clean="false"
+    LOCAL_DEB=""
+    LOCAL_ARCH=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        -v)
+            if [ "$USE_LATEST" = "true" ] || [ -n "$LOCAL_DEB" ]; then
+                log_error "错误: -v 和 -latest 或 -l 不能同时使用" >&2
+                show_build_usage
+                exit 1
+            fi
+            FRIDA_VERSION="$2"
+            shift 2
+            ;;
+        -latest)
+            if [ -n "$FRIDA_VERSION" ] || [ -n "$LOCAL_DEB" ]; then
+                log_error "错误: -latest 和 -v 或 -l 不能同时使用" >&2
+                show_build_usage
+                exit 1
+            fi
+            USE_LATEST="true"
+            shift
+            ;;
+        -p | --port)
+            FRIDA_SERVER_PORT="$2"
+            shift 2
+            ;;
+        -y | --yes)
+            AUTO_CONFIRM="true"
+            shift
+            ;;
+        -c | --clean)
+            clean="true"
+            shift
+            ;;
+        -l | --local)
+            if [ -n "$FRIDA_VERSION" ] || [ "$USE_LATEST" = "true" ]; then
+                log_error "错误: -l 和 -v 或 -latest 不能同时使用" >&2
+                show_build_usage
+                exit 1
+            fi
+            if [ -z "$2" ] || [ -z "$3" ]; then
+                log_error "错误: 使用本地文件时必须指定处理器架构 arm, arm64 或 arm64e" >&2
+                show_build_usage
+                exit 1
+            fi
+            LOCAL_ARCH="$2"
+            LOCAL_DEB="$3"
+            shift 3
+            ;;
+        *)
+            log_error "无效选项: $1" >&2
+            show_build_usage
+            exit 1
+            ;;
+        esac
+    done
+
+    if [ "$USE_LATEST" = "true" ]; then
+        FRIDA_VERSION=$(get_latest_frida_version)
+        log_info "使用最新的 Frida 版本: $FRIDA_VERSION"
+    elif [ -z "$FRIDA_VERSION" ] && [ -z "$LOCAL_DEB" ]; then
+        log_error "错误: 必须指定 Frida 版本 (-v) 或使用最新版本 (-latest) 或使用本地文件 (-l)" >&2
+        show_build_usage
+        exit 1
+    else
+        log_info "使用指定的 Frida 版本: $FRIDA_VERSION"
+    fi
+
+    # 执行构建逻辑
+    build_frida "$clean" "$LOCAL_DEB" "$LOCAL_ARCH"
+}
+parse_config_args() {
+    if [ $# -eq 0 ]; then
+        show_config_usage
+        exit 1
+    fi
+
+    action="$1"
+    shift
+
+    case "$action" in
+    set)
+        if [ $# -lt 2 ]; then
+            log_error "set 命令需要一个选项和一个值"
+            show_config_usage
+            exit 1
+        fi
+        option="$1"
+        value="$2"
+        set_config "$option" "$value"
+        list_config
+        ;;
+    unset)
+        if [ $# -lt 1 ]; then
+            log_error "unset 命令需要一个选项"
+            show_config_usage
+            exit 1
+        fi
+        option="$1"
+        unset_config "$option"
+        list_config
+        ;;
+    ls | list)
+        list_config
+        ;;
+    edit)
+        interactive_config_editor
+        ;;
+    frida-tools)
+        install_frida_tools
+        ;;
+    *)
+        log_error "未知的配置操作: $action"
+        show_config_usage
+        exit 1
+        ;;
+    esac
+}
+
+set_config() {
+    local option="$1"
+    local value="$2"
+    case "$option" in
+    proxy)
+        CURL_PROXY="$value"
+        log_success "代理已设置为: $CURL_PROXY"
+        ;;
+    port)
+        FRIDA_SERVER_PORT="$value"
+        log_success "Frida 服务器端口已设置为: $FRIDA_SERVER_PORT"
+        ;;
+    frida-name)
+        FRIDA_NAME="$value"
+        log_success "Frida 魔改名已设置为: $FRIDA_NAME"
+        ;;
+    *)
+        log_error "未知的配置选项: $option"
+        show_config_usage
+        return
+        ;;
+    esac
+    update_config_file
+}
+
+unset_config() {
+    local option="$1"
+    case "$option" in
+    proxy)
+        CURL_PROXY=""
+        log_success "HTTP 代理设置已取消"
+        ;;
+    port)
+        FRIDA_SERVER_PORT="$DEF_FRIDA_SERVER_PORT"
+        log_success "Frida 服务器端口已重置为默认值: $FRIDA_SERVER_PORT"
+        ;;
+    frida-name)
+        FRIDA_NAME=""
+        log_success "Frida 魔改名设置已取消"
+        ;;
+    *)
+        log_error "未知的配置选项: $option"
+        show_config_usage
+        return
+        ;;
+    esac
+    update_config_file
+}
+list_config() {
+    log_info "当前配置 (存储在 $CONFIG_FILE)："
+    [ -n "$CURL_PROXY" ] && log_info "HTTP 代理: $CURL_PROXY"
+    log_info "Frida 服务器端口: ${FRIDA_SERVER_PORT:-$DEF_FRIDA_SERVER_PORT}"
+    [ -n "$FRIDA_NAME" ] && log_info "Frida 魔改名: $FRIDA_NAME"
+}
+update_config_file() {
+    echo "#Fridare.sh config" >"$CONFIG_FILE"
+    echo "FRIDA_SERVER_PORT=${FRIDA_SERVER_PORT}" >>"$CONFIG_FILE"
+    echo "CURL_PROXY=${CURL_PROXY}" >>"$CONFIG_FILE"
+    echo "AUTO_CONFIRM=${AUTO_CONFIRM}" >>"$CONFIG_FILE"
+    echo "FRIDA_NAME=${FRIDA_NAME}" >>"$CONFIG_FILE"
+    echo "FRIDA_MODULES=(" >>"$CONFIG_FILE"
+    for module in "${FRIDA_MODULES[@]}"; do
+        echo "$module" >>"$CONFIG_FILE"
+    done
+    echo ")" >>"$CONFIG_FILE"
+    log_success "配置已更新: $CONFIG_FILE"
+}
+
+interactive_config_editor() {
+    while true; do
+        echo -e "${COLOR_SKYBLUE}交互式配置编辑器${COLOR_RESET}"
+        echo -e "${COLOR_GREEN}1.${COLOR_RESET} 编辑 WEB 代理 ${COLOR_GRAY}(当前: ${CURL_PROXY:-未设置})${COLOR_RESET}"
+        echo -e "${COLOR_GREEN}2.${COLOR_RESET} 编辑 Frida 服务器端口 ${COLOR_GRAY}(当前: ${FRIDA_SERVER_PORT:-$DEF_FRIDA_SERVER_PORT})${COLOR_RESET}"
+        echo -e "${COLOR_GREEN}3.${COLOR_RESET} 编辑 Frida 魔改名 ${COLOR_GRAY}(当前: ${FRIDA_NAME:-未设置})${COLOR_RESET}"
+        echo -e "${COLOR_GREEN}4.${COLOR_RESET} 退出"
+        read -p "请选择要编辑的项目 (1-4): " choice
+        case $choice in
+        1)
+            read -p "输入新的 HTTP 代理 (当前: ${CURL_PROXY:-未设置}): " new_proxy
+            if [ -n "$new_proxy" ]; then
+                set_config proxy "$new_proxy"
+            else
+                echo -e "${COLOR_YELLOW}保持原值不变${COLOR_RESET}"
+            fi
+            ;;
+        2)
+            read -p "输入新的 Frida 服务器端口 (当前: ${FRIDA_SERVER_PORT:-$DEF_FRIDA_SERVER_PORT}): " new_port
+            if [ -n "$new_port" ]; then
+                set_config port "$new_port"
+            else
+                echo -e "${COLOR_YELLOW}保持原值不变${COLOR_RESET}"
+            fi
+            ;;
+        3)
+            read -p "输入新的 Frida 魔改名 (当前: ${FRIDA_NAME:-未设置}): " new_name
+            if [ -n "$new_name" ]; then
+                # 检查新名称是否有效
+                if [[ ! "$new_name" =~ ^[a-zA-Z]{5}$ ]]; then
+                    log_error "无效的魔改名: $new_name"
+                    log_info "魔改名必须是恰好 5 个字母（a-z 或 A-Z）"
+                else
+                    set_config frida-name "$new_name"
+                fi
+            else
+                echo -e "${COLOR_YELLOW}保持原值不变${COLOR_RESET}"
+            fi
+            ;;
+        4)
+            return
+            ;;
+        *)
+            echo -e "${COLOR_BG_WHITE}${COLOR_RED}无效的选择${COLOR_RESET}"
+            ;;
+        esac
+        echo
+    done
+}
+render_markdown() {
+    echo "$1" | sed -E '
+        # 标题
+        s/^# (.+)$/\n\\033[1;4;31m\1\\033[0m\n/g;
+        s/^## (.+)$/\n\\033[1;4;32m\1\\033[0m\n/g;
+        s/^### (.+)$/\n\\033[1;4;33m\1\\033[0m\n/g;
+        s/^#### (.+)$/\n\\033[1;4;34m\1\\033[0m\n/g;
+        s/^##### (.+)$/\n\\033[1;4;35m\1\\033[0m\n/g;
+        s/^###### (.+)$/\n\\033[1;4;36m\1\\033[0m\n/g;
+
+        # 粗体和斜体
+        s/\*\*\*([^*]+)\*\*\*/\\033[1;3m\1\\033[0m/g;
+        s/\*\*([^*]+)\*\*/\\033[1m\1\\033[0m/g;
+        s/\*([^*]+)\*/\\033[3m\1\\033[0m/g;
+        s/_([^_]+)_/\\033[3m\1\\033[0m/g;
+
+        # 删除线
+        s/~~([^~]+)~~/\\033[9m\1\\033[0m/g;
+
+        # 代码块
+        s/`([^`]+)`/\\033[7m\1\\033[0m/g;
+
+        # 链接
+        s/\[([^\]]+)\]\(([^\)]+)\)/\\033[4;34m\1\\033[0m (\\033[34m\2\\033[0m)/g;
+
+        # 无序列表
+        s/^[*+-] (.+)$/  • \1/g;
+
+        # 有序列表 (仅支持前9个项目)
+        s/^([1-9])\. (.+)$/  \1. \2/g;
+
+        # 水平线
+        s/^([-*_]{3,})$/\\033[37m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\033[0m/g;
+
+        # 引用
+        s/^> (.+)$/  ┃ \\033[36m\1\\033[0m/g;
+    '
+}
+list_frida_versions() {
+    log_info "获取 Frida 最新版本列表..."
+
+    # 使用 GitHub API 获取最新的 10 个发布版本
+    releases=$(curl -s "https://api.github.com/repos/frida/frida/releases?per_page=10")
+
+    if [ $? -ne 0 ]; then
+        log_error "无法从 GitHub 获取 Frida 版本信息"
+        exit 1
+    fi
+
+    log_success "最新的 Frida 版本："
+    log_color ${COLOR_BG_WHITE}${COLOR_BLUE} "序号\t版本\t\t发布日期\t\t下载次数"
+    echo -e "$(render_markdown "---")"
+
+    echo "$releases" | jq -r '.[] | "\(.tag_name)\t\(.published_at)\t\(.assets | length)"' |
+        while IFS=$'\t' read -r version date asset_count; do
+            # 格式化日期 (适用于 macOS)
+            formatted_date=$(date -jf "%Y-%m-%dT%H:%M:%SZ" "$date" "+%Y-%m-%d" 2>/dev/null || echo "$date")
+            description=$(echo "$releases" | jq -r ".[] | select(.tag_name == \"$version\") | .body" | sed 's/\r//' | sed 's/\n\n/\n/g' | head -n 10)
+            # 输出格式化的版本信息
+            rendered_description=$(render_markdown "$description")
+            printf "${COLOR_GREEN}%2d${COLOR_RESET}\t${COLOR_YELLOW}%-10s${COLOR_RESET}\t%s\t\t%s\n" "$((++i))" "$version" "$formatted_date" "$asset_count"
+            echo -e "${rendered_description}"
+            echo -e "$(render_markdown "---")"
+        done
+
+    echo -e "\n${COLOR_SKYBLUE}提示: 使用 'fridare.sh build -v <版本号>' 来构建特定版本${COLOR_RESET}"
+}
+FRIDA_MODULES=()
+
+get_proxy_settings() {
+    curl_proxy=$(echo $CURL_PROXY)
+    if [[ -n $curl_proxy ]]; then
+        echo "$curl_proxy"
+    else
+        echo ""
+    fi
+}
+
+get_latest_release() {
+    url="https://api.github.com/repos/frida/frida/releases/latest"
+    proxies=$(get_proxy_settings)
+
+    if [[ -n $proxies ]]; then
+        response=$(curl -s -H "Accept: application/json" -x "$proxies" "$url")
+    else
+        response=$(curl -s -H "Accept: application/json" "$url")
+    fi
+
+    echo "$response"
+}
+
+parse_filename() {
+    filename=$1
+    if [[ $filename =~ (frida[-_]?[a-zA-Z0-9\-]+)?[-_](v?[0-9]+\.[0-9]+\.[0-9]+)[-_]([a-zA-Z0-9\-]+)[-_]([a-zA-Z0-9_]+) ]]; then
+        module_type=${BASH_REMATCH[1]}
+        version=${BASH_REMATCH[2]}
+        os=${BASH_REMATCH[3]}
+        arch=${BASH_REMATCH[4]}
+
+        [[ $filename == *"."* ]] && ext=${filename##*.} || ext="N/A"
+
+        [[ $arch == "64" ]] && arch="x86_64"
+        [[ $arch == *"_"* ]] && arch=${arch##*_}
+
+        if [[ $os == "cp"* && $os == *"-"* ]] || [[ $os == *"node-"* ]] || [[ $os == *"electron-"* ]]; then
+            IFS='-' read -ra os_info <<<"$os"
+            os_count=${#os_info[@]}
+            if [ $os_count -gt 0 ]; then
+                new_os=${os_info[$os_count - 1]}
+                if [ $os_count -gt 2 ]; then
+                    if [[ $os == "cp"* ]]; then
+                        new_module_type="frida-python-${os_info[0]}-${os_info[1]}"
+                    else
+                        new_module_type="frida-${os_info[0]}-${os_info[1]}"
+                    fi
+                    module_type=$new_module_type
+                fi
+                os=$new_os
+            fi
+        elif [[ $os == *"-"* ]]; then
+            os=${os%%-*}
+        fi
+
+        [[ -z $module_type && $filename == *"deb"* ]] && module_type="frida-${os}-deb"
+        [[ -z $module_type && $filename == *"gum-graft"* ]] && module_type="gum-graft" && os=${filename##*-} && arch=${filename##*-}.${ext}
+
+        echo "$module_type:$version:$os:$arch:$ext"
+    else
+        echo "null"
+    fi
+}
+
+generate_frida_modules() {
+    release=$(get_latest_release)
+    assets=$(echo "$release" | awk -F'"' '/"browser_download_url":/{print $4}')
+
+    frida_modules=()
+    for asset in $assets; do
+        filename=$(basename "$asset")
+        parsed=$(parse_filename "$filename")
+        if [[ $parsed != "null" ]]; then
+            IFS=':' read -r module_type version os arch ext <<<"$parsed"
+            [[ $version == v* ]] && version=${version#v}
+            asset_name=${filename//$version/"{VERSION}"}
+            frida_modules+=("$module_type:$os:$arch:$asset_name")
+        fi
+    done
+
+    printf '%s\n' "${frida_modules[@]}"
+}
+
+update_frida_modules() {
+    log_info "正在更新 FRIDA_MODULES..."
+
+    # 确保 CURL_PROXY 环境变量可用于 Python 脚本
+    local new_modules=$(generate_frida_modules)
+
+    if [ $? -ne 0 ]; then
+        log_error "更新 FRIDA_MODULES 失败"
+        return 1
+    fi
+
+    FRIDA_MODULES=()
+    FRIDA_MODULES=("$new_modules")
+    # 更新配置文件中的 FRIDA_MODULES
+    update_config_file
+    log_success "FRIDA_MODULES 更新完成"
+    return 0
+}
+list_frida_modules() {
+    # 检查 FRIDA_MODULES 是否为空
+    if [ ${#FRIDA_MODULES[@]} -eq 0 ]; then
+        log_info "FRIDA_MODULES 为空，正在更新..."
+        update_frida_modules
+        # 重新加载配置文件以获取更新后的 FRIDA_MODULES
+        source "$CONFIG_FILE"
+    fi
+
+    log_info "可用的 Frida 模块："
+    # 使用临时文件来存储和排序唯一的模块
+    temp_file=$(mktemp)
+
+    # 添加表头
+    echo -e "模块名称\t操作系统\t架构" >"$temp_file"
+    echo -e "-------\t-------\t----" >>"$temp_file"
+
+    for item in "${FRIDA_MODULES[@]}"; do
+        IFS=':' read -r mod os arch filename <<<"$item"
+        echo -e "$mod\t$os\t$arch" >>"$temp_file"
+    done
+
+    # 使用 column 命令对齐输出，并删除临时文件
+    column -t -s $'\t' <"$temp_file"
+    rm -f "$temp_file"
+}
+
+parse_download_args() {
+    local version=""
+    local module=""
+    local output_dir=""
+    local use_latest=false
+    local download_all=false
+    local no_extract=false
+    local os=""
+    local arch=""
+    local force=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        ls | list-modules)
+            list_frida_modules
+            exit 0
+            ;;
+        -v | --version)
+            version="$2"
+            shift 2
+            ;;
+        -latest)
+            use_latest=true
+            shift
+            ;;
+        -m | --module)
+            module="$2"
+            shift 2
+            ;;
+        -all)
+            download_all=true
+            shift
+            ;;
+        --no-extract)
+            no_extract=true
+            shift
+            ;;
+        -os)
+            os="$2"
+            shift 2
+            ;;
+        -arch)
+            arch="$2"
+            shift 2
+            ;;
+        -f | --force)
+            force=true
+            shift
+            ;;
+        *)
+            if [[ -z "$output_dir" ]]; then
+                output_dir="$1"
+                shift
+            else
+                log_error "无效的参数: $1"
+                show_download_usage
+                exit 1
+            fi
+            ;;
+        esac
+    done
+
+    if [[ -z "$output_dir" ]]; then
+        log_error "必须指定输出目录"
+        show_download_usage
+        exit 1
+    fi
+
+    if [[ "$use_latest" == true && -n "$version" ]]; then
+        log_error "不能同时指定版本和使用最新版本"
+        show_download_usage
+        exit 1
+    fi
+
+    if [[ "$download_all" == true && -n "$module" ]]; then
+        log_error "不能同时指定模块和下载所有模块"
+        show_download_usage
+        exit 1
+    fi
+
+    # 执行下载逻辑
+    download_frida_module "$version" "$use_latest" "$module" "$download_all" "$output_dir" "$no_extract" "$os" "$arch" "$force"
+}
+download_frida_module() {
+    local version="$1"
+    local use_latest="$2"
+    local module="$3"
+    local download_all="$4"
+    local output_dir="$5"
+    local no_extract="$6"
+    local os="$7"
+    local arch="$8"
+    local force="$9"
+
+    # 如果使用最新版本，获取最新版本号
+    if [[ "$use_latest" == true ]]; then
+        version=$(get_latest_frida_version)
+        log_info "使用最新版本: $version"
+    fi
+    # 如果指定了模块，检查模块是否存在
+    if [[ -n "$module" ]]; then
+        local module_found=false
+        for item in "${FRIDA_MODULES[@]}"; do
+            IFS=':' read -r item_mod item_os item_arch filename <<<"$item"
+            if [[ "$item_mod" == "$module" ]]; then
+                module_found=true
+                break
+            fi
+        done
+        if [[ "$module_found" == false ]]; then
+            log_error "指定的模块 '$module' 不存在。使用 'download list-modules' 查看可用模块。"
+            exit 1
+        fi
+    fi
+    # 检查 7z 是否安装
+    if ! command -v 7z &>/dev/null; then
+        log_warning "7z 未安装，将使用系统默认解压工具"
+    fi
+
+    # 创建基础输出目录
+    mkdir -p "$output_dir"
+
+    local found_match=false
+    # 遍历模块列表
+    for item in "${FRIDA_MODULES[@]}"; do
+        IFS=':' read -r item_mod item_os item_arch filename <<<"$item"
+        # 如果指定了模块且不匹配，则跳过
+        if [ "$item_mod" != "$module" ]; then
+            # 如果不是下载全部，找到匹配项后就退出循环
+            if [[ "$download_all" != true ]]; then
+                continue
+            fi
+        fi
+        found_match=true
+
+        # 替换文件名中的版本占位符
+        filename="${filename/\{VERSION\}/$version}"
+
+        # 创建目录结构
+        local dir="${output_dir}/${version}/${item_mod}/${item_os}/${item_arch}"
+        mkdir -p "$dir"
+
+        local url="https://github.com/frida/frida/releases/download/${version}/${filename}"
+        local output_file="${dir}/${filename}"
+
+        if [[ -f "$output_file" && "$force" != true ]]; then
+            log_info "文件 $filename 已存在，跳过下载"
+        else
+            log_info "正在下载 $filename 到 $dir"
+            download_with_progress "$url" "$output_file" "$filename"
+
+            log_success "下载 $filename 完成"
+        fi
+        # 解压逻辑
+        if [[ "$no_extract" != true ]]; then
+            if [[ "$filename" != *.deb && "$filename" != *.whl ]]; then # 排除 deb 和 whl 文件
+                if command -v 7z &>/dev/null; then
+                    log_info "使用 7z 解压 $filename..."
+                    7z x "$output_file" -o"$dir" -y || {
+                        log_error "解压 $filename 失败"
+                        continue
+                    }
+                    rm -rf $output_file
+                else
+                    case "$filename" in
+                    *.tar.xz)
+                        log_info "解压 $filename..."
+                        tar -xJf "$output_file" -C "$dir" || {
+                            log_error "解压 $filename 失败"
+                            continue
+                        }
+                        rm -rf $output_file
+                        ;;
+                    *.xz)
+                        log_info "解压 $filename..."
+                        xz -d "$output_file" || {
+                            log_error "解压 $filename 失败"
+                            continue
+                        }
+                        rm -rf $output_file
+                        ;;
+                    *.gz)
+                        log_info "解压 $filename..."
+                        gzip -d "$output_file" || {
+                            log_error "解压 $filename 失败"
+                            continue
+                        }
+                        rm -rf $output_file
+                        ;;
+                    *)
+                        log_warning "无法识别的压缩格式: $filename，跳过解压"
+                        ;;
+                    esac
+                fi
+                log_success "解压 $filename 完成"
+            else
+                log_info "跳过解压 $filename (deb 或 whl 文件)"
+            fi
+        fi
+
+    done
+    if [[ "$found_match" == false ]]; then
+        log_error "没有找到匹配的模块: $module (OS: $item_os, Arch: $item_arch)"
+        return 1
+    fi
+    log_success "所有下载和解压操作完成"
+}
+parse_patch_args() {
+    local module=""
+    local version=""
+    local use_latest=false
+    local os=""
+    local arch=""
+    local output_dir="${SCRIPT_WORK_DIR}/patched"
+    local no_backup=false
+    local auto_package=false
+    local force=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+        -m | --module)
+            module="$2"
+            shift 2
+            ;;
+        -v | --version)
+            version="$2"
+            shift 2
+            ;;
+        -latest)
+            use_latest=true
+            shift
+            ;;
+        -os)
+            os="$2"
+            shift 2
+            ;;
+        -arch)
+            arch="$2"
+            shift 2
+            ;;
+        -o | --output)
+            output_dir="$2"
+            shift 2
+            ;;
+        -n | --no-backup)
+            no_backup=true
+            shift
+            ;;
+        -a | --auto-package)
+            auto_package=true
+            shift
+            ;;
+        -f | --force)
+            force=true
+            shift
+            ;;
+        *)
+            log_error "无效的参数: $1"
+            show_patch_usage
+            exit 1
+            ;;
+        esac
+    done
+
+    if [ -z "$module" ]; then
+        log_error "必须指定模块名称"
+        show_patch_usage
+        exit 1
+    fi
+
+    if [ "$use_latest" = true ] && [ -n "$version" ]; then
+        log_error "不能同时指定版本和使用最新版本"
+        show_patch_usage
+        exit 1
+    fi
+
+    if [ "$use_latest" = false ] && [ -z "$version" ]; then
+        log_error "必须指定版本或使用 -latest 选项"
+        show_patch_usage
+        exit 1
+    fi
+
+    # 如果使用最新版本,获取最新版本号
+    if [ "$use_latest" = true ]; then
+        version=$(get_latest_frida_version)
+        log_info "使用最新版本: $version"
+    fi
+
+    # 执行修补逻辑
+    patch_frida_module "$module" "$version" "$os" "$arch" "$output_dir" "$keep_source" "$auto_package" "$force"
+}
+
+patch_frida_module() {
+    local module="$1"
+    local version="$2"
+    local os="$3"
+    local arch="$4"
+    local output_dir="$5"
+    local keep_source="$6"
+    local auto_package="$7"
+    local force="$8"
+
+    log_info "准备下载模块: $module, 版本: $version, OS: $os, 架构: $arch, 输出目录: $output_dir, 保留源码: $keep_source, 自动打包: $auto_package, 强制下载: $force"
+
+    # 首先下载模块
+    download_frida_module "$version" false "$module" false "$output_dir" false "$os" "$arch" "$force"
+
+    # 获取下载的文件路径
+    local downloaded_file=$(find "$output_dir" -name "${module}*-${os}*-${arch}*" -type f | head -n 1)
+    if [ -z "$downloaded_file" ]; then
+        log_error "无法找到下载的模块文件"
+        return 1
+    fi
+
+    log_info "正在修补文件: $downloaded_file"
+
+    # 编译hexreplace工具
+    (cd $SCRIPT_WORK_DIR/hexreplace && go build -o $SCRIPT_WORK_DIR/build/hexreplace && cd ..) || {
+        log_error "编译 hexreplace 工具失败"
+        return 1
+    }
+    chmod +x $SCRIPT_WORK_DIR/build/hexreplace
+
+    # 生成新的Frida名称（如果未指定则提示进行配置： config set frida-name ）
+    if [ -z "$FRIDA_NAME" ]; then
+        log_error "未指定 Frida 魔改名，请使用 config set frida-name 命令指定"
+        read -p "请输入本次所采用的 Frida 魔改名: " value
+        if [[ "$value" =~ ^[a-zA-Z]{5}$ ]]; then
+            FRIDA_NAME="$value"
+            log_success "Frida 魔改名已设置为: $FRIDA_NAME"
+        else
+            log_error "无效的 Frida 魔改名: $value"
+            log_info "Frida 魔改名必须是恰好 5 个字母（a-z 或 A-Z）"
+            return 1
+        fi
+    else
+        log_info "使用指定的 Frida 魔改名: $FRIDA_NAME"
+    fi
+
+    # 修补二进制文件
+    local patched_file="${output_dir}/${module}_${FRIDA_NAME}"
+    ($SCRIPT_WORK_DIR/build/hexreplace "$downloaded_file" "$FRIDA_NAME" "$patched_file") || {
+        log_error "修改 ${module} 二进制失败"
+        return 1
+    }
+
+    # 设置权限
+    sudo chmod +x "$patched_file"
+    sudo chown root:wheel "$patched_file"
+
+    log_success "模块修补完成: $patched_file"
+
+    # 处理源文件
+    if [ "$no_backup" = true ]; then
+        rm -f "$downloaded_file"
+        log_info "已删除源文件"
+    fi
+
+    # 自动打包
+    if [ "$auto_package" = true ]; then
+        log_info "正在自动打包修补后的模块..."
+
+        # 获取原始文件的扩展名
+        local original_extension="${downloaded_file##*.}"
+        local packed_file="${patched_file}.${original_extension}"
+
+        # 使用7z进行压缩
+        if command -v 7z &>/dev/null; then
+            case "$original_extension" in
+            xz | gz | zip | tar | bz2 | 7z)
+                7z a -t"$original_extension" "$packed_file" "$patched_file" >/dev/null || {
+                    log_error "使用 7z 压缩失败"
+                    return 1
+                }
+                ;;
+            *)
+                # 对于未知格式,使用gzip压缩
+                gzip -c "$patched_file" >"${patched_file}.gz" || {
+                    log_error "使用 gzip 压缩失败"
+                    return 1
+                }
+                packed_file="${patched_file}.gz"
+                log_warning "未知的压缩格式: ${original_extension}, 使用 gzip 压缩"
+                ;;
+            esac
+        else
+            # 如果7z不可用,退回到使用gzip
+            gzip -c "$patched_file" >"${patched_file}.gz" || {
+                log_error "使用 gzip 压缩失败"
+                return 1
+            }
+            packed_file="${patched_file}.gz"
+            log_warning "7z 不可用,使用 gzip 压缩"
+        fi
+
+        if [ "$packed_file" != "$patched_file" ]; then
+            log_success "模块已打包: $packed_file"
+            # 如果不保留源文件，删除未压缩的修补文件
+            if [ "$no_backup" = true ]; then
+                rm -f "$patched_file"
+                log_info "已删除未压缩的修补文件"
+            fi
+        fi
+    fi
+
+    return 0
+}
+# 用户确认函数
+confirm_execution() {
+    if [ "$AUTO_CONFIRM" = "true" ]; then
+        log_warning "自动确认模式：用户已同意免责声明和sudo权限使用。"
+        return 0
+    fi
+
+    log_color $COLOR_PURPLE "$DISCLAIMER"
+    log_warning "本脚本将会要求使用sudo权限以修改文件权限。"
+
+    read -p "您是否同意以上免责声明并允许使用sudo权限？(y/N) " response
+    case "$response" in
+    [yY][eE][sS] | [yY])
+        return 0
+        ;;
+    *)
+        log_info "用户不同意，操作已取消"
+        exit 0
+        ;;
+    esac
+}
+confirm_modify_frida_tools() {
+    if [ "$AUTO_CONFIRM" = "true" ]; then
+        log_warning "自动确认模式：用户已同意自动修改本地 frida-tools。"
+        return 0
+    fi
+    log_color $COLOR_PURPLE "本脚本将自动修改本地 frida-tools，以适配魔改版本的 Frida。（跳过 frida-tools 魔改。某些功能可能无法使用，建议修改）"
+    read -p "您是否同意？(y/N) " response
+    case "$response" in
+    [yY][eE][sS] | [yY])
+        return 0
+        ;;
+    *)
+        log_info "用户不同意，操作已取消"
+        return 1
+        ;;
+    esac
+}
+check_dependencies() {
+    local missing_tools=()
+    local tools=("xcode-select" "brew" "git" "jq" "dpkg-deb" "go" "python3" "7z" "curl" "xz" "gzip")
+
+    for tool in "${tools[@]}"; do
+        if ! command -v $tool &>/dev/null; then
+            missing_tools+=("$tool")
+            log_warning "$COLOR_YELLOW$tool$COLOR_RESET ${COLOR_PURPLE}未找到"
+        else
+            log_success "$COLOR_YELLOW$tool$COLOR_RESET ${COLOR_SKYBLUE}已安装"
+        fi
+    done
+
+    # 检查 Frida 工具
+    if ! check_frida_tool; then
+        missing_tools+=("frida-tools")
+        log_warning "${COLOR_YELLOW}frida-tools${COLOR_RESET} ${COLOR_PURPLE}未找到"
+    else
+        log_success "${COLOR_YELLOW}frida-tools$COLOR_RESET ${COLOR_SKYBLUE}已安装"
+    fi
+
+    if [ ${#missing_tools[@]} -eq 0 ]; then
+        log_success "所有依赖已安装"
+        return 0
+    else
+        log_warning "以下工具未安装: ${missing_tools[*]}"
+        return 1
+    fi
+
+}
+
+install_dependencies() {
+    log_warning "正在安装缺失的依赖..."
+    confirm_execution
+
+    check_and_install_tool "xcode-select" "xcode-select --install"
+    check_and_install_tool "brew" "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash"
+    check_and_install_tool "git" "brew install git"
+    check_and_install_tool "jq" "brew install jq"
+    check_and_install_tool "dpkg-deb" "brew install dpkg"
+    check_and_install_tool "go" "brew install go"
+    check_and_install_tool "python3" "brew install python3"
+    check_and_install_tool "7z" "brew install p7zip"
+    check_and_install_tool "curl" "brew install curl"
+    check_and_install_tool "xz" "brew install xz"
+    check_and_install_tool "gzip" "brew install gzip"
+
+    install_frida_tools
+
+    log_success "依赖安装完成"
+}
+
+setup_environment() {
+    log_info "检查系统依赖..."
+    if ! check_dependencies; then
+        install_dependencies
+    fi
+
+    log_success "环境设置完成"
+}
+check_frida_tool() {
+    if command -v frida-ps >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+install_frida_tools() {
+    log_info "正在安装 frida-tools..."
+
+    local pip_commands=("pip" "pip3")
+    for pip_cmd in "${pip_commands[@]}"; do
+        if command -v "$pip_cmd" >/dev/null 2>&1; then
+            if $pip_cmd install --user frida-tools --force-reinstall; then
+                log_success "frida-tools 安装成功"
+                return 0
+            else
+                log_error "使用 $pip_cmd 安装 frida-tools 失败"
+            fi
+        fi
+    done
+
+    log_error "无法安装 frida-tools。请确保 pip 已正确安装并且网络连接正常。"
+    return 1
+}
+check_and_install_tool() {
+    local tool=$1
+    local install_cmd=$2
+
+    if ! command -v $tool &>/dev/null; then
+        log_warning "$tool 未找到，正在安装..."
+        eval $install_cmd || {
+            log_error "安装 $tool 失败"
+            exit 1
+        }
+    else
+        log_success "$tool 已安装"
+    fi
+}
+# 函数：下载 Frida
+download_frida() {
+    local arch=$1
+    local fridaver=$2
+    local clean=$3
+    local filename="frida_${fridaver}_iphoneos-${arch}.deb"
+    local output="${SCRIPT_WORK_DIR}/build/$filename"
+    # 如果本地文件存在
+    if [ -f "$output" ]; then
+        if [ "$clean" = "true" ]; then
+            log_warning "清理旧文件: $output"
+            rm -f $output
+        fi
+    fi
+
+    if [ ! -f "$output" ]; then
+        local url="https://github.com/frida/frida/releases/download/${fridaver}/${filename}"
+        echo $url
+        download_with_progress "$url" "$output"
+    else
+        log_warning "本地存在 $filename"
+    fi
+
+    log_success "下载 $filename 完成"
+}
+# 新增函数：删除目录内的所有 .DS_Store 文件
+remove_ds_store() {
+    local dir=$1
+    log_success "正在删除 $dir 中的 .DS_Store 文件..."
+    find "$dir" -name ".DS_Store" -type f -delete
+    log_info ".DS_Store 文件删除完成"
+}
+
+modify_launch_daemon() {
+    local build=$1
+    local arch=$2
+    local plist
+
+    if [ "$arch" = "arm64" ]; then
+        plist="${build}/var/jb/Library/LaunchDaemons/re.frida.server.plist"
+    else
+        plist="${build}/Library/LaunchDaemons/re.frida.server.plist"
+    fi
+
+    if [ ! -f "$plist" ]; then
+        log_error "错误: plist 文件不存在: $plist"
+        return 1
+    fi
+
+    log_success "正在修改 plist 文件: $plist"
+    log_info "FRIDA_NAME: $FRIDA_NAME"
+    log_info "FRIDA_SERVER_PORT: $FRIDA_SERVER_PORT"
+
+    # 检查变量是否为空
+    if [ -z "$FRIDA_NAME" ] || [ -z "$FRIDA_SERVER_PORT" ]; then
+        log_error "错误: FRIDA_NAME 或 FRIDA_SERVER_PORT 为空"
+        return 1
+    fi
+
+    # 使用 -e 选项为每个替换操作创建单独的 sed 命令
+    sed -i '' \
+        -e 's/re\.frida\.server/re.'"${FRIDA_NAME}"'.server/g' \
+        -e 's/frida-server/'"${FRIDA_NAME}"'/g' \
+        -e 's@</array>@\t<string>-l</string>\n\t\t<string>0.0.0.0:'"${FRIDA_SERVER_PORT}"'</string>\n\t</array>@g' \
+        "$plist"
+
+    if [ $? -ne 0 ]; then
+        log_error "错误: sed 命令执行失败"
+        return 1
+    fi
+
+    log_success "plist 文件修改完成"
+
+    # 收到一个 arm64e 的版本，对它做了适配：
+    # 检查 usr/sbin/frida-server-wrapper 和 usr/sbin/frida-server.ent
+    # 存在则更名 ${FRIDA_NAME}-server-wrapper 和 usr/sbin/${FRIDA_NAME}-server.ent
+    # 打开 ${FRIDA_NAME}-server-wrapper ，进行替换
+    # exec /usr/sbin/frida-server $@ 替换为 exec /usr/sbin/${FRIDA_NAME}-server $@
+    # 打开 usr/sbin/${FRIDA_NAME}-server.ent，进行替换
+    # <string>re.frida.Server</string> 替换为 <string>re.${FRIDA_NAME}.Server</string>
+    # 修改2个文件权限
+    # local frida_server_wrapper_file="${build}/usr/sbin/frida-server-wrapper"
+    # local new_frida_server_wrapper_file="${build}/usr/sbin/${FRIDA_NAME}-server-wrapper"
+    # local frida_server_ent_file="${build}/usr/sbin/frida-server.ent"
+    # local new_frida_server_ent_file="${build}/usr/sbin/${FRIDA_NAME}-server.ent"
+
+    # if [ -f "$frida_server_wrapper_file" ]; then
+    #     log_success "正在修改 frida-server-wrapper 文件: $frida_server_wrapper_file"
+    #     sed -i '' 's/exec \/usr\/sbin\/frida-server/exec \/usr\/sbin\/'"${FRIDA_NAME}"'-server/g' "$frida_server_wrapper_file"
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 修改 frida-server-wrapper 文件失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server-wrapper 文件修改完成"
+    #     mv "$frida_server_wrapper_file" "$new_frida_server_wrapper_file"
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 重命名 frida-server-wrapper 文件失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server-wrapper 文件已重命名为: $new_frida_server_wrapper_file"
+    #     sudo chown root:wheel $new_frida_server_wrapper_file
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 修改 frida-server-wrapper 文件权限失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server-wrapper 文件权限修改完成"
+    # else
+    #     log_warning "警告: frida-server-wrapper 文件不存在: $frida_server_wrapper_file"
+    # fi
+
+    # if [ -f "$frida_server_ent_file" ]; then
+    #     log_success "正在修改 frida-server.ent 文件: $frida_server_ent_file"
+    #     sed -i '' 's/<string>re\.frida\.Server/<string>re.'"${FRIDA_NAME}"'.Server/g' "$frida_server_ent_file"
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 修改 frida-server.ent 文件失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server.ent 文件修改完成"
+    #     mv "$frida_server_ent_file" "$new_frida_server_ent_file"
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 重命名 frida-server.ent 文件失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server.ent 文件已重命名为: $new_frida_server_ent_file"
+    #     sudo chown root:wheel $new_frida_server_ent_file
+    #     if [ $? -ne 0 ]; then
+    #         log_error "错误: 修改 frida-server.ent 文件权限失败"
+    #         return 1
+    #     fi
+    #     log_success "frida-server.ent 文件权限修改完成"
+    # else
+    #     log_warning "警告: frida-server.ent 文件不存在: $frida_server_ent_file"
+    # fi
+
+    # log_success "frida-server-wrapper 和 frida-server.ent 文件修改完成"
+
+    # 重命名 plist 文件
+    local new_plist
+    if [ "$arch" = "arm64" ]; then
+        new_plist="${build}/var/jb/Library/LaunchDaemons/re.${FRIDA_NAME}.server.plist"
+    else
+        new_plist="${build}/Library/LaunchDaemons/re.${FRIDA_NAME}.server.plist"
+    fi
+
+    mv "$plist" "$new_plist"
+    sudo chown root:wheel $new_plist
+
+    if [ $? -ne 0 ]; then
+        log_error "错误: 重命名 plist 文件失败"
+        return 1
+    fi
+
+    log_success "plist 文件已重命名为: $new_plist"
+}
+
+modify_debian_files() {
+    local build=$1
+    local arch=$2
+    local debian_dir
+
+    debian_dir="${build}/DEBIAN"
+
+    log_success "正在修改 DEBIAN 文件夹中的文件: $debian_dir"
+    log_info "FRIDA_NAME: $FRIDA_NAME"
+
+    # 检查变量是否为空
+    if [ -z "$FRIDA_NAME" ]; then
+        log_error "错误: FRIDA_NAME 为空"
+        return 1
+    fi
+
+    # 修改 control 文件
+    local control_file="${debian_dir}/control"
+    if [ -f "$control_file" ]; then
+        log_info "修改 control 文件"
+        sed -i '' 's/Package: re\.frida\.server/Package: re.'"${FRIDA_NAME}"'.server/g' "$control_file"
+        if [ $? -ne 0 ]; then
+            log_error "错误: 修改 control 文件失败"
+            return 1
+        fi
+    else
+        log_warning "警告: control 文件不存在: $control_file"
+    fi
+    sudo chown root:wheel $control_file
+
+    # 修改 extrainst_ 文件
+    local extrainst_file="${debian_dir}/extrainst_"
+    if [ -f "$extrainst_file" ]; then
+        log_info "修改 extrainst_ 文件"
+        if [ "$arch" = "arm64" ]; then
+            sed -i '' 's@launchcfg=/var/jb/Library/LaunchDaemons/re\.frida\.server\.plist@launchcfg=/var/jb/Library/LaunchDaemons/re.'"${FRIDA_NAME}"'.server.plist@g' "$extrainst_file"
+        else
+            sed -i '' 's@launchcfg=/Library/LaunchDaemons/re\.frida\.server\.plist@launchcfg=/Library/LaunchDaemons/re.'"${FRIDA_NAME}"'.server.plist@g' "$extrainst_file"
+        fi
+        if [ $? -ne 0 ]; then
+            log_error "错误: 修改 extrainst_ 文件失败"
+            return 1
+        fi
+    else
+        log_warning "警告: extrainst_ 文件不存在: $extrainst_file"
+    fi
+    sudo chown root:wheel $extrainst_file
+
+    # 修改 prerm 文件
+    local prerm_file="${debian_dir}/prerm"
+    if [ -f "$prerm_file" ]; then
+        log_info "修改 prerm 文件"
+        if [ "$arch" = "arm64" ]; then
+            sed -i '' 's@launchctl unload /var/jb/Library/LaunchDaemons/re\.frida\.server\.plist@launchctl unload /var/jb/Library/LaunchDaemons/re.'"${FRIDA_NAME}"'.server.plist@g' "$prerm_file"
+        else
+            sed -i '' 's@launchctl unload /Library/LaunchDaemons/re\.frida\.server\.plist@launchctl unload /Library/LaunchDaemons/re.'"${FRIDA_NAME}"'.server.plist@g' "$prerm_file"
+        fi
+        if [ $? -ne 0 ]; then
+            log_error "错误: 修改 prerm 文件失败"
+            return 1
+        fi
+    else
+        log_warning "警告: prerm 文件不存在: $prerm_file"
+    fi
+    sudo chown root:wheel $prerm_file
+
+    log_success "DEBIAN 文件夹中的文件修改完成"
+}
+
+modify_binary() {
+    local build=$1
+    local arch=$2
+    local frida_server_path
+    local new_path
+    local frida_dylib_file
+    local new_dylib_file
+    local dylib_folder
+    local new_dylib_folder
+
+    if [ "$arch" = "arm64" ]; then
+        frida_server_path="${build}/var/jb/usr/sbin/frida-server"
+        new_path="${build}/var/jb/usr/sbin/${FRIDA_NAME}"
+        frida_dylib_file="${build}/var/jb/usr/lib/frida/frida-agent.dylib"
+        new_dylib_file="${build}/var/jb/usr/lib/frida/${FRIDA_NAME}-agent.dylib"
+        dylib_folder="${build}/var/jb/usr/lib/frida"
+        new_dylib_folder="${build}/var/jb/usr/lib/${FRIDA_NAME}"
+    else
+        frida_server_path="${build}/usr/sbin/frida-server"
+        new_path="${build}/usr/sbin/${FRIDA_NAME}"
+        frida_dylib_file="${build}/usr/lib/frida/frida-agent.dylib"
+        new_dylib_file="${build}/usr/lib/frida/${FRIDA_NAME}-agent.dylib"
+        dylib_folder="${build}/usr/lib/frida"
+        new_dylib_folder="${build}/usr/lib/${FRIDA_NAME}"
+    fi
+    log_success "正在修改二进制文件: $frida_server_path"
+    if [ ! -f "$frida_server_path" ]; then
+        log_error "错误: frida-server 文件不存在于路径: $frida_server_path"
+        return 1
+    fi
+
+    (cd $SCRIPT_WORK_DIR/hexreplace && go build -o $SCRIPT_WORK_DIR/build/hexreplace && cd ..) || {
+        log_error "编译 hexreplace 工具失败"
+        return 1
+    }
+    chmod +x $SCRIPT_WORK_DIR/build/hexreplace
+    ($SCRIPT_WORK_DIR/build/hexreplace "$frida_server_path" "$FRIDA_NAME" "$new_path") || {
+        log_error "修改 frida-server 二进制失败"
+        return 1
+    }
+    rm -rf $frida_server_path
+    # 确保新文件有执行权限
+    sudo chmod +x $new_path
+    sudo chown root:wheel $new_path
+
+    ($SCRIPT_WORK_DIR/build/hexreplace $frida_dylib_file $FRIDA_NAME $new_dylib_file) || {
+        log_error "修改 frida-agent.dylib 失败"
+        return 1
+    }
+    rm -rf $frida_dylib_file
+    # 确保新文件有执行权限
+    sudo chmod +x $new_dylib_file
+    sudo chown root:wheel $new_dylib_file
+
+    # 修改dylib目录
+    if ! mv "$dylib_folder" "$new_dylib_folder"; then
+        log_error "重命名 dylib 目录失败"
+        return 1
+    fi
+    log_success "二进制文件修改完成"
+    return 0
+}
+
+# 函数：重新打包 deb 文件
+repackage_deb() {
+    local build=$1
+    local output_filename=$2
+    # 在打包之前删除 .DS_Store 文件
+    remove_ds_store "$build"
+    # 打包
+    dpkg-deb -b "$build" "$output_filename" || {
+        log_error "打包 $output_filename 失败"
+        exit 1
+    }
+
+    rm -rf "$build"
+
+    log_success "重新打包 $output_filename 完成"
+}
+
+find_frida_path() {
+    local pip_commands=("pip3" "pip")
+    local frida_path=""
+
+    for pip_cmd in "${pip_commands[@]}"; do
+        if command -v "$pip_cmd" >/dev/null 2>&1; then
+            frida_path=$("$pip_cmd" show frida 2>/dev/null | grep "Location:" | cut -d " " -f 2-)
+            if [ -n "$frida_path" ]; then
+                frida_path="${frida_path}/frida"
+                if [ -d "$frida_path" ]; then
+                    echo "$frida_path"
+                    return 0
+                fi
+            fi
+        fi
+    done
+
+    # 如果通过 pip 无法找到，尝试常见路径
+    local frida_paths=(
+        "/usr/local/lib/python*/site-packages/frida"
+        "/usr/lib/python*/site-packages/frida"
+        "$HOME/.local/lib/python*/site-packages/frida"
+        "$HOME/Library/Python/*/lib/python/site-packages/frida"
+        "$HOME/anaconda*/lib/python*/site-packages/frida"
+        "/opt/homebrew/lib/python*/site-packages/frida"
+        "/Library/Frameworks/Python.framework/Versions/*/lib/python*/site-packages/frida"
+        "/Applications/Frida.app/Contents/Resources/lib/python*/site-packages/frida"
+    )
+
+    for path_pattern in "${frida_paths[@]}"; do
+        for path in $path_pattern; do
+            if [ -d "$path" ]; then
+                echo "$path"
+                return 0
+            fi
+        done
+    done
+
+    log_error "无法找到 frida-tools 路径。请确保 frida-tools 已正确安装。"
+    return 1
+}
+generate_random_name() {
+    cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-z' | fold -w 5 | head -n 1
+}
+patch_frida_tools() {
+    local local_frida_name="$1"
+
+    log_info "开始给 frida-tools 打补丁..."
+
+    # 如果未提供名称，尝试使用配置的名称或生成随机名称
+    if [ -z "$local_frida_name" ]; then
+        if [ -n "$FRIDA_NAME" ]; then
+            local_frida_name="$FRIDA_NAME"
+            log_info "使用配置的魔改名: $local_frida_name"
+        else
+            local_frida_name=$(generate_random_name)
+            log_info "生成随机魔改名: $local_frida_name"
+        fi
+    fi
+
+    # 检查新名称是否有效
+    if [[ ! "$local_frida_name" =~ ^[a-zA-Z]{5}$ ]]; then
+        log_error "无效的魔改名: $local_frida_name"
+        log_info "魔改名必须是恰好 5 个字母（a-z 或 A-Z）"
+        return 1
+    fi
+
+    modify_frida_tools "$local_frida_name"
+}
+
+restore_frida_tools() {
+    log_info "开始恢复 frida-tools 到原版..."
+    local python_cmd=$(get_python_cmd)
+    if [ -z "$python_cmd" ]; then
+        log_error "未找到 Python 解释器"
+        return 1
+    fi
+
+    local frida_tools_path=$($python_cmd -c "import os, frida; print(os.path.dirname(frida.__file__))" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        log_error "执行 Python 命令失败，请确保 frida 已正确安装"
+        return 1
+    fi
+    # 恢复 Python 库文件
+    local pylib_backup=$(ls $frida_tools_path/*.so.fridare 2>/dev/null)
+    local pylib=$(ls $frida_tools_path/*.so 2>/dev/null)
+
+    if [ -z "$pylib_backup" ]; then
+        log_warning "未找到 Python 库文件的备份"
+        return 1
+    else
+        log_info "正在恢复 Python 库文件: $pylib"
+        mv "$pylib_backup" "$pylib"
+    fi
+
+    # 恢复 core.py 文件
+    local core_py="$frida_tools_path/core.py"
+    if [ -f "$core_py.fridare" ]; then
+        log_info "正在恢复 core.py 文件: $core_py"
+        mv "$core_py.fridare" "$core_py"
+    else
+        log_warning "未找到 core.py 文件的备份"
+    fi
+
+    rm -rf "$frida_tools_path/__pycache__"
+    log_success "frida-tools 已恢复到原版"
+}
+# 函数：修订frida-tools
+modify_core_py() {
+    frida_name=$1
+    path=$2
+    p="${path}/core.py"
+    b="${p}.fridare"
+    if [ ! -f "$b" ]; then
+        echo "Creating backup: $b"
+        cp "$p" "$b"
+    else
+        echo "Backup already exists: $b"
+    fi
+    replaced=0
+    while IFS= read -r line; do
+        # echo "Processing line: $line" >&2  # Debug output
+
+        if [[ $line =~ [\'\"](([^\'\"]+):rpc)[\'\"] ]]; then
+            old=${BASH_REMATCH[2]}
+            new=$(printf "%-5s" "${frida_name:0:5}")
+            new_line=${line//$old:rpc/$new:rpc}
+            if [ "$new_line" != "$line" ]; then
+                echo "Replaced \"$old:rpc\" with \"$new:rpc\"" >&2
+                line=$new_line
+                ((replaced++))
+            fi
+        fi
+
+        echo "$line"
+    done < "$p" > "${p}.tmp"
+    if [ $replaced -gt 0 ]; then
+        mv "${p}.tmp" "$p"
+        echo "Replacement complete. Made $replaced replacements."
+    else
+        echo "No matching pattern found, no changes made"
+        rm "${p}.tmp"
+    fi
+}
+modify_frida_tools() {
+    local local_frida_name="$1"
+
+    local python_cmd=$(get_python_cmd)
+    if [ -z "$python_cmd" ]; then
+        log_error "未找到 Python 解释器"
+        return 1
+    fi
+
+    local pylib_path=$($python_cmd -c "import os, frida; print(os.path.dirname(frida.__file__))" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        log_error "执行 Python 命令失败，请确保 frida 已正确安装"
+        return 1
+    fi
+    local pylib=$(ls $pylib_path/*.so 2>/dev/null)
+    if [ -z "$pylib" ]; then
+        log_error "未找到 frida Python 库"
+        return 1
+    fi
+
+    if [ ! -f "$pylib.fridare" ]; then
+        cp "$pylib" "$pylib.fridare"
+        log_info "创建备份: $pylib.fridare"
+    else
+        log_info "备份已存在: $pylib.fridare"
+    fi
+
+    log_info "Python 库文件: $pylib"
+    log_info "Frida 名称: $local_frida_name"
+
+    $SCRIPT_WORK_DIR/build/hexreplace "$pylib" "$local_frida_name" "test.so" || {
+        log_error "修改 frida Python 库失败"
+        return 1
+    }
+
+    rm -f "$pylib"
+    rm -rf "$pylib_path/__pycache__"
+    mv test.so "$pylib"
+    chmod 755 "$pylib"
+
+    modify_core_py "$local_frida_name" "$pylib_path"
+
+    log_success "frida-tools 修改完成"
+    return 0
+}
+get_absolute_path() {
+    local relative_path="$1"
+    local absolute_path=""
+
+    # 如果是相对路径，添加当前目录
+    if [[ "$relative_path" != /* ]]; then
+        relative_path="$PWD/$relative_path"
+    fi
+
+    # 规范化路径
+    local oldIFS="$IFS"
+    IFS='/'
+    local path_parts=($relative_path)
+    local new_path=()
+
+    for part in "${path_parts[@]}"; do
+        case "$part" in
+        "" | ".") ;;
+        "..")
+            if [ ${#new_path[@]} -ne 0 ]; then
+                unset 'new_path[${#new_path[@]}-1]'
+            fi
+            ;;
+        *)
+            new_path+=("$part")
+            ;;
+        esac
+    done
+
+    IFS="$oldIFS"
+    absolute_path="/${new_path[*]}"
+    absolute_path="${absolute_path// //}"
+
+    echo "$absolute_path"
+}
+move_file() {
+    local source_file="$1"
+    local target_dir="$2"
+    mv "$OUTPUT_FIsource_fileLENAME" "$target_dir" 2>&1 | grep -v "are identical" || true
+}
+build_frida() {
+    local clean=$1
+    local local_deb=$2
+    local local_arch=$3
+    # 检查并设置 Frida 版本
+    local use_local=false
+    if [ -n "$local_deb" ]; then
+        # 首先检查文件是否存在
+        if [ ! -f "$local_deb" ]; then
+            log_error "本地文件不存在: $local_deb"
+            exit 1
+        fi
+        # 获取 local_deb 的绝对路径
+        if command -v realpath >/dev/null 2>&1; then
+            local_deb=$(realpath "$local_deb")
+        else
+            # 如果 realpath 不可用，使用自定义函数
+            local_deb=$(get_absolute_path "$local_deb")
+        fi
+        if [ ! -f "$local_deb" ]; then
+            log_error "本地文件不存在: $local_deb"
+            exit 1
+        fi
+        log_info "使用本地文件: $local_deb"
+        use_local=true
+    else
+        if [ -z "$FRIDA_VERSION" ]; then
+            log_error "未指定 Frida 版本"
+            show_build_usage
+            exit 1
+        fi
+    fi
+
+    log_info "使用 Frida 服务器端口: $FRIDA_SERVER_PORT"
+    [ -n "$CURL_PROXY" ] && log_info "HTTP 代理：${CURL_PROXY}"
+    [ "$AUTO_CONFIRM" = "true" ] && log_info "自动确认：已启用"
+
+    log_warning "期间可能会要求输入 sudo 密码，用于修改文件权限"
+    log_color "${COLOR_GREEN}构建目录：${COLOR_RESET} $SCRIPT_WORK_DIR/build"
+    log_color "${COLOR_GREEN}输出目录：${COLOR_RESET} $SCRIPT_WORK_DIR/dist"
+
+    # 确认执行
+    if [ "$AUTO_CONFIRM" != "true" ]; then
+        confirm_execution
+    fi
+
+    log_info "开始构建 Frida..."
+    # 检查并安装 dpkg
+
+    if ! check_dependencies; then
+        log_error "依赖检查失败"
+        log_success "请使用 './$0 setup' 命令安装依赖"
+        exit 1
+    fi
+
+    # 如果 FRIDA_NAME 为空，生成一个新的
+    if [ -z "$FRIDA_NAME" ]; then
+        FRIDA_NAME=$(generate_random_name)
+        if [[ ! "$FRIDA_NAME" =~ ^[a-z]{5}$ ]]; then
+            log_error "无法生成有效的 Frida 魔改名"
+            exit 1
+        fi
+    fi
+
+    local architectures=("arm" "arm64")
+    for arch in "${architectures[@]}"; do
+        local input_file
+        if [ "$use_local" = "true" ]; then
+            input_file="$local_deb"
+            OUTPUT_FILENAME="${local_deb}_${FRIDA_NAME}_tcp.deb"
+            if [ "$local_arch" = "arm64e" ]; then
+                arch="arm"
+            fi
+            log_info "使用本地文件: $input_file"
+        else
+            input_file="${SCRIPT_WORK_DIR}/build/frida_${FRIDA_VERSION}_iphoneos-${arch}.deb"
+            OUTPUT_FILENAME="${SCRIPT_WORK_DIR}/build/frida_${FRIDA_VERSION}_iphoneos-${arch}_${FRIDA_NAME}_tcp.deb"
+            download_frida $arch $FRIDA_VERSION $clean
+        fi
+
+        BUILD_DIR="${SCRIPT_WORK_DIR}/build/frida_build_${arch}"
+        rm -rf "$BUILD_DIR"
+
+        dpkg-deb -R "${input_file}" "${BUILD_DIR}"
+
+        log_cinfo $COLOR_GREEN "正在修改 Frida ${COLOR_PURPLE}${FRIDA_VERSION}${COLOR_RESET} 版本 (${COLOR_SKYBLUE}${arch}${COLOR_RESET})"
+        modify_launch_daemon "$BUILD_DIR" "$arch"
+        modify_debian_files "$BUILD_DIR" "$arch"
+        modify_binary "$BUILD_DIR" "$arch"
+
+        repackage_deb "$BUILD_DIR" "$OUTPUT_FILENAME"
+
+        mkdir -p $SCRIPT_WORK_DIR/dist
+
+        mv "$OUTPUT_FILENAME" $SCRIPT_WORK_DIR/dist/ 2>&1 | grep -v "are identical" || true
+
+        log_success "Frida ${FRIDA_VERSION} 版本 (${arch}) 修改完成"
+
+        log_info "新版本名：${FRIDA_NAME}"
+        log_info "请使用新版本名：${FRIDA_NAME} 进行调试"
+        log_info "请使用端口：${FRIDA_SERVER_PORT} 进行调试"
+        log_info "新版本 deb 文件：$SCRIPT_WORK_DIR/dist/${OUTPUT_FILENAME}"
+        log_info "-------------------------------------------------"
+        log_info "iPhone 安装："
+        log_info "scp dist/${OUTPUT_FILENAME} root@<iPhone-IP>:/var/root"
+        log_info "ssh root@<iPhone-IP>"
+        log_info "dpkg -i /var/root/${OUTPUT_FILENAME}"
+        log_info "PC 连接："
+        log_info "frida -U -f com.xxx.xxx -l"
+        log_info "frida -H <iPhone-IP>:${FRIDA_SERVER_PORT} -f com.xxx.xxx --no-pause"
+        log_info "-------------------------------------------------"
+
+        if [ -n "$local_deb" ]; then
+            return 0 # 如果是本地文件，只处理一次
+        fi
+    done
+
+    # 确认执行
+    if [ "$AUTO_CONFIRM" != "true" ]; then
+        # 不同意返回0
+        if ! confirm_modify_frida_tools; then
+            log_success "frida-tools 未修改。"
+            exit 0
+        fi
+    fi
+    modify_frida_tools "$FRIDA_NAME"
+
+}
+initialize_config() {
+    SCRIPT_WORK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    log_color $COLOR_GREEN "工作目录：$SCRIPT_WORK_DIR"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo "# Fridare Configuration File" >"$CONFIG_FILE"
+        echo "FRIDA_SERVER_PORT=$DEF_FRIDA_SERVER_PORT" >>"$CONFIG_FILE"
+        echo "CURL_PROXY=" >>"$CONFIG_FILE"
+        echo "AUTO_CONFIRM=$DEF_AUTO_CONFIRM" >>"$CONFIG_FILE"
+        echo "FRIDA_NAME=" >>"$CONFIG_FILE"
+        echo "FRIDA_MODULES=(" >>"$CONFIG_FILE"
+        echo ")" >>"$CONFIG_FILE"
+    fi
+
+    # 检查并创建 build 和 dist 目录
+    if [ ! -d "${SCRIPT_WORK_DIR}/build" ]; then
+        mkdir -p ${SCRIPT_WORK_DIR}/build
+    fi
+    if [ ! -d "${SCRIPT_WORK_DIR}/dist" ]; then
+        mkdir -p ${SCRIPT_WORK_DIR}/dist
+    fi
+
+}
+is_conda_env() {
+    # 检查 CONDA_PREFIX 环境变量是否存在
+    [ -n "$CONDA_PREFIX" ]
+}
+get_python_cmd() {
+    if is_conda_env; then
+        echo "$CONDA_PREFIX/bin/python"
+    else
+        for cmd in python3 python; do
+            if command -v $cmd >/dev/null 2>&1; then
+                echo $cmd
+                return
+            fi
+        done
+    fi
+}
+#创建了一个后台进程，其目的是保持 sudo 权限活跃
+sudo_keep_alive() {
+    while true; do
+        sudo -n true
+        sleep 60
+        kill -0 "$$" || exit
+    done 2>/dev/null &
+    SUDO_KEEP_ALIVE_PID=$!
+}
+
+# 在脚本结束时清理
+cleanup() {
+    if [ -n "$SUDO_KEEP_ALIVE_PID" ]; then
+        kill $SUDO_KEEP_ALIVE_PID
+    fi
+}
+get_golang_info() {
+    if command -v go >/dev/null 2>&1; then
+        local go_version=$(go version 2>&1)
+        local go_path=$(go env GOPATH 2>/dev/null)
+        echo "$go_version:$go_path"
+    else
+        echo "Not installed"
+    fi
+}
+log_environment_info() {
+    log_skyblue "环境信息:"
+
+    # Python 环境信息
+    if is_conda_env; then
+        log_skyblue "  Conda 环境: $CONDA_PREFIX"
+    else
+        log_skyblue "  使用系统 Python 环境"
+    fi
+    local python_cmd=$(get_python_cmd)
+    log_skyblue "  Python 路径: $python_cmd"
+    log_skyblue "  Python 版本: $($python_cmd --version 2>&1)"
+
+    # Frida 信息
+    local frida_version=$($python_cmd -c 'import frida; print(frida.__version__)' 2>/dev/null)
+    if [ -n "$frida_version" ]; then
+        log_skyblue "  Frida 版本: $frida_version"
+        log_skyblue "  Frida 路径: $($python_cmd -c 'import os; import frida; print(os.path.dirname(frida.__file__))' 2>/dev/null)"
+    else
+        log_warning "  Frida 未安装或无法检测"
+    fi
+
+    # Golang 环境信息
+    local golang_info=$(get_golang_info)
+    if [ "$golang_info" != "Not installed" ]; then
+        IFS=':' read -r go_version go_path <<<"$golang_info"
+        log_skyblue "  Golang 版本: $go_version"
+        log_skyblue "  GOPATH: $go_path"
+    else
+        log_warning "  Golang 未安装或无法检测"
+    fi
+
+    # 操作系统信息
+    log_skyblue "  操作系统: $(uname -s)"
+    log_skyblue "  系统版本: $(uname -r)"
+
+    echo # 空行，为了更好的可读性
+}
+
+log_config_info() {
+    log_skyblue "配置信息:"
+    log_skyblue "  FRIDA_SERVER_PORT: $FRIDA_SERVER_PORT"
+    log_skyblue "  CURL_PROXY: $CURL_PROXY"
+    log_skyblue "  AUTO_CONFIRM: $AUTO_CONFIRM"
+    log_skyblue "  FRIDA_NAME: $FRIDA_NAME"
+    echo # 空行，为了更好的可读性
+}
+
+version_compare() {
+    local v1="$1"
+    local v2="$2"
+
+    # Remove 'v' if present
+    v1="${v1#v}"
+    v2="${v2#v}"
+
+    # Split the versions into arrays
+    IFS='.' read -r -a ver1 <<<"$v1"
+    IFS='.' read -r -a ver2 <<<"$v2"
+
+    # Compare each part of the version
+    for ((i = 0; i < ${#ver1[@]} || i < ${#ver2[@]}; i++)); do
+        local num1=$((${ver1[i]:-0}))
+        local num2=$((${ver2[i]:-0}))
+        if ((num1 > num2)); then
+            echo ">" # v1 is greater
+            return
+        elif ((num1 < num2)); then
+            echo "<" # v2 is greater
+            return
+        fi
+    done
+    echo "=" # versions are equal
+}
+
+check_version() {
+    local is_install=$1
+    local current_version="$VERSION"
+    local repo_owner="suifei"
+    local repo_name="fridare"
+    local next="false"
+
+    log_info "检查版本更新..."
+    local releases_info=$(curl -s "https://api.github.com/repos/$repo_owner/$repo_name/releases")
+
+    if [ -z "$releases_info" ]; then
+        log_error "无法获取版本信息"
+        return 1
+    fi
+
+    # 获取所有非预发布版本，并按版本号排序
+    local versions=$(echo "$releases_info" | jq -r '.[] | select(.prerelease == false) | .tag_name' | sort -rV)
+    local latest_version=$(echo "$versions" | head -n1)
+
+    if [ -z "$latest_version" ]; then
+        log_error "无法获取最新版本信息"
+        return 1
+    fi
+
+    local download_url=$(echo "$releases_info" | jq -r ".[] | select(.tag_name == \"$latest_version\") | .zipball_url")
+
+    if [ -z "$download_url" ]; then
+        log_error "无法获取下载链接"
+        return 1
+    fi
+
+    current_version="${current_version#v}"
+    latest_version="${latest_version#v}"
+
+    result=$(version_compare "$current_version" "$latest_version")
+
+    if [ "$result" = "=" ]; then
+        log_success "当前版本 (${current_version}) 已是最新正式版本"
+    elif [ "$result" = ">" ]; then
+        log_success "当前版本 (${current_version}) 比最新正式版本 (${latest_version}) 更新"
+    elif [ "$result" = "<" ]; then
+        log_warning "发现新的正式版本：${latest_version}（当前版本：${current_version}）"
+        echo "更新说明："
+        echo "$releases_info" | jq -r ".[] | select(.tag_name == \"$latest_version\") | .body" | sed 's/^/  /'
+
+        read -p "是否更新到最新正式版本？(y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "取消更新"
+            return 0
+        fi
+        next="true"
+    else
+        log_error "版本比较出错"
+    fi
+    if [ "$next" = "true" ] || [ "$is_install" = "true" ]; then
+
+        # 下载和更新过程保持不变
+        log_info "开始下载最新正式版本..."
+        local temp_dir=$(mktemp -d)
+        local zip_file="$temp_dir/fridare-$latest_version.zip"
+        local extract_dir="$temp_dir/extracted_files"
+
+        download_with_progress "$download_url" "$zip_file" "Fridare 版本 ${latest_version}"
+
+        log_info "解压文件..."
+        if ! unzip -q "$zip_file" -d "$extract_dir"; then
+            log_error "解压失败"
+            rm -rf "$temp_dir"
+            return 1
+        fi
+
+        log_info "更新本地文件..."
+        local script_dir="$(dirname "$0")"
+        local install_dir="${script_dir}/fridare"
+
+        if [ "$is_install" = "true" ]; then
+            # 创建目录
+            mkdir -p "$install_dir"
+            script_dir="$install_dir"
+            log_success "文件夹 \"${script_dir}\" 已创建，请将此文件夹添加到 PATH 环境变量中"
+            log_skyblue "  export PATH=\$PATH:\"${script_dir}\""
+            # 加入 .bashrc 或者 .zshrc 的提示
+            if [ -f "$HOME/.bashrc" ]; then
+                log_skyblue "  echo \"export PATH=\$PATH:\\\"${script_dir}\\\"\" >> ~/.bashrc"
+            fi
+            if [ -f "$HOME/.zshrc" ]; then
+                log_skyblue "  echo \"export PATH=\$PATH:\\\"${script_dir}\\\"\" >> ~/.zshrc"
+            fi
+        fi
+
+        # 找到解压后的目录（应该只有一个）
+        local update_dir=$(find "$extract_dir" -maxdepth 1 -type d | grep -v "^$extract_dir$" | head -n 1)
+
+        if [ -z "$update_dir" ]; then
+            log_error "无法找到更新文件目录"
+            rm -rf "$temp_dir"
+            return 1
+        fi
+
+        log_info "正在从 $update_dir 复制文件到 $script_dir"
+
+        # 复制新文件到脚本目录
+        if ! cp -R "$update_dir/"* "$script_dir/"; then
+            log_error "复制新文件失败"
+            rm -rf "$temp_dir"
+            return 1
+        fi
+
+        # 删除旧文件
+        find "$script_dir" -type f | while read file; do
+            if [ ! -e "$update_dir/${file#$script_dir/}" ]; then
+                rm "$file"
+            fi
+        done
+
+        # 调整权限
+        chmod -R 755 "$script_dir"
+        # 删除.git
+        rm -rf "$script_dir/.git"
+
+        # 清理临时文件
+        rm -rf "$temp_dir"
+
+        log_success "更新完成，新版本：${latest_version}"
+        log_info "请重新运行脚本以使用新版本"
+        exit 0
+    fi
+}
+
+# 主函数
+main() {
+    initialize_config
+    log_environment_info
+    # 检查是否有 -y 参数
+    if [[ "$*" == *"-y"* || "$*" == *"--yes"* ]]; then
+        sudo -v || {
+            log_error "无法获取 sudo 权限"
+            exit 1
+        }
+        sudo_keep_alive
+        trap cleanup EXIT
+    fi
+    # 检查是否是首次运行
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${COLOR_YELLOW}欢迎使用 Fridare！这似乎是您第一次运行本工具。${COLOR_RESET}"
+        echo -e "${COLOR_YELLOW}以下是快速开始指南：${COLOR_RESET}\n"
+        quick_start_guide
+        echo -e "\n${COLOR_YELLOW}按回车键继续...${COLOR_RESET}"
+        read
+    fi
+    # 读取配置文件（如果存在）
+    if [ -f "$CONFIG_FILE" ]; then
+        FRIDA_MODULES=()
+        source "$CONFIG_FILE"
+    fi
+
+    # 将配置文件中的值赋给脚本变量
+    FRIDA_SERVER_PORT=${FRIDA_SERVER_PORT:-$DEF_FRIDA_SERVER_PORT}
+    CURL_PROXY=${CURL_PROXY:-""}
+    AUTO_CONFIRM=${AUTO_CONFIRM:-$DEF_AUTO_CONFIRM}
+    FRIDA_NAME=${FRIDA_NAME:-""}
+
+    log_config_info
+
+    # 解析参数
+    parse_arguments "$@"
+}
+# 执行主函数
+main "$@"
+
+```
+
+`hexreplace/Makefile`:
+
+```
+.PHONY: test build
+
+help:
+	@echo "make test - Run the tests"
+	@echo "make build - Build the project"
+
+build:
+	@go build 
+
+test:
+	@go run main.go ../build/test.so abcde _test.so
+```
+
+`hexreplace/go.mod`:
+
+```mod
+module github.com/suifei/fridare/hexreplace
+
+go 1.22.3
+
+```
+
+`hexreplace/main.go`:
+
+```go
+/*
+hexreplace is a tool to patch binary file with hex string.
+Usage: hexreplace <file path> <frida new name>
+Example: hexreplace /Users/xxx/Desktop/frida-ios-dump/FridaGadget.dylib frida
+Author: suifei@gmail.com
+Github: https://github.com/suifei/fridare/tree/master/hexreplace
+Version: 2.2
+
+changelog:
+- 2.2:
+	- Added support for ELF and PE file formats
+	- Added functions for describing architectures: describeMachOArch, describeELFArch, describePEArch
+	- Modified buildReplacements function to support different executable formats
+	- Unified file detection and opening logic into detectAndOpenFile function
+	- Refactored handleSignleArchitecture and handleMultipleArchitectures functions to handle different file formats
+	
+- 2.1:
+	- Refactored the Replacements structure to support multiple sections:
+	- Added a new 'SectionName' field to the Replacements struct
+	- Changed 'Replacements' to contain an 'Items' slice of Replacement structs
+	- Modified the buildReplacements function to return a slice of Replacements, allowing for multiple section definitions
+	- Updated handleSignleArchitecture and patchArchitecture functions to process multiple sections:
+	- Now iterates through all defined sections in the Replacements slice
+	- Applies replacements to each specified section individually
+	- Adjusted the replaceInSection function to accept a slice of Replacement structs
+	- Improved error handling and logging:
+	- Added more detailed error messages for each section processing step
+	- Included section names in log messages for better traceability
+	- Enhanced code flexibility and extensibility:
+	- Made it easier to add new sections for replacement in the future
+	- Improved code organization by grouping replacement rules by section
+
+- 2.0: support multiple architectures, add more ARM and ARM64 subtypes, add more replacements, macho.File.Section() returns a pointer to macho.Section, add more error handling
+- 1.0: initial version
+*/
+package main
+
+import (
+	"debug/elf"
+	"debug/macho"
+	"debug/pe"
+	"encoding/binary"
+	"fmt"
+	"io"
+	"os"
+	"strings"
+)
+
+type ExecutableFormat int
+
+const (
+	PE ExecutableFormat = iota
+	MachO
+	ELF
+)
+
+type Replacement struct {
+	Old []byte
+	New []byte
+}
+
+type Replacements struct {
+	ExecutableFormat ExecutableFormat
+	SectionName      string
+	Items            []*Replacement
+}
+
+func describeArch(file interface{}, format ExecutableFormat) string {
+	switch format {
+	case MachO:
+		switch f := file.(type) {
+		case *macho.File:
+			return describeMachOArch(f)
+		case *macho.FatFile:
+			return "MachO Fat Binary (Multiple Architectures)"
+		}
+	case ELF:
+		if f, ok := file.(*elf.File); ok {
+			return describeELFArch(f)
+		}
+	case PE:
+		if f, ok := file.(*pe.File); ok {
+			return describePEArch(f)
+		}
+	}
+	return "Unknown Architecture"
+}
+
+func cpuTypeToString(cpu macho.Cpu) string {
+	switch cpu {
+	case macho.Cpu386:
+		return "x86"
+	case macho.CpuAmd64:
+		return "x86_64"
+	case macho.CpuArm:
+		return "ARM"
+	case macho.CpuArm64:
+		return "ARM64"
+	case macho.CpuPpc:
+		return "PowerPC"
+	case macho.CpuPpc64:
+		return "PowerPC 64"
+	default:
+		return fmt.Sprintf("Unknown CPU type: %d", cpu)
+	}
+}
+func describeMachOArch(f *macho.File) string {
+	cpu := cpuTypeToString(f.Cpu)
+	byteOrder := "Little Endian"
+	if f.ByteOrder == binary.BigEndian {
+		byteOrder = "Big Endian"
+	}
+	return fmt.Sprintf("MachO: CPU: %s, Byte Order: %s, File Type: %s", cpu, byteOrder, f.Type.String())
+}
+
+func describeELFArch(f *elf.File) string {
+	var details []string
+	details = append(details, fmt.Sprintf("Machine: %s", f.Machine.String()))
+	details = append(details, fmt.Sprintf("Class: %s", f.Class.String()))
+	details = append(details, fmt.Sprintf("Data: %s", f.Data.String()))
+	details = append(details, fmt.Sprintf("OSABI: %s", describeOSABI(f.OSABI)))
+	details = append(details, fmt.Sprintf("ABI Version: %d", f.ABIVersion))
+	details = append(details, fmt.Sprintf("Type: %s", f.Type.String()))
+	details = append(details, fmt.Sprintf("Entry: 0x%x", f.Entry))
+	if len(f.Progs) > 0 {
+		details = append(details, fmt.Sprintf("Program Headers: %d", len(f.Progs)))
+		for _, prog := range f.Progs {
+			details = append(details, fmt.Sprintf("  Type: %s, Flags: %s, VAddr: 0x%x, Memsz: 0x%x",
+				prog.Type.String(), describeProgramFlags(prog.Flags), prog.Vaddr, prog.Memsz))
+		}
+	}
+	if len(f.Sections) > 0 {
+		details = append(details, fmt.Sprintf("Section Headers: %d", len(f.Sections)))
+		for _, section := range f.Sections {
+			details = append(details, fmt.Sprintf("  Name: %s, Type: %s, Flags: %s, Addr: 0x%x, Size: 0x%x",
+				section.Name, section.Type.String(), describeSectionFlags(section.Flags), section.Addr, section.Size))
+		}
+	}
+	if syms, err := f.DynamicSymbols(); err == nil {
+		details = append(details, fmt.Sprintf("Dynamic Symbols: %d", len(syms)))
+	}
+	if libs, err := f.ImportedLibraries(); err == nil && len(libs) > 0 {
+		details = append(details, fmt.Sprintf("Imported Libraries: %s", strings.Join(libs, ", ")))
+	}
+	return strings.Join(details, "\n")
+}
+
+func describeOSABI(osabi elf.OSABI) string {
+	switch osabi {
+	case elf.ELFOSABI_NONE:
+		return "UNIX System V ABI"
+	case elf.ELFOSABI_HPUX:
+		return "HP-UX"
+	case elf.ELFOSABI_NETBSD:
+		return "NetBSD"
+	case elf.ELFOSABI_LINUX:
+		return "Linux"
+	case elf.ELFOSABI_SOLARIS:
+		return "Sun Solaris"
+	case elf.ELFOSABI_AIX:
+		return "IBM AIX"
+	case elf.ELFOSABI_IRIX:
+		return "SGI Irix"
+	case elf.ELFOSABI_FREEBSD:
+		return "FreeBSD"
+	case elf.ELFOSABI_TRU64:
+		return "Compaq TRU64 UNIX"
+	case elf.ELFOSABI_MODESTO:
+		return "Novell Modesto"
+	case elf.ELFOSABI_OPENBSD:
+		return "OpenBSD"
+	case elf.ELFOSABI_ARM:
+		return "ARM"
+	case elf.ELFOSABI_STANDALONE:
+		return "Standalone (embedded) application"
+	default:
+		return fmt.Sprintf("Unknown OSABI (%d)", osabi)
+	}
+}
+
+func describeProgramFlags(flags elf.ProgFlag) string {
+	var s []string
+	if flags&elf.PF_X != 0 {
+		s = append(s, "X")
+	}
+	if flags&elf.PF_W != 0 {
+		s = append(s, "W")
+	}
+	if flags&elf.PF_R != 0 {
+		s = append(s, "R")
+	}
+	return strings.Join(s, "+")
+}
+
+func describeSectionFlags(flags elf.SectionFlag) string {
+	var s []string
+	if flags&elf.SHF_WRITE != 0 {
+		s = append(s, "W")
+	}
+	if flags&elf.SHF_ALLOC != 0 {
+		s = append(s, "A")
+	}
+	if flags&elf.SHF_EXECINSTR != 0 {
+		s = append(s, "X")
+	}
+	return strings.Join(s, "+")
+}
+func describePEArch(f *pe.File) string {
+	var details []string
+	details = append(details, fmt.Sprintf("Machine: %d", f.Machine))
+	characteristics := describeCharacteristics(f.Characteristics)
+	if len(characteristics) > 0 {
+		details = append(details, fmt.Sprintf("Characteristics: %s", strings.Join(characteristics, "\n")))
+	}
+	if f.OptionalHeader != nil {
+		switch oh := f.OptionalHeader.(type) {
+		case *pe.OptionalHeader32:
+			details = append(details, "Format: PE32")
+			details = append(details, fmt.Sprintf("Subsystem: %s", describeSubsystem(oh.Subsystem)))
+			details = append(details, fmt.Sprintf("BaseOfCode: 0x%X", oh.BaseOfCode))
+			details = append(details, fmt.Sprintf("BaseOfData: 0x%X", oh.BaseOfData))
+		case *pe.OptionalHeader64:
+			details = append(details, "Format: PE32+")
+			details = append(details, fmt.Sprintf("Subsystem: %s", describeSubsystem(oh.Subsystem)))
+			details = append(details, fmt.Sprintf("BaseOfCode: 0x%X", oh.BaseOfCode))
+		}
+	}
+	details = append(details, fmt.Sprintf("Number of Sections: %d", len(f.Sections)))
+
+	for i, s := range f.Sections {
+		details = append(details, fmt.Sprintf("\tSection %d: %s", i, describePESection(s)))
+	}
+	details = append(details, fmt.Sprintf("Number of Symbols: %d", len(f.Symbols)))
+
+	return strings.Join(details, "\n")
+}
+
+func describePESection(s *pe.Section) string {
+	return fmt.Sprintf("Name: %s, Address: 0x%X, Size: 0x%X", s.Name, s.VirtualAddress, s.Size)
+}
+
+func describeCharacteristics(characteristics uint16) []string {
+	var chars []string
+	if characteristics&pe.IMAGE_FILE_EXECUTABLE_IMAGE != 0 {
+		chars = append(chars, "Executable")
+	}
+	if characteristics&pe.IMAGE_FILE_LARGE_ADDRESS_AWARE != 0 {
+		chars = append(chars, "Large Address Aware")
+	}
+	if characteristics&pe.IMAGE_FILE_DLL != 0 {
+		chars = append(chars, "DLL")
+	}
+	if characteristics&pe.IMAGE_FILE_32BIT_MACHINE != 0 {
+		chars = append(chars, "32-bit")
+	}
+	if characteristics&pe.IMAGE_FILE_SYSTEM != 0 {
+		chars = append(chars, "System")
+	}
+	if characteristics&pe.IMAGE_FILE_DEBUG_STRIPPED != 0 {
+		chars = append(chars, "Debug Stripped")
+	}
+	return chars
+}
+
+func describeSubsystem(subsystem uint16) string {
+	switch subsystem {
+	case pe.IMAGE_SUBSYSTEM_WINDOWS_GUI:
+		return "Windows GUI"
+	case pe.IMAGE_SUBSYSTEM_WINDOWS_CUI:
+		return "Windows Console"
+	case pe.IMAGE_SUBSYSTEM_EFI_APPLICATION:
+		return "EFI Application"
+	case pe.IMAGE_SUBSYSTEM_EFI_BOOT_SERVICE_DRIVER:
+		return "EFI Boot Service Driver"
+	case pe.IMAGE_SUBSYSTEM_EFI_RUNTIME_DRIVER:
+		return "EFI Runtime Driver"
+	case pe.IMAGE_SUBSYSTEM_NATIVE:
+		return "Native"
+	case pe.IMAGE_SUBSYSTEM_POSIX_CUI:
+		return "POSIX Console"
+	default:
+		return fmt.Sprintf("Unknown (%d)", subsystem)
+	}
+}
+func main() {
+	if len(os.Args) != 4 {
+		fmt.Println("Usage: program <input file path> <frida new name> <output file path>")
+		os.Exit(1)
+	}
+
+	inputFilePath := os.Args[1]
+	fridaNewName := os.Args[2]
+	outputFilePath := os.Args[3]
+
+	if len(fridaNewName) != 5 || !isStringAlpha(fridaNewName) {
+		fmt.Println("Error: frida new name must be a 5-character alphabetic string")
+		os.Exit(1)
+	}
+
+	// 首先复制输入文件到输出文件
+	if err := copyFile(inputFilePath, outputFilePath); err != nil {
+		fmt.Println("Error copying file:", err)
+		os.Exit(1)
+	}
+
+	file, format, err := detectAndOpenFile(outputFilePath)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Detected file format:", format)
+	fmt.Println(describeArch(file, format))
+
+	switch f := file.(type) {
+	case *macho.File:
+		handleSignleArchitecture(f, outputFilePath, fridaNewName, format)
+	case *macho.FatFile:
+		handleMultipleArchitectures(f, outputFilePath, fridaNewName, format)
+	case *elf.File:
+		handleELFFile(f, outputFilePath, fridaNewName, format)
+	case *pe.File:
+		handlePEFile(f, outputFilePath, fridaNewName, format)
+	default:
+		fmt.Println("Unsupported file type")
+		os.Exit(1)
+	}
+
+	fmt.Println("Patch success")
+}
+
+func detectAndOpenFile(filePath string) (interface{}, ExecutableFormat, error) {
+	if machoFile, err := macho.Open(filePath); err == nil {
+		return machoFile, MachO, nil
+	}
+	if fatFile, err := macho.OpenFat(filePath); err == nil {
+		return fatFile, MachO, nil
+	}
+	if elfFile, err := elf.Open(filePath); err == nil {
+		return elfFile, ELF, nil
+	}
+	if peFile, err := pe.Open(filePath); err == nil {
+		return peFile, PE, nil
+	}
+	return nil, 0, fmt.Errorf("unsupported file format")
+}
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+
+	os.Chmod(dst, 0755)
+	return err
+}
+
+func handlePEFile(file *pe.File, outputFilePath, fridaNewName string, format ExecutableFormat) {
+	replacementsList := buildReplacements(fridaNewName, format)
+	for _, replacements := range replacementsList {
+		section := file.Section(replacements.SectionName)
+		if section == nil {
+			fmt.Printf("Warning: %s section not found in file\n", replacements.SectionName)
+			continue
+		}
+		data, err := section.Data()
+		if err != nil {
+			fmt.Printf("Error reading section data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		modifiedData := replaceInSection(data, replacements.Items)
+		if err := writeModifiedSection(outputFilePath, int64(section.Offset), modifiedData); err != nil {
+			fmt.Printf("Error writing modified data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		fmt.Printf("Successfully patched %s section\n", replacements.SectionName)
+	}
+}
+
+func handleELFFile(file *elf.File, outputFilePath, fridaNewName string, format ExecutableFormat) {
+	replacementsList := buildReplacements(fridaNewName, format)
+	for _, replacements := range replacementsList {
+		section := file.Section(replacements.SectionName)
+		if section == nil {
+			fmt.Printf("Warning: %s section not found in file\n", replacements.SectionName)
+			continue
+		}
+		data, err := section.Data()
+		if err != nil {
+			fmt.Printf("Error reading section data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		modifiedData := replaceInSection(data, replacements.Items)
+		if err := writeModifiedSection(outputFilePath, int64(section.Offset), modifiedData); err != nil {
+			fmt.Printf("Error writing modified data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		fmt.Printf("Successfully patched %s section\n", replacements.SectionName)
+	}
+}
+
+func handleSignleArchitecture(file *macho.File, outputFilePath, fridaNewName string, format ExecutableFormat) {
+	replacementsList := buildReplacements(fridaNewName, format)
+	for _, replacements := range replacementsList {
+		section := file.Section(replacements.SectionName)
+		if section == nil {
+			fmt.Printf("Warning: %s section not found in file\n", replacements.SectionName)
+			continue
+		}
+		data, err := section.Data()
+		if err != nil {
+			fmt.Printf("Error reading section data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		modifiedData := replaceInSection(data, replacements.Items)
+		if err := writeModifiedSection(outputFilePath, int64(section.Offset), modifiedData); err != nil {
+			fmt.Printf("Error writing modified data for %s: %v\n", replacements.SectionName, err)
+			continue
+		}
+		fmt.Printf("Successfully patched %s section\n", replacements.SectionName)
+	}
+}
+
+func handleMultipleArchitectures(fatFile *macho.FatFile, filePath, fridaNewName string, format ExecutableFormat) {
+	for _, arch := range fatFile.Arches {
+		patchArchitecture(arch, filePath, fridaNewName, format)
+	}
+}
+
+func patchArchitecture(arch macho.FatArch, filePath, fridaNewName string, format ExecutableFormat) {
+	replacementsList := buildReplacements(fridaNewName, format)
+	for _, replacements := range replacementsList {
+		section := arch.Section(replacements.SectionName)
+		if section == nil {
+			fmt.Printf("Warning: %s section not found in architecture %s\n", replacements.SectionName, arch.Cpu.String())
+			continue
+		}
+		data, err := section.Data()
+		if err != nil {
+			fmt.Printf("Error reading section data for %s in architecture %s: %v\n", replacements.SectionName, arch.Cpu.String(), err)
+			continue
+		}
+		modifiedData := replaceInSection(data, replacements.Items)
+		if err := writeModifiedSection(filePath, int64(arch.Offset+section.Offset), modifiedData); err != nil {
+			fmt.Printf("Error writing modified data for %s in architecture %s: %v\n", replacements.SectionName, arch.Cpu.String(), err)
+			continue
+		}
+		fmt.Printf("Successfully patched %s section\n", replacements.SectionName)
+	}
+}
+
+func isStringAlpha(s string) bool {
+	for _, c := range s {
+		if c < 'a' || c > 'z' {
+			return false
+		}
+	}
+	return true
+}
+
+func buildReplacements(fridaNewName string, format ExecutableFormat) []Replacements {
+	switch format {
+	case MachO:
+		return []Replacements{
+			{
+				ExecutableFormat: format,
+				SectionName:      "__cstring",
+				Items: []*Replacement{
+					{Old: []byte("frida_server_"), New: []byte(fridaNewName + "_server_")},
+					{Old: []byte("frida-server-main-loop"), New: []byte(fridaNewName + "-server-main-loop")},
+					{Old: []byte("frida-main-loop"), New: []byte(fridaNewName + "-main-loop")},
+					{Old: []byte("frida:rpc"), New: []byte(fridaNewName + ":rpc")},
+					{Old: []byte("frida-agent.dylib"), New: []byte(fridaNewName + "-agent.dylib")},
+					{Old: []byte("/usr/lib/frida/"), New: []byte("/usr/lib/" + fridaNewName + "/")},
+					{Old: []byte("gum-"), New: []byte(fridaNewName[:3] + "-")},
+				},
+			},
+			{
+				ExecutableFormat: format,
+				SectionName:      "__const",
+				Items: []*Replacement{
+					{Old: []byte("frida:rpc"), New: []byte(fridaNewName + ":rpc")},
+				},
+			},
+		}
+	case ELF:
+		return []Replacements{
+			{
+				ExecutableFormat: format,
+				SectionName:      ".rodata",
+				Items: []*Replacement{
+					{Old: []byte("frida_server_"), New: []byte(fridaNewName + "_server_")},
+					{Old: []byte("frida-main-loop"), New: []byte(fridaNewName + "-main-loop")},
+					{Old: []byte("frida:rpc"), New: []byte(fridaNewName + ":rpc")},
+					{Old: []byte("frida-agent-<arch>.so"), New: []byte(fridaNewName + "-agent-<arch>.so")},
+					{Old: []byte("frida-agent-arm.so"), New: []byte(fridaNewName + "-agent-arm.so")},
+					{Old: []byte("frida-agent-arm64.so"), New: []byte(fridaNewName + "-agent-arm64.so")},
+					{Old: []byte("frida-agent-32.so"), New: []byte(fridaNewName + "-agent-32.so")},
+					{Old: []byte("frida-agent-64.so"), New: []byte(fridaNewName + "-agent-64.so")},
+					{Old: []byte("gum-"), New: []byte(fridaNewName[:3] + "-")},
+				},
+			},
+			{
+				ExecutableFormat: format,
+				SectionName:      ".text",
+				Items: []*Replacement{
+					{Old: []byte("frida:rpc"), New: []byte(fridaNewName + ":rpc")},
+					{Old: []byte("gum-"), New: []byte(fridaNewName[:3] + "-")},
+				},
+			},
+		}
+	case PE:
+		return []Replacements{
+			{
+				ExecutableFormat: format,
+				SectionName:      ".rdata",
+				Items: []*Replacement{
+					{Old: []byte("frida-"), New: []byte(fridaNewName + "-")},
+					{Old: []byte("frida_"), New: []byte(fridaNewName + "_")},
+					{Old: []byte("frida_server_"), New: []byte(fridaNewName + "_server_")},
+					{Old: []byte("frida-main-loop"), New: []byte(fridaNewName + "-main-loop")},
+					{Old: []byte("gum-"), New: []byte(fridaNewName[:3] + "-")},
+					{Old: []byte("frida-thread"), New: []byte(fridaNewName + "-thread")},
+					{Old: []byte("frida:rpc"), New: []byte(fridaNewName + ":rpc")},
+					{Old: []byte("frida-agent"), New: []byte(fridaNewName + "-agent")},
+				},
+			},
+		}
+	}
+	return nil
+}
+
+func replaceInSection(data []byte, replacements []*Replacement) []byte {
+	modifiedData := make([]byte, len(data))
+	copy(modifiedData, data)
+
+	counter := 0
+	for _, replacement := range replacements {
+		oldBytes := replacement.Old
+		newBytes := replacement.New
+
+		for i := 0; i <= len(modifiedData)-len(oldBytes); i++ {
+			if bytesEqual(modifiedData[i:i+len(oldBytes)], oldBytes) {
+				replacement := make([]byte, len(oldBytes))
+				copy(replacement, newBytes)
+				for j := len(newBytes); j < len(oldBytes); j++ {
+					replacement[j] = 0
+				}
+				copy(modifiedData[i:i+len(oldBytes)], replacement)
+				counter++
+			}
+		}
+	}
+
+	fmt.Printf("Replaced %d occurrences\n", counter)
+
+	return modifiedData
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func writeModifiedSection(filePath string, offset int64, data []byte) error {
+	f, err := os.OpenFile(filePath, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.WriteAt(data, offset)
+	return err
+}
+
+```
+
+`toolkit/generate_frida_modules.py`:
+
+```py
+import os
+import re
+import requests
+
+def get_proxy_settings():
+    curl_proxy = os.environ.get('CURL_PROXY', '')
+    if curl_proxy:
+        return {"http": curl_proxy, "https": curl_proxy}
+    return None
+
+def get_latest_release():
+    url = "https://api.github.com/repos/frida/frida/releases/latest"
+    proxies = get_proxy_settings()
+    try:
+        response = requests.get(url, proxies=proxies)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error fetching latest release: {str(e)}")
+        return None
+
+def parse_filename(filename):
+    pattern = re.compile(r'(?P<module_type>frida[-_]?[a-zA-Z0-9\-]+)?[-_](?P<version>v?\d+\.\d+\.\d+)[-_](?P<os>[a-zA-Z0-9\-]+)[-_](?P<arch>[a-zA-Z0-9_]+)')
+    match = pattern.search(filename)
+    if match:
+        module_type = match.group('module_type') or 'N/A'
+        version = match.group('version')
+        os = match.group('os')
+        arch = match.group('arch')
+        if '.' in filename:
+            ext = filename.split('.')[-1]
+        else:
+            ext = 'N/A'
+        if '64' == arch:
+            arch = 'x86_64'
+        elif '_' in arch:
+            arch = arch.split('_')[-1]
+        if os.startswith('cp') and '-' in os:
+            os_info = os.split('-')
+            os = os_info[-1]
+            module_type = 'frida-python-' + os_info[0] + '-' + os_info[1]
+        elif 'node-' in os:
+            os_info = os.split('-')
+            os = os_info[-1]
+            module_type = 'frida-' + os_info[0] + '-' + os_info[1]
+        elif 'electron-' in os:
+            os_info = os.split('-')
+            os = os_info[-1]
+            module_type = 'frida-' + os_info[0] + '-' + os_info[1]
+        elif '-' in os:
+            os = os.split('-')[0]
+
+        if 'N/A' == module_type and 'deb' in filename:
+            module_type = 'frida-' + os + '-deb'
+        elif 'N/A' == module_type and 'gum-graft' in filename:
+            module_type = 'gum-graft'
+            os = filename.split('-')[-2]
+            arch = filename.split('-')[-1].split('.')[0]
+        return (module_type, version, os, arch, ext)
+    return None
+
+def generate_frida_modules():
+    release = get_latest_release()
+    if not release:
+        return []
+
+    assets = release['assets']
+    frida_modules = []
+
+    for asset in assets:
+        parsed = parse_filename(asset['name'])
+        if parsed:
+            module_type, version, os, arch, ext = parsed
+            if 'v' == version[0]:
+                version = version[1:]
+            asset_name = asset['name'].replace(version, '{VERSION}')
+            frida_modules.append(f'"{module_type}:{os}:{arch}:{asset_name}"')
+
+    return frida_modules
+
+def main():
+    frida_modules = generate_frida_modules()
+    print("FRIDA_MODULES=(")
+    for module in frida_modules:
+        print(f"    {module}")
+    print(")")
+
+if __name__ == "__main__":
+    main()
+```
+
+`toolkit/manifest.txt`:
+
+```txt
+hexreplace/main.go
+hexreplace/Makefile
+hexreplace/go.mod
+autoinstall.sh
+CHANGELOG
+fridare.sh
+README.md
+```
+
+`toolkit/merge.py`:
+
+```py
+import os
+import argparse
+
+def get_language(file_extension):
+    language_map = {
+        '.py': 'python',
+        '.js': 'javascript',
+        '.html': 'html',
+        '.css': 'css',
+        '.java': 'java',
+        '.c': 'c',
+        '.cpp': 'cpp',
+        '.go': 'golang',
+        '.rs': 'rust',
+        '.sh': 'shell',
+        '.md': 'markdown',
+        '.json': 'json',
+        '.yaml': 'yaml',
+        '.xml': 'xml',
+        '.sql': 'sql',
+        '.ts': 'typescript',
+    }
+    return language_map.get(file_extension.lower(), '')
+
+def escape_backticks(content):
+    return content.replace("```", "\\`\\`\\`")
+
+def merge_files(manifest_file, base_directory, output_file):
+    with open(output_file, 'w', encoding='utf-8') as outfile:
+        with open(manifest_file, 'r', encoding='utf-8') as manifest:
+            for line in manifest:
+                file_path = line.strip()
+                if not file_path or file_path.startswith('#'):
+                    continue  # 跳过空行和注释
+
+                full_path = os.path.join(base_directory, file_path)
+                if not os.path.exists(full_path):
+                    print(f"Warning: File not found - {full_path}")
+                    continue
+
+                _, file_extension = os.path.splitext(file_path)
+                
+                # 写入文件名作为Markdown标题
+                outfile.write(f"# {file_path}\n\n")
+                
+                # 获取语言类型
+                language = get_language(file_extension)
+                
+                # 读取并转义文件内容
+                try:
+                    with open(full_path, 'r', encoding='utf-8') as infile:
+                        content = infile.read()
+                        escaped_content = escape_backticks(content)
+                    
+                    # 写入文件内容，包括语言类型
+                    outfile.write(f"```{language}\n{escaped_content}\n```\n\n")
+                except Exception as e:
+                    print(f"Error reading file {full_path}: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Merge specified files into a single Markdown file.")
+    parser.add_argument("manifest", help="Path to the manifest file listing files to merge")
+    parser.add_argument("base_directory", help="Base directory for the files listed in the manifest")
+    parser.add_argument("output", help="Output file name")
+    
+    args = parser.parse_args()
+    
+    merge_files(args.manifest, args.base_directory, args.output)
+    print(f"Files merged successfully into {args.output}")
+
+if __name__ == "__main__":
+    main()
+```
+
+`win/README.md`:
+
+```md
+# Fridare Windows 使用指南
+
+## 最新更新
+
+### v3.1.5 - Windows 支持
+
+- 新增 `patch-frida.cmd` 脚本,用于在 Windows 环境下修改 frida-server
+- 新增 `patch-frida-tools.cmd` 脚本,用于在 Windows 环境下修改 frida-tools
+- 增加对 Windows 平台的全面支持
+- 更新了使用说明,增加了 Windows 平台的详细教程
+
+## Windows 下的使用教程
+
+### 准备工作
+
+1. 确保你的系统已经安装了 Python 和 pip
+2. 下载 Fridare 项目到本地
+
+### 修改 frida-server
+
+1. 打开命令提示符,进入 Fridare 项目目录
+2. 运行以下命令:
+
+```
+patch-frida.cmd <frida-server路径> <5字符魔改名>
+```
+
+例如:
+
+```
+patch-frida.cmd frida-server-16.4.7-android-arm64 abcde
+```
+
+3. 脚本将会生成一个修改后的 frida-server 文件,文件名为 `frida-server-16.4.7-android-arm64_abcde`
+
+### 修改 frida-tools
+
+1. 在命令提示符中运行:
+
+```
+patch-frida-tools.cmd
+```
+
+2. 脚本会自动定位 frida 的安装路径
+3. 根据提示输入 5 个字符的魔改名(必须是小写字母 a-z)
+4. 脚本会自动修改 `core.py` 和 `_frida.pyd` 文件
+
+### 注意事项
+
+- 在修改 frida-tools 之前,脚本会自动备份原文件
+- 确保你有足够的权限修改 Python 安装目录下的文件
+- 修改后,建议重新启动你的 Python 环境以确保更改生效
+
+## 故障排除
+
+如果遇到 "Error: hexreplace tool not found" 错误,请确保 `hexreplace_windows_amd64.exe` 文件位于与脚本相同的目录中。
+
+如果修改过程中遇到权限问题,尝试以管理员身份运行命令提示符。
+
+## 恢复原始文件
+
+如果需要恢复原始的 frida-tools 文件:
+
+1. 找到 frida 的安装目录 (通常在运行 `patch-frida-tools.cmd` 时会显示)
+2. 将 `core.py.fridare` 重命名为 `core.py`
+3. 将 `_frida.pyd.fridare` 重命名为 `_frida.pyd`
+
+## 贡献
+
+欢迎提交问题和拉取请求。对于重大更改,请先开 issue 讨论您想要更改的内容。
+
+## 许可证
+
+[MIT LICENSE](LICENSE)
+
+```
+
+`win/patch-frida-tools.cmd`:
+
+```cmd
+@echo off
+setlocal enabledelayedexpansion
+
+:: 获取脚本所在路径
+set "SCRIPT_PATH=%~dp0"
+:: 设置 hexreplace 工具路径
+set "HEXREPLACE_PATH=%SCRIPT_PATH%hexreplace_windows_amd64.exe"
+
+:: 检查 hexreplace 工具是否存在
+if not exist "%HEXREPLACE_PATH%" (
+    echo Error: hexreplace tool not found at %HEXREPLACE_PATH%
+    goto :eof
+)
+
+:: 使用 pip 获取 Frida 安装路径
+for /f "tokens=2 delims= " %%a in ('pip show frida ^| findstr "Location"') do set FRIDA_PATH=%%a\frida
+
+echo Frida installation path: %FRIDA_PATH%
+
+:: 检查文件是否存在
+if not exist "%FRIDA_PATH%\core.py" (
+    echo Error: core.py not found in %FRIDA_PATH%
+    goto :eof
+)
+if not exist "%FRIDA_PATH%\_frida.pyd" (
+    echo Error: _frida.pyd not found in %FRIDA_PATH%
+    goto :eof
+)
+
+:: 备份文件
+if not exist "%FRIDA_PATH%\core.py.fridare" (
+    copy "%FRIDA_PATH%\core.py" "%FRIDA_PATH%\core.py.fridare"
+    echo Backed up core.py
+)
+if not exist "%FRIDA_PATH%\_frida.pyd.fridare" (
+    copy "%FRIDA_PATH%\_frida.pyd" "%FRIDA_PATH%\_frida.pyd.fridare"
+    echo Backed up _frida.pyd
+)
+
+:: 获取用户输入
+set /p "input=Please enter 5 characters (a-z): "
+if not "%input:~4,1%" == "" (
+    if "%input:~5,1%" == "" (
+        echo Input accepted.
+    ) else (
+        echo Input must be exactly 5 characters.
+        goto :eof
+    )
+) else (
+    echo Input must be exactly 5 characters.
+    goto :eof
+)
+
+:: 使用 hexreplace 修改文件
+"%HEXREPLACE_PATH%" "%FRIDA_PATH%\_frida.pyd" %input% "%FRIDA_PATH%\_frida.pyd.modify"
+
+if %errorlevel% neq 0 (
+    echo Error occurred during file modification.
+    goto :eof
+)
+
+:: 替换原文件
+move /y "%FRIDA_PATH%\_frida.pyd.modify" "%FRIDA_PATH%\_frida.pyd"
+
+echo Modification complete.
+```
+
+`win/patch-frida.cmd`:
+
+```cmd
+@echo off
+setlocal enabledelayedexpansion
+
+:: 检查参数数量
+if "%~2"=="" (
+    echo Usage: %~nx0 ^<frida-server_path^> ^<5_char_magic_name^>
+    echo Example: %~nx0 "C:\path\to\frida-server.exe" abcde
+    goto :eof
+)
+
+:: 获取输入参数
+set "FRIDA_SERVER_PATH=%~1"
+set "MAGIC_NAME=%~2"
+
+:: 验证输入文件路径
+if not exist "%FRIDA_SERVER_PATH%" (
+    echo Error: frida-server file not found at %FRIDA_SERVER_PATH%
+    goto :eof
+)
+
+:: 验证魔改名长度
+if not "%MAGIC_NAME:~4,1%" == "" (
+    if "%MAGIC_NAME:~5,1%" == "" (
+        echo Magic name accepted.
+    ) else (
+        echo Error: Magic name must be exactly 5 characters.
+        goto :eof
+    )
+) else (
+    echo Error: Magic name must be exactly 5 characters.
+    goto :eof
+)
+
+:: 获取脚本所在路径
+set "SCRIPT_PATH=%~dp0"
+:: 设置 hexreplace 工具路径
+set "HEXREPLACE_PATH=%SCRIPT_PATH%hexreplace_windows_amd64.exe"
+
+:: 检查 hexreplace 工具是否存在
+if not exist "%HEXREPLACE_PATH%" (
+    echo Error: hexreplace tool not found at %HEXREPLACE_PATH%
+    goto :eof
+)
+
+:: 构建输出文件名
+for %%F in ("%FRIDA_SERVER_PATH%") do (
+    set "FILE_NAME=%%~nF"
+    set "FILE_EXT=%%~xF"
+)
+set "OUTPUT_PATH=%~dp1%FILE_NAME%%FILE_EXT%_%MAGIC_NAME%"
+
+:: 使用 hexreplace 修改文件
+"%HEXREPLACE_PATH%" "%FRIDA_SERVER_PATH%" %MAGIC_NAME% "%OUTPUT_PATH%"
+
+if %errorlevel% neq 0 (
+    echo Error occurred during file modification.
+    goto :eof
+)
+
+echo Modification complete.
+echo Modified file saved as: %OUTPUT_PATH%
+```
