@@ -1,0 +1,4741 @@
+Project Path: arc_gmh5225_ntoseye_bcbt4z7v
+
+Source Tree:
+
+```txt
+arc_gmh5225_ntoseye_bcbt4z7v
+├── CMakeLists.txt
+├── LICENSE
+├── README.md
+├── examples
+│   ├── base_addr.lua
+│   └── list_args.lua
+├── media
+│   └── ntoseye.png
+├── ntoseye
+│   ├── cmd.cpp
+│   ├── cmd.hpp
+│   ├── config.hpp
+│   ├── curl.cpp
+│   ├── curl.hpp
+│   ├── dbg.cpp
+│   ├── dbg.hpp
+│   ├── gdb.cpp
+│   ├── gdb.hpp
+│   ├── guest.cpp
+│   ├── guest.hpp
+│   ├── host.cpp
+│   ├── host.hpp
+│   ├── log.hpp
+│   ├── lua.cpp
+│   ├── lua.hpp
+│   ├── main.cpp
+│   ├── mem.cpp
+│   ├── mem.hpp
+│   ├── pdb.cpp
+│   ├── pdb.hpp
+│   ├── termcolors.h
+│   ├── util.cpp
+│   ├── util.hpp
+│   └── windefs.h
+└── version.h.in
+
+```
+
+`CMakeLists.txt`:
+
+```txt
+cmake_minimum_required(VERSION 3.5.0)
+project(ntoseye VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_COMPILER "g++")
+set(CMAKE_CXX_STANDARD 23)
+
+find_package(sol2)
+find_package(Zydis)
+
+configure_file(version.h.in version.h)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+file(GLOB GLOBBED_SOURCES CONFIGURE_DEPENDS "ntoseye/*.cpp")
+
+add_executable(ntoseye ${GLOBBED_SOURCES})
+target_link_libraries(ntoseye tbb readline Zydis lua dl m curl LLVM lldb)
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2024 dmaivel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`README.md`:
+
+```md
+<img align="right" width="28%" src="media/ntoseye.png">
+
+# ntoseye ![license](https://img.shields.io/badge/license-MIT-blue)
+
+Windows kernel debugger for Linux hosts running Windows under KVM/QEMU.
+
+## Features
+
+- Command line interface
+- WinDbg style commands
+- Kernel debugging
+- PDB fetching
+- Breakpointing
+- Scripting API (Lua)
+
+### Supported Windows
+
+`ntoseye` currently only supports Windows 10 and 11 guests.
+
+### Disclaimer
+
+`ntoseye` will ask you if you wish to download symbols (defaults to exports if user declines). It will only download symbols from Microsoft's official symbol server. All files which will be read/written to will be located in `$XDG_CONFIG_HOME/ntoseye`.
+
+# Getting started
+
+## Dependencies
+
+| Name | Version |
+| ---- | ------- |
+| [CMake](https://cmake.org/) | 3.5+ |
+| [GCC](https://gcc.gnu.org/) | 14+ |
+| [GDB](https://www.sourceware.org/gdb/) | Latest |
+| [libreadline](www.gnu.org/software/readline/) | Latest |
+| [Zydis](https://github.com/zyantific/zydis) | Latest |
+| [LLVM](https://llvm.org/) | 15+ |
+| [Lua](https://www.lua.org/) | 5.3+ |
+| [sol2](https://github.com/ThePhD/sol2) | Latest |
+| [curl](https://curl.se/) | Latest |
+
+## Building
+
+```bash
+git clone https://github.com/dmaivel/ntoseye.git
+cd ntoseye
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
+
+# Usage
+
+`ntoseye` takes in no arguments to launch. It is recommended that you run the following command before running `ntoseye` or a VM:
+```bash
+echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope 
+```
+
+Note that you may need to run `ntoseye` with `sudo` aswell.
+
+## VM configuration
+
+Although it is not required, many features depend on `gdbstub` being enabled.
+
+#### QEMU
+
+Append `-s -S` to qemu command.
+
+#### virt-manager
+
+Add the following to the XML configuration:
+```xml
+<domain xmlns:qemu="http://libvirt.org/schemas/domain/qemu/1.0" type="kvm">
+  ...
+  <qemu:commandline>
+    <qemu:arg value="-s"/>
+    <qemu:arg value="-S"/>
+  </qemu:commandline>
+</domain>
+```
+
+## Keybinds
+
+| Key(s) | Description |
+| - | - |
+| <kbd>tab</kbd> | Tab completion. Either lists all available commands or attempts to complete the currently typed out command. |
+| <kbd>ctrl+C</kbd> | Attempt a breakpoint. Will terminate the debugger if in the middle of a download or hang. |
+
+## Commands
+
+| Command                           | Description                                                |
+|-----------------------------------|------------------------------------------------------------|
+| `!pte [VirtualAddress/Symbol]` | Display the page table entries of a given virtual address. |
+| `!process 0 0` | Display a list of the current active processes. |
+| `.process [/p /r] OR [AddressOfEPROCESS]` | Set the current process context. |
+| `break` | Breakpoint. |
+| `db [VirtualAddress/Symbol] [EndAddress/L<Count>]` | Display bytes at address. |
+| `g` | Continue from breakpoint. |
+| `lm` | List current modules. |
+| `n [10 OR 16]` | Set radix. 16 by default. |
+| `q` | Quit. |
+| `r OR r [Register names]` | Display registers. |
+| `reload_lua` | Reload lua scripts. |
+| `u [VirtualAddress/Symbol] [EndAddress/L<Count>]` | Display disassembly at address. |
+| `uf [VirtualAddress/Symbol] [EndAddress/L<Count>]` | Alias for `u` command. |
+| `x [Module!Function]` | Display symbols matching the string. Accepts wildcard. |
+| `~ OR ~ [ProcessorNumber]` | Display current processor number or set current processor. |
+| `:[CallbackName] <Args>` | Call to Lua callback. |
+
+## Lua API
+
+For scripts to be visible to `ntoseye`, they need to be stored in `$XDG_CONFIG_HOME/ntoseye/scripts/`. This folder is create automatically when you run `ntoseye` for the first time.
+
+There are a few example lua scripts provided in `./examples`. Documentation is not available yet.
+
+## Credits
+
+Functionality regarding initialization of guest information was written with the help of the following sources:
+
+- [vmread](https://github.com/h33p/vmread)
+- [pcileech](https://github.com/ufrisk/pcileech)
+```
+
+`examples/base_addr.lua`:
+
+```lua
+function display_base_address(args, current_process)
+    local output = string.format("%x%x", current_process.base_address.high, current_process.base_address.low)
+    print(output)
+    return status_success()
+end
+
+base_addr = {} 
+base_addr.on_load = function()
+    return "display_base_address"
+end
+```
+
+`examples/list_args.lua`:
+
+```lua
+function list_arguments(args, current_process)
+    for i = 1, args:size() do
+        print(i .. ": " .. args:get(i))
+    end
+    
+    return status_success()
+end
+
+list_args = {} 
+list_args.on_load = function()
+    return "list_arguments"
+end
+```
+
+`ntoseye/cmd.cpp`:
+
+```cpp
+#include "cmd.hpp"
+#include "mem.hpp"
+
+#include <map>
+#include <algorithm>
+#include <ostream>
+#include <ranges>
+#include <print>
+
+#include <readline/history.h>
+#include <readline/readline.h>
+
+struct internal_callback {
+    cmd::callback callback;
+    std::string completion;
+};
+
+std::map<std::string, internal_callback> global_callbacks;
+
+void cmd::register_callback(const std::string &cmd, const callback &callback, const std::string &custom_completion)
+{
+    global_callbacks[cmd] = { 
+        .callback = callback,
+        .completion = custom_completion.empty() ? cmd : custom_completion
+    };
+}
+
+cmd::status cmd::attempt_callback(const std::string &fullcmd, mem::process &current_process)
+{
+    const std::string& delim = " ";
+    auto args = fullcmd | std::views::split(delim)
+                        | std::ranges::to<std::vector<std::string>>();
+
+    // remove whitespaces
+    args.erase(std::remove(args.begin(), args.end(), std::string()), args.end());
+
+    // remove command
+    auto command = *args.begin();
+    args.erase(args.begin());
+                            
+    return global_callbacks.contains(command) 
+            ? global_callbacks[command].callback(args, current_process)
+            : cmd::status::unknown_command();
+}
+
+static char *command_generator(const char *text, int state)
+{
+    static int list_index, len;
+    int local_index = 0;
+
+    if (!state) {
+        list_index = 0;
+        len = strlen(text);
+    }
+
+    if (list_index == global_callbacks.size())
+        return NULL;
+
+    for (const auto & [cmd, callbackInfo] : global_callbacks) {
+        if (local_index < list_index) {
+            local_index++;
+            continue;
+        }
+        else {
+            local_index++;
+            list_index++;
+        }
+
+        const char *name = callbackInfo.completion.c_str();
+        if (std::strncmp(name, text, len) == 0)
+            return strdup(name);
+    }
+
+    return NULL;
+}
+
+static char **command_completion(const char *text, int start, int end)
+{
+    rl_attempted_completion_over = 1;
+    return rl_completion_matches(text, command_generator);
+}
+
+void cmd::initialize_readline()
+{
+    using_history();
+    rl_attempted_completion_function = command_completion;
+}
+
+void cmd::reformat_after_signal()
+{
+    std::println("");
+    rl_on_new_line();
+    rl_replace_line("", 0);
+}
+
+void cmd::finish_reformat_after_signal()
+{
+    rl_redisplay();
+}
+
+std::string cmd::read_line(const char *s)
+{
+    auto raw_input = readline(s);
+    add_history(raw_input);
+
+    std::string input(raw_input);
+    delete[] raw_input;
+
+    return input;
+}
+
+bool cmd::read_yes_no(const char* s)
+{
+    auto raw_input = readline(s);
+
+    std::string input(raw_input);
+    delete[] raw_input;
+
+    if (input.empty() || input == "n" || input == "N")
+        return false;
+    else if (input == "y" || input == "Y")
+        return true;
+
+    std::puts("Please answer either y or [n].");
+    return read_yes_no(s);
+}
+```
+
+`ntoseye/cmd.hpp`:
+
+```hpp
+#pragma once
+
+#include "mem.hpp"
+
+#include <algorithm>
+#include <functional>
+#include <string>
+
+namespace cmd {
+    enum class status_code : int {
+        success,
+        invalid_syntax,
+        invalid_argument,
+        unimplemented,
+        unknown_command,
+        script_failed_during_run,
+        script_callback_not_found,
+    };
+
+    enum class prompt_result : int {
+        no,
+        yes,
+        all
+    };
+
+    enum class arg_type : int {
+        string,     // self
+        integer,    // 0x, 0, ...
+        line,       // L_ (e.g L4)
+        flag        // /_ (e.g /F)
+    };
+
+    struct argument {
+        arg_type type;
+        std::string str;
+        uint64_t u64;
+
+        argument(const std::string &arg, int radix = 16) {
+            if (arg.empty())
+                return;
+
+            switch (arg[0]) {
+            case '/':
+                type = arg.size() > 1 ? arg_type::flag : arg_type::string; 
+                str = arg;
+                u64 = arg.size() > 1 ? (uint64_t)arg[1] : 0;
+                return;
+            case 'L':
+                if (!std::all_of(arg.begin() + 1, arg.end(), ::isxdigit))
+                    break;
+                type = arg_type::line;
+                str = arg;
+                u64 = std::stoull(&arg.c_str()[1], nullptr, radix);
+                return;
+            default:
+                break;
+            }
+
+            try {
+                u64 = std::stoull(arg, nullptr, radix);
+            }
+            catch (...) {
+                type = arg_type::string;
+                str = arg;
+                u64 = 0;
+                return;
+            }
+
+            type = arg_type::integer;
+            str = arg;
+            return;
+        }
+    };
+
+    struct status {
+        status() noexcept : status_value(status_code::success) { }
+        status(status_code status) : status_value(status) { }
+        status(status_code status, const std::string &message) : status_value(status), error_message(message) { }
+        
+        status_code status_value;
+        std::string error_message;
+
+        static inline status success()
+        {
+            return status(status_code::success);
+        }
+
+        static inline status invalid_syntax(const std::string &message = "")
+        {
+            return status(status_code::invalid_syntax, message);
+        }
+
+        static inline status invalid_argument(const std::string &message = "")
+        {
+            return status(status_code::invalid_argument, message);
+        }
+
+        static inline status unimplemented(const std::string &message = "")
+        {
+            return status(status_code::unimplemented, message);
+        }
+
+        static inline status unknown_command(const std::string &message = "")
+        {
+            return status(status_code::unknown_command, message);
+        }
+
+        static inline status script_failed_during_run(const std::string &message = "")
+        {
+            return status(status_code::script_failed_during_run, message);
+        }
+
+        static inline status script_callback_not_found(const std::string &message = "")
+        {
+            return status(status_code::script_callback_not_found, message);
+        }
+    };
+
+    using callback = std::function<status(const std::vector<std::string>&, mem::process&)>;
+
+    void register_callback(const std::string &cmd, const callback &callback, const std::string &custom_completion = {});
+    status attempt_callback(const std::string &fullcmd, mem::process &current_process);
+
+    void initialize_readline();
+    void reformat_after_signal();
+    void finish_reformat_after_signal();
+    
+    std::string read_line(const char *s);
+    bool read_yes_no(const char* s);
+}
+```
+
+`ntoseye/config.hpp`:
+
+```hpp
+#pragma once
+
+#include <string>
+
+namespace config {
+    inline std::string get_storage_directory()
+    {
+        constexpr auto get_user_home_directory = []() {
+            auto sudo_user = std::getenv("SUDO_USER");
+            if (sudo_user != nullptr) {
+                std::string home = "/home/";
+                home += sudo_user;
+                return home;
+            }
+
+            auto home = std::getenv("HOME");
+            return (home != nullptr) ? home : std::string();
+        };
+
+        std::string config_directory;
+
+        auto config_directory_env = std::getenv("XDG_CONFIG_HOME");
+        if (config_directory_env == nullptr) {
+            config_directory = get_user_home_directory();
+            config_directory += "/.config";
+        }
+        else {
+            config_directory = config_directory_env;
+        }
+
+        return config_directory + "/ntoseye";
+    }
+}
+```
+
+`ntoseye/curl.cpp`:
+
+```cpp
+#include "curl.hpp"
+#include "cmd.hpp"
+#include "config.hpp"
+#include "util.hpp"
+#include "log.hpp"
+
+#include <curl/curl.h>
+
+CURL *curl_state;
+
+bool curl::initialize()
+{
+    curl_state = curl_easy_init();
+    if (!curl_state)
+        out::warn("failed to initialize libcurl, note downloads will not work\n");
+    return curl_state;
+}
+
+bool curl::attempt_file_download(const std::string &dst, const std::string &url)
+{
+    auto file = std::fopen(dst.c_str(), "w");
+    if (!file || dst.empty())
+        return false;
+
+    curl_easy_setopt(curl_state, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl_state, CURLOPT_WRITEDATA, file);
+    curl_easy_setopt(curl_state, CURLOPT_FOLLOWLOCATION, 1L);
+
+    // std::print("Downloading from '{}'... ", url);
+    // std::fflush(stdout);
+
+    auto res = curl_easy_perform(curl_state);
+    bool status = res == CURLE_OK;
+
+    // std::println("{}", status ? "done" : "error");
+
+    std::fclose(file);
+
+    return status;
+}
+```
+
+`ntoseye/curl.hpp`:
+
+```hpp
+#pragma once
+
+#include <string>
+
+namespace curl {
+    bool initialize();
+    bool attempt_file_download(const std::string &dst, const std::string &url);
+}
+```
+
+`ntoseye/dbg.cpp`:
+
+```cpp
+#include "dbg.hpp"
+#include "cmd.hpp"
+#include "gdb.hpp"
+#include "guest.hpp"
+#include "log.hpp"
+#include "lua.hpp"
+#include "util.hpp"
+#include "mem.hpp"
+
+#include <Zydis/Zydis.h>
+
+#include <csignal>
+#include <expected>
+#include <ranges>
+
+mem::process current_process;
+int radix = 16;
+
+mem::process& dbg::get_current_process()
+{
+    return current_process;
+}
+
+uintptr_t dbg::str2v(const std::string &str, int rad)
+{
+    return std::stoull(str, nullptr, rad);
+}
+
+uintptr_t dbg::sym2addr(pdb::symbol &symbol, const std::string &fn_start, const std::string &data_start)
+{
+    auto section = symbol.type == pdb::symbol::sym_type::data ? data_start : fn_start;
+    return current_process.base_address + util::get_section_virtual_address(current_process, section) + symbol.offset;
+}
+
+uintptr_t dbg::name2addr(const std::string &name, const std::string &fn_start, const std::string &data_start)
+{
+    auto pdb_sym = pdb::get(name);
+    if (pdb_sym.has_value())
+        return sym2addr(pdb_sym.value(), fn_start, data_start);
+    
+    auto exports = util::get_process_exports(current_process);
+    return util::get_proc_address(exports, name);
+}
+
+std::pair<std::string, uintptr_t> dbg::closest_symbol(uintptr_t address)
+{
+    auto pdb_symbols = pdb::get_all();
+    if (!pdb_symbols.empty()) {
+        pdb::symbol closest;
+        closest.offset = 0;
+
+        for (auto &sym : pdb_symbols) {
+            auto sym_address = sym2addr(sym);
+            if (sym_address <= address && sym_address > sym2addr(closest))
+                closest = sym;
+        }
+
+        return { closest.name, address - sym2addr(closest) };
+    }
+    else {
+        auto exports = util::get_process_exports(current_process);
+        util::symbol closest;
+        closest.address = 0;
+
+        for (auto &sym : exports) {
+            if (sym.address <= address && sym.address > closest.address)
+                closest = sym;
+        }
+
+        return { closest.name, address - closest.address };
+    }
+
+    return { "??", 0 };
+}
+
+static std::expected<uintptr_t, std::string> arg_expect_address(const std::string &arg, int radix = 16)
+{
+    cmd::argument parsed_arg(arg, radix);
+
+    switch (parsed_arg.type) {
+    case cmd::arg_type::integer:
+        return parsed_arg.u64;
+    case cmd::arg_type::string:
+        parsed_arg.u64 = dbg::name2addr(parsed_arg.str);
+        if (parsed_arg.u64)
+            return parsed_arg.u64;
+        return std::unexpected("symbol not found");
+    default:
+        return std::unexpected("expected valid address");
+    }
+}
+
+void dbg::install_builtin_commands()
+{
+    current_process = guest::get_ntoskrnl_process();
+
+    cmd::register_callback("!pte", [&](auto args, auto current_process) {
+        if (args.size() != 1)
+            return cmd::status::invalid_syntax("expected 1 argument");
+
+        auto expect_virtual_address = arg_expect_address(args[0]);
+        if (!expect_virtual_address)
+            return cmd::status::invalid_syntax(expect_virtual_address.error());
+
+        auto virtual_address = expect_virtual_address.value();
+
+        std::print("VA {}\n", out::address(virtual_address));
+
+        auto pxe = guest::get_pxe_address(virtual_address);
+        auto ppe = guest::get_ppe_address(virtual_address);
+        auto pde = guest::get_pde_address(virtual_address);
+        auto pte = guest::get_pte_address(virtual_address);
+        
+        std::print("PXE at {}    PPE at {}    PDE at {}    PTE at {}\n", 
+                out::address(pxe, out::fmt::X), out::address(ppe, out::fmt::X), out::address(pde, out::fmt::X), out::address(pte, out::fmt::X));
+        
+        // incase current process isn't ntoskrnl
+        auto ntoskrnl = guest::get_ntoskrnl_process();
+
+        auto cpxe = ntoskrnl.read<MMPTE>(pxe);
+        auto cppe = ntoskrnl.read<MMPTE>(ppe);
+        auto cpde = ntoskrnl.read<MMPTE>(pde);
+        auto cpte = !cpde.u.Hard.LargePage ? ntoskrnl.read<MMPTE>(pte) : MMPTE{ 0 };
+
+        std::print("contains {}  contains {}  contains {}  contains {}\n", 
+                out::value_hex(cpxe.u.Long, out::fmt::X), out::value_hex(cppe.u.Long, out::fmt::X), out::value_hex(cpde.u.Long, out::fmt::X), out::value_hex(cpte.u.Long, out::fmt::X));
+
+        static constexpr auto dump_bits = [](const MMPTE &pte, bool first) {
+            if (pte.u.Long == 0) {
+                if (first)
+                    std::print("not valid");
+                return;
+            }
+
+            auto pfn_digits = std::format("{:04x}", pte.u.Hard.PageFrameNumber).size();
+
+            std::print("pfn {:04x}{}{}{:c}{:c}{:c}{:c}{:c}{:c}{:c}{:c}{:c}{:c}{:c}  ",
+                pte.u.Hard.PageFrameNumber,
+                out::align(10, pfn_digits, 1),
+                first ? "" : "",
+                pte.u.Hard.CopyOnWrite ? 'C' : '-',
+                pte.u.Hard.Global ? 'G' : '-',
+                pte.u.Hard.LargePage ? 'L' : '-',
+                pte.u.Hard.Dirty ? 'D' : '-',
+                pte.u.Hard.Accessed ? 'A' : '-',
+                pte.u.Hard.CacheDisable ? 'N' : '-',
+                '-',
+                pte.u.Hard.Owner ? 'U' : 'K',
+                pte.u.Hard.Write ? 'W' : 'R',
+                pte.u.Hard.NoExecute ? '-' : 'E',
+                pte.u.Hard.Valid ? 'V' : '-');
+
+            if (pte.u.Hard.LargePage)
+                std::print("LARGE PAGE pfn {:04x}", pte.u.Hard.PageFrameNumber);
+        };
+
+        dump_bits(cpxe, true);
+        dump_bits(cppe, false);
+        dump_bits(cpde, false);
+        dump_bits(cpte, false);
+
+        std::puts("");
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("!process", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 2)
+            return cmd::status::invalid_syntax("expected 2 arguments");
+
+        int v0, v1;
+        if (!safe_run([&]() { v0 = std::stoull(args[0], nullptr, radix); }) || !safe_run([&]() { v1 = std::stoull(args[1], nullptr, radix); }))
+            return cmd::status::invalid_syntax("expected '!process 0 0'");
+
+        if (v0 != 0 || v1 != 0)
+            out::warn("flags not supported\n");
+
+        std::print("**** NT ACTIVE PROCESS DUMP ****\n");
+
+        uint64_t phys = 0;
+        uint64_t virt = 0;
+        mem::process process;
+
+        while (guest::query_process_basic_info(phys, virt, process)) {
+            auto base = util::get_module(process, {});
+            if (base.name.empty())
+                continue;
+
+            std::print("PROCESS {}\n", out::address(virt, out::fmt::x));
+            
+            std::print("{} SessionId: {}  Cid: {}  Peb: {}  ParentCid: {}\n", out::indent(), 
+                    out::value(process.win_dbg_data.session_id), out::value_hex<4>(process.win_dbg_data.client_id),
+                    out::address<10>(process.win_dbg_data.peb_address), out::value_hex<4>(process.win_dbg_data.parent_client_id));
+            
+            std::print("{} DirBase: {}  ObjectTable: {}\n", out::indent(),
+                    out::address<9>(process.dir_base), out::address(process.win_dbg_data.object_table_address));
+
+            std::print("{} Image: {}\n\n", out::indent(), out::name(base.name.c_str()));
+        }
+
+        return cmd::status::success();
+    }, "!process 0 0");
+
+    cmd::register_callback(".process", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 1 && args.size() != 2)
+            return cmd::status::invalid_syntax("expected either: [EPROCESS address] or [/p /r]");
+
+        uint64_t address_of_eprocess;
+        if (args.size() == 1)
+            if (!safe_run([&]() { address_of_eprocess = std::stoull(args[0], nullptr, 16); }))
+                return cmd::status::invalid_syntax("expected virtual address of EPROCESS");
+
+        if (args.size() == 2)
+            ::current_process = guest::get_ntoskrnl_process();
+        else {
+            uint64_t phys = 0;
+            uint64_t virt = 0;
+            mem::process process;
+
+            while (guest::query_process_basic_info(phys, virt, process) && virt != address_of_eprocess);
+
+            if (virt != address_of_eprocess)
+                return cmd::status::invalid_argument("couldn't find matching EPROCESS address");
+
+            ::current_process = process;
+        }
+
+        std::print("Implicit process is now {}\n", out::address(::current_process.virtual_process));
+
+        pdb::load(::current_process, pdb::process_priv::user);
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("q", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        return cmd::status::unknown_command("if you see this, something went very wrong");
+    });
+
+    cmd::register_callback("reload_lua", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        return lua::initialize() ? cmd::status::success() : cmd::status::invalid_argument("failed to re-initialize lua");
+    });
+
+    cmd::register_callback("n", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 1)
+            return cmd::status::invalid_syntax("expected 1 argument");
+
+        int local_radix = 0;
+        if (!safe_run([&]() { local_radix = std::stoull(args[0], nullptr, 10); }))
+            return cmd::status::invalid_syntax("expected either '10' or '16'");
+
+        if (local_radix != 10 && local_radix != 16)
+            return cmd::status::invalid_argument("expected either '10' or '16'");
+
+        radix = local_radix;
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("u", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 1 && args.size() != 2)
+            return cmd::status::invalid_syntax("expected either just address or address and range");
+
+        uintptr_t virtual_start_address;
+        uintptr_t virtual_end_address;
+
+        auto expect_virtual_start_address = arg_expect_address(args[0]);
+        if (!expect_virtual_start_address)
+            return cmd::status::invalid_syntax(expect_virtual_start_address.error());
+
+        virtual_start_address = expect_virtual_start_address.value();
+
+        int lines;
+        if (args.size() == 1) {
+            lines = DEFAULT_LINES;
+        }
+        else {
+            auto arg1 = cmd::argument(args[1]);
+            switch (arg1.type) {
+            case cmd::arg_type::integer:
+                virtual_end_address = arg1.u64;
+                if (virtual_end_address < virtual_start_address)
+                    return cmd::status::invalid_argument("invalid range, end address is smaller than start address");
+                lines = 0;
+                break;
+            case cmd::arg_type::line:
+                lines = arg1.u64;
+                break;
+            default:
+                return cmd::status::invalid_argument("invalid range");
+            }
+        }
+
+        ZydisDisassembledInstruction instruction;
+        uint8_t data[16];
+        int count = 0;
+
+        auto symbol = closest_symbol(virtual_start_address);
+        std::println("{}+0x{:x}", symbol.first, symbol.second);
+
+        while (lines ? count < lines : virtual_start_address < virtual_end_address) {
+            current_process.read_bytes(data, virtual_start_address, 16);
+
+            ZydisDisassembleIntel(!current_process.WOW64 ? ZYDIS_MACHINE_MODE_LONG_64 : ZYDIS_MACHINE_MODE_LONG_COMPAT_32, virtual_start_address, data, sizeof(data), &instruction);
+
+            auto length = instruction.info.length;
+
+            std::print("{}  {}{} {}\n", out::address(virtual_start_address), out::value(out::hex_arr(data, length)),
+                    out::align(10, length, 2), instruction.text);
+
+            virtual_start_address += length;
+            count++;
+        }
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("uf", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        auto s = args | std::views::join_with(' ') | std::ranges::to<std::string>();
+        return cmd::attempt_callback("u " + s, current_process);
+    });
+
+    cmd::register_callback("db", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 1 && args.size() != 2)
+            return cmd::status::invalid_syntax("expected either just address or address and range");
+
+        uintptr_t virtual_start_address;
+        uintptr_t virtual_end_address;
+
+        auto expect_virtual_start_address = arg_expect_address(args[0]);
+        if (!expect_virtual_start_address)
+            return cmd::status::invalid_syntax(expect_virtual_start_address.error());
+
+        virtual_start_address = expect_virtual_start_address.value();
+
+        int lines;
+        size_t bytes;
+
+        if (args.size() == 1) {
+            virtual_end_address = virtual_start_address + (DEFAULT_LINES * 0x10);
+
+            lines = DEFAULT_LINES;
+            bytes = lines * 0x10;
+        }
+        else {
+            auto arg1 = cmd::argument(args[1]);
+            switch (arg1.type) {
+            case cmd::arg_type::integer:
+                virtual_end_address = arg1.u64 + 1;
+                if (virtual_end_address < virtual_start_address)
+                    return cmd::status::invalid_argument("invalid range, end address is smaller than start address");
+                break;
+            case cmd::arg_type::line:
+                virtual_end_address = virtual_start_address + arg1.u64;
+                break;
+            default:
+                return cmd::status::invalid_argument("invalid range");
+            }
+
+            auto length = virtual_end_address - virtual_start_address;
+
+            lines = (length / 0x10) + (length % 0x10 != 0);
+            bytes = length;
+        }
+
+        auto memory = new uint8_t[bytes];
+        current_process.read_bytes(memory, virtual_start_address, bytes);
+
+        for (int i = 0; i < lines; i++) {
+            int count = bytes > 0x10 ? 0x10 : bytes;
+            auto arr = &memory[i * 0x10];
+
+            std::print("{}  {}{} {}\n", out::address(virtual_start_address), out::hex_arr(arr, count, " "), out::align(0x10, count, 3), out::char_arr(arr, count));
+
+            virtual_start_address += 0x10;
+            bytes -= 0x10;
+        }
+
+        delete[] memory;
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("lm", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        auto modules = guest::get_kernel_modules();
+        std::println("start            end              path");
+        for (auto m : modules)
+            std::println("{} {} {}", out::address(m.base_address), out::address(m.base_address + m.ldr_module.SizeOfImage), out::name(m.name.substr(0, m.name.find(".sys"))));
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("break", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        auto address = gdb::breakpoint();
+        if (!address) {
+            out::error("breakpoint failed ({})\n", address.error());
+            return cmd::status::success();
+        }
+
+        std::println("Breakpoint at {}", out::address(address.value()));
+
+        cmd::attempt_callback(std::format("u {:x} L1", address.value()), current_process);
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("g", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (gdb::resume()) {
+            std::println("continued...");
+            return cmd::status::success();
+        }
+
+        out::error("process already running\n");
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("x", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() != 1)
+            return cmd::status::invalid_syntax("expected one argument");
+
+        bool wildcard = args[0] == "*";
+        auto pdb_symbols = pdb::get_all();
+
+        for (auto &sym : pdb_symbols) {
+            if (sym.name.contains(args[0]) || wildcard)
+                std::println("{} {}", out::address(dbg::sym2addr(sym)), std::format("{}", sym.name));
+        }
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("r", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        auto expected_registers = gdb::get_registers();
+        if (!expected_registers)
+            return cmd::status::invalid_argument(expected_registers.error());
+
+        auto registers = expected_registers.value();
+
+        if (args.empty()) {
+            std::println("rax={} rbx={} rcx={}", out::value_hex(registers["rax"]), out::value_hex(registers["rbx"]), out::value_hex(registers["rcx"]));
+            std::println("rdx={} rsi={} rdi={}", out::value_hex(registers["rdx"]), out::value_hex(registers["rsi"]), out::value_hex(registers["rdi"]));
+            std::println("rip={} rsp={} rbp={}", out::value_hex(registers["rip"]), out::value_hex(registers["rsp"]), out::value_hex(registers["rbp"]));
+            std::println(" r8={}  r9={} r10={}", out::value_hex(registers["r8"]), out::value_hex(registers["r9"]), out::value_hex(registers["r10"]));
+            std::println("r11={} r12={} r13={}", out::value_hex(registers["r11"]), out::value_hex(registers["r12"]), out::value_hex(registers["r13"]));
+            std::println("r14={} r15={}", out::value_hex(registers["r14"]), out::value_hex(registers["r15"]));
+
+            auto eflags = *reinterpret_cast<gdb::eflags*>(&registers["eflags"]);
+            std::println("iopl={} {} {} {} {} {} {} {} {}", (int)eflags.IOPL, 
+                eflags.OF ? "ov" : "nv",
+                eflags.DF ? "dn" : "up",
+                eflags.IF ? "di" : "ei",
+                eflags.SF ? "ng" : "pl",
+                eflags.ZF ? "zr" : "nz",
+                eflags.AF ? "ac" : "na",
+                eflags.PF ? "po" : "pe",
+                eflags.CF ? "cy" : "nc");
+
+            std::println("cs={} ss={} ds={} es={} fs={} gs={} efl={}", 
+                out::value_hex<4>(registers["cs"]), out::value_hex<4>(registers["ss"]), out::value_hex<4>(registers["ds"]), out::value_hex<4>(registers["es"]), out::value_hex<4>(registers["fs"]), out::value_hex<4>(registers["gs"]), out::value_hex<8>(registers["eflags"]));
+
+            auto symbol = closest_symbol(registers["rip"]);
+            std::println("{}+0x{:x}", symbol.first, symbol.second);
+            cmd::attempt_callback(std::format("u {:x} L1", registers["rip"]), current_process);
+            
+            return cmd::status::success();
+        }
+
+        // first validate input
+        for (const auto &r : args)
+            if (!registers.contains(r))
+                return cmd::status::invalid_argument(std::format("register '{}' not found", r));
+
+        // then print
+        for (const auto &r : args)
+            std::println("{}={}", r, out::value_hex(registers[r]));
+
+        return cmd::status::success();
+    });
+
+    cmd::register_callback("~", [&](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+        if (args.size() > 1)
+            return cmd::status::invalid_syntax("expected either one or no arguments");
+
+        if (args.empty()) {
+            auto result = gdb::get_current_thread();
+            if (!result)
+                return cmd::status::invalid_argument(result.error());
+
+            std::println("Currently on processor {} ({} available)", result.value(), gdb::get_num_threads());
+            return cmd::status::success();
+        }
+
+        cmd::argument arg(args[0], 10);
+        if (arg.type != cmd::arg_type::integer)
+            return cmd::status::invalid_argument("expected integer");
+
+        auto result = gdb::set_current_thread(arg.u64);
+        if (!result.has_value())
+            return cmd::status::invalid_argument(result.error());
+
+        return result.value() ? cmd::status::success() : cmd::status::invalid_argument("processor doesn't exist");
+    });
+}
+
+static void int_handler(int status) 
+{
+    gdb::set_signal_raised();
+    cmd::reformat_after_signal();
+    cmd::attempt_callback("break", dbg::get_current_process());
+    std::println("");
+    cmd::finish_reformat_after_signal();
+}
+
+void dbg::install_breakpoint_signal()
+{
+    signal(SIGINT, int_handler);
+}
+
+void dbg::uninstall_breakpoint_signal()
+{
+    signal(SIGINT, SIG_DFL);
+}
+```
+
+`ntoseye/dbg.hpp`:
+
+```hpp
+#pragma once
+
+#include "pdb.hpp"
+#include "mem.hpp"
+
+#define DEFAULT_LINES 8
+
+template<typename T>
+struct is_void_return : std::is_same<T, void> {};
+
+template<typename Func, typename... Args>
+auto safe_run(Func&& func, Args&&... args) 
+{
+    using return_type = std::invoke_result_t<Func, Args...>;
+
+    if constexpr (is_void_return<return_type>::value) {
+        try {
+            func(std::forward<Args>(args)...);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    } else {
+        try {
+            return std::optional<return_type>(func(std::forward<Args>(args)...));
+        } catch (...) {
+            return std::optional<return_type>();
+        }
+    }
+}
+
+namespace dbg {
+    mem::process& get_current_process();
+
+    uintptr_t str2v(const std::string &str, int rad = 16);
+
+    uintptr_t sym2addr(pdb::symbol &symbol, const std::string &fn_start = ".text", const std::string &data_start = ".data");
+    uintptr_t name2addr(const std::string &name, const std::string &fn_start = ".text", const std::string &data_start = ".data");
+    std::pair<std::string, uintptr_t> closest_symbol(uintptr_t address);
+
+    void install_builtin_commands();
+
+    void install_breakpoint_signal();
+    void uninstall_breakpoint_signal();
+}
+```
+
+`ntoseye/gdb.cpp`:
+
+```cpp
+#include "gdb.hpp"
+#include "log.hpp"
+#include "util.hpp"
+
+#include <cstring>
+#include <expected>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#include <print>
+#include <sstream>
+#include <vector>
+#include <ranges>
+#include <algorithm>
+#include <functional>
+
+// to-do: display error messages?
+
+FILE *gdb_in;
+FILE *gdb_out;
+pid_t gdb_pid = 0;
+
+bool in_breakpoint = false;
+bool signal_raised = false;
+
+int processor_count = 0;
+
+struct mi_entry {
+    std::string name;
+    std::string content;
+    std::vector<mi_entry> children;
+
+    mi_entry()
+    {
+
+    }
+
+    mi_entry(const std::string &name, const std::string &content) : name(name), content(content)
+    {
+
+    }
+
+    mi_entry& operator[](const std::string &name)
+    {
+        auto x = std::find_if(children.begin(), children.end(), [name](auto element){
+            return element.name == name;
+        });
+
+        if (x == children.end())
+            return *std::find_if(children.begin(), children.end(), [name](auto element){
+                return element.content == name;
+            });
+
+        if (x == children.end())
+            throw std::bad_expected_access("could not find expected entry from gdb");
+
+        return *x;
+    }
+
+    mi_entry& operator()(const std::string &name)
+    {
+        auto x = std::find_if(children.begin(), children.end(), [name](auto element){
+            return element.name.contains(name);
+        });
+
+        if (x == children.end())
+            return *std::find_if(children.begin(), children.end(), [name](auto element){
+                return element.content.contains(name);
+            });
+
+        if (x == children.end())
+            throw std::bad_expected_access("could not find expected entry from gdb");
+
+        return *x;
+    }
+
+    inline bool is_valid()
+    {
+        return !content.empty();
+    }
+
+    inline bool is_string()
+    {
+        return children.empty() && !content.empty();
+    }
+
+    inline bool is_array()
+    {
+        return !children.empty();
+    }
+
+    static mi_entry construct(const std::string &raw_output)
+    {
+        mi_entry outputs;
+
+        std::istringstream iss(raw_output);
+        std::string line;
+        while (std::getline(iss, line)) {
+            if (line.contains("(gdb)"))
+                continue;
+
+            outputs.children.push_back(mi_entry());
+            auto &output = outputs.children.back();
+
+            const std::string& delim = ",";
+            auto line_elems = line | std::views::split(delim)
+                                   | std::ranges::to<std::vector<std::string>>();
+
+            auto first_string = line_elems[0];
+            if (first_string[0] == '~' || first_string[0] == '&' || first_string[0] == '^') {
+                output.content = util::string_replace(util::string_replace(first_string.substr(2), "\\n", "\n"), "\"", "");
+                continue;
+            }
+
+            output.content = line_elems.begin()->substr(1, line_elems.begin()->back());
+            line_elems.erase(line_elems.begin());
+
+            using iter_t = std::vector<std::string>::iterator;
+
+            std::function<iter_t(mi_entry &current_array, iter_t it)> recurse_build;
+            recurse_build = [&](mi_entry &current_array, iter_t it) -> iter_t {
+                for (auto iter = it; iter != line_elems.end();) {
+                    auto content = *iter;
+                    auto divide_at_equal = content.find("=");
+
+                    content = util::string_replace(util::string_replace(content, "\\n", "\n"), "\"", "");
+
+                    if (content.contains("{")) {
+                        current_array.children.push_back(mi_entry(content.substr(0, divide_at_equal), ""));
+                        auto next_level = current_array.children.back().children;
+
+                        *iter = content.substr(content.find("{") + 1);
+                        iter = recurse_build(current_array.children.back(), iter);
+                    }
+                    else if (content.contains("}")) {
+                        current_array.children.push_back(mi_entry(content.substr(0, divide_at_equal), util::string_replace(content.substr(divide_at_equal + 1, content.back() - 2), "}", "")));
+                        iter++;
+                        return iter;
+                    }
+                    else {
+                        current_array.children.push_back(mi_entry(content.substr(0, divide_at_equal), content.substr(divide_at_equal + 1, content.back() - 1)));
+                        iter++;
+                    }
+                }
+
+                return iter_t();
+            };
+
+            recurse_build(output, line_elems.begin());
+        }
+
+        return outputs;
+    }
+
+    void dump(int indent = 0) 
+    {
+        for (auto & x : children) {
+            if (x.children.size() != 0) {
+                std::println("{}> {}", std::string(indent, ' '), x.content);
+                x.dump(indent + 2);
+            }
+            else {
+                std::println("{}> {} = {}", std::string(indent, ' '), x.name, x.content);
+            }
+        }
+    }
+};
+
+bool send_command(const std::string& command) 
+{
+    if (!gdb_in) return false;
+    fprintf(gdb_in, "%s\n", command.c_str());
+    fflush(gdb_in);
+    return true;
+}
+
+std::string read_output() 
+{
+    if (!gdb_out) return "";
+    char buffer[1024];
+    std::string output;
+    while (fgets(buffer, sizeof(buffer), gdb_out)) {
+        output += buffer;
+        if (strstr(buffer, "(gdb)") != nullptr) break;
+    }
+    return output;
+}
+
+bool gdb::initialize()
+{
+    int in_pipe[2], out_pipe[2];
+
+    if (pipe(in_pipe) == -1 || pipe(out_pipe) == -1)
+        return false;
+
+    gdb_pid = fork();
+    if (gdb_pid == -1)
+        return false;
+
+    if (gdb_pid == 0) {
+        dup2(in_pipe[0], STDIN_FILENO);
+        dup2(out_pipe[1], STDOUT_FILENO);
+        dup2(out_pipe[1], STDERR_FILENO);
+
+        close(in_pipe[0]);
+        close(in_pipe[1]);
+        close(out_pipe[0]);
+        close(out_pipe[1]);
+
+        execlp("gdb", "gdb", "--quiet", "--interpreter=mi", nullptr);
+        exit(1);
+    }
+
+    // parent process
+    close(in_pipe[0]);
+    close(out_pipe[1]);
+
+    gdb_in = fdopen(in_pipe[1], "w");
+    gdb_out = fdopen(out_pipe[0], "r");
+
+    if (!gdb_in || !gdb_out)
+        return false;
+
+    std::print("attempting to connect to gdbstub, this may take awhile...");
+    std::fflush(stdout);
+
+    send_command("target remote localhost:1234");
+    send_command("c");
+
+    auto initial_message = read_output();
+    auto target_remote_result = read_output();
+    auto countinue_result = read_output();
+
+    auto entry = mi_entry::construct(target_remote_result);
+    for (const auto & x : entry.children) {
+        if (x.content == "thread-created")
+            processor_count++;
+    }
+
+    out::clear();
+
+    if (target_remote_result.contains("Connection timed out.") || countinue_result.contains("not being run")) {
+        gdb::detach();
+        return false;
+    }
+
+    return true;
+}
+
+void gdb::detach()
+{
+    send_command("q");
+
+    if (gdb_in) 
+        fclose(gdb_in);
+    if (gdb_out) 
+        fclose(gdb_out);
+
+    if (gdb_pid > 0) {
+        kill(gdb_pid, SIGTERM);
+        waitpid(gdb_pid, nullptr, 0);
+    }
+
+    // prevent detaching more than once
+    gdb_in = 0;
+    gdb_out = 0;
+    gdb_pid = 0;
+}
+
+std::expected<uintptr_t, std::string> gdb::breakpoint()
+{
+    if (!gdb_pid)
+        return std::unexpected("feature not available");
+
+    if (!signal_raised)
+        kill(gdb_pid, SIGINT);
+    else
+        signal_raised = false;
+
+    if (in_breakpoint) {
+        read_output();
+        return std::unexpected("breakpoint already established");
+    }
+
+    // apparently when user does CTRL+C, we don't have to send anything
+    auto output = mi_entry::construct(read_output());
+    uintptr_t addr = 0;
+
+    in_breakpoint = true;
+
+    try {
+        auto gdb_result = output["stopped"]["frame"]["addr"].content;
+        std::sscanf(gdb_result.c_str(), "%lx", &addr);
+        return addr;
+    }
+    catch (...) {
+        return std::unexpected("failed to parse gdb output");
+    }
+}
+
+bool gdb::resume()
+{
+    auto res = in_breakpoint;
+    if (in_breakpoint) {
+        send_command("c");
+        read_output();
+        in_breakpoint = false;
+    }
+
+    return res;
+}
+
+std::expected<std::map<std::string, uintptr_t>, std::string> gdb::get_registers()
+{
+    if (!in_breakpoint)
+        return std::unexpected("breakpoint needed to view registers");
+
+    constexpr auto extract_value_from_line = [](const mi_entry &entry) {
+        char throwaway[12];
+        uintptr_t address;
+
+        std::sscanf(entry.content.c_str(), "%s %lx", throwaway, &address);
+
+        return address;
+    };
+
+    send_command("info registers");
+    auto output = mi_entry::construct(read_output());
+
+    std::map<std::string, uintptr_t> result;
+    result["rax"] = extract_value_from_line(output("rax"));
+    result["rcx"] = extract_value_from_line(output("rcx"));
+    result["rdx"] = extract_value_from_line(output("rdx"));
+    result["rbx"] = extract_value_from_line(output("rbx"));
+    result["rsp"] = extract_value_from_line(output("rsp"));
+    result["rbp"] = extract_value_from_line(output("rbp"));
+    result["rsi"] = extract_value_from_line(output("rsi"));
+    result["rdi"] = extract_value_from_line(output("rdi"));
+    result["r8"] = extract_value_from_line(output("r8"));
+    result["r9"] = extract_value_from_line(output("r9"));
+    result["r10"] = extract_value_from_line(output("r10"));
+    result["r11"] = extract_value_from_line(output("r11"));
+    result["r12"] = extract_value_from_line(output("r12"));
+    result["r13"] = extract_value_from_line(output("r13"));
+    result["r14"] = extract_value_from_line(output("r14"));
+    result["r15"] = extract_value_from_line(output("r15"));
+    result["rip"] = extract_value_from_line(output("rip"));
+    result["eflags"] = extract_value_from_line(output("eflags"));
+    result["cs"] = extract_value_from_line(output("cs"));
+    result["ss"] = extract_value_from_line(output("ss"));
+    result["ds"] = extract_value_from_line(output("ds"));
+    result["es"] = extract_value_from_line(output("es"));
+    result["fs"] = extract_value_from_line(output("fs"));
+    result["gs"] = extract_value_from_line(output("gs"));
+    result["cr0"] = extract_value_from_line(output("cr0"));
+    result["cr2"] = extract_value_from_line(output("cr2"));
+    result["cr3"] = extract_value_from_line(output("cr3"));
+    result["cr4"] = extract_value_from_line(output("cr4"));
+    result["cr8"] = extract_value_from_line(output("cr8"));
+    result["efer"] = extract_value_from_line(output("efer"));
+    
+    // to-do: xmm registers
+
+    return result;
+}
+
+int gdb::get_num_threads()
+{
+    return processor_count;
+}
+
+std::expected<int, std::string> gdb::get_current_thread()
+{
+    if (!in_breakpoint)
+        return std::unexpected("breakpoint needed to get current thread");
+
+    send_command("thread");
+    auto entry = mi_entry::construct(read_output());
+
+    // entry.dump();
+
+    for (const auto & x : entry.children) {
+        if (x.content.contains("Current")) {
+            int result = -1;
+            std::sscanf(x.content.c_str(), "[Current thread is %d", &result);
+            return result - 1;
+        }
+    }
+
+    return std::unexpected("failed to parse gdb output");
+}
+
+std::expected<bool, std::string> gdb::set_current_thread(int index)
+{
+    if (!in_breakpoint)
+        return std::unexpected("breakpoint needed to set current thread");
+
+    if (index >= processor_count || index < 0)
+        return false;
+
+    send_command(std::format("thread {}", index + 1));
+    read_output();
+    return true;
+}
+
+void gdb::set_signal_raised()
+{
+    signal_raised = true;
+}
+```
+
+`ntoseye/gdb.hpp`:
+
+```hpp
+#pragma once
+
+#include <cstdint>
+#include <expected>
+#include <string>
+#include <map>
+
+namespace gdb {
+    struct eflags {
+        uint32_t CF : 1;   // Carry Flag
+        uint32_t : 1;      // Reserved
+        uint32_t PF : 1;   // Parity Flag
+        uint32_t : 1;      // Reserved
+        uint32_t AF : 1;   // Auxiliary Carry Flag
+        uint32_t : 1;      // Reserved
+        uint32_t ZF : 1;   // Zero Flag
+        uint32_t SF : 1;   // Sign Flag
+        uint32_t TF : 1;   // Trap Flag
+        uint32_t IF : 1;   // Interrupt Enable Flag
+        uint32_t DF : 1;   // Direction Flag
+        uint32_t OF : 1;   // Overflow Flag
+        uint32_t IOPL : 2; // I/O Privilege Level (2 bits)
+        uint32_t NT : 1;   // Nested Task Flag
+        uint32_t : 1;      // Reserved
+        uint32_t RF : 1;   // Resume Flag
+        uint32_t VM : 1;   // Virtual 8086 Mode
+        uint32_t AC : 1;   // Alignment Check
+        uint32_t VIF : 1;  // Virtual Interrupt Flag
+        uint32_t VIP : 1;  // Virtual Interrupt Pending
+        uint32_t ID : 1;   // ID Flag (Can check CPUID support)
+        uint32_t : 10;     // Reserved
+    };
+
+    bool initialize();
+    void detach();
+
+    std::expected<uintptr_t, std::string> breakpoint();
+    bool resume();
+
+    int get_num_threads();
+    std::expected<int, std::string> get_current_thread();
+    std::expected<bool, std::string> set_current_thread(int index);
+
+    std::expected<std::map<std::string, uintptr_t>, std::string> get_registers();
+
+    void set_signal_raised();
+}
+```
+
+`ntoseye/guest.cpp`:
+
+```cpp
+#include "guest.hpp"
+#include "pdb.hpp"
+#include "util.hpp"
+#include "host.hpp"
+#include "mem.hpp"
+#include "log.hpp"
+
+#include "windefs.h"
+
+#include <cstdint>
+#include <limits>
+
+static uintptr_t mm_pte_base = 0;
+static uintptr_t mm_pde_base = 0;
+static uintptr_t mm_ppe_base = 0;
+static uintptr_t mm_pxe_base = 0;
+static uintptr_t mm_pxe_self = 0;
+
+#define VIRTUAL_ADDRESS_BITS 48
+#define VIRTUAL_ADDRESS_MASK ((((uintptr_t)1) << VIRTUAL_ADDRESS_BITS) - 1)
+#define PTE_SHIFT 3
+#define PTI_SHIFT 12
+#define PDI_SHIFT 21
+#define PPI_SHIFT 30
+#define PXI_SHIFT 39
+
+#define PTE_PER_PAGE 512
+#define PDE_PER_PAGE 512
+#define PPE_PER_PAGE 512
+#define PXE_PER_PAGE 512
+
+#define PTI_MASK_AMD64 (PTE_PER_PAGE - 1)
+#define PDI_MASK_AMD64 (PDE_PER_PAGE - 1)
+#define PPI_MASK (PPE_PER_PAGE - 1)
+#define PXI_MASK (PXE_PER_PAGE - 1)
+
+#define mi_get_pxe_offset(va) ((uint32_t)(((uintptr_t)(va) >> PXI_SHIFT) & PXI_MASK))
+
+#define mi_get_pxe_address(va)   ((uint64_t)mm_pxe_base + mi_get_pxe_offset(va))
+
+#define mi_get_ppe_address(va)   \
+    ((uint64_t)(((((uintptr_t)(va) & VIRTUAL_ADDRESS_MASK) >> PPI_SHIFT) << PTE_SHIFT) + mm_ppe_base))
+
+#define mi_get_pde_address(va)  \
+    ((uint64_t)(((((uintptr_t)(va) & VIRTUAL_ADDRESS_MASK) >> PDI_SHIFT) << PTE_SHIFT) + mm_pde_base))
+
+#define mi_get_pte_address(va) \
+    ((uint64_t)(((((uintptr_t)(va) & VIRTUAL_ADDRESS_MASK) >> PTI_SHIFT) << PTE_SHIFT) + mm_pte_base))
+
+static mem::process ntoskrnl_process;
+static std::vector<util::symbol> ntoskrnl_symbols;
+static guest::ntos_offsets ntoskrnl_offsets;
+
+static auto get_ntoskrnl_entry() -> uint64_t
+{
+    char buf[0x10000];
+
+    for (int i = 0; i < 10; i++) {
+        host::read_kvm_memory(buf, i * 0x10000, 0x10000);
+        
+        for (int o = 0; o < 0x10000; o += 0x1000) {
+            // start bytes
+            if (0x00000001000600E9 ^ (0xffffffffffff00ff & *(uint64_t*)(void*)(buf + o)))
+                continue;
+
+            // kernel entry
+            if (0xfffff80000000000 ^ (0xfffff80000000000 & *(uint64_t*)(void*)(buf + o + 0x70)))
+                continue;
+
+            // pml4
+            if (0xffffff0000000fff & *(uint64_t*)(void*)(buf + o + 0xa0))
+                continue;
+
+            ntoskrnl_process.set_dir_base(*(uint64_t*)(void*)(buf + o + 0xa0));
+            return *(uint64_t*)(void*)(buf + o + 0x70);
+        }
+    }
+
+    return 0;
+}
+
+static bool get_ntoskrnl_base_address(uint64_t kernel_entry)
+{
+    uint64_t i, o, p, u, mask = 0xfffff;
+    char buf[0x10000];
+
+    while (mask >= 0xfff) {
+        for (i = (kernel_entry & ~0x1fffff) + 0x20000000; i > kernel_entry - 0x20000000; i -= 0x200000) {
+            for (o = 0; o < 0x20; o++) {
+                ntoskrnl_process.read_bytes(buf, i + 0x10000 * o, sizeof(buf));
+
+                for (p = 0; p < 0x10000; p += 0x1000) {
+                    if (((i + 0x1000 * o + p) & mask) == 0 && *(short*)(void*)(buf + p) == IMAGE_DOS_SIGNATURE) {
+                        int kdbg = 0, pool_code = 0;
+                        for (u = 0; u < 0x1000; u++) {
+                            kdbg = kdbg || *(uint64_t*)(void*)(buf + p + u) == 0x4742444b54494e49;
+                            pool_code = pool_code || *(uint64_t*)(void*)(buf + p + u) == 0x45444f434c4f4f50;
+                            if (kdbg & pool_code) {
+                                ntoskrnl_process.base_address = i + 0x10000 * o + p;
+                                
+                                ntoskrnl_symbols = util::get_process_exports(ntoskrnl_process);
+                                if (ntoskrnl_symbols.empty())
+                                    break;
+
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        mask = mask >> 4;
+    }
+
+    return false;
+}
+
+static uint16_t get_ntos_version()
+{
+    auto get_version = util::get_proc_address(ntoskrnl_symbols, "RtlGetVersion");
+
+    auto buffer = ntoskrnl_process.read<util::page_4kb_buffer>(get_version);
+    auto buf = buffer.data;
+
+    char major = 0, minor = 0;
+
+    // rcx + 4, rcx + 8
+    for (char* b = (char*)buf; b - (char*)buf < 0xf0; b++) {
+        if (!major && !minor)
+            if (*(uint32_t*)(void*)b == 0x441c748)
+                return ((uint16_t)b[4]) * 100 + (b[5] & 0xf);
+        if (!major && (*(uint32_t*)(void*)b & 0xfffff) == 0x441c7)
+            major = b[3];
+        if (!minor && (*(uint32_t*)(void*)b & 0xfffff) == 0x841c7)
+            minor = b[3];
+    }
+
+    if (minor >= 100)
+        minor = 0;
+
+    return ((uint16_t)major) * 100 + minor;
+}
+
+static uint32_t get_ntos_build()
+{
+    uint64_t nt_build = util::get_proc_address(ntoskrnl_symbols, "NtBuildNumber");
+
+    if (nt_build) {
+        auto build = ntoskrnl_process.read<uint32_t>(nt_build);
+        if (build)
+            return build & 0xffffff;
+    }
+
+    uint64_t get_version = util::get_proc_address(ntoskrnl_symbols, "RtlGetVersion");
+
+    auto buffer = ntoskrnl_process.read<util::page_4kb_buffer>(get_version);
+    auto buf = buffer.data;
+
+    // rcx + 12
+    for (char* b = (char*)buf; b - (char*)buf < 0xf0; b++) {
+        uint32_t val = *(uint32_t*)(void*)b & 0xffffff;
+        if (val == 0x0c41c7 || val == 0x05c01b)
+            return *(uint32_t*)(void*)(b + 3);
+    }
+
+    return 0;
+}
+
+// https://www.gaijin.at/en/infos/windows-version-numbers
+static bool set_ntos_offsets(uint16_t version, uint32_t build)
+{
+    switch (version) {
+    case 1000: /* W10 */
+        ntoskrnl_offsets = (guest::ntos_offsets){
+            .active_process_links = 0x2e8,
+            .session = 0x448,
+            .session_id = 0x8,
+            .client_id = 0x440,
+            .stack_count = 0x23c,
+            .image_filename = 0x450,
+            .dir_base = 0x28,
+            .peb = 0x3f8,
+            .peb32 = 0x30,
+            .thread_list_head = 0x488,
+            .thread_list_entry = 0x6a8,
+            .teb = 0xf0,
+            .vad_root = 0x7d8,
+            .parent_client_id = 0x540,
+            .object_table = 0x570,
+        };
+
+        if (build >= 18362) { /* Version 1903 or higher */
+            ntoskrnl_offsets.active_process_links = 0x2f0;
+            ntoskrnl_offsets.thread_list_entry = 0x6b8;
+        }
+
+        if (build >= 19041) { /* Version 2004 or higher */
+            ntoskrnl_offsets.active_process_links = 0x448;
+            ntoskrnl_offsets.stack_count = 0x348;
+            ntoskrnl_offsets.image_filename = 0x5a8;
+            ntoskrnl_offsets.peb = 0x550;
+            ntoskrnl_offsets.thread_list_head = 0x5e0;
+            ntoskrnl_offsets.thread_list_entry = 0x4e8;
+            ntoskrnl_offsets.session = 0x558;
+        }
+
+        if (build >= 19045) {
+
+        }
+
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
+bool guest::initialize()
+{
+    if (!get_ntoskrnl_base_address(get_ntoskrnl_entry())) {
+        out::error("failed to get ntoskrnl base address\n");
+        return false;
+    }
+
+    auto nt_version = get_ntos_version();
+    auto nt_build = get_ntos_build();
+
+    if (!set_ntos_offsets(nt_version, nt_build)) {
+        out::error("failed to get ntoskrnl offsets\n");
+        return false;
+    }
+
+    auto initial_system_process = util::get_proc_address(ntoskrnl_symbols, "PsInitialSystemProcess");
+    ntoskrnl_process.virtual_process = ntoskrnl_process.read<uint64_t>(initial_system_process);
+    ntoskrnl_process.physical_process = ntoskrnl_process.virtual_to_physical(ntoskrnl_process.virtual_process);
+
+    // set the basic process info of ntoskrnl, lil hack
+    uint64_t a = 0, b = 0;
+    query_process_basic_info(a, b, ntoskrnl_process);
+
+    std::print("Windows Kernel Version {}\n", out::value(nt_build));
+    std::print("Kernel base = {} PsLoadedModuleList = {}\n\n", 
+            out::address(ntoskrnl_process.base_address, out::fmt::x, out::prefix::with_prefix), 
+            out::address(util::get_proc_address(ntoskrnl_symbols, "PsLoadedModuleList"), out::fmt::x, out::prefix::with_prefix));
+
+    pdb::load(ntoskrnl_process, pdb::process_priv::kernel);
+
+    uint8_t mi_get_pte_address_signature[] = "\x48\xc1\xe9\x09\x48\xb8\xf8\xff\xff\xff\x7f\x00\x00\x00\x48\x23\xc8\x48\xb8\x00\x00\x00\x00\x00\x00\x00\x00\x48\x03\xc1\xc3";
+    char mi_get_pte_address_mask[] = "xxxxxxxxxxxxxxxxxxx????????xxxx";
+
+    auto section = IMAGE_FIRST_SECTION(ntoskrnl_process.nt_headers);
+    for (int i = 0; i < ntoskrnl_process.nt_headers->FileHeader.NumberOfSections; i++, section++) {
+        section->Name[7] = 0;
+        if (strcmp((char*)section->Name, ".text") == 0)
+            break;
+    }
+
+    auto mi_get_pte_address = util::find_pattern(ntoskrnl_process, ntoskrnl_process.base_address + section->VirtualAddress, section->SizeOfRawData, mi_get_pte_address_signature, mi_get_pte_address_mask);
+    
+    mm_pte_base = ntoskrnl_process.read<uint64_t>(mi_get_pte_address + 0x13);
+    mm_pde_base = mm_pte_base + (mm_pte_base >> 9 & 0x7FFFFFFFFF);
+    mm_ppe_base = mm_pde_base + (mm_pde_base >> 9 & 0x3FFFFFFF);
+    mm_pxe_base = mm_ppe_base + (mm_ppe_base >> 9 & 0x1FFFFF);
+    mm_pxe_self = mm_pxe_base + (mm_pxe_base >> 9 & 0xFFF);
+
+    return true;
+}
+
+mem::process guest::get_ntoskrnl_process()
+{
+    return ntoskrnl_process;
+}
+
+guest::ntos_offsets guest::get_ntoskrnl_offsets()
+{
+    return ntoskrnl_offsets;
+}
+
+std::vector<util::module> guest::get_kernel_modules()
+{
+    PEB_LDR_DATA ldr = { 0 };
+    ldr.InMemoryOrdermoduleList.Flink = util::get_proc_address(ntoskrnl_symbols, "PsLoadedModuleList");
+
+    uint64_t head = 0;
+    uint64_t end = 0;
+    uint64_t prev = 0;
+
+    LDR_MODULE ldr_module;
+
+    std::vector<util::module> modules;
+
+    while (util::query_module_basic_info(ntoskrnl_process, ldr, ldr_module, head, end, prev, false)) {
+        auto module_wide_name = new short[ldr_module.BaseDllName.Length];
+        ntoskrnl_process.read_bytes(module_wide_name, ldr_module.BaseDllName.Buffer, ldr_module.BaseDllName.Length * sizeof(short));
+
+        std::string modulename;
+        for (int i = 0; i < ldr_module.BaseDllName.Length; i++)
+            modulename.push_back(((char*)module_wide_name)[i*2]);
+
+        delete[] module_wide_name;
+
+        modules.push_back({ ntoskrnl_process, modulename.c_str(), ldr_module.BaseAddress, ldr_module });
+    }
+
+    return modules;
+}
+
+bool guest::query_process_basic_info(uint64_t &physical_process, uint64_t &virtual_process, mem::process &current_process)
+{
+    if (physical_process == 0 && virtual_process == 0) {
+        physical_process = ntoskrnl_process.physical_process;
+        virtual_process = ntoskrnl_process.virtual_process;
+    }
+    else {
+        virtual_process = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.active_process_links) - ntoskrnl_offsets.active_process_links;
+        if (!virtual_process)
+            return false;
+
+        physical_process = current_process.virtual_to_physical(virtual_process);
+        if (!physical_process)
+            return false;
+    }
+
+    current_process.process_id = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.active_process_links - 8);
+    current_process.physical_process = physical_process;
+    current_process.virtual_process = virtual_process;
+
+    current_process.set_dir_base(host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.dir_base));
+
+    util::set_process_peb(current_process, ntoskrnl_offsets.peb);
+
+    current_process.win_dbg_data.session_id = ntoskrnl_process.read<uint32_t>(host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.session) + ntoskrnl_offsets.session_id);
+    current_process.win_dbg_data.client_id = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.client_id);
+    current_process.win_dbg_data.peb_address = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.peb);
+    current_process.win_dbg_data.parent_client_id = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.parent_client_id);
+    current_process.win_dbg_data.object_table_address = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.object_table);
+
+    return true;
+}
+
+mem::process guest::find_process(const std::string &name)
+{
+    uint64_t physical_process = 0;
+    uint64_t virtual_process = 0;
+    mem::process current_process;
+
+    while (query_process_basic_info(physical_process, virtual_process, current_process)) {
+        auto stack_count = host::read_kvm_memory<uint64_t>(physical_process + ntoskrnl_offsets.stack_count);
+
+        if (current_process.process_id < std::numeric_limits<int>::max() && stack_count) {
+            auto base_module = util::get_module(current_process, {});
+
+            if (name == base_module.name.c_str()) {
+
+                auto physical_vad_root = physical_process + ntoskrnl_offsets.vad_root;
+                auto vad_count = current_process.read<uint64_t>(physical_process + ntoskrnl_offsets.vad_root + 0x10);
+    
+                std::vector<uint64_t> visit;
+
+                visit.push_back(physical_vad_root);
+
+                while (visit.size() != 0) {
+                    auto virtual_vad = host::read_kvm_memory<uintptr_t>(visit.back());
+                    visit.pop_back();
+
+                    if (!virtual_vad)
+                        continue;
+
+                    auto physical_vad = current_process.virtual_to_physical(virtual_vad);
+                    visit.push_back(physical_vad + 0);
+                    visit.push_back(physical_vad + 8);
+
+                    auto short_vad = host::read_kvm_memory<MMVAD_SHORT>(physical_vad);
+
+                    if (util::is_vad_short(short_vad)) {
+                        MMVAD full_vad = { 0 };
+                        full_vad.Core = short_vad;
+
+                        current_process.vad_list.push_back(full_vad);
+                    }
+                    else {
+                        current_process.vad_list.push_back(host::read_kvm_memory<MMVAD>(physical_vad));
+                    }
+                }
+
+                current_process.base_address = base_module.base_address;
+
+                return current_process;
+            }
+        }
+    }
+
+    return {};
+}
+
+uint64_t guest::get_pxe_address(uint64_t va)
+{
+    auto x = ((PMMPTE)mm_pxe_base + (((uint64_t)va >> 39) & 0x1FF));
+    return *reinterpret_cast<uint64_t*>(&x);
+}
+
+uint64_t guest::get_ppe_address(uint64_t va)
+{
+    return mi_get_ppe_address(va);
+}
+
+uint64_t guest::get_pde_address(uint64_t va)
+{
+    return mi_get_pde_address(va);
+}
+
+uint64_t guest::get_pte_address(uint64_t va)
+{
+    return mi_get_pte_address(va);
+}
+```
+
+`ntoseye/guest.hpp`:
+
+```hpp
+#pragma once
+
+#include "mem.hpp"
+#include "util.hpp"
+
+#include <cstdint>
+#include <string>
+
+namespace guest {
+    struct ntos_offsets {
+        int64_t active_process_links,
+                session,
+                session_id,
+                client_id,
+                stack_count,
+                image_filename,
+                dir_base,
+                peb,
+                peb32,
+                thread_list_head,
+                thread_list_entry,
+                teb,
+                vad_root,
+                parent_client_id,
+                object_table;
+    };
+
+    bool initialize();
+
+    mem::process get_ntoskrnl_process();
+    ntos_offsets get_ntoskrnl_offsets();
+
+    std::vector<util::module> get_kernel_modules();
+
+    bool query_process_basic_info(uint64_t &physical_process, uint64_t &virtual_process, mem::process &current_process);
+    mem::process find_process(const std::string &name);
+
+    uint64_t get_pxe_address(uint64_t va);
+    uint64_t get_ppe_address(uint64_t va);
+    uint64_t get_pde_address(uint64_t va);
+    uint64_t get_pte_address(uint64_t va);
+}
+```
+
+`ntoseye/host.cpp`:
+
+```cpp
+#include "host.hpp"
+#include "util.hpp"
+#include "log.hpp"
+
+#include <cstdint>
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+
+#include <stdio.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <stdint.h>
+
+#include <sys/uio.h>
+
+#define KFIXV 0x80000000
+#define KFIX(x) ((x) < KFIXV ? (x) : ((x) - KFIXV))
+
+struct memory_region {
+    uintptr_t start;
+    uintptr_t end;
+    size_t length;
+};
+
+static int pid = 0;
+static memory_region largest_region;
+
+static int get_kvm_pid()
+{
+    int result = 0;
+
+    std::ranges::all_of(std::filesystem::directory_iterator("/proc"),
+        [&](const auto& dir_entry) -> bool {
+            if (!dir_entry.is_directory())
+                return true;
+
+            try {
+                std::ranges::all_of(std::filesystem::directory_iterator(dir_entry.path().string() + "/fd"),
+                    [&](const auto& dir_entry) -> bool {
+                        if (dir_entry.is_symlink() && std::filesystem::read_symlink(dir_entry) == "/dev/kvm") {
+                            std::sscanf(dir_entry.path().c_str(), "/proc/%d/", &result);
+                            return false;
+                        }
+                        
+                        return true;
+                    }
+                );
+            }
+            catch (...) {
+                // dont care
+            }
+
+            return result == 0;
+        }
+    );
+
+    return result;
+}
+
+int host::get_kvm_pid()
+{
+    return pid ? pid : ::get_kvm_pid();
+}
+
+static std::vector<memory_region> get_kvm_memory_regions(int pid)
+{
+    std::ifstream maps("/proc/" + std::to_string(pid) + "/maps");
+    std::vector<memory_region> regions;
+
+    std::string line;
+    while (std::getline(maps, line)) {
+        uintptr_t start, end;
+        std::sscanf(line.c_str(), "%lx-%lx", &start, &end);
+
+        regions.push_back({ start, end, end - start });
+    }
+
+    return regions;
+}
+
+bool host::initialize()
+{
+    pid = get_kvm_pid();
+    if (!pid) {
+        out::error("failed to find kvm\n");
+        return false;
+    }
+
+    auto regions = get_kvm_memory_regions(pid);
+    if (regions.empty()) {
+        out::error("failed to get memory regions\n");
+        return false;
+    }
+
+    largest_region = *std::max_element(regions.begin(), regions.end(),
+            [](const auto& a, const auto& b) { return a.length < b.length; });
+
+    return true;
+}
+
+ssize_t host::read_kvm_memory(void *local_address, uint64_t remote_address, size_t length)
+{
+    struct iovec local;
+    struct iovec remote;
+    local.iov_base = local_address;
+    local.iov_len = length;
+    remote.iov_base = (void*)((char*)largest_region.start + KFIX(remote_address));
+    remote.iov_len = length;
+    return process_vm_readv(pid, &local, 1, &remote, 1, 0);
+}
+
+ssize_t host::write_kvm_memory(void *local_address, uint64_t remote_address, size_t length)
+{
+    struct iovec local;
+    struct iovec remote;
+    local.iov_base = local_address;
+    local.iov_len = length;
+    remote.iov_base = (void*)((char*)largest_region.start + KFIX(remote_address));
+    remote.iov_len = length;
+    return process_vm_writev(pid, &local, 1, &remote, 1, 0);
+}
+```
+
+`ntoseye/host.hpp`:
+
+```hpp
+#pragma once
+
+#include "mem.hpp"
+
+namespace host {
+    bool initialize();
+    ssize_t read_kvm_memory(void *local_address, uint64_t remote_address, size_t length);
+    ssize_t write_kvm_memory(void *local_address, uint64_t remote_address, size_t length);
+
+    int get_kvm_pid();
+
+    template <typename T>
+    T read_kvm_memory(uint64_t remote_address)
+    {
+        T result;
+        for (
+            ssize_t remaining = 0; 
+            remaining < sizeof(T); 
+            remaining += read_kvm_memory((char*)&result + remaining, remote_address + remaining, sizeof(T) - remaining)
+        ) {
+            // ...
+        }
+
+        return result;
+    }
+
+    template <typename T>
+    void write_kvm_memory(uint64_t remote_address, T data)
+    {
+        for (
+            ssize_t remaining = 0; 
+            remaining < sizeof(T); 
+            remaining += write_kvm_memory((char*)&data + remaining, remote_address + remaining, sizeof(T) - remaining)
+        ) {
+            // ...
+        }
+    }
+
+    mem::process get_ntoskrnl();
+}
+```
+
+`ntoseye/log.hpp`:
+
+```hpp
+#pragma once
+
+#include <print>
+#include <format>
+#include <vector>
+
+#include "termcolors.h"
+
+// i wanted this to be named 'log' but it conflicts with cmath in sol2/lua
+namespace out {
+    enum class prefix : bool {
+        no_prefix = false,
+        with_prefix = true
+    };
+
+    enum class fmt : bool {
+        x = false,
+        X = true
+    };
+
+    static inline void clear() { std::print("\33[2K\r"); }
+
+    template<typename... Args>
+    static inline void error(std::format_string<Args...> fmt, Args&&... args) 
+    {
+        std::print("{}error: {}", COLOR_ERROR, COLOR_RESET);
+        std::print(fmt, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    static inline void warn(std::format_string<Args...> fmt, Args&&... args) 
+    {
+        std::print("{}warn: {}", COLOR_WARN, COLOR_RESET);
+        std::print(fmt, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    static inline void special(std::format_string<Args...> fmt, Args&&... args) 
+    {
+        std::print("{}", COLOR_WARN);
+        std::print(fmt, std::forward<Args>(args)...);
+        std::print("{}", COLOR_RESET);
+    }
+
+    static inline std::string indent(int lvl = 1)
+    {
+        // to-do: maybe don't hardcode 4 spaces, idk
+        return std::string((lvl * 4) - 1, ' ');
+    }
+
+    template <typename T = uint64_t>
+    static inline std::string value(T v)
+    {
+        return std::format("{}{}{}", COLOR_VALUE, v, COLOR_RESET);
+    }
+
+    static inline std::string name(const std::string &s)
+    {
+        return std::format("{}{}{}", COLOR_NAME, s, COLOR_RESET);
+    }
+
+    static inline std::string green(int v)
+    {
+        return std::format("{}{}{}", COLOR_GREEN, v, COLOR_RESET);
+    }
+
+    static inline std::string red(int v)
+    {
+        return std::format("{}{}{}", COLOR_RED, v, COLOR_RESET);
+    }
+
+    static inline std::string yellow(int v)
+    {
+        return std::format("{}{}{}", COLOR_YELLOW, v, COLOR_RESET);
+    }
+
+    template<typename... Args>
+    [[nodiscard]] static inline auto vformat(std::string_view fmt, Args&&... args)
+    {
+        return std::vformat(fmt, std::make_format_args(args...));
+    }
+
+    template <int bytes = 16>
+    static inline std::string address(uint64_t v, fmt c = fmt::x, prefix p = prefix::no_prefix)
+    {
+        auto prefix = static_cast<bool>(p) ? "0x" : "";
+        auto letter_case = static_cast<bool>(c) ? "X" : "x";
+        return vformat(vformat("{{}}{}{{:0{}{}}}{{}}", prefix, bytes, letter_case), COLOR_ADDRESS, v, COLOR_RESET);
+    }
+
+    template <int bytes = 16>
+    static inline std::string value_hex(uint64_t v, fmt c = fmt::x, prefix p = prefix::no_prefix)
+    {
+        auto prefix = static_cast<bool>(p) ? "0x" : "";
+        auto letter_case = static_cast<bool>(c) ? "X" : "x";
+        return vformat(vformat("{{}}{}{{:0{}{}}}{{}}", prefix, bytes, letter_case), COLOR_VALUE, v, COLOR_RESET);
+    }
+
+    static inline std::string hex_arr(uint8_t *bytes, size_t length, const std::string &suffix = "")
+    {
+        std::string result;
+        for (int i = 0; i < length; i++)
+            result = vformat("{}{:02x}{}", result, bytes[i], suffix);
+        return result;
+    }
+
+    static inline std::string char_arr(uint8_t *bytes, size_t length, const std::string &suffix = "")
+    {
+        std::string result;
+        for (int i = 0; i < length; i++)
+            result = vformat("{}{:c}{}", result, std::isprint(bytes[i]) ? bytes[i] : '.', suffix);
+        return result;
+    }
+
+    static inline std::string align(int max_count, int count, int spaces = 1)
+    {
+        auto rem = max_count - count;
+        return rem <= 0 ? "" : std::string(rem * spaces, ' ');
+    }
+}
+```
+
+`ntoseye/lua.cpp`:
+
+```cpp
+#include "lua.hpp"
+#include "cmd.hpp"
+#include "guest.hpp"
+#include "mem.hpp"
+#include "config.hpp"
+#include "log.hpp"
+
+#include <filesystem>
+
+#include <sol/forward.hpp>
+
+#include <sol/sol.hpp>
+#include <sol/types.hpp>
+#include <sol/usertype_container.hpp>
+
+sol::state lua_state;
+
+bool lua::initialize()
+{
+    lua_state = sol::state();
+
+    auto scripts_directory = config::get_storage_directory() + "/scripts";
+    std::filesystem::create_directories(scripts_directory);
+
+    lua_state.open_libraries(sol::lib::base, sol::lib::string, sol::lib::math);
+
+    lua_state["status_code_success"] = (double)cmd::status_code::success;
+    lua_state["status_code_invalid_syntax"] = (double)cmd::status_code::invalid_syntax;
+    lua_state["status_code_invalid_argument"] = (double)cmd::status_code::invalid_argument;
+    lua_state["status_code_unimplemented"] = (double)cmd::status_code::unimplemented;
+    lua_state["status_code_unknown_command"] = (double)cmd::status_code::unknown_command;
+    
+    lua_state.new_usertype<std::vector<std::string>>("vector_string",
+        "new", sol::constructors<std::vector<std::string>()>(),
+        "size", &std::vector<std::string>::size,
+        "get", [](std::vector<std::string>& vec, int index) {
+            if (index >= 1 && index <= static_cast<int>(vec.size())) {
+                return vec[index - 1];
+            }
+            return std::string();
+        }
+    );
+
+    lua_state.new_usertype<uint64>("uint64",
+        "low", &uint64::low,
+        "high", &uint64::high);
+
+    lua_state.set_function("status_success", []() { 
+        return cmd::status::success();
+    });
+
+    lua_state.set_function("status_invalid_syntax", [](const std::string &m) { 
+        return cmd::status::invalid_syntax(m);
+    });
+
+    lua_state.set_function("status_invalid_argument", [](const std::string &m) { 
+        return cmd::status::invalid_argument(m);
+    });
+
+    lua_state.set_function("status_unimplemented", [](const std::string &m) { 
+        return cmd::status::unimplemented(m);
+    });
+
+    lua_state.new_usertype<mem::process>("mem_process",
+        "dir_base", &mem::process::dir_base,
+        "base_address", sol::property(
+                            [](mem::process& obj) -> uint64 {
+                                return uint64(obj.base_address);
+                            },
+                            [](mem::process& obj, const uint64& luavalue) {
+                                obj.base_address = luavalue.value;
+                            }
+                        ),
+        "virtual_process", sol::property(
+                                [](mem::process& obj) -> uint64 {
+                                    return uint64(obj.virtual_process);
+                                },
+                                [](mem::process& obj, const uint64& luavalue) {
+                                    obj.virtual_process = luavalue.value;
+                                }
+                           ),
+        "physical_process", sol::property(
+                                [](mem::process& obj) -> uint64 {
+                                    return uint64(obj.physical_process);
+                                },
+                                [](mem::process& obj, const uint64& luavalue) {
+                                    obj.physical_process = luavalue.value;
+                                }
+                            ),
+        "virtual_to_physical", &mem::process::virtual_to_physical,
+        "set_dir_base", &mem::process::set_dir_base,
+        "read_bytes", &mem::process::read_bytes,
+        "write_bytes", &mem::process::write_bytes);
+
+    lua_state.set_function("guest_get_ntoskrnl_process", []() { 
+        return guest::get_ntoskrnl_process();
+    });
+
+    int loaded_scripts_count = 0;
+    bool any_errors = false;
+
+    std::function<void(const std::string &directory)> load_scripts;
+    load_scripts = [&](const std::string &directory) -> void {
+        std::ranges::for_each(std::filesystem::directory_iterator(directory),
+            [&](std::filesystem::directory_entry dir_entry) {
+                if (dir_entry.is_directory())
+                    load_scripts(dir_entry.path());
+
+                if (!dir_entry.is_regular_file()) {
+                    if (dir_entry.is_symlink())
+                        dir_entry = std::filesystem::directory_entry(std::filesystem::read_symlink(dir_entry));
+                    else
+                        return;
+                }
+
+                try {
+                    lua_state.script_file(dir_entry.path(), sol::load_mode::text);
+
+                    auto file = dir_entry.path().filename().string();
+                    auto table_name = file.substr(0, file.find_last_of('.'));
+
+                    auto table = lua_state[table_name];
+                    if (!table.valid()) {
+                        any_errors = true;
+                        out::error("script '{}' is missing table '{}'\n", file, table_name);
+                        return;
+                    }
+
+                    sol::safe_function on_load = table["on_load"];
+                    if (on_load.valid()) {
+                        auto result = on_load();
+                        if (!result.valid() || result.get_type() != sol::type::string || result.get<std::string>().empty()) {
+                            any_errors = true;
+                            out::warn("script '{}' didn't return a callback contained in string\n", file, table_name);
+                            return;
+                        }
+
+                        auto cmd = result.get<std::string>();
+                        cmd::register_callback(":" + cmd, [cmd](const std::vector<std::string> &args, mem::process &current_process) -> cmd::status {
+                            sol::safe_function func = lua_state[cmd];
+                            if (func.valid()) {
+                                auto result = func(args, current_process);
+
+                                if (!result.valid()) {
+                                    sol::error err = result;
+                                    std::print("{}\n", err.what());
+
+                                    return cmd::status::script_failed_during_run();
+                                }
+                                else {
+                                    return result;
+                                }
+                            }
+
+                            return cmd::status::script_callback_not_found();
+                        });
+
+                        loaded_scripts_count++;
+                    }
+                    else {
+                        any_errors = true;
+                        out::error("script '{}' is missing '{}.on_load()'\n", file, table_name);
+                    }
+                }
+                catch (const sol::error &e) {
+                    any_errors = true;
+                    out::error("something went wrong attempting to load script '{}' {}\n", dir_entry.path().string(), e.what());
+                }
+            });
+    };
+
+    std::puts("");
+    load_scripts(scripts_directory);
+
+    if (any_errors)
+        std::puts("");
+
+    std::print("Loaded {} scripts\n", out::value(loaded_scripts_count));
+
+    return true;
+}
+```
+
+`ntoseye/lua.hpp`:
+
+```hpp
+#pragma once
+
+#include <cinttypes>
+
+namespace lua {
+    // lua doesn't support unsigned 64-bit integers, yay
+    struct uint64 {
+        uint64() noexcept : value(0) { }
+        uint64(uint64_t value) : value(value) { }
+        uint64(uint32_t hi, uint32_t lo) : value((uint64_t(hi) << 32) | uint64_t(lo)) { }
+
+        union {
+            struct {
+                uint32_t low;
+                uint32_t high;
+            };
+
+            uint64_t value;
+        };
+
+        bool operator==(uint64 const& w64) const { return value == w64.value; }
+        bool operator!=(uint64 const& w64) const { return value != w64.value; }
+        bool operator<(uint64 const& w64) const { return value < w64.value; }
+        bool operator>(uint64 const& w64) const { return value > w64.value; }
+        bool operator<=(uint64 const& w64) const { return value <= w64.value; }
+        bool operator>=(uint64 const& w64) const { return value >= w64.value; }
+    };
+
+    bool initialize();
+}
+```
+
+`ntoseye/main.cpp`:
+
+```cpp
+#include "cmd.hpp"
+#include "curl.hpp"
+#include "dbg.hpp"
+#include "host.hpp"
+#include "guest.hpp"
+#include "lua.hpp"
+#include "log.hpp"
+#include "gdb.hpp"
+
+#include "version.h"
+
+#include <fmt/core.h>
+#include <print>
+#include <string>
+
+static std::string strip(const std::string &s)
+{
+    auto it_start = s.begin();
+    auto it_end = s.rbegin();
+
+    while (std::isspace(*it_start))
+        ++it_start;
+    while (std::isspace(*it_end))
+        ++it_end;
+
+    return std::string(it_start, it_end.base());
+}
+
+int main(int argc, char **argv)
+{
+    bool gdb_status = gdb::initialize();
+    out::special("Windows debugger for Linux (ntoseye v{})\n\n", NTOSEYE_VERSION);
+
+    if (!gdb_status) {
+        out::warn("gdbstub not found, proceeding without control flow capabilities\n");
+        out::warn("to enable gdbstub, pass '-s -S' into QEMU\n\n");
+    }
+
+    // non-fatal
+    curl::initialize();
+
+    if (!host::initialize())
+        return 1;
+
+    if (!guest::initialize())
+        return 1;
+
+    dbg::install_builtin_commands();
+
+    if (!lua::initialize())
+        return 1;
+
+    cmd::initialize_readline();
+
+    while (true) {
+        dbg::install_breakpoint_signal();
+        auto input = cmd::read_line("\n" COLOR_INPUT "(ntoseye) " COLOR_RESET);
+        dbg::uninstall_breakpoint_signal();
+
+        if (input.empty())
+            continue;
+
+        try {
+            if (strip(input) == "q")
+                break;
+        }
+        catch (...) {
+            continue;
+        }
+
+        auto status = cmd::attempt_callback(input, dbg::get_current_process());
+
+        switch (status.status_value) {
+        case cmd::status_code::success:
+            break;
+        case cmd::status_code::invalid_syntax:
+            out::error("invalid syntax");
+            break;
+        case cmd::status_code::invalid_argument:
+            out::error("invalid argument");
+            break;
+        case cmd::status_code::unimplemented:
+            out::error("functionality is unimplemented");
+            break;
+        case cmd::status_code::unknown_command:
+            out::error("unrecognized command");
+            break;
+        case cmd::status_code::script_failed_during_run:
+            out::error("script failed during run");
+            break;
+        case cmd::status_code::script_callback_not_found:
+            out::error("script has registered a callback, but callback not found");
+            break;
+        default:
+            out::error("command returned unknown status (%d)", static_cast<int>(status.status_value));
+            break;
+        }
+
+        if (status.status_value != cmd::status_code::success && !status.error_message.empty())
+            std::print(" ({})\n", status.error_message);
+        else if (status.status_value != cmd::status_code::success)
+            std::puts("");
+    }
+
+    gdb::detach();
+    return 0;
+}
+
+```
+
+`ntoseye/mem.cpp`:
+
+```cpp
+#include "mem.hpp"
+#include "host.hpp"
+#include "windefs.h"
+#include <ctime>
+
+#define PAGE_OFFSET_SIZE 12
+
+// PageFrameNumber
+static const uint64_t PMASK = (~0xfull << 8) & 0xfffffffffull;
+
+uintptr_t mem::process::virtual_to_physical(uintptr_t address)
+{
+    auto page_offset = address & ~(~0ul << PAGE_OFFSET_SIZE);
+    auto pte = ((address >> 12) & (0x1ffll));
+    auto pt = ((address >> 21) & (0x1ffll));
+    auto pd = ((address >> 30) & (0x1ffll));
+    auto pdp = ((address >> 39) & (0x1ffll));
+
+    auto pdpe = host::read_kvm_memory<uint64_t>(dir_base + 8 * pdp);
+    if (~pdpe & 1)
+        return 0;
+
+    auto pde = host::read_kvm_memory<uint64_t>((pdpe & PMASK) + 8 * pd);
+    if (~pde & 1)
+        return 0;
+
+    /* 1GB large page, use pde's 12-34 bits */
+    if (pde & 0x80)
+        return (pde & (~0ull << 42 >> 12)) + (address & ~(~0ull << 30));
+
+    auto pte_address = host::read_kvm_memory<uint64_t>((pde & PMASK) + 8 * pt);
+    if (~pte_address & 1)
+        return 0;
+
+    /* 2MB large page */
+    if (pte_address & 0x80)
+        return (pte_address & PMASK) + (address & ~(~0ull << 21));
+
+    address = host::read_kvm_memory<uintptr_t>((pte_address & PMASK) + 8 * pte) & PMASK;
+    if (!address)
+        return 0;
+
+    return address + page_offset;
+}
+
+void mem::process::set_dir_base(uint64_t new_dir_base)
+{
+    dir_base = new_dir_base;
+    dir_base &= ~0xf;
+}
+
+ssize_t mem::process::read_virtual_memory(void *local_address, uint64_t remote_address, size_t length)
+{
+    // request is contained within a single page of memory
+    if ((remote_address >> 12ull) == ((remote_address + length - 1) >> 12ull))
+        return host::read_kvm_memory(local_address, virtual_to_physical(remote_address), length);
+
+    // otherwise, we only read partial data
+    size_t new_length = PAGE_SIZE - (remote_address & 0xfff);
+    return host::read_kvm_memory(local_address, virtual_to_physical(remote_address), length > new_length ? new_length : length);
+}
+
+ssize_t mem::process::write_virtual_memory(void *local_address, uint64_t remote_address, size_t length)
+{
+    // request is contained within a single page of memory
+    if ((remote_address >> 12ull) == ((remote_address + length - 1) >> 12ull))
+        return host::write_kvm_memory(local_address, virtual_to_physical(remote_address), length);
+
+    // otherwise, we only read partial data
+    size_t new_length = PAGE_SIZE - (remote_address & 0xfff);
+    return host::write_kvm_memory(local_address, virtual_to_physical(remote_address), length > new_length ? new_length : length);
+}
+
+bool mem::process::read_bytes(void *local_address, uint64_t remote_address, size_t length, std::source_location fun)
+{
+    int missed_attempts = 0;
+
+    for (
+        ssize_t remaining = 0; 
+        remaining < length; 
+    ) {
+        auto read = read_virtual_memory((char*)local_address + remaining, remote_address + remaining, length - remaining);
+        if (read == -1) {
+            if (missed_attempts >= VMM_MAX_ATTEMPTS) {
+                // errorf("exceeded max attempts from %s (%s) [V(%012lX) -> P(%012lX)]\n", fun.function_name(), strerror(errno), remote_address, virtual_to_physical(remote_address));
+                return false;
+            }
+
+            missed_attempts++;
+            
+            continue;
+        }
+
+        remaining += read;
+    }
+
+    return true;
+}
+
+bool mem::process::write_bytes(void *local_address, uint64_t remote_address, size_t length, std::source_location fun)
+{
+    int missed_attempts = 0;
+
+    for (
+        ssize_t remaining = 0; 
+        remaining < length; 
+    ) {
+        auto write = write_virtual_memory((char*)local_address + remaining, remote_address + remaining, length - remaining);
+        if (write == -1) {
+            if (missed_attempts >= VMM_MAX_ATTEMPTS) {
+                // errorf("exceeded max attempts from %s (%s) [V(%012lX) -> P(%012lX)]\n", fun.function_name(), strerror(errno), remote_address, virtual_to_physical(remote_address));
+                return false;
+            }
+
+            missed_attempts++;
+            
+            continue;
+        }
+
+        remaining += write;
+    }
+
+    return true;
+}
+```
+
+`ntoseye/mem.hpp`:
+
+```hpp
+#pragma once
+
+#include "windefs.h"
+#include "mem.hpp"
+
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <sys/types.h>
+#include <vector>
+#include <source_location>
+
+#include <cerrno>
+
+#include <immintrin.h>
+
+// to-do: phase out, this was only meant for debugging
+#define VMM_MAX_ATTEMPTS    2
+
+#define PAGE_SHIFT          12
+#define PAGE_SIZE           (1UL << PAGE_SHIFT)
+#define PAGE_MASK           (~(PAGE_SIZE-1))
+
+#define PAGE_ALIGN(addr)     (((addr)+PAGE_SIZE-1)&PAGE_MASK)
+
+struct windbg_process_data {
+    int session_id;
+    int client_id;
+    uintptr_t peb_address;
+    int parent_client_id;
+    uintptr_t object_table_address;
+    int handle_count;
+};
+
+namespace mem {
+    class process {
+    private:
+        ssize_t read_virtual_memory(void *local_address, uint64_t remote_address, size_t length);
+        ssize_t write_virtual_memory(void *local_address, uint64_t remote_address, size_t length);
+
+    public:
+        uint64_t dir_base;
+
+        uint64_t base_address;
+
+        uint64_t virtual_process;
+        uint64_t physical_process;
+
+        uint64_t process_id;
+        bool WOW64;
+
+        std::vector<MMVAD> vad_list;
+
+        PIMAGE_DOS_HEADER dos_header = nullptr;
+        PIMAGE_NT_HEADERS nt_headers;
+
+        PEB peb;
+
+        windbg_process_data win_dbg_data;
+
+        void set_dir_base(uint64_t new_dir_base);
+
+        uintptr_t virtual_to_physical(uintptr_t address);
+
+        template <typename T>
+        T read(uint64_t remote_address, std::source_location fun = std::source_location::current())
+        {
+            int missed_attempts = 0;
+
+            T result;
+            std::memset(&result, 0, sizeof(T));
+
+            if (virtual_to_physical(remote_address) == 0)
+                return result;
+
+            for (
+                ssize_t remaining = 0; 
+                remaining < sizeof(T); 
+            ) {
+                auto read = read_virtual_memory((char*)&result + remaining, remote_address + remaining, sizeof(T) - remaining);
+                if (read == -1) {
+                    if (missed_attempts >= VMM_MAX_ATTEMPTS) {
+                        // errorf("exceeded max attempts from %s (%s) [V(%012lX) -> P(%012lX)]\n", fun.function_name(), strerror(errno), remote_address, virtual_to_physical(remote_address));
+                        return result;
+                    }
+
+                    missed_attempts++;
+                    _mm_pause();
+                    continue;
+                }
+
+                remaining += read;
+            }
+
+            return result;
+        }
+
+        bool read_bytes(void *local_address, uint64_t remote_address, size_t length, std::source_location fun = std::source_location::current());
+
+        template <typename T>
+        void write(uint64_t remote_address, T data, std::source_location fun = std::source_location::current())
+        {
+            int missed_attempts = 0;
+
+            for (
+                ssize_t remaining = 0; 
+                remaining < sizeof(T); 
+            ) {
+                auto read = write_virtual_memory((char*)&data + remaining, remote_address + remaining, sizeof(T) - remaining);
+                if (read == -1) {
+                    if (missed_attempts >= VMM_MAX_ATTEMPTS) {
+                        // errorf("exceeded max attempts from %s (%s) [V(%012lX) -> P(%012lX)]\n", fun.function_name(), strerror(errno), remote_address, virtual_to_physical(remote_address));
+                        return;
+                    }
+
+                    missed_attempts++;
+                    _mm_pause();
+                    continue;
+                }
+
+                remaining += read;
+            }
+        }
+
+        bool write_bytes(void *local_address, uint64_t remote_address, size_t length, std::source_location fun = std::source_location::current());
+    };
+}
+```
+
+`ntoseye/pdb.cpp`:
+
+```cpp
+#include <atomic>
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/StringExtras.h>
+#include <llvm/DebugInfo/CodeView/CVSymbolVisitor.h>
+#include <llvm/DebugInfo/CodeView/CVTypeVisitor.h>
+#include <llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugCrossExSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugCrossImpSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugFrameDataSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugInlineeLinesSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugLinesSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugStringTableSubsection.h>
+#include <llvm/DebugInfo/CodeView/DebugSymbolsSubsection.h>
+#include <llvm/DebugInfo/CodeView/Formatters.h>
+#include <llvm/DebugInfo/CodeView/LazyRandomTypeCollection.h>
+#include <llvm/DebugInfo/CodeView/Line.h>
+#include <llvm/DebugInfo/CodeView/SymbolDeserializer.h>
+#include <llvm/DebugInfo/CodeView/SymbolVisitorCallbackPipeline.h>
+#include <llvm/DebugInfo/CodeView/SymbolVisitorCallbacks.h>
+#include <llvm/DebugInfo/CodeView/TypeHashing.h>
+#include <llvm/DebugInfo/CodeView/TypeIndexDiscovery.h>
+#include <llvm/DebugInfo/MSF/MappedBlockStream.h>
+#include <llvm/DebugInfo/PDB/Native/DbiModuleDescriptor.h>
+#include <llvm/DebugInfo/PDB/Native/DbiStream.h>
+#include <llvm/DebugInfo/PDB/Native/FormatUtil.h>
+#include <llvm/DebugInfo/PDB/Native/GlobalsStream.h>
+#include <llvm/DebugInfo/PDB/Native/ISectionContribVisitor.h>
+#include <llvm/DebugInfo/PDB/Native/InputFile.h>
+#include <llvm/DebugInfo/PDB/Native/ModuleDebugStream.h>
+#include <llvm/DebugInfo/PDB/Native/PDBFile.h>
+#include <llvm/DebugInfo/PDB/Native/PublicsStream.h>
+#include <llvm/DebugInfo/PDB/Native/RawError.h>
+#include <llvm/DebugInfo/PDB/Native/SymbolStream.h>
+#include <llvm/DebugInfo/PDB/Native/TpiHashing.h>
+#include <llvm/DebugInfo/PDB/Native/TpiStream.h>
+#include <llvm/DebugInfo/CodeView/SymbolRecord.h>
+#include <llvm/DebugInfo/PDB/IPDBSession.h>
+#include <llvm/DebugInfo/PDB/Native/LinePrinter.h>
+#include <llvm/DebugInfo/PDB/PDB.h>
+#include <llvm/DebugInfo/PDB/PDBSymbolExe.h>
+#include <llvm/DebugInfo/PDB/PDBSymbolTypeFunctionSig.h>
+#include <llvm/DebugInfo/PDB/IPDBLineNumber.h>
+#include <llvm/DebugInfo/PDB/PDBSymbolFunc.h>
+#include <llvm/DebugInfo/PDB/PDBSymbolTypeUDT.h>
+#include <llvm/DebugInfo/PDB/PDBSymbolData.h>
+#include <llvm/DebugInfo/PDB/Native/NativeSession.h>
+#include <llvm/DebugInfo/PDB/Native/InfoStream.h>
+#include <llvm/DebugInfo/PDB/Native/DbiStream.h>
+#include <llvm/DebugInfo/PDB/Native/SymbolStream.h>
+#include <llvm/DebugInfo/PDB/Native/NativeFunctionSymbol.h>
+#include <llvm/DebugInfo/PDB/Native/NativePublicSymbol.h>
+#include <llvm/Object/COFF.h>
+#include <llvm/Object/Error.h>
+
+#include "pdb.hpp"
+#include "cmd.hpp"
+#include "config.hpp"
+#include "curl.hpp"
+#include "guest.hpp"
+#include "log.hpp"
+#include "util.hpp"
+
+#include <format>
+#include <filesystem>
+#include <print>
+#include <algorithm>
+#include <execution>
+
+using namespace llvm::codeview;
+
+std::vector<pdb::symbol> symbols;
+
+static std::string get_pdb_path_from_storage(pdb::metadata &metadata)
+{
+    auto download_destination_directory = std::format("{}/symbols", config::get_storage_directory());
+    std::filesystem::create_directories(download_destination_directory);
+
+    auto target_file_path = std::format("{}/{}.{}", download_destination_directory, metadata.filename, metadata.id);
+
+    bool does_exact_symbol_file_not_exist = true;
+    std::ranges::all_of(std::filesystem::directory_iterator(download_destination_directory),
+        [&](auto dir_entry) {
+            if (!dir_entry.is_regular_file())
+                return true;
+
+            does_exact_symbol_file_not_exist = dir_entry.path() != target_file_path.c_str();
+            return does_exact_symbol_file_not_exist;
+        }
+    );
+
+    if (does_exact_symbol_file_not_exist)
+        if (!curl::attempt_file_download(target_file_path, metadata.url))
+            return {};
+
+    return target_file_path;
+}
+
+static bool attempt_get_symbols(pdb::metadata metadata, const std::string &prefix, int attempts = 0)
+{
+    if (attempts >= pdb::max_download_attempts) {
+        // out::warn("exceeded max download attempts on pdb, skipping...\n");
+        return false;
+    }
+
+    if (!metadata.valid())
+        return false;
+
+    auto path = get_pdb_path_from_storage(metadata);
+    if (path.empty())
+        return false;
+
+    auto file = llvm::pdb::InputFile::open(path);
+    if (!file) {
+        std::filesystem::remove(path);
+        // std::println("Failed to open pdb ({}), removed and retrying...", toString(file.takeError()));
+        return attempt_get_symbols(metadata, prefix, attempts + 1);
+    }
+
+    if (!file->pdb().hasPDBPublicsStream() || !file->pdb().hasPDBSymbolStream()) {
+        // std::println("PDB has no publics or symbol streams");
+        return false;
+    }
+
+    auto expected_symbol_stream = file->pdb().getPDBSymbolStream();
+    if (!expected_symbol_stream) {
+        // std::println("Failed to get symbol stream ({})", toString(expected_symbol_stream.takeError()));
+        return false;
+    }
+
+    auto &symbol_stream = *expected_symbol_stream;
+
+    llvm::for_each(file->pdb().getPDBPublicsStream()->getPublicsTable(), [&](auto offset){
+        auto cv_sym = symbol_stream.readRecord(offset);
+        if (cv_sym.kind() == SymbolKind::S_PUB32) {
+            auto public_symbol = cantFail(SymbolDeserializer::deserializeAs<PublicSym32>(cv_sym));
+
+            symbols.push_back({
+                .name = !prefix.empty() ? std::format("{}!{}", prefix, public_symbol.Name.str()) : public_symbol.Name.str(),
+                .offset = public_symbol.Offset,
+                .type = public_symbol.Flags == PublicSymFlags::None ? pdb::symbol::sym_type::data : pdb::symbol::sym_type::function
+            });
+        }
+    });
+
+    return true;
+}
+
+void pdb::load(mem::process &process, process_priv priv)
+{
+    static auto prompt_message = "Current process/modules may have undownloaded symbols. Would you like to download them? (y/[n]): ";
+
+    std::atomic_int success_count = 0, fail_count = 0;
+
+    auto print_download_count = [&](const std::string &pdb) {
+        out::clear();
+        std::print("Downloading '{}'... ({} succeeded, {} failed)", pdb.size() < 32 ? pdb : std::format("{}...", pdb.substr(0, 32)), out::green(success_count), out::red(fail_count));
+        std::fflush(stdout);
+    };
+
+    auto update_count = [&](bool status) {
+        if (status)
+            success_count++;
+        else
+            fail_count++;
+    };
+    
+    // auto metadata = util::get_pdb_metadata(process);
+    // if (metadata.valid()) {
+    //     auto should_download = cmd::read_yes_no(prompt_message);
+    //     if (!should_download)
+    //         return;
+
+    //     print_download_count(metadata.filename);
+    //     update_count(attempt_get_symbols(metadata, priv == process_priv::kernel ? "nt" : ""));
+    //     asked = true;
+    // }
+
+    std::vector<util::module> modules;
+    if (priv == process_priv::kernel)
+        modules = guest::get_kernel_modules();
+    else
+        modules = util::get_modules(process);
+
+    auto should_download = cmd::read_yes_no(prompt_message);
+    if (!should_download)
+        return;
+
+    for (auto &x : modules) {
+        mem::process module_disguised_as_process = process;
+        module_disguised_as_process.dos_header = nullptr;
+        module_disguised_as_process.nt_headers = nullptr;
+        module_disguised_as_process.base_address = x.base_address;
+
+        auto metadata = util::get_pdb_metadata(module_disguised_as_process);
+        if (!metadata.valid())
+            continue;
+
+        print_download_count(metadata.filename);
+        update_count(attempt_get_symbols(metadata, x.name.substr(0, x.name.find("."))));
+    }
+
+    out::clear();
+    std::println("Downloaded symbols ({} succeeded, {} failed)", out::green(success_count), out::red(fail_count));
+}
+
+std::optional<pdb::symbol> pdb::get(const std::string &str)
+{
+    auto str_modified = util::string_replace(str, "nt!", "ntoskrnl!");
+
+    auto sym = std::find_if(symbols.begin(), symbols.end(), [str_modified](const pdb::symbol &sym) {
+        return sym.name.contains(str_modified);
+    });
+
+    if (sym != symbols.end())
+        return *sym;
+    return {};
+}
+
+std::vector<pdb::symbol> pdb::get_all()
+{
+    return symbols;
+}
+```
+
+`ntoseye/pdb.hpp`:
+
+```hpp
+#pragma once
+
+#include <memory>
+#include <fstream>
+#include <algorithm>
+#include <vector>
+
+#include "mem.hpp"
+
+namespace pdb {
+    constexpr int max_download_attempts = 2;
+
+    enum class process_priv {
+        kernel,
+        user
+    };
+
+    struct symbol {
+        enum class sym_type {
+            data,
+            function
+        };
+
+        std::string name;
+        uint64_t offset;
+        sym_type type;
+    };
+
+    struct metadata {
+        std::string filename;
+        std::string id; // guid + age
+        std::string url;
+
+        // if anything is empty, consider the pdb invalid
+        inline bool valid()
+        {
+            return !filename.empty() && !id.empty() && !url.empty();
+        }
+
+        static inline std::string read_id_from_disk(const std::string &path)
+        {
+            std::ifstream file(path);
+            std::string result;
+            std::getline(file, result);
+            return result;
+        }
+
+        inline void write_id_to_disk(const std::string &path)
+        {
+            std::ofstream file(path);
+            file << id;
+        }
+    };
+
+    void load(mem::process &process, process_priv priv);
+    std::optional<pdb::symbol> get(const std::string &str);
+    std::vector<pdb::symbol> get_all();
+}
+```
+
+`ntoseye/termcolors.h`:
+
+```h
+#pragma once
+
+#define COLOR_ESC "\x1b["
+#define COLOR_RESET COLOR_ESC "0m"
+
+#define COLOR_ATTR_RESET "0;"
+#define COLOR_ATTR_BOLD "1;"
+#define COLOR_ATTR_DIM "2;"
+#define COLOR_ATTR_UNDERLINE "3;"
+#define COLOR_ATTR_BLINK "5;"
+#define COLOR_ATTR_REVERSE "7;"
+#define COLOR_ATTR_HIDDEN "8;"
+
+#define COLOR_FG_BLACK "30"
+#define COLOR_FG_RED "31"
+#define COLOR_FG_GREEN "32"
+#define COLOR_FG_YELLOW "33"
+#define COLOR_FG_BLUE "34"
+#define COLOR_FG_MAGENTA "35"
+#define COLOR_FG_CYAN "36"
+#define COLOR_FG_WHITE "37"
+#define COLOR_FG_GRAY "90"
+
+#define COLOR_BG_BLACK ";40m"
+#define COLOR_BG_RED ";41m"
+#define COLOR_BG_GREEN ";42m"
+#define COLOR_BG_YELLOW ";43m"
+#define COLOR_BG_BLUE ";44m"
+#define COLOR_BG_MAGENTA ";45m"
+#define COLOR_BG_CYAN ";46m"
+#define COLOR_BG_WHITE ";47m"
+
+#define COLOR_BG_NONE "m"
+
+#ifndef NO_VERBOSE_COLOR_OUTPUT
+#define COLOR(...) COLOR_ESC __VA_ARGS__
+#else
+#define COLOR(...) ""
+#endif
+
+#define COLOR_ADDRESS COLOR(COLOR_FG_YELLOW COLOR_BG_NONE) 
+#define COLOR_VALUE COLOR(COLOR_FG_CYAN COLOR_BG_NONE) 
+#define COLOR_ERROR COLOR(COLOR_ATTR_BOLD COLOR_FG_RED COLOR_BG_NONE) 
+#define COLOR_WARN COLOR(COLOR_ATTR_BOLD COLOR_FG_MAGENTA COLOR_BG_NONE)
+#define COLOR_INPUT COLOR(COLOR_FG_GRAY COLOR_BG_NONE)
+#define COLOR_NAME COLOR(COLOR_FG_GREEN COLOR_BG_NONE)
+
+#define COLOR_GREEN COLOR(COLOR_FG_GREEN COLOR_BG_NONE)
+#define COLOR_RED COLOR(COLOR_FG_RED COLOR_BG_NONE)
+#define COLOR_YELLOW COLOR(COLOR_FG_YELLOW COLOR_BG_NONE)
+```
+
+`ntoseye/util.cpp`:
+
+```cpp
+#include "util.hpp"
+#include "host.hpp"
+#include "mem.hpp"
+#include "windefs.h"
+
+#include <algorithm>
+#include <cstring>
+#include <memory>
+
+bool util::set_process_headers(mem::process &process)
+{
+    // already initialized
+    if (process.dos_header == nullptr)
+        process.dos_header = (IMAGE_DOS_HEADER*)(new uint8_t[0x1000]);
+
+    process.read_bytes(process.dos_header, process.base_address, 0x1000);
+    auto header = (uint8_t*)process.dos_header;
+
+    if (header[0] != 'M' || header[1] != 'Z')
+        return false;
+
+    process.dos_header = (IMAGE_DOS_HEADER*)(void*)header;
+    process.nt_headers = (IMAGE_NT_HEADERS*)(void*)(header + process.dos_header->e_lfanew);
+    if ((uint8_t*)process.nt_headers - header > sizeof(size_t) - 0x200 
+            || process.nt_headers->signature != IMAGE_NT_SIGNATURE)
+        return false;
+
+    if (process.nt_headers->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC 
+            && process.nt_headers->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        return false;
+
+    process.WOW64 = process.nt_headers->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC;
+
+    return true;
+}
+
+uint64_t util::get_section_virtual_address(mem::process &process, const std::string &name)
+{
+    if (!util::set_process_headers(process))
+        return {};
+
+    auto section = IMAGE_FIRST_SECTION(process.nt_headers);
+    for (int i = 0; i < process.nt_headers->FileHeader.NumberOfSections; i++, section++)
+        if (name == (char*)section->Name)
+            return section->VirtualAddress;
+
+    return 0;
+}
+
+std::vector<util::symbol> util::get_process_exports(mem::process &process)
+{
+    if (!util::set_process_headers(process))
+        return {};
+
+    if (!process.nt_headers)
+        return {};
+
+    PIMAGE_DATA_DIRECTORY export_table = NULL;
+    if (!process.WOW64)
+        export_table = process.nt_headers->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_EXPORT;
+    else
+        export_table = (reinterpret_cast<PIMAGE_NT_HEADERS32>(process.nt_headers))->OptionalHeader.DataDirectory 
+                + IMAGE_DIRECTORY_ENTRY_EXPORT;
+
+    if (!export_table->Size)
+        return {};
+
+    auto buffer = new uint8_t[export_table->Size];
+    process.read_bytes(buffer, process.base_address + export_table->VirtualAddress, export_table->Size);
+
+    PIMAGE_EXPORT_DIRECTORY export_directory = PIMAGE_EXPORT_DIRECTORY(buffer);
+
+    buffer[export_table->Size - 1] = 0;
+    if (!export_directory->NumberOfNames || !export_directory->AddressOfNames) {
+        delete[] buffer;
+        return {};
+    }
+
+    uint32_t export_offset = export_table->VirtualAddress;
+
+    uint32_t* names = (uint32_t*)(void*)(buffer + export_directory->AddressOfNames - export_offset);
+    uint16_t* ordinals = (uint16_t*)(void*)(buffer + export_directory->AddressOfNameOrdinals - export_offset);
+    uint32_t* functions = (uint32_t*)(void*)(buffer + export_directory->AddressOfFunctions - export_offset);
+
+    std::vector<util::symbol> exports;
+
+    for (uint32_t i = 0; i < export_directory->NumberOfNames; i++) {
+        if (names[i] > export_table->Size + export_offset || names[i] < export_offset || ordinals[i] > export_directory->NumberOfNames)
+            continue;
+
+        exports.push_back({
+            strdup((char*)buffer + names[i] - export_offset),
+            process.base_address + functions[ordinals[i]]
+        });
+    }
+
+    delete[] buffer;
+    return exports;
+}
+
+uint64_t util::get_proc_address(std::vector<symbol> &symbols, const std::string &name)
+{
+    auto result = std::find_if(symbols.begin(), symbols.end(), [name](const symbol & symbol) -> bool {
+        return symbol.name == name;
+    });
+
+    return result != symbols.end() ? result->address : 0;
+}
+
+void util::set_process_peb(mem::process &process, uint64_t peb_offset)
+{
+    process.peb = process.read<PEB>(host::read_kvm_memory<uint64_t>(process.physical_process + peb_offset));
+}
+
+bool util::query_module_basic_info(mem::process &process, PEB_LDR_DATA ldr, LDR_MODULE &ldr_module, uint64_t &head, uint64_t &end, uint64_t &prev, bool in_order)
+{
+    if (head == 0 && end == 0 && prev == 0) {
+        head = ldr.InMemoryOrdermoduleList.Flink;
+        end = head;
+        prev = head + 1;
+    }
+    else {
+        if (head == end || head == prev)
+            return false;
+        
+        prev = head;
+    }
+
+    // if we're invalid, bye
+    if (head == 0)
+        return false;
+
+    // attempt to advance head
+    ldr_module = process.read<LDR_MODULE>(head - sizeof(LIST_ENTRY) * in_order);
+    head = process.read<uint64_t>(head);
+
+    // if current module is invalid, query next
+    if (!ldr_module.SizeOfImage || !ldr_module.BaseDllName.Length)
+        return query_module_basic_info(process, ldr, ldr_module, head, end, prev, in_order);
+
+    return true;
+}
+
+std::vector<util::module> util::get_modules(mem::process &process)
+{
+    std::vector<util::module> result;
+
+    auto ldr = process.read<PEB_LDR_DATA>(process.peb.Ldr);
+    uint64_t head = 0;
+    uint64_t end = 0;
+    uint64_t prev = 0;
+
+    LDR_MODULE ldr_module;
+
+    while (query_module_basic_info(process, ldr, ldr_module, head, end, prev, true)) {
+        auto module_wide_name = new short[ldr_module.BaseDllName.Length];
+        process.read_bytes(module_wide_name, ldr_module.BaseDllName.Buffer, ldr_module.BaseDllName.Length * sizeof(short));
+
+        std::string modulename;
+        for (int i = 0; i < ldr_module.BaseDllName.Length; i++)
+            modulename.push_back(((char*)module_wide_name)[i*2]);
+
+        delete[] module_wide_name;
+
+        result.push_back({ process, modulename, ldr_module.BaseAddress, ldr_module });
+    }
+
+    return result;
+}
+
+util::module util::get_module(mem::process &process, const std::string &module)
+{
+    auto ldr = process.read<PEB_LDR_DATA>(process.peb.Ldr);
+    uint64_t head = 0;
+    uint64_t end = 0;
+    uint64_t prev = 0;
+
+    LDR_MODULE ldr_module;
+
+    while (query_module_basic_info(process, ldr, ldr_module, head, end, prev, true)) {
+        auto module_wide_name = new short[ldr_module.BaseDllName.Length];
+        process.read_bytes(module_wide_name, ldr_module.BaseDllName.Buffer, ldr_module.BaseDllName.Length * sizeof(short));
+
+        std::string modulename;
+        for (int i = 0; i < ldr_module.BaseDllName.Length; i++)
+            modulename.push_back(((char*)module_wide_name)[i*2]);
+
+        delete[] module_wide_name;
+
+        // empty means we want process base
+        if ((module.empty() && ldr_module.BaseAddress == process.peb.ImageBaseAddress) || module == modulename.c_str())
+            return { process, modulename, ldr_module.BaseAddress };
+    }
+
+    return {};
+}
+
+std::vector<util::symbol> util::get_module_exports(module &module)
+{
+    mem::process module_disguised_as_process = module.process;
+    module_disguised_as_process.dos_header = nullptr;
+    module_disguised_as_process.nt_headers = nullptr;
+    module_disguised_as_process.base_address = module.base_address;
+
+    return get_process_exports(module_disguised_as_process);
+}
+
+bool util::is_vad_short(const MMVAD_SHORT &vad)
+{
+    return vad.u.VadFlags.VadType == 0 && vad.u.VadFlags.PrivateMemory == 1;
+}
+
+uint64_t util::get_vad_start(const MMVAD &vad)
+{
+    auto vad_short = vad.Core;
+    return ((uint64_t)vad_short.StartingVpn << 12) | ((uint64_t)vad_short.StartingVpnHigh << 44);   
+}
+
+uint64_t util::get_vad_length(const MMVAD &vad, uint64_t start)
+{
+    if (start == 0)
+        start = get_vad_start(vad);
+
+    auto vad_short = vad.Core;
+    return ((((uint64_t)vad_short.EndingVpn + 1) << 12) | ((uint64_t)vad_short.EndingVpnHigh << 44)) - start; 
+}
+
+uint64_t util::find_pattern(mem::process &process, uint64_t base, size_t length, uint8_t *bytes, const std::string &mask)
+{
+    auto mask_length = mask.size();
+
+    const auto match = [&process, bytes, mask, mask_length](uint64_t address) -> bool {
+        auto block = std::make_unique<uint8_t[]>(mask_length);
+        process.read_bytes(block.get(), address, mask_length);
+
+        for (int i = 0; i < mask_length; i++)
+            if (mask[i] != '?' && block[i] != bytes[i])
+                return false;
+        return true;
+    };
+
+    for (int i = 0; i < length - mask_length; i++) {
+        auto current_address = base + i;
+        if (match(current_address))
+            return current_address;
+    }
+    
+    return 0;
+}
+
+std::string util::string_tolower(const std::string &string)
+{
+    std::string result;
+    result.resize(string.size());
+
+    std::transform(string.begin(),
+                   string.end(),
+                   result.begin(),
+                   ::tolower);
+
+    return result;
+}
+
+std::string util::string_toupper(const std::string &string)
+{
+    std::string result;
+    result.resize(string.size());
+
+    std::transform(string.begin(),
+                   string.end(),
+                   result.begin(),
+                   ::toupper);
+
+    return result;
+}
+
+pdb::metadata util::get_pdb_metadata(mem::process &process)
+{
+    struct pdb_internal_info {
+        uint32_t signature;
+        uint8_t  guid[16];
+        uint32_t age;
+        char     pdb_filename[128];
+    };
+
+    constexpr auto format_guid = [](const uint8_t guid[16]) {
+        return std::format("{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+                guid[3], guid[2], guid[1], guid[0],
+                guid[5], guid[4],
+                guid[7], guid[6],
+                guid[8], guid[9], guid[10], guid[11], guid[12], guid[13], guid[14], guid[15]);
+    };
+
+    constexpr auto construct_url = [format_guid](const pdb_internal_info &info) {
+        return std::format("https://msdl.microsoft.com/download/symbols/{}/{}{:X}/{}",
+                info.pdb_filename, format_guid(info.guid), info.age, info.pdb_filename);
+    };
+
+    if (!process.nt_headers)
+        set_process_headers(process);
+
+    if (!process.nt_headers)
+        return {};
+
+    PIMAGE_DATA_DIRECTORY debug_directory_entry = NULL;
+    if (!process.WOW64)
+        debug_directory_entry = process.nt_headers->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_DEBUG;
+    else
+        debug_directory_entry = (reinterpret_cast<PIMAGE_NT_HEADERS32>(process.nt_headers))->OptionalHeader.DataDirectory + IMAGE_DIRECTORY_ENTRY_DEBUG;
+
+    if (!debug_directory_entry->Size)
+        return {};
+
+    auto dbg_dir = process.read<IMAGE_DEBUG_DIRECTORY>(process.base_address + debug_directory_entry->VirtualAddress);
+
+    if (dbg_dir.Type == _IMAGE_DEBUG_TYPE_CODEVIEW) {
+        auto pdb_info = process.read<pdb_internal_info>(process.base_address + dbg_dir.AddressOfRawData);
+
+        if (std::memcmp(&pdb_info.signature, "RSDS", 4) == 0)
+            return { pdb_info.pdb_filename, std::format("{}{:X}", format_guid(pdb_info.guid), pdb_info.age), construct_url(pdb_info) };
+    }
+
+    return {};
+}
+```
+
+`ntoseye/util.hpp`:
+
+```hpp
+#pragma once
+
+#include "mem.hpp"
+#include "windefs.h"
+#include "pdb.hpp"
+
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <fstream>
+
+namespace util {
+    struct symbol {
+        std::string name;
+        uint64_t address;
+    };
+
+    struct page_4kb_buffer {
+        uint8_t data[0x1000];
+    };
+
+    struct module {
+        mem::process process; // sub-optimal; needed for util::get_module_exports
+        std::string name;
+        uint64_t base_address;
+
+        LDR_MODULE ldr_module;
+    };
+
+    bool set_process_headers(mem::process &process);
+
+    uint64_t get_section_virtual_address(mem::process &process, const std::string &name);
+
+    std::vector<symbol> get_process_exports(mem::process &process);
+    uint64_t get_proc_address(std::vector<symbol> &symbols, const std::string &name);
+
+    void set_process_peb(mem::process &process, uint64_t peb_offset);
+
+    bool query_module_basic_info(mem::process &process, PEB_LDR_DATA ldr, LDR_MODULE &ldr_module, uint64_t &head, uint64_t &end, uint64_t &prev, bool in_order = true);
+
+    std::vector<module> get_modules(mem::process &process);
+    module get_module(mem::process &process, const std::string &module);
+    std::vector<symbol> get_module_exports(module &module);
+
+    bool is_vad_short(const MMVAD_SHORT &vad);
+    uint64_t get_vad_start(const MMVAD &vad);
+    uint64_t get_vad_length(const MMVAD &vad, uint64_t start = 0);
+
+    pdb::metadata get_pdb_metadata(mem::process &process);
+
+    uint64_t find_pattern(mem::process &process, uint64_t base, size_t length, uint8_t *bytes, const std::string &mask);
+
+    std::string string_tolower(const std::string &string);
+    std::string string_toupper(const std::string &string);
+    
+    static inline std::string string_replace(std::string string, const std::string_view &from, const std::string_view &to)
+    {
+        for (size_t pos = 0; (pos = string.find(from, pos)) != std::string::npos; pos += to.length())
+            string.replace(pos, from.length(), to);
+        return string;
+    }
+}
+```
+
+`ntoseye/windefs.h`:
+
+```h
+#pragma once
+
+#include <stdint.h>
+#include <stddef.h>
+
+// #define _In_
+// #define _Out_
+// #define _In_out_
+
+// typedef int16_t WCHAR;
+// typedef char *PSTR, *LPSTR;
+// typedef const char *PCSTR, *LPCSTR;
+// typedef WCHAR *PWSTR, *LPWSTR;
+// typedef const WCHAR *PCWSTR, *LPCWSTR;
+// typedef int8_t CHAR, *PCHAR, INT8, *PINT8;
+// typedef uint8_t UCHAR, *PUCHAR, UINT8, *PUINT8, BYTE, *PBYTE, BOOLEAN, *PBOOLEAN;
+// typedef int16_t SHORT, *PSHORT, INT16, *PINT16;
+// typedef uint16_t USHORT, *PUSHORT, UINT16, *PUINT16, WORD, *PWORD;
+// typedef int32_t INT, *PINT, INT32, *PINT32, LONG, *PLONG, BOOL, *PBOOL;
+// typedef uint32_t UINT, *PUINT, UINT32, *PUINT32, ULONG, *PULONG, ULONG32, *PULONG32, DWORD, *PDWORD, DWORD32, *PDWORD32;
+// typedef int64_t LONGLONG, *PLONGLONG, INT64, *PINT64, SSIZE_T, *PSSIZE_T;
+// typedef uint64_t ULONGLONG, *PULONGLONG, UINT64, *PUINT64, SIZE_T, *PSIZE_T, ULONG64, *PULONG64, DWORD64, *PDWORD64, QWORD, *PQWORD;
+
+#define IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x10b
+#define IMAGE_NT_OPTIONAL_HDR64_MAGIC 0x20b
+#define IMAGE_DIRECTORY_ENTRY_EXPORT 0 /* Export Directory */
+#define IMAGE_DOS_SIGNATURE 0x5a4d /* MZ */
+#define IMAGE_NT_SIGNATURE 0x4550 /* PE00 */
+#define IMAGE_NUMBEROF_DIRECTORY_ENTRIES 16
+#define IMAGE_SIZEOF_SHORT_NAME 8
+#define IMAGE_DIRECTORY_ENTRY_DEBUG 6
+#define _IMAGE_DEBUG_TYPE_CODEVIEW 2
+
+typedef uint32_t WIN32_PROTECTION_MASK;
+typedef uint32_t* PWIN32_PROTECTION_MASK;
+
+typedef uint32_t MM_PROTECTION_MASK;
+typedef uint32_t* PMM_PROTECTION_MASK;
+
+#define MM_ZERO_ACCESS         0  // this value is not used.
+#define MM_READONLY            1
+#define MM_EXECUTE             2
+#define MM_EXECUTE_READ        3
+#define MM_READWRITE           4  // bit 2 is set if this is writable.
+#define MM_WRITECOPY           5
+#define MM_EXECUTE_READWRITE   6
+#define MM_EXECUTE_WRITECOPY   7
+
+#define MM_NOCACHE            0x8
+#define MM_GUARD_PAGE         0x10
+#define MM_DECOMMIT           0x10   // NO_ACCESS, Guard page
+#define MM_NOACCESS           0x18   // NO_ACCESS, Guard_page, nocache.
+#define MM_UNKNOWN_PROTECTION 0x100  // bigger than 5 bits!
+
+#define MM_INVALID_PROTECTION ((uint32_t)-1)  // bigger than 5 bits!
+
+#define MM_PROTECTION_WRITE_MASK     4
+#define MM_PROTECTION_COPY_MASK      1
+#define MM_PROTECTION_OPERATION_MASK 7 // mask off guard page and nocache.
+#define MM_PROTECTION_EXECUTE_MASK   2
+
+#define MM_SECURE_DELETE_CHECK 0x55
+
+#define IMAGE_DIRECTORY_ENTRY_IMPORT 1
+#define IMAGE_DIRECTORY_ENTRY_BASERELOC 5
+#define _IMAGE_REL_BASED_DIR64 10
+
+#define PAGE_NOACCESS          0x01     // winnt
+#define PAGE_READONLY          0x02     // winnt
+#define PAGE_READWRITE         0x04     // winnt
+#define PAGE_WRITECOPY         0x08     // winnt
+#define PAGE_EXECUTE           0x10     // winnt
+#define PAGE_EXECUTE_READ      0x20     // winnt
+#define PAGE_EXECUTE_READWRITE 0x40     // winnt
+#define PAGE_EXECUTE_WRITECOPY 0x80     // winnt
+#define PAGE_GUARD            0x100     // winnt
+#define PAGE_NOCACHE          0x200     // winnt
+#define PAGE_WRITECOMBINE     0x400     // winnt
+
+#define MI_PTE_LOOKUP_NEEDED ((uint64_t)0xffffffff)
+
+typedef struct _IMAGE_DOS_HEADER {
+    uint16_t e_magic;
+    uint16_t e_cblp;
+    uint16_t e_cp;
+    uint16_t e_crlc;
+    uint16_t e_cparhdr;
+    uint16_t e_minalloc;
+    uint16_t e_maxalloc;
+    uint16_t e_ss;
+    uint16_t e_sp;
+    uint16_t e_csum;
+    uint16_t e_ip;
+    uint16_t e_cs;
+    uint16_t e_lfarlc;
+    uint16_t e_ovno;
+    uint16_t e_res[4];
+    uint16_t e_oemid;
+    uint16_t e_oeminfo;
+    uint16_t e_res2[10];
+    int e_lfanew;
+} IMAGE_DOS_HEADER, *PIMAGE_DOS_HEADER;
+
+typedef struct _IMAGE_EXPORT_DIRECTORY {
+    uint32_t Characteristics;
+    uint32_t TimeDateStamp;
+    uint16_t MajorVersion;
+    uint16_t MinorVersion;
+    uint32_t Name;
+    uint32_t Base;
+    uint32_t NumberOfFunctions;
+    uint32_t NumberOfNames;
+    uint32_t AddressOfFunctions;
+    uint32_t AddressOfNames;
+    uint32_t AddressOfNameOrdinals;
+} IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+
+typedef struct _IMAGE_DEBUG_DIRECTORY {
+    uint32_t Characteristics;
+    uint32_t TimeDateStamp;
+    uint16_t MajorVersion;
+    uint16_t MinorVersion;
+    uint32_t Type;
+    uint32_t SizeOfData;
+    uint32_t AddressOfRawData;
+    uint32_t PointerToRawData;
+} IMAGE_DEBUG_DIRECTORY, *PIMAGE_DEBUG_DIRECTORY;
+
+typedef struct _IMAGE_FILE_HEADER {
+    uint16_t Machine;
+    uint16_t NumberOfSections;
+    uint32_t TimeDateStamp;
+    uint32_t PointerToSymbolTable;
+    uint32_t NumberOfSymbols;
+    uint16_t SizeOfOptionalHeader;
+    uint16_t Characteristics;
+} IMAGE_FILE_HEADER, *PIMAGE_FILE_HEADER;
+
+typedef struct _IMAGE_DATA_DIRECTORY {
+    uint32_t VirtualAddress;
+    uint32_t Size;
+} IMAGE_DATA_DIRECTORY, *PIMAGE_DATA_DIRECTORY;
+
+typedef struct _IMAGE_OPTIONAL_HEADER64 {
+    uint16_t Magic;
+    uint8_t MajorLinkerVersion;
+    uint8_t MinorLinkerVersion;
+    uint32_t SizeOfCode;
+    uint32_t SizeOfInitializedData;
+    uint32_t SizeOfUninitializedData;
+    uint32_t AddressOfEntryPoint;
+    uint32_t BaseOfCode;
+    uint64_t ImageBase;
+    uint32_t SectionAlignment;
+    uint32_t FileAlignment;
+    uint16_t MajorOperatingSystemVersion;
+    uint16_t MinorOperatingSystemVersion;
+    uint16_t MajorImageVersion;
+    uint16_t MinorImageVersion;
+    uint16_t MajorSubsystemVersion;
+    uint16_t MinorSubsystemVersion;
+    uint32_t Win32VersionValue;
+    uint32_t SizeOfImage;
+    uint32_t SizeOfHeaders;
+    uint32_t CheckSum;
+    uint16_t Subsystem;
+    uint16_t DllCharacteristics;
+    uint64_t SizeOfStackReserve;
+    uint64_t SizeOfStackCommit;
+    uint64_t SizeOfHeapReserve;
+    uint64_t SizeOfHeapCommit;
+    uint32_t LoaderFlags;
+    uint32_t NumberOfRvaAndSizes;
+    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+} IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
+
+typedef struct _IMAGE_NT_HEADERS64 {
+    uint32_t signature;
+    IMAGE_FILE_HEADER FileHeader;
+    IMAGE_OPTIONAL_HEADER64 OptionalHeader;
+} IMAGE_NT_HEADERS64, IMAGE_NT_HEADERS, *PIMAGE_NT_HEADERS64, *PIMAGE_NT_HEADERS;
+
+#define FIELD_OFFSET offsetof
+
+#define IMAGE_FIRST_SECTION( ntheader ) ((PIMAGE_SECTION_HEADER)        \
+    ((size_t)(ntheader) +                                            \
+     FIELD_OFFSET( IMAGE_NT_HEADERS, OptionalHeader ) +                 \
+     ((ntheader))->FileHeader.SizeOfOptionalHeader   \
+    ))
+
+typedef struct _IMAGE_OPTIONAL_HEADER32 {
+    uint16_t Magic;
+    uint8_t MajorLinkerVersion;
+    uint8_t MinorLinkerVersion;
+    uint32_t SizeOfCode;
+    uint32_t SizeOfInitializedData;
+    uint32_t SizeOfUninitializedData;
+    uint32_t AddressOfEntryPoint;
+    uint32_t BaseOfCode;
+    uint32_t BaseOfData;
+    uint32_t ImageBase;
+    uint32_t SectionAlignment;
+    uint32_t FileAlignment;
+    uint16_t MajorOperatingSystemVersion;
+    uint16_t MinorOperatingSystemVersion;
+    uint16_t MajorImageVersion;
+    uint16_t MinorImageVersion;
+    uint16_t MajorSubsystemVersion;
+    uint16_t MinorSubsystemVersion;
+    uint32_t Win32VersionValue;
+    uint32_t SizeOfImage;
+    uint32_t SizeOfHeaders;
+    uint32_t CheckSum;
+    uint16_t Subsystem;
+    uint16_t DllCharacteristics;
+    uint32_t SizeOfStackReserve;
+    uint32_t SizeOfStackCommit;
+    uint32_t SizeOfHeapReserve;
+    uint32_t SizeOfHeapCommit;
+    uint32_t LoaderFlags;
+    uint32_t NumberOfRvaAndSizes;
+    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+} IMAGE_OPTIONAL_HEADER32, *PIMAGE_OPTIONAL_HEADER32;
+
+typedef struct _IMAGE_NT_HEADERS32 {
+    uint32_t signature;
+    IMAGE_FILE_HEADER FileHeader;
+    IMAGE_OPTIONAL_HEADER32 OptionalHeader;
+} IMAGE_NT_HEADERS32, *PIMAGE_NT_HEADERS32;
+
+typedef struct _IMAGE_SECTION_HEADER {
+    uint8_t Name[IMAGE_SIZEOF_SHORT_NAME];
+    union {
+        uint32_t PhysicalAddress;
+        uint32_t VirtualSize;
+    } Misc;
+    uint32_t VirtualAddress;
+    uint32_t SizeOfRawData;
+    uint32_t PointerToRawData;
+    uint32_t PointerToRelocations;
+    uint32_t PointerToLinenumbers;
+    uint16_t NumberOfRelocations;
+    uint16_t NumberOfLinenumbers;
+    uint32_t Characteristics;
+} IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
+
+typedef struct _LIST_ENTRY
+{
+    uint64_t Flink;
+    uint64_t Blink;
+} LIST_ENTRY;
+
+typedef struct _UNICODE_STRING
+{
+    uint16_t Length;
+    uint16_t MaximumLength;
+    uint64_t Buffer;
+} UNICODE_STRING;
+
+union _LARGE_INTEGER
+{
+    struct
+    {
+        uint32_t LowPart;                                                      //0x0
+        int32_t HighPart;                                                      //0x4
+    };
+    struct
+    {
+        uint32_t LowPart;                                                      //0x0
+        int32_t HighPart;                                                      //0x4
+    } u;                                                                    //0x0
+    int64_t QuadPart;                                                      //0x0
+}; 
+
+typedef struct _LDR_MODULE {
+    LIST_ENTRY InLoadOrdermoduleList;
+    LIST_ENTRY InMemoryOrdermoduleList;
+    LIST_ENTRY InInitializationOrdermoduleList;
+    uint64_t BaseAddress;
+    uint64_t EntryPoint;
+    uint64_t SizeOfImage;
+    UNICODE_STRING FullDllName;
+    UNICODE_STRING BaseDllName;
+    uint64_t Flags;
+    short LoadCount;
+    short TlsIndex;
+    LIST_ENTRY HashTableEntry;
+    uint64_t TimeDateStamp;
+} LDR_MODULE, *PLDR_MODULE;
+
+typedef struct _PEB_LDR_DATA
+{
+    uint64_t Length;
+    uint8_t Initialized;
+    uint64_t SsHandle;
+    LIST_ENTRY InLoadOrdermoduleList;
+    LIST_ENTRY InMemoryOrdermoduleList;
+    LIST_ENTRY InInitializationOrdermoduleList;
+    uint64_t EntryInProgress;
+} PEB_LDR_DATA;
+
+typedef struct _PEB
+{
+    uint8_t InheritedAddressSpace;
+    uint8_t ReadImageFileExecOptions;
+    uint8_t BeingDebugged;
+    uint8_t BitField;
+    uint8_t Padding0[4];
+    uint64_t Mutant;
+    uint64_t ImageBaseAddress;
+    uint64_t Ldr;
+} PEB, PEB64;
+
+typedef struct _LIST_ENTRY32
+{
+    uint32_t f_link;
+    uint32_t b_link;
+} LIST_ENTRY32;
+
+typedef struct _UNICODE_STRING32
+{
+    uint16_t length;
+    uint16_t maximum_length;
+    uint32_t buffer;
+} UNICODE_STRING32;
+
+typedef struct _LDR_MODULE32 {
+    LIST_ENTRY32 InLoadOrdermoduleList;
+    LIST_ENTRY32 InMemoryOrdermoduleList;
+    LIST_ENTRY32 InInitializationOrdermoduleList;
+    uint32_t BaseAddress;
+    uint32_t EntryPoint;
+    uint32_t SizeOfImage;
+    UNICODE_STRING32 FullDllName;
+    UNICODE_STRING32 BaseDllName;
+    uint32_t Flags;
+    short LoadCount;
+    short TlsIndex;
+    LIST_ENTRY32 HashTableEntry;
+    uint32_t TimeDateStamp;
+} LDR_MODULE32, *PLDR_MODULE32;
+
+typedef struct _PEB_LDR_DATA32
+{
+    uint32_t Length;
+    uint8_t Initialized;
+    uint32_t SsHandle;
+    LIST_ENTRY32 InLoadOrdermoduleList;
+    LIST_ENTRY32 InMemoryOrdermoduleList;
+    LIST_ENTRY32 InInitializationOrdermoduleList;
+    uint32_t EntryInProgress;
+} PEB_LDR_DATA32;
+
+typedef struct _PEB32
+{
+    uint8_t InheritedAddressSpace;
+    uint8_t ReadImageFileExecOptions;
+    uint8_t BeingDebugged;
+    uint8_t BitField;
+    uint32_t Mutant;
+    uint32_t ImageBaseAddress;
+    uint32_t Ldr;
+} PEB32;
+
+typedef struct _IMAGE_BASE_RELOCATION {
+    uint32_t   VirtualAddress;
+    uint32_t   SizeOfBlock;
+} IMAGE_BASE_RELOCATION;
+typedef IMAGE_BASE_RELOCATION * PIMAGE_BASE_RELOCATION;
+
+typedef struct _IMAGE_IMPORT_DESCRIPTOR {
+    union {
+        uint32_t   Characteristics;            // 0 for terminating null import descriptor
+        uint32_t   OriginalFirstThunk;         // RVA to original unbound IAT (PIMAGE_THUNK_DATA)
+    };
+    uint32_t   TimeDateStamp;                  // 0 if not bound,
+                                            // -1 if bound, and real date\time stamp
+                                            //     in IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT (new BIND)
+                                            // O.W. date/time stamp of DLL bound to (Old BIND)
+
+    uint32_t   ForwarderChain;                 // -1 if no forwarders
+    uint32_t   Name;
+    uint32_t   FirstThunk;                     // RVA to IAT (if bound this IAT has actual Addresses)
+} IMAGE_IMPORT_DESCRIPTOR;
+typedef IMAGE_IMPORT_DESCRIPTOR *PIMAGE_IMPORT_DESCRIPTOR;
+
+typedef struct _IMAGE_THUNK_DATA64 {
+    union {
+        uint64_t ForwarderString;  // PBYTE 
+        uint64_t Function;         // PDWORD
+        uint64_t Ordinal;
+        uint64_t AddressOfData;    // PIMAGE_IMPORT_BY_NAME
+    } u1;
+} IMAGE_THUNK_DATA64;
+typedef IMAGE_THUNK_DATA64 * PIMAGE_THUNK_DATA64;
+
+//@[comment("MVI_tracked")]
+typedef struct _IMAGE_THUNK_DATA32 {
+    union {
+        uint32_t ForwarderString;      // PBYTE 
+        uint32_t Function;             // PDWORD
+        uint32_t Ordinal;
+        uint32_t AddressOfData;        // PIMAGE_IMPORT_BY_NAME
+    } u1;
+} IMAGE_THUNK_DATA32;
+typedef IMAGE_THUNK_DATA32 * PIMAGE_THUNK_DATA32;
+
+typedef struct _IMAGE_IMPORT_BY_NAME {
+    uint16_t    Hint;
+    char   Name[1];
+} IMAGE_IMPORT_BY_NAME, *PIMAGE_IMPORT_BY_NAME;
+
+typedef struct _MMPTE_HARDWARE64
+{
+    uint64_t Valid : 1;
+    uint64_t Dirty1 : 1;
+    uint64_t Owner : 1;
+    uint64_t WriteThrough : 1;
+    uint64_t CacheDisable : 1;
+    uint64_t Accessed : 1;
+    uint64_t Dirty : 1;
+    uint64_t LargePage : 1;
+    uint64_t Global : 1;
+    uint64_t CopyOnWrite : 1;
+    uint64_t Unused : 1;
+    uint64_t Write : 1;
+    uint64_t PageFrameNumber : 36;
+    uint64_t reserved1 : 4;
+    uint64_t SoftwareWsIndex : 11;
+    uint64_t NoExecute : 1;
+} MMPTE_HARDWARE64, *PMMPTE_HARDWARE64;
+
+struct _MMPTE_PROTOTYPE
+{
+    uint64_t Valid:1;                                                      //0x0
+    uint64_t DemandFillProto:1;                                            //0x0
+    uint64_t HiberVerifyConverted:1;                                       //0x0
+    uint64_t ReadOnly:1;                                                   //0x0
+    uint64_t SwizzleBit:1;                                                 //0x0
+    uint64_t Protection:5;                                                 //0x0
+    uint64_t Prototype:1;                                                  //0x0
+    uint64_t Combined:1;                                                   //0x0
+    uint64_t Unused1:4;                                                    //0x0
+    int64_t  ProtoAddress:48;                                               //0x0
+}; 
+
+struct _MMPTE_SOFTWARE
+{
+    uint64_t Valid:1;                                                      //0x0
+    uint64_t PageFileReserved:1;                                           //0x0
+    uint64_t PageFileAllocated:1;                                          //0x0
+    uint64_t ColdPage:1;                                                   //0x0
+    uint64_t SwizzleBit:1;                                                 //0x0
+    uint64_t Protection:5;                                                 //0x0
+    uint64_t Prototype:1;                                                  //0x0
+    uint64_t Transition:1;                                                 //0x0
+    uint64_t PageFileLow:4;                                                //0x0
+    uint64_t UsedPageTableEntries:10;                                      //0x0
+    uint64_t ShadowStack:1;                                                //0x0
+    uint64_t Unused:5;                                                     //0x0
+    uint64_t PageFileHigh:32;                                              //0x0
+}; 
+
+typedef struct _MMPTE 
+{
+    union  
+    {
+        uint64_t Long;
+        MMPTE_HARDWARE64 Hard;
+        struct _MMPTE_PROTOTYPE Proto;
+        struct _MMPTE_SOFTWARE Soft;
+    } u;
+} MMPTE;
+typedef MMPTE *PMMPTE;
+
+typedef enum _MI_VAD_TYPE {
+    VadNone,
+    VadDevicePhysicalMemory,
+    VadImageMap,
+    VadAwe,
+    VadWriteWatch,
+    VadLargePages,
+    VadRotatePhysical,
+    VadLargePageSection
+} MI_VAD_TYPE, *PMI_VAD_TYPE;
+
+//0x4 bytes (Sizeof)
+typedef struct _MMVAD_FLAGS
+{
+    uint32_t Lock:1;                                                           //0x0
+    uint32_t LockContended:1;                                                  //0x0
+    uint32_t DeleteInProgress:1;                                               //0x0
+    uint32_t NoChange:1;                                                       //0x0
+    uint32_t VadType:3;                                                        //0x0
+    uint32_t Protection:5;                                                     //0x0
+    uint32_t PreferredNode:6;                                                  //0x0
+    uint32_t PageSize:2;                                                       //0x0
+    uint32_t PrivateMemory:1;                                                  //0x0
+} MMVAD_FLAGS; 
+
+struct _MM_PRIVATE_VAD_FLAGS
+{
+    uint32_t Lock:1;                                                           //0x0
+    uint32_t LockContended:1;                                                  //0x0
+    uint32_t DeleteInProgress:1;                                               //0x0
+    uint32_t NoChange:1;                                                       //0x0
+    uint32_t VadType:3;                                                        //0x0
+    uint32_t Protection:5;                                                     //0x0
+    uint32_t PreferredNode:6;                                                  //0x0
+    uint32_t PageSize:2;                                                       //0x0
+    uint32_t PrivateMemoryAlwaysSet:1;                                         //0x0
+    uint32_t WriteWatch:1;                                                     //0x0
+    uint32_t FixedLargePageSize:1;                                             //0x0
+    uint32_t ZeroFillPagesOptional:1;                                          //0x0
+    uint32_t Graphics:1;                                                       //0x0
+    uint32_t Enclave:1;                                                        //0x0
+    uint32_t ShadowStack:1;                                                    //0x0
+    uint32_t PhysicalMemoryPfnsReferenced:1;                                   //0x0
+}; 
+
+typedef struct _MMVAD_FLAGS1
+{
+    uint32_t CommitCharge:31;                                                  //0x0
+    uint32_t MemCommit:1;                                                      //0x0
+} MVAD_FLAGS1; 
+
+struct _RTL_BALANCED_NODE
+{
+    union
+    {
+        struct _RTL_BALANCED_NODE* Children[2];                             //0x0
+        struct
+        {
+            struct _RTL_BALANCED_NODE* Left;                                //0x0
+            struct _RTL_BALANCED_NODE* Right;                               //0x8
+        };
+    };
+    union
+    {
+        struct
+        {
+            uint8_t Red:1;                                                    //0x10
+            uint8_t Balance:2;                                                //0x10
+        };
+        uint64_t ParentValue;                                              //0x10
+    };
+}; 
+
+struct _EX_PUSH_LOCK
+{
+    union
+    {
+        struct
+        {
+            uint64_t Locked:1;                                             //0x0
+            uint64_t Waiting:1;                                            //0x0
+            uint64_t Waking:1;                                             //0x0
+            uint64_t MultipleShared:1;                                     //0x0
+            uint64_t Shared:60;                                            //0x0
+        };
+        uint64_t Value;                                                    //0x0
+        void* Ptr;                                                          //0x0
+    };
+}; 
+
+//0x40 bytes (Sizeof)
+typedef struct _MMVAD_SHORT
+{
+    union
+    {
+        struct
+        {
+            struct _MMVAD_SHORT* NextVad;                                   //0x0
+            void* ExtraCreateInfo;                                          //0x8
+        };
+        struct _RTL_BALANCED_NODE VadNode;                                  //0x0
+    };
+    uint32_t StartingVpn;                                                      //0x18
+    uint32_t EndingVpn;                                                        //0x1c
+    uint8_t StartingVpnHigh;                                                  //0x20
+    uint8_t EndingVpnHigh;                                                    //0x21
+    uint8_t CommitChargeHigh;                                                 //0x22
+    uint8_t SpareNT64VadUchar;                                                //0x23
+    int32_t ReferenceCount;                                                    //0x24
+    struct _EX_PUSH_LOCK PushLock;                                          //0x28
+    union
+    {
+        uint32_t LongFlags;                                                    //0x30
+        struct _MMVAD_FLAGS VadFlags;                                       //0x30
+        struct _MM_PRIVATE_VAD_FLAGS PrivateVadFlags;                       //0x30
+        volatile uint32_t VolatileVadLong;                                     //0x30
+    } u;                                                                    //0x30
+    union
+    {
+        uint32_t LongFlags1;                                                   //0x34
+        struct _MMVAD_FLAGS1 VadFlags1;                                     //0x34
+    } u1;                                                                   //0x34
+    struct _MI_VAD_EVENT_BLOCK* EventList;                                  //0x38
+} MMVAD_SHORT;
+
+struct _MMVAD_FLAGS2
+{
+    uint32_t FileOffset:24;                                                    //0x0
+    uint32_t Large:1;                                                          //0x0
+    uint32_t TrimBehind:1;                                                     //0x0
+    uint32_t Inherit:1;                                                        //0x0
+    uint32_t NoValidationNeeded:1;                                             //0x0
+    uint32_t PrivateDemandZero:1;                                              //0x0
+    uint32_t Spare:3;                                                          //0x0
+};
+
+struct _MMSECTION_FLAGS
+{
+    uint32_t BeingDeleted:1;                                                   //0x0
+    uint32_t BeingCreated:1;                                                   //0x0
+    uint32_t BeingPurged:1;                                                    //0x0
+    uint32_t NoModifiedWriting:1;                                              //0x0
+    uint32_t FailAllIo:1;                                                      //0x0
+    uint32_t Image:1;                                                          //0x0
+    uint32_t Based:1;                                                          //0x0
+    uint32_t File:1;                                                           //0x0
+    uint32_t AttemptingDelete:1;                                               //0x0
+    uint32_t PrefetchCreated:1;                                                //0x0
+    uint32_t PhysicalMemory:1;                                                 //0x0
+    uint32_t ImageControlAreaOnRemovableMedia:1;                               //0x0
+    uint32_t Reserve:1;                                                        //0x0
+    uint32_t Commit:1;                                                         //0x0
+    uint32_t NoChange:1;                                                       //0x0
+    uint32_t WasPurged:1;                                                      //0x0
+    uint32_t UserReference:1;                                                  //0x0
+    uint32_t GlobalMemory:1;                                                   //0x0
+    uint32_t DeleteOnClose:1;                                                  //0x0
+    uint32_t FilePointerNull:1;                                                //0x0
+    uint32_t PreferredNode:6;                                                  //0x0
+    uint32_t GlobalOnlyPerSession:1;                                           //0x0
+    uint32_t Userwritable:1;                                                   //0x0
+    uint32_t SystemVaAllocated:1;                                              //0x0
+    uint32_t PreferredFsCompressionBoundary:1;                                 //0x0
+    uint32_t UsingFileExtents:1;                                               //0x0
+    uint32_t PageSize64K:1;                                                    //0x0
+}; 
+
+struct _MMSECTION_FLAGS2
+{
+    uint16_t PartitionId:10;                                                  //0x0
+    uint8_t NoCrossPartitionAccess:1;                                         //0x2
+    uint8_t SubsectionCrossPartitionReferenceOverflow:1;                      //0x2
+}; 
+
+struct _EX_FAST_REF
+{
+    union
+    {
+        void* Object;                                                       //0x0
+        uint64_t RefCnt:4;                                                 //0x0
+        uint64_t Value;                                                    //0x0
+    };
+}; 
+
+struct _CONTROL_AREA
+{
+    struct _SEGMENT* Segment;                                               //0x0
+    union
+    {
+        struct _LIST_ENTRY ListHead;                                        //0x8
+        void* AweContext;                                                   //0x8
+    };
+    uint64_t NumberOfSectionReferences;                                    //0x18
+    uint64_t NumberOfPfnReferences;                                        //0x20
+    uint64_t NumberOfMappedViews;                                          //0x28
+    uint64_t NumberOfUserReferences;                                       //0x30
+    union
+    {
+        uint32_t LongFlags;                                                    //0x38
+        struct _MMSECTION_FLAGS Flags;                                      //0x38
+    } u;                                                                    //0x38
+    union
+    {
+        uint32_t LongFlags;                                                    //0x3c
+        struct _MMSECTION_FLAGS2 Flags;                                     //0x3c
+    } u1;                                                                   //0x3c
+    struct _EX_FAST_REF FilePointer;                                        //0x40
+    volatile int32_t ControlAreaLock;                                          //0x48
+    uint32_t ModifiedWriteCount;                                               //0x4c
+    struct _MI_CONTROL_AREA_WAIT_BLOCK* WaitList;                           //0x50
+    union
+    {
+        struct
+        {
+            union
+            {
+                uint32_t NumberOfSystemCacheViews;                             //0x58
+                uint32_t ImageRelocationStartBit;                              //0x58
+            };
+            union
+            {
+                volatile int32_t writableUserReferences;                       //0x5c
+                struct
+                {
+                    uint32_t ImageRelocationSizeIn64k:16;                      //0x5c
+                    uint32_t SystemImage:1;                                    //0x5c
+                    uint32_t CantMove:1;                                       //0x5c
+                    uint32_t StrongCode:2;                                     //0x5c
+                    uint32_t BitMap:2;                                         //0x5c
+                    uint32_t ImageActive:1;                                    //0x5c
+                    uint32_t ImageBaseOkToReuse:1;                             //0x5c
+                };
+            };
+            union
+            {
+                uint32_t FlushInProgressCount;                                 //0x60
+                uint32_t NumberOfSubsections;                                  //0x60
+                struct _MI_IMAGE_SECURITY_REFERENCE* SeImageStub;           //0x60
+            };
+        } e2;                                                               //0x58
+    } u2;                                                                   //0x58
+    struct _EX_PUSH_LOCK FileObjectLock;                                    //0x68
+    volatile uint64_t LockedPages;                                         //0x70
+    union
+    {
+        uint64_t IoAttributionContext:61;                                  //0x78
+        uint64_t Spare:3;                                                  //0x78
+        uint64_t ImageCrossPartitionCharge;                                //0x78
+        uint64_t CommittedPageCount:36;                                    //0x78
+    } u3;                                                                   //0x78
+}; 
+
+struct _RTL_AVL_TREE
+{
+    struct _RTL_BALANCED_NODE* Root;                                        //0x0
+}; 
+
+struct _MMSUBSECTION_FLAGS
+{
+    uint16_t SubsectionAccessed:1;                                            //0x0
+    uint16_t Protection:5;                                                    //0x0
+    uint16_t StartingSector4132:10;                                           //0x0
+    uint16_t SubsectionStatic:1;                                              //0x2
+    uint16_t GlobalMemory:1;                                                  //0x2
+    uint16_t Spare:1;                                                         //0x2
+    uint16_t OnDereferenceList:1;                                             //0x2
+    uint16_t SectorEndOffset:12;                                              //0x2
+}; 
+
+struct _MI_SUBSECTION_ENTRY1
+{
+    uint32_t CrossPartitionReferences:30;                                      //0x0
+    uint32_t SubsectionMappedLarge:2;                                          //0x0
+}; 
+
+struct _SUBSECTION
+{
+    struct _CONTROL_AREA* ControlArea;                                      //0x0
+    struct _MMPTE* SubsectionBase;                                          //0x8
+    struct _SUBSECTION* NextSubsection;                                     //0x10
+    union
+    {
+        struct _RTL_AVL_TREE GlobalPerSessionHead;                          //0x18
+        struct _MI_CONTROL_AREA_WAIT_BLOCK* CreationWaitList;               //0x18
+        struct _MI_PER_SESSION_PROTOS* SessionDriverProtos;                 //0x18
+    };
+    union
+    {
+        uint32_t LongFlags;                                                    //0x20
+        struct _MMSUBSECTION_FLAGS SubsectionFlags;                         //0x20
+    } u;                                                                    //0x20
+    uint32_t StartingSector;                                                   //0x24
+    uint32_t NumberOfFullSectors;                                              //0x28
+    uint32_t PtesInSubsection;                                                 //0x2c
+    union
+    {
+        struct _MI_SUBSECTION_ENTRY1 e1;                                    //0x30
+        uint32_t EntireField;                                                  //0x30
+    } u1;                                                                   //0x30
+    uint32_t UnusedPtes:30;                                                    //0x34
+    uint32_t ExtentQueryNeeded:1;                                              //0x34
+    uint32_t DirtyPages:1;                                                     //0x34
+}; 
+
+struct _MI_VAD_SEQUENTIAL_INFO
+{
+    uint64_t Length:12;                                                    //0x0
+    uint64_t Vpn:52;                                                       //0x0
+}; 
+
+struct _MMEXTEND_INFO
+{
+    uint64_t CommittedSize;                                                //0x0
+    uint32_t ReferenceCount;                                                   //0x8
+}; 
+
+struct _DISPATCHER_HEADER
+{
+    union
+    {
+        volatile int32_t Lock;                                                 //0x0
+        int32_t LockNV;                                                        //0x0
+        struct
+        {
+            uint8_t Type;                                                     //0x0
+            uint8_t Signalling;                                               //0x1
+            uint8_t Size;                                                     //0x2
+            uint8_t Reserved1;                                                //0x3
+        };
+        struct
+        {
+            uint8_t TimerType;                                                //0x0
+            union
+            {
+                uint8_t TimerControlFlags;                                    //0x1
+                struct
+                {
+                    uint8_t Absolute:1;                                       //0x1
+                    uint8_t Wake:1;                                           //0x1
+                    uint8_t EncodedTolerableDelay:6;                          //0x1
+                };
+            };
+            uint8_t Hand;                                                     //0x2
+            union
+            {
+                uint8_t TimerMiscFlags;                                       //0x3
+                struct
+                {
+                    uint8_t Index:6;                                          //0x3
+                    uint8_t Inserted:1;                                       //0x3
+                    volatile uint8_t Expired:1;                               //0x3
+                };
+            };
+        };
+        struct
+        {
+            uint8_t Timer2Type;                                               //0x0
+            union
+            {
+                uint8_t Timer2Flags;                                          //0x1
+                struct
+                {
+                    uint8_t Timer2Inserted:1;                                 //0x1
+                    uint8_t Timer2Expiring:1;                                 //0x1
+                    uint8_t Timer2CancelPending:1;                            //0x1
+                    uint8_t Timer2SetPending:1;                               //0x1
+                    uint8_t Timer2Running:1;                                  //0x1
+                    uint8_t Timer2Disabled:1;                                 //0x1
+                    uint8_t Timer2ReservedFlags:2;                            //0x1
+                };
+            };
+            uint8_t Timer2ComponentId;                                        //0x2
+            uint8_t Timer2RelativeId;                                         //0x3
+        };
+        struct
+        {
+            uint8_t QueueType;                                                //0x0
+            union
+            {
+                uint8_t QueueControlFlags;                                    //0x1
+                struct
+                {
+                    uint8_t Abandoned:1;                                      //0x1
+                    uint8_t DisableIncrement:1;                               //0x1
+                    uint8_t QueueReservedControlFlags:6;                      //0x1
+                };
+            };
+            uint8_t QueueSize;                                                //0x2
+            uint8_t QueueReserved;                                            //0x3
+        };
+        struct
+        {
+            uint8_t ThReadType;                                               //0x0
+            uint8_t ThReadReserved;                                           //0x1
+            union
+            {
+                uint8_t ThReadControlFlags;                                   //0x2
+                struct
+                {
+                    uint8_t CycleProfiling:1;                                 //0x2
+                    uint8_t CounterProfiling:1;                               //0x2
+                    uint8_t GroupScheduling:1;                                //0x2
+                    uint8_t AffinitySet:1;                                    //0x2
+                    uint8_t Tagged:1;                                         //0x2
+                    uint8_t EnergyProfiling:1;                                //0x2
+                    uint8_t SchedulerAssist:1;                                //0x2
+                    uint8_t ThReadReservedControlFlags:1;                     //0x2
+                };
+            };
+            union
+            {
+                uint8_t DebugActive;                                          //0x3
+                struct
+                {
+                    uint8_t ActiveDR7:1;                                      //0x3
+                    uint8_t Instrumented:1;                                   //0x3
+                    uint8_t Minimal:1;                                        //0x3
+                    uint8_t Reserved4:2;                                      //0x3
+                    uint8_t AltSyscall:1;                                     //0x3
+                    uint8_t UmsScheduled:1;                                   //0x3
+                    uint8_t UmsPrimary:1;                                     //0x3
+                };
+            };
+        };
+        struct
+        {
+            uint8_t MutantType;                                               //0x0
+            uint8_t MutantSize;                                               //0x1
+            uint8_t DpcActive;                                                //0x2
+            uint8_t MutantReserved;                                           //0x3
+        };
+    };
+    int32_t SignalState;                                                       //0x4
+    struct _LIST_ENTRY WaitListHead;                                        //0x8
+}; 
+
+struct _KEVENT
+{
+    struct _DISPATCHER_HEADER Header;                                       //0x0
+}; 
+
+struct _FILE_OBJECT
+{
+    short Type;                                                             //0x0
+    short Size;                                                             //0x2
+    struct _DEVICE_OBJECT* DeviceObject;                                    //0x8
+    struct _VPB* Vpb;                                                       //0x10
+    void* FsContext;                                                        //0x18
+    void* FsContext2;                                                       //0x20
+    struct _SECTION_OBJECT_POINTERS* SectionObjectPointer;                  //0x28
+    void* PrivateCacheMap;                                                  //0x30
+    int32_t FinalStatus;                                                       //0x38
+    struct _FILE_OBJECT* RelatedFileObject;                                 //0x40
+    unsigned char LockOperation;                                                    //0x48
+    unsigned char DeletePending;                                                    //0x49
+    unsigned char ReadAccess;                                                       //0x4a
+    unsigned char WriteAccess;                                                      //0x4b
+    unsigned char DeleteAccess;                                                     //0x4c
+    unsigned char SharedRead;                                                       //0x4d
+    unsigned char SharedWrite;                                                      //0x4e
+    unsigned char SharedDelete;                                                     //0x4f
+    uint32_t Flags;                                                            //0x50
+    struct _UNICODE_STRING FileName;                                        //0x58
+    union _LARGE_INTEGER CurrentByteOffset;                                 //0x68
+    uint32_t Waiters;                                                          //0x70
+    uint32_t Busy;                                                             //0x74
+    void* LastLock;                                                         //0x78
+    struct _KEVENT Lock;                                                    //0x80
+    struct _KEVENT Event;                                                   //0x98
+    struct _IO_COMPLETION_CONTEXT* CompletionContext;                       //0xb0
+    uint64_t IrpListLock;                                                  //0xb8
+    struct _LIST_ENTRY IrpList;                                             //0xc0
+    void* FileObjectExtension;                                              //0xd0
+}; 
+
+typedef struct _MMVAD
+{
+    struct _MMVAD_SHORT Core;                                               //0x0
+    union
+    {
+        uint32_t LongFlags2;                                                   //0x40
+        struct _MMVAD_FLAGS2 VadFlags2;                            //0x40
+    } u2;                                                                   //0x40
+    struct _SUBSECTION* Subsection;                                         //0x48
+    struct _MMPTE* FirstPrototypePte;                                       //0x50
+    struct _MMPTE* LastContiguousPte;                                       //0x58
+    struct _LIST_ENTRY ViewLinks;                                           //0x60
+    struct _EPROCESS* Vadsprocess;                                          //0x70
+    union
+    {
+        struct _MI_VAD_SEQUENTIAL_INFO SequentialVa;                        //0x78
+        struct _MMEXTEND_INFO* ExtendedInfo;                                //0x78
+    } u4;                                                                   //0x78
+    struct _FILE_OBJECT* FileObject;                                        //0x80
+} MMVAD; 
+```
+
+`version.h.in`:
+
+```in
+#pragma once
+
+#define NTOSEYE_VERSION_MAJOR @ntoseye_VERSION_MAJOR@
+#define NTOSEYE_VERSION_MINOR @ntoseye_VERSION_MINOR@
+#define NTOSEYE_VERSION_PATCH @ntoseye_VERSION_PATCH@
+#define NTOSEYE_VERSION "@ntoseye_VERSION@"
+```
