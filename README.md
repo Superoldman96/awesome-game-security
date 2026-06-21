@@ -453,7 +453,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/kvick-games/UnrealMCP [MCP for Unreal Engine]
 - https://github.com/VedantRGosavi/UE5-MCP [MCP for Unreal Engine 5]
 - https://github.com/justinpbarnett/unity-mcp [MCP for unity]
-- https://github.com/wondeks/unity-mcp [MCP for unity]
+- https://github.com/gmh5225/unity-mcp [MCP for unity]
 - https://github.com/gmh5225/mcpup [MCP for unity]
 - https://github.com/gmh5225/vibe-blocks-mcp [MCP for Roblox Studio]
 - https://github.com/LaurieWired/GhidraMCP [MCP for Ghidra]
