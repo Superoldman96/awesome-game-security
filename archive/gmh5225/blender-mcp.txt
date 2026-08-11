@@ -1,0 +1,2609 @@
+Project Path: arc_gmh5225_blender-mcp_lkzp_y7d
+
+Source Tree:
+
+```txt
+arc_gmh5225_blender-mcp_lkzp_y7d
+├── LICENSE
+├── README.md
+├── addon.py
+├── assets
+│   ├── addon-instructions.png
+│   └── hammer-icon.png
+├── main.py
+├── pyproject.toml
+├── src
+│   └── blender_mcp
+│       ├── __init__.py
+│       └── server.py
+└── uv.lock
+
+```
+
+`LICENSE`:
+
+```
+MIT License
+
+Copyright (c) 2025 Siddharth Ahuja
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+`README.md`:
+
+```md
+# BlenderMCP - Blender Model Context Protocol Integration
+
+BlenderMCP connects Blender to Claude AI through the Model Context Protocol (MCP), allowing Claude to directly interact with and control Blender. This integration enables prompt assisted 3D modeling, scene creation, and manipulation.
+
+## Release notes (1.1.0)
+
+- Added support for Poly Haven assets through their API
+- For newcomers, you can go straight to Installation. For existing users, see the points below
+- Download the latest addon.py file and replace the older one, then add it to Blender
+- Delete the MCP server from Claude and add it back again, and you should be good to go!
+
+## Features
+
+- **Two-way communication**: Connect Claude AI to Blender through a socket-based server
+- **Object manipulation**: Create, modify, and delete 3D objects in Blender
+- **Material control**: Apply and modify materials and colors
+- **Scene inspection**: Get detailed information about the current Blender scene
+- **Code execution**: Run arbitrary Python code in Blender from Claude
+
+## Components
+
+The system consists of two main components:
+
+1. **Blender Addon (`addon.py`)**: A Blender addon that creates a socket server within Blender to receive and execute commands
+2. **MCP Server (`src/blender_mcp/server.py`)**: A Python server that implements the Model Context Protocol and connects to the Blender addon
+
+## Installation
+
+
+### Prerequisites
+
+- Blender 3.0 or newer
+- Python 3.10 or newer
+- uv package manager: 
+
+If you're on Mac, please install uv as
+```bash
+brew install uv
+```
+On Windows
+```bash
+pip install uv
+```
+
+Otherwise installation instructions are on their website: [Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+**⚠️ Do not proceed before installing UV**
+
+
+### Claude for Desktop Integration
+
+[Watch the setup instruction video](https://www.youtube.com/watch?v=neoK_WMq92g) (Assuming you have already installed uv)
+
+Go to Claude > Settings > Developer > Edit Config > claude_desktop_config.json to include the following:
+
+```json
+{
+    "mcpServers": {
+        "blender": {
+            "command": "uvx",
+            "args": [
+                "blender-mcp"
+            ]
+        }
+    }
+}
+```
+
+### Cursor integration
+
+Run blender-mcp without installing it permanently through uvx. Go to Cursor Settings > MCP and paste this as a command.
+
+```bash
+uvx blender-mcp
+```
+
+**⚠️ Only run one instance of the MCP server (either on Cursor or Claude Desktop), not both**
+
+### Installing the Blender Addon
+
+1. Download the `addon.py` file from this repo
+1. Open Blender
+2. Go to Edit > Preferences > Add-ons
+3. Click "Install..." and select the `addon.py` file
+4. Enable the addon by checking the box next to "Interface: Blender MCP"
+
+
+## Usage
+
+### Starting the Connection
+![BlenderMCP in the sidebar](assets/addon-instructions.png)
+
+1. In Blender, go to the 3D View sidebar (press N if not visible)
+2. Find the "BlenderMCP" tab
+3. Turn on the Poly Haven checkbox if you want assets from their API (optional)
+4. Click "Connect to Claude"
+5. Make sure the MCP server is running in your terminal
+
+### Using with Claude
+
+Once the config file has been set on Claude, and the addon is running on Blender, you will see a hammer icon with tools for the Blender MCP.
+
+![BlenderMCP in the sidebar](assets/hammer-icon.png)
+
+#### Tools
+
+- `get_scene_info` - Gets scene information
+- `get_object_info` - Gets detailed information for a specific object in the scene
+- `create_primitive` - Create basic primitive objects with optional color
+- `set_object_property` - Set a single property of an object
+- `create_object` - Create a new object with detailed parameters
+- `modify_object` - Modify an existing object's properties
+- `delete_object` - Remove an object from the scene
+- `set_material` - Apply or create materials for objects
+- `execute_blender_code` - Run any Python code in Blender
+- `get_polyhaven_categories` - Get a list of categories for PolyHaven assets (HDRIs, textures, models)
+- `search_polyhaven_assets` - Search for assets on PolyHaven with optional category filtering
+- `download_polyhaven_asset` - Download and import a PolyHaven asset into Blender
+
+To see everything in Poly Haven, [see here](https://polyhaven.com/)
+
+### Example Commands
+
+Here are some examples of what you can ask Claude to do:
+
+- "Create a low poly scene in a dungeon, with a dragon guarding a pot of gold" [Demo](https://www.youtube.com/watch?v=DqgKuLYUv00)
+- "Create a beach vibe using HDRIs, textures, and models like rocks and vegatation from Poly Haven" [Demo](https://www.youtube.com/watch?v=I29rn92gkC4)
+- Give a reference image, and create a Blender scene out of it [Demo](https://www.youtube.com/watch?v=FDRb03XPiRo)
+- "Get information about the current scene, and make a threejs sketch from it" [Demo](https://www.youtube.com/watch?v=jxbNI5L7AH8)
+- "Make this car red and metallic" 
+- "Create a sphere and place it above the cube"
+- "Make the lighting like a studio"
+- "Point the camera at the scene, and make it isometric"
+
+## Troubleshooting
+
+- **Connection issues**: Make sure the Blender addon server is running, and the MCP server is configured on Claude, DO NOT run the uvx command in the terminal. Sometimes, the first command won't go through but after that it starts working.
+- **Timeout errors**: Try simplifying your requests or breaking them into smaller steps
+- **Poly Haven integration**: Claude is sometimes erratic with its behaviour
+- **Have you tried turning it off and on again?**: If you're still having connection errors, try restarting both Claude and the Blender server
+
+
+## Technical Details
+
+### Communication Protocol
+
+The system uses a simple JSON-based protocol over TCP sockets:
+
+- **Commands** are sent as JSON objects with a `type` and optional `params`
+- **Responses** are JSON objects with a `status` and `result` or `message`
+
+## Limitations & Security Considerations
+
+- The `execute_blender_code` tool allows running arbitrary Python code in Blender, which can be powerful but potentially dangerous. Use with caution in production environments. ALWAYS save your work before using it.
+- Poly Haven requires downloading models, textures, and HDRI images. If you do not want to use it, please turn it off in the checkbox in Blender. 
+- Complex operations might need to be broken down into smaller steps
+
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Disclaimer
+
+This is a third-party integration and not made by Blender.
+
+```
+
+`addon.py`:
+
+```py
+import bpy
+import json
+import threading
+import socket
+import time
+import requests  # Add this import for HTTP requests
+import tempfile  # Add this import for temporary directories
+from bpy.props import StringProperty, IntProperty
+import traceback
+import os
+import shutil
+
+bl_info = {
+    "name": "Blender MCP",
+    "author": "BlenderMCP",
+    "version": (0, 1),
+    "blender": (3, 0, 0),
+    "location": "View3D > Sidebar > BlenderMCP",
+    "description": "Connect Blender to Claude via MCP",
+    "category": "Interface",
+}
+
+class BlenderMCPServer:
+    def __init__(self, host='localhost', port=9876):
+        self.host = host
+        self.port = port
+        self.running = False
+        self.socket = None
+        self.client = None
+        self.command_queue = []
+        self.buffer = b''  # Add buffer for incomplete data
+    
+    def start(self):
+        self.running = True
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
+        try:
+            self.socket.bind((self.host, self.port))
+            self.socket.listen(1)
+            self.socket.setblocking(False)
+            # Register the timer
+            bpy.app.timers.register(self._process_server, persistent=True)
+            print(f"BlenderMCP server started on {self.host}:{self.port}")
+        except Exception as e:
+            print(f"Failed to start server: {str(e)}")
+            self.stop()
+            
+    def stop(self):
+        self.running = False
+        if hasattr(bpy.app.timers, "unregister"):
+            if bpy.app.timers.is_registered(self._process_server):
+                bpy.app.timers.unregister(self._process_server)
+        if self.socket:
+            self.socket.close()
+        if self.client:
+            self.client.close()
+        self.socket = None
+        self.client = None
+        print("BlenderMCP server stopped")
+
+    def _process_server(self):
+        """Timer callback to process server operations"""
+        if not self.running:
+            return None  # Unregister timer
+            
+        try:
+            # Accept new connections
+            if not self.client and self.socket:
+                try:
+                    self.client, address = self.socket.accept()
+                    self.client.setblocking(False)
+                    print(f"Connected to client: {address}")
+                except BlockingIOError:
+                    pass  # No connection waiting
+                except Exception as e:
+                    print(f"Error accepting connection: {str(e)}")
+                
+            # Process existing connection
+            if self.client:
+                try:
+                    # Try to receive data
+                    try:
+                        data = self.client.recv(8192)
+                        if data:
+                            self.buffer += data
+                            # Try to process complete messages
+                            try:
+                                # Attempt to parse the buffer as JSON
+                                command = json.loads(self.buffer.decode('utf-8'))
+                                # If successful, clear the buffer and process command
+                                self.buffer = b''
+                                response = self.execute_command(command)
+                                response_json = json.dumps(response)
+                                self.client.sendall(response_json.encode('utf-8'))
+                            except json.JSONDecodeError:
+                                # Incomplete data, keep in buffer
+                                pass
+                        else:
+                            # Connection closed by client
+                            print("Client disconnected")
+                            self.client.close()
+                            self.client = None
+                            self.buffer = b''
+                    except BlockingIOError:
+                        pass  # No data available
+                    except Exception as e:
+                        print(f"Error receiving data: {str(e)}")
+                        self.client.close()
+                        self.client = None
+                        self.buffer = b''
+                        
+                except Exception as e:
+                    print(f"Error with client: {str(e)}")
+                    if self.client:
+                        self.client.close()
+                        self.client = None
+                    self.buffer = b''
+                    
+        except Exception as e:
+            print(f"Server error: {str(e)}")
+            
+        return 0.1  # Continue timer with 0.1 second interval
+
+    def execute_command(self, command):
+        """Execute a command in the main Blender thread"""
+        try:
+            cmd_type = command.get("type")
+            params = command.get("params", {})
+            
+            # Ensure we're in the right context
+            if cmd_type in ["create_object", "modify_object", "delete_object"]:
+                override = bpy.context.copy()
+                override['area'] = [area for area in bpy.context.screen.areas if area.type == 'VIEW_3D'][0]
+                with bpy.context.temp_override(**override):
+                    return self._execute_command_internal(command)
+            else:
+                return self._execute_command_internal(command)
+                
+        except Exception as e:
+            print(f"Error executing command: {str(e)}")
+
+            traceback.print_exc()
+            return {"status": "error", "message": str(e)}
+
+    def _execute_command_internal(self, command):
+        """Internal command execution with proper context"""
+        cmd_type = command.get("type")
+        params = command.get("params", {})
+
+        # Add a handler for checking PolyHaven status
+        if cmd_type == "get_polyhaven_status":
+            return {"status": "success", "result": self.get_polyhaven_status()}
+        
+        # Base handlers that are always available
+        handlers = {
+            "get_scene_info": self.get_scene_info,
+            "create_object": self.create_object,
+            "modify_object": self.modify_object,
+            "delete_object": self.delete_object,
+            "get_object_info": self.get_object_info,
+            "execute_code": self.execute_code,
+            "set_material": self.set_material,
+            "get_polyhaven_status": self.get_polyhaven_status,
+        }
+        
+        # Add Polyhaven handlers only if enabled
+        if bpy.context.scene.blendermcp_use_polyhaven:
+            polyhaven_handlers = {
+                "get_polyhaven_categories": self.get_polyhaven_categories,
+                "search_polyhaven_assets": self.search_polyhaven_assets,
+                "download_polyhaven_asset": self.download_polyhaven_asset,
+                "set_texture": self.set_texture,
+            }
+            handlers.update(polyhaven_handlers)
+        
+        handler = handlers.get(cmd_type)
+        if handler:
+            try:
+                print(f"Executing handler for {cmd_type}")
+                result = handler(**params)
+                print(f"Handler execution complete")
+                return {"status": "success", "result": result}
+            except Exception as e:
+                print(f"Error in handler: {str(e)}")
+                traceback.print_exc()
+                return {"status": "error", "message": str(e)}
+        else:
+            return {"status": "error", "message": f"Unknown command type: {cmd_type}"}
+
+    
+    def get_simple_info(self):
+        """Get basic Blender information"""
+        return {
+            "blender_version": ".".join(str(v) for v in bpy.app.version),
+            "scene_name": bpy.context.scene.name,
+            "object_count": len(bpy.context.scene.objects)
+        }
+    
+    def get_scene_info(self):
+        """Get information about the current Blender scene"""
+        try:
+            print("Getting scene info...")
+            # Simplify the scene info to reduce data size
+            scene_info = {
+                "name": bpy.context.scene.name,
+                "object_count": len(bpy.context.scene.objects),
+                "objects": [],
+                "materials_count": len(bpy.data.materials),
+            }
+            
+            # Collect minimal object information (limit to first 10 objects)
+            for i, obj in enumerate(bpy.context.scene.objects):
+                if i >= 10:  # Reduced from 20 to 10
+                    break
+                    
+                obj_info = {
+                    "name": obj.name,
+                    "type": obj.type,
+                    # Only include basic location data
+                    "location": [round(float(obj.location.x), 2), 
+                                round(float(obj.location.y), 2), 
+                                round(float(obj.location.z), 2)],
+                }
+                scene_info["objects"].append(obj_info)
+            
+            print(f"Scene info collected: {len(scene_info['objects'])} objects")
+            return scene_info
+        except Exception as e:
+            print(f"Error in get_scene_info: {str(e)}")
+            traceback.print_exc()
+            return {"error": str(e)}
+    
+    def create_object(self, type="CUBE", name=None, location=(0, 0, 0), rotation=(0, 0, 0), scale=(1, 1, 1)):
+        """Create a new object in the scene"""
+        # Deselect all objects
+        bpy.ops.object.select_all(action='DESELECT')
+        
+        # Create the object based on type
+        if type == "CUBE":
+            bpy.ops.mesh.primitive_cube_add(location=location, rotation=rotation, scale=scale)
+        elif type == "SPHERE":
+            bpy.ops.mesh.primitive_uv_sphere_add(location=location, rotation=rotation, scale=scale)
+        elif type == "CYLINDER":
+            bpy.ops.mesh.primitive_cylinder_add(location=location, rotation=rotation, scale=scale)
+        elif type == "PLANE":
+            bpy.ops.mesh.primitive_plane_add(location=location, rotation=rotation, scale=scale)
+        elif type == "CONE":
+            bpy.ops.mesh.primitive_cone_add(location=location, rotation=rotation, scale=scale)
+        elif type == "TORUS":
+            bpy.ops.mesh.primitive_torus_add(location=location, rotation=rotation, scale=scale)
+        elif type == "EMPTY":
+            bpy.ops.object.empty_add(location=location, rotation=rotation, scale=scale)
+        elif type == "CAMERA":
+            bpy.ops.object.camera_add(location=location, rotation=rotation)
+        elif type == "LIGHT":
+            bpy.ops.object.light_add(type='POINT', location=location, rotation=rotation, scale=scale)
+        else:
+            raise ValueError(f"Unsupported object type: {type}")
+        
+        # Get the created object
+        obj = bpy.context.active_object
+        
+        # Rename if name is provided
+        if name:
+            obj.name = name
+        
+        return {
+            "name": obj.name,
+            "type": obj.type,
+            "location": [obj.location.x, obj.location.y, obj.location.z],
+            "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
+            "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+        }
+    
+    def modify_object(self, name, location=None, rotation=None, scale=None, visible=None):
+        """Modify an existing object in the scene"""
+        # Find the object by name
+        obj = bpy.data.objects.get(name)
+        if not obj:
+            raise ValueError(f"Object not found: {name}")
+        
+        # Modify properties as requested
+        if location is not None:
+            obj.location = location
+        
+        if rotation is not None:
+            obj.rotation_euler = rotation
+        
+        if scale is not None:
+            obj.scale = scale
+        
+        if visible is not None:
+            obj.hide_viewport = not visible
+            obj.hide_render = not visible
+        
+        return {
+            "name": obj.name,
+            "type": obj.type,
+            "location": [obj.location.x, obj.location.y, obj.location.z],
+            "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
+            "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+            "visible": obj.visible_get(),
+        }
+    
+    def delete_object(self, name):
+        """Delete an object from the scene"""
+        obj = bpy.data.objects.get(name)
+        if not obj:
+            raise ValueError(f"Object not found: {name}")
+        
+        # Store the name to return
+        obj_name = obj.name
+        
+        # Select and delete the object
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        bpy.ops.object.delete()
+        
+        return {"deleted": obj_name}
+    
+    def get_object_info(self, name):
+        """Get detailed information about a specific object"""
+        obj = bpy.data.objects.get(name)
+        if not obj:
+            raise ValueError(f"Object not found: {name}")
+        
+        # Basic object info
+        obj_info = {
+            "name": obj.name,
+            "type": obj.type,
+            "location": [obj.location.x, obj.location.y, obj.location.z],
+            "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
+            "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+            "visible": obj.visible_get(),
+            "materials": [],
+        }
+        
+        # Add material slots
+        for slot in obj.material_slots:
+            if slot.material:
+                obj_info["materials"].append(slot.material.name)
+        
+        # Add mesh data if applicable
+        if obj.type == 'MESH' and obj.data:
+            mesh = obj.data
+            obj_info["mesh"] = {
+                "vertices": len(mesh.vertices),
+                "edges": len(mesh.edges),
+                "polygons": len(mesh.polygons),
+            }
+        
+        return obj_info
+    
+    def execute_code(self, code):
+        """Execute arbitrary Blender Python code"""
+        # This is powerful but potentially dangerous - use with caution
+        try:
+            # Create a local namespace for execution
+            namespace = {"bpy": bpy}
+            exec(code, namespace)
+            return {"executed": True}
+        except Exception as e:
+            raise Exception(f"Code execution error: {str(e)}")
+    
+    def set_material(self, object_name, material_name=None, create_if_missing=True, color=None):
+        """Set or create a material for an object"""
+        try:
+            # Get the object
+            obj = bpy.data.objects.get(object_name)
+            if not obj:
+                raise ValueError(f"Object not found: {object_name}")
+            
+            # Make sure object can accept materials
+            if not hasattr(obj, 'data') or not hasattr(obj.data, 'materials'):
+                raise ValueError(f"Object {object_name} cannot accept materials")
+            
+            # Create or get material
+            if material_name:
+                mat = bpy.data.materials.get(material_name)
+                if not mat and create_if_missing:
+                    mat = bpy.data.materials.new(name=material_name)
+                    print(f"Created new material: {material_name}")
+            else:
+                # Generate unique material name if none provided
+                mat_name = f"{object_name}_material"
+                mat = bpy.data.materials.get(mat_name)
+                if not mat:
+                    mat = bpy.data.materials.new(name=mat_name)
+                material_name = mat_name
+                print(f"Using material: {mat_name}")
+            
+            # Set up material nodes if needed
+            if mat:
+                if not mat.use_nodes:
+                    mat.use_nodes = True
+                
+                # Get or create Principled BSDF
+                principled = mat.node_tree.nodes.get('Principled BSDF')
+                if not principled:
+                    principled = mat.node_tree.nodes.new('ShaderNodeBsdfPrincipled')
+                    # Get or create Material Output
+                    output = mat.node_tree.nodes.get('Material Output')
+                    if not output:
+                        output = mat.node_tree.nodes.new('ShaderNodeOutputMaterial')
+                    # Link if not already linked
+                    if not principled.outputs[0].links:
+                        mat.node_tree.links.new(principled.outputs[0], output.inputs[0])
+                
+                # Set color if provided
+                if color and len(color) >= 3:
+                    principled.inputs['Base Color'].default_value = (
+                        color[0],
+                        color[1],
+                        color[2],
+                        1.0 if len(color) < 4 else color[3]
+                    )
+                    print(f"Set material color to {color}")
+            
+            # Assign material to object if not already assigned
+            if mat:
+                if not obj.data.materials:
+                    obj.data.materials.append(mat)
+                else:
+                    # Only modify first material slot
+                    obj.data.materials[0] = mat
+                
+                print(f"Assigned material {mat.name} to object {object_name}")
+                
+                return {
+                    "status": "success",
+                    "object": object_name,
+                    "material": mat.name,
+                    "color": color if color else None
+                }
+            else:
+                raise ValueError(f"Failed to create or find material: {material_name}")
+            
+        except Exception as e:
+            print(f"Error in set_material: {str(e)}")
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "message": str(e),
+                "object": object_name,
+                "material": material_name if 'material_name' in locals() else None
+            }
+    
+    def render_scene(self, output_path=None, resolution_x=None, resolution_y=None):
+        """Render the current scene"""
+        if resolution_x is not None:
+            bpy.context.scene.render.resolution_x = resolution_x
+        
+        if resolution_y is not None:
+            bpy.context.scene.render.resolution_y = resolution_y
+        
+        if output_path:
+            bpy.context.scene.render.filepath = output_path
+        
+        # Render the scene
+        bpy.ops.render.render(write_still=bool(output_path))
+        
+        return {
+            "rendered": True,
+            "output_path": output_path if output_path else "[not saved]",
+            "resolution": [bpy.context.scene.render.resolution_x, bpy.context.scene.render.resolution_y],
+        }
+
+    def get_polyhaven_categories(self, asset_type):
+        """Get categories for a specific asset type from Polyhaven"""
+        try:
+            if asset_type not in ["hdris", "textures", "models", "all"]:
+                return {"error": f"Invalid asset type: {asset_type}. Must be one of: hdris, textures, models, all"}
+                
+            response = requests.get(f"https://api.polyhaven.com/categories/{asset_type}")
+            if response.status_code == 200:
+                return {"categories": response.json()}
+            else:
+                return {"error": f"API request failed with status code {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def search_polyhaven_assets(self, asset_type=None, categories=None):
+        """Search for assets from Polyhaven with optional filtering"""
+        try:
+            url = "https://api.polyhaven.com/assets"
+            params = {}
+            
+            if asset_type and asset_type != "all":
+                if asset_type not in ["hdris", "textures", "models"]:
+                    return {"error": f"Invalid asset type: {asset_type}. Must be one of: hdris, textures, models, all"}
+                params["type"] = asset_type
+                
+            if categories:
+                params["categories"] = categories
+                
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                # Limit the response size to avoid overwhelming Blender
+                assets = response.json()
+                # Return only the first 20 assets to keep response size manageable
+                limited_assets = {}
+                for i, (key, value) in enumerate(assets.items()):
+                    if i >= 20:  # Limit to 20 assets
+                        break
+                    limited_assets[key] = value
+                
+                return {"assets": limited_assets, "total_count": len(assets), "returned_count": len(limited_assets)}
+            else:
+                return {"error": f"API request failed with status code {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def download_polyhaven_asset(self, asset_id, asset_type, resolution="1k", file_format=None):
+        try:
+            # First get the files information
+            files_response = requests.get(f"https://api.polyhaven.com/files/{asset_id}")
+            if files_response.status_code != 200:
+                return {"error": f"Failed to get asset files: {files_response.status_code}"}
+            
+            files_data = files_response.json()
+            
+            # Handle different asset types
+            if asset_type == "hdris":
+                # For HDRIs, download the .hdr or .exr file
+                if not file_format:
+                    file_format = "hdr"  # Default format for HDRIs
+                
+                if "hdri" in files_data and resolution in files_data["hdri"] and file_format in files_data["hdri"][resolution]:
+                    file_info = files_data["hdri"][resolution][file_format]
+                    file_url = file_info["url"]
+                    
+                    # For HDRIs, we need to save to a temporary file first
+                    # since Blender can't properly load HDR data directly from memory
+                    with tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False) as tmp_file:
+                        # Download the file
+                        response = requests.get(file_url)
+                        if response.status_code != 200:
+                            return {"error": f"Failed to download HDRI: {response.status_code}"}
+                        
+                        tmp_file.write(response.content)
+                        tmp_path = tmp_file.name
+                    
+                    try:
+                        # Create a new world if none exists
+                        if not bpy.data.worlds:
+                            bpy.data.worlds.new("World")
+                        
+                        world = bpy.data.worlds[0]
+                        world.use_nodes = True
+                        node_tree = world.node_tree
+                        
+                        # Clear existing nodes
+                        for node in node_tree.nodes:
+                            node_tree.nodes.remove(node)
+                        
+                        # Create nodes
+                        tex_coord = node_tree.nodes.new(type='ShaderNodeTexCoord')
+                        tex_coord.location = (-800, 0)
+                        
+                        mapping = node_tree.nodes.new(type='ShaderNodeMapping')
+                        mapping.location = (-600, 0)
+                        
+                        # Load the image from the temporary file
+                        env_tex = node_tree.nodes.new(type='ShaderNodeTexEnvironment')
+                        env_tex.location = (-400, 0)
+                        env_tex.image = bpy.data.images.load(tmp_path)
+                        
+                        # FIXED: Use a color space that exists in all Blender versions
+                        if file_format.lower() == 'exr':
+                            # Try to use Linear color space for EXR files
+                            try:
+                                env_tex.image.colorspace_settings.name = 'Linear'
+                            except:
+                                # Fallback to Non-Color if Linear isn't available
+                                env_tex.image.colorspace_settings.name = 'Non-Color'
+                        else:  # hdr
+                            # For HDR files, try these options in order
+                            for color_space in ['Linear', 'Linear Rec.709', 'Non-Color']:
+                                try:
+                                    env_tex.image.colorspace_settings.name = color_space
+                                    break  # Stop if we successfully set a color space
+                                except:
+                                    continue
+                        
+                        background = node_tree.nodes.new(type='ShaderNodeBackground')
+                        background.location = (-200, 0)
+                        
+                        output = node_tree.nodes.new(type='ShaderNodeOutputWorld')
+                        output.location = (0, 0)
+                        
+                        # Connect nodes
+                        node_tree.links.new(tex_coord.outputs['Generated'], mapping.inputs['Vector'])
+                        node_tree.links.new(mapping.outputs['Vector'], env_tex.inputs['Vector'])
+                        node_tree.links.new(env_tex.outputs['Color'], background.inputs['Color'])
+                        node_tree.links.new(background.outputs['Background'], output.inputs['Surface'])
+                        
+                        # Set as active world
+                        bpy.context.scene.world = world
+                        
+                        # Clean up temporary file
+                        try:
+                            tempfile._cleanup()  # This will clean up all temporary files
+                        except:
+                            pass
+                        
+                        return {
+                            "success": True, 
+                            "message": f"HDRI {asset_id} imported successfully",
+                            "image_name": env_tex.image.name
+                        }
+                    except Exception as e:
+                        return {"error": f"Failed to set up HDRI in Blender: {str(e)}"}
+                else:
+                    return {"error": f"Requested resolution or format not available for this HDRI"}
+                    
+            elif asset_type == "textures":
+                if not file_format:
+                    file_format = "jpg"  # Default format for textures
+                
+                downloaded_maps = {}
+                
+                try:
+                    for map_type in files_data:
+                        if map_type not in ["blend", "gltf"]:  # Skip non-texture files
+                            if resolution in files_data[map_type] and file_format in files_data[map_type][resolution]:
+                                file_info = files_data[map_type][resolution][file_format]
+                                file_url = file_info["url"]
+                                
+                                # Use NamedTemporaryFile like we do for HDRIs
+                                with tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False) as tmp_file:
+                                    # Download the file
+                                    response = requests.get(file_url)
+                                    if response.status_code == 200:
+                                        tmp_file.write(response.content)
+                                        tmp_path = tmp_file.name
+                                        
+                                        # Load image from temporary file
+                                        image = bpy.data.images.load(tmp_path)
+                                        image.name = f"{asset_id}_{map_type}.{file_format}"
+                                        
+                                        # Pack the image into .blend file
+                                        image.pack()
+                                        
+                                        # Set color space based on map type
+                                        if map_type in ['color', 'diffuse', 'albedo']:
+                                            try:
+                                                image.colorspace_settings.name = 'sRGB'
+                                            except:
+                                                pass
+                                        else:
+                                            try:
+                                                image.colorspace_settings.name = 'Non-Color'
+                                            except:
+                                                pass
+                                        
+                                        downloaded_maps[map_type] = image
+                                        
+                                        # Clean up temporary file
+                                        try:
+                                            os.unlink(tmp_path)
+                                        except:
+                                            pass
+                
+                    if not downloaded_maps:
+                        return {"error": f"No texture maps found for the requested resolution and format"}
+                    
+                    # Create a new material with the downloaded textures
+                    mat = bpy.data.materials.new(name=asset_id)
+                    mat.use_nodes = True
+                    nodes = mat.node_tree.nodes
+                    links = mat.node_tree.links
+                    
+                    # Clear default nodes
+                    for node in nodes:
+                        nodes.remove(node)
+                    
+                    # Create output node
+                    output = nodes.new(type='ShaderNodeOutputMaterial')
+                    output.location = (300, 0)
+                    
+                    # Create principled BSDF node
+                    principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+                    principled.location = (0, 0)
+                    links.new(principled.outputs[0], output.inputs[0])
+                    
+                    # Add texture nodes based on available maps
+                    tex_coord = nodes.new(type='ShaderNodeTexCoord')
+                    tex_coord.location = (-800, 0)
+                    
+                    mapping = nodes.new(type='ShaderNodeMapping')
+                    mapping.location = (-600, 0)
+                    mapping.vector_type = 'TEXTURE'  # Changed from default 'POINT' to 'TEXTURE'
+                    links.new(tex_coord.outputs['UV'], mapping.inputs['Vector'])
+                    
+                    # Position offset for texture nodes
+                    x_pos = -400
+                    y_pos = 300
+                    
+                    # Connect different texture maps
+                    for map_type, image in downloaded_maps.items():
+                        tex_node = nodes.new(type='ShaderNodeTexImage')
+                        tex_node.location = (x_pos, y_pos)
+                        tex_node.image = image
+                        
+                        # Set color space based on map type
+                        if map_type.lower() in ['color', 'diffuse', 'albedo']:
+                            try:
+                                tex_node.image.colorspace_settings.name = 'sRGB'
+                            except:
+                                pass  # Use default if sRGB not available
+                        else:
+                            try:
+                                tex_node.image.colorspace_settings.name = 'Non-Color'
+                            except:
+                                pass  # Use default if Non-Color not available
+                        
+                        links.new(mapping.outputs['Vector'], tex_node.inputs['Vector'])
+                        
+                        # Connect to appropriate input on Principled BSDF
+                        if map_type.lower() in ['color', 'diffuse', 'albedo']:
+                            links.new(tex_node.outputs['Color'], principled.inputs['Base Color'])
+                        elif map_type.lower() in ['roughness', 'rough']:
+                            links.new(tex_node.outputs['Color'], principled.inputs['Roughness'])
+                        elif map_type.lower() in ['metallic', 'metalness', 'metal']:
+                            links.new(tex_node.outputs['Color'], principled.inputs['Metallic'])
+                        elif map_type.lower() in ['normal', 'nor']:
+                            # Add normal map node
+                            normal_map = nodes.new(type='ShaderNodeNormalMap')
+                            normal_map.location = (x_pos + 200, y_pos)
+                            links.new(tex_node.outputs['Color'], normal_map.inputs['Color'])
+                            links.new(normal_map.outputs['Normal'], principled.inputs['Normal'])
+                        elif map_type in ['displacement', 'disp', 'height']:
+                            # Add displacement node
+                            disp_node = nodes.new(type='ShaderNodeDisplacement')
+                            disp_node.location = (x_pos + 200, y_pos - 200)
+                            links.new(tex_node.outputs['Color'], disp_node.inputs['Height'])
+                            links.new(disp_node.outputs['Displacement'], output.inputs['Displacement'])
+                        
+                        y_pos -= 250
+                    
+                    return {
+                        "success": True, 
+                        "message": f"Texture {asset_id} imported as material",
+                        "material": mat.name,
+                        "maps": list(downloaded_maps.keys())
+                    }
+                
+                except Exception as e:
+                    return {"error": f"Failed to process textures: {str(e)}"}
+                
+            elif asset_type == "models":
+                # For models, prefer glTF format if available
+                if not file_format:
+                    file_format = "gltf"  # Default format for models
+                
+                if file_format in files_data and resolution in files_data[file_format]:
+                    file_info = files_data[file_format][resolution][file_format]
+                    file_url = file_info["url"]
+                    
+                    # Create a temporary directory to store the model and its dependencies
+                    temp_dir = tempfile.mkdtemp()
+                    main_file_path = ""
+                    
+                    try:
+                        # Download the main model file
+                        main_file_name = file_url.split("/")[-1]
+                        main_file_path = os.path.join(temp_dir, main_file_name)
+                        
+                        response = requests.get(file_url)
+                        if response.status_code != 200:
+                            return {"error": f"Failed to download model: {response.status_code}"}
+                        
+                        with open(main_file_path, "wb") as f:
+                            f.write(response.content)
+                        
+                        # Check for included files and download them
+                        if "include" in file_info and file_info["include"]:
+                            for include_path, include_info in file_info["include"].items():
+                                # Get the URL for the included file - this is the fix
+                                include_url = include_info["url"]
+                                
+                                # Create the directory structure for the included file
+                                include_file_path = os.path.join(temp_dir, include_path)
+                                os.makedirs(os.path.dirname(include_file_path), exist_ok=True)
+                                
+                                # Download the included file
+                                include_response = requests.get(include_url)
+                                if include_response.status_code == 200:
+                                    with open(include_file_path, "wb") as f:
+                                        f.write(include_response.content)
+                                else:
+                                    print(f"Failed to download included file: {include_path}")
+                        
+                        # Import the model into Blender
+                        if file_format == "gltf" or file_format == "glb":
+                            bpy.ops.import_scene.gltf(filepath=main_file_path)
+                        elif file_format == "fbx":
+                            bpy.ops.import_scene.fbx(filepath=main_file_path)
+                        elif file_format == "obj":
+                            bpy.ops.import_scene.obj(filepath=main_file_path)
+                        elif file_format == "blend":
+                            # For blend files, we need to append or link
+                            with bpy.data.libraries.load(main_file_path, link=False) as (data_from, data_to):
+                                data_to.objects = data_from.objects
+                            
+                            # Link the objects to the scene
+                            for obj in data_to.objects:
+                                if obj is not None:
+                                    bpy.context.collection.objects.link(obj)
+                        else:
+                            return {"error": f"Unsupported model format: {file_format}"}
+                        
+                        # Get the names of imported objects
+                        imported_objects = [obj.name for obj in bpy.context.selected_objects]
+                        
+                        return {
+                            "success": True, 
+                            "message": f"Model {asset_id} imported successfully",
+                            "imported_objects": imported_objects
+                        }
+                    except Exception as e:
+                        return {"error": f"Failed to import model: {str(e)}"}
+                    finally:
+                        # Clean up temporary directory
+                        try:
+                            shutil.rmtree(temp_dir)
+                        except:
+                            print(f"Failed to clean up temporary directory: {temp_dir}")
+                else:
+                    return {"error": f"Requested format or resolution not available for this model"}
+                
+            else:
+                return {"error": f"Unsupported asset type: {asset_type}"}
+                
+        except Exception as e:
+            return {"error": f"Failed to download asset: {str(e)}"}
+
+    def set_texture(self, object_name, texture_id):
+        """Apply a previously downloaded Polyhaven texture to an object by creating a new material"""
+        try:
+            # Get the object
+            obj = bpy.data.objects.get(object_name)
+            if not obj:
+                return {"error": f"Object not found: {object_name}"}
+            
+            # Make sure object can accept materials
+            if not hasattr(obj, 'data') or not hasattr(obj.data, 'materials'):
+                return {"error": f"Object {object_name} cannot accept materials"}
+            
+            # Find all images related to this texture and ensure they're properly loaded
+            texture_images = {}
+            for img in bpy.data.images:
+                if img.name.startswith(texture_id + "_"):
+                    # Extract the map type from the image name
+                    map_type = img.name.split('_')[-1].split('.')[0]
+                    
+                    # Force a reload of the image
+                    img.reload()
+                    
+                    # Ensure proper color space
+                    if map_type.lower() in ['color', 'diffuse', 'albedo']:
+                        try:
+                            img.colorspace_settings.name = 'sRGB'
+                        except:
+                            pass
+                    else:
+                        try:
+                            img.colorspace_settings.name = 'Non-Color'
+                        except:
+                            pass
+                    
+                    # Ensure the image is packed
+                    if not img.packed_file:
+                        img.pack()
+                    
+                    texture_images[map_type] = img
+                    print(f"Loaded texture map: {map_type} - {img.name}")
+                    
+                    # Debug info
+                    print(f"Image size: {img.size[0]}x{img.size[1]}")
+                    print(f"Color space: {img.colorspace_settings.name}")
+                    print(f"File format: {img.file_format}")
+                    print(f"Is packed: {bool(img.packed_file)}")
+
+            if not texture_images:
+                return {"error": f"No texture images found for: {texture_id}. Please download the texture first."}
+            
+            # Create a new material
+            new_mat_name = f"{texture_id}_material_{object_name}"
+            
+            # Remove any existing material with this name to avoid conflicts
+            existing_mat = bpy.data.materials.get(new_mat_name)
+            if existing_mat:
+                bpy.data.materials.remove(existing_mat)
+            
+            new_mat = bpy.data.materials.new(name=new_mat_name)
+            new_mat.use_nodes = True
+            
+            # Set up the material nodes
+            nodes = new_mat.node_tree.nodes
+            links = new_mat.node_tree.links
+            
+            # Clear default nodes
+            nodes.clear()
+            
+            # Create output node
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            output.location = (600, 0)
+            
+            # Create principled BSDF node
+            principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+            principled.location = (300, 0)
+            links.new(principled.outputs[0], output.inputs[0])
+            
+            # Add texture nodes based on available maps
+            tex_coord = nodes.new(type='ShaderNodeTexCoord')
+            tex_coord.location = (-800, 0)
+            
+            mapping = nodes.new(type='ShaderNodeMapping')
+            mapping.location = (-600, 0)
+            mapping.vector_type = 'TEXTURE'  # Changed from default 'POINT' to 'TEXTURE'
+            links.new(tex_coord.outputs['UV'], mapping.inputs['Vector'])
+            
+            # Position offset for texture nodes
+            x_pos = -400
+            y_pos = 300
+            
+            # Connect different texture maps
+            for map_type, image in texture_images.items():
+                tex_node = nodes.new(type='ShaderNodeTexImage')
+                tex_node.location = (x_pos, y_pos)
+                tex_node.image = image
+                
+                # Set color space based on map type
+                if map_type.lower() in ['color', 'diffuse', 'albedo']:
+                    try:
+                        tex_node.image.colorspace_settings.name = 'sRGB'
+                    except:
+                        pass  # Use default if sRGB not available
+                else:
+                    try:
+                        tex_node.image.colorspace_settings.name = 'Non-Color'
+                    except:
+                        pass  # Use default if Non-Color not available
+                
+                links.new(mapping.outputs['Vector'], tex_node.inputs['Vector'])
+                
+                # Connect to appropriate input on Principled BSDF
+                if map_type.lower() in ['color', 'diffuse', 'albedo']:
+                    links.new(tex_node.outputs['Color'], principled.inputs['Base Color'])
+                elif map_type.lower() in ['roughness', 'rough']:
+                    links.new(tex_node.outputs['Color'], principled.inputs['Roughness'])
+                elif map_type.lower() in ['metallic', 'metalness', 'metal']:
+                    links.new(tex_node.outputs['Color'], principled.inputs['Metallic'])
+                elif map_type.lower() in ['normal', 'nor', 'dx', 'gl']:
+                    # Add normal map node
+                    normal_map = nodes.new(type='ShaderNodeNormalMap')
+                    normal_map.location = (x_pos + 200, y_pos)
+                    links.new(tex_node.outputs['Color'], normal_map.inputs['Color'])
+                    links.new(normal_map.outputs['Normal'], principled.inputs['Normal'])
+                elif map_type.lower() in ['displacement', 'disp', 'height']:
+                    # Add displacement node
+                    disp_node = nodes.new(type='ShaderNodeDisplacement')
+                    disp_node.location = (x_pos + 200, y_pos - 200)
+                    disp_node.inputs['Scale'].default_value = 0.1  # Reduce displacement strength
+                    links.new(tex_node.outputs['Color'], disp_node.inputs['Height'])
+                    links.new(disp_node.outputs['Displacement'], output.inputs['Displacement'])
+                
+                y_pos -= 250
+            
+            # Second pass: Connect nodes with proper handling for special cases
+            texture_nodes = {}
+            
+            # First find all texture nodes and store them by map type
+            for node in nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    for map_type, image in texture_images.items():
+                        if node.image == image:
+                            texture_nodes[map_type] = node
+                            break
+            
+            # Now connect everything using the nodes instead of images
+            # Handle base color (diffuse)
+            for map_name in ['color', 'diffuse', 'albedo']:
+                if map_name in texture_nodes:
+                    links.new(texture_nodes[map_name].outputs['Color'], principled.inputs['Base Color'])
+                    print(f"Connected {map_name} to Base Color")
+                    break
+            
+            # Handle roughness
+            for map_name in ['roughness', 'rough']:
+                if map_name in texture_nodes:
+                    links.new(texture_nodes[map_name].outputs['Color'], principled.inputs['Roughness'])
+                    print(f"Connected {map_name} to Roughness")
+                    break
+            
+            # Handle metallic
+            for map_name in ['metallic', 'metalness', 'metal']:
+                if map_name in texture_nodes:
+                    links.new(texture_nodes[map_name].outputs['Color'], principled.inputs['Metallic'])
+                    print(f"Connected {map_name} to Metallic")
+                    break
+            
+            # Handle normal maps
+            for map_name in ['gl', 'dx', 'nor']:
+                if map_name in texture_nodes:
+                    normal_map_node = nodes.new(type='ShaderNodeNormalMap')
+                    normal_map_node.location = (100, 100)
+                    links.new(texture_nodes[map_name].outputs['Color'], normal_map_node.inputs['Color'])
+                    links.new(normal_map_node.outputs['Normal'], principled.inputs['Normal'])
+                    print(f"Connected {map_name} to Normal")
+                    break
+            
+            # Handle displacement
+            for map_name in ['displacement', 'disp', 'height']:
+                if map_name in texture_nodes:
+                    disp_node = nodes.new(type='ShaderNodeDisplacement')
+                    disp_node.location = (300, -200)
+                    disp_node.inputs['Scale'].default_value = 0.1  # Reduce displacement strength
+                    links.new(texture_nodes[map_name].outputs['Color'], disp_node.inputs['Height'])
+                    links.new(disp_node.outputs['Displacement'], output.inputs['Displacement'])
+                    print(f"Connected {map_name} to Displacement")
+                    break
+            
+            # Handle ARM texture (Ambient Occlusion, Roughness, Metallic)
+            if 'arm' in texture_nodes:
+                separate_rgb = nodes.new(type='ShaderNodeSeparateRGB')
+                separate_rgb.location = (-200, -100)
+                links.new(texture_nodes['arm'].outputs['Color'], separate_rgb.inputs['Image'])
+                
+                # Connect Roughness (G) if no dedicated roughness map
+                if not any(map_name in texture_nodes for map_name in ['roughness', 'rough']):
+                    links.new(separate_rgb.outputs['G'], principled.inputs['Roughness'])
+                    print("Connected ARM.G to Roughness")
+                
+                # Connect Metallic (B) if no dedicated metallic map
+                if not any(map_name in texture_nodes for map_name in ['metallic', 'metalness', 'metal']):
+                    links.new(separate_rgb.outputs['B'], principled.inputs['Metallic'])
+                    print("Connected ARM.B to Metallic")
+                
+                # For AO (R channel), multiply with base color if we have one
+                base_color_node = None
+                for map_name in ['color', 'diffuse', 'albedo']:
+                    if map_name in texture_nodes:
+                        base_color_node = texture_nodes[map_name]
+                        break
+                
+                if base_color_node:
+                    mix_node = nodes.new(type='ShaderNodeMixRGB')
+                    mix_node.location = (100, 200)
+                    mix_node.blend_type = 'MULTIPLY'
+                    mix_node.inputs['Fac'].default_value = 0.8  # 80% influence
+                    
+                    # Disconnect direct connection to base color
+                    for link in base_color_node.outputs['Color'].links:
+                        if link.to_socket == principled.inputs['Base Color']:
+                            links.remove(link)
+                    
+                    # Connect through the mix node
+                    links.new(base_color_node.outputs['Color'], mix_node.inputs[1])
+                    links.new(separate_rgb.outputs['R'], mix_node.inputs[2])
+                    links.new(mix_node.outputs['Color'], principled.inputs['Base Color'])
+                    print("Connected ARM.R to AO mix with Base Color")
+            
+            # Handle AO (Ambient Occlusion) if separate
+            if 'ao' in texture_nodes:
+                base_color_node = None
+                for map_name in ['color', 'diffuse', 'albedo']:
+                    if map_name in texture_nodes:
+                        base_color_node = texture_nodes[map_name]
+                        break
+                
+                if base_color_node:
+                    mix_node = nodes.new(type='ShaderNodeMixRGB')
+                    mix_node.location = (100, 200)
+                    mix_node.blend_type = 'MULTIPLY'
+                    mix_node.inputs['Fac'].default_value = 0.8  # 80% influence
+                    
+                    # Disconnect direct connection to base color
+                    for link in base_color_node.outputs['Color'].links:
+                        if link.to_socket == principled.inputs['Base Color']:
+                            links.remove(link)
+                    
+                    # Connect through the mix node
+                    links.new(base_color_node.outputs['Color'], mix_node.inputs[1])
+                    links.new(texture_nodes['ao'].outputs['Color'], mix_node.inputs[2])
+                    links.new(mix_node.outputs['Color'], principled.inputs['Base Color'])
+                    print("Connected AO to mix with Base Color")
+            
+            # CRITICAL: Make sure to clear all existing materials from the object
+            while len(obj.data.materials) > 0:
+                obj.data.materials.pop(index=0)
+            
+            # Assign the new material to the object
+            obj.data.materials.append(new_mat)
+            
+            # CRITICAL: Make the object active and select it
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+            
+            # CRITICAL: Force Blender to update the material
+            bpy.context.view_layer.update()
+            
+            # Get the list of texture maps
+            texture_maps = list(texture_images.keys())
+            
+            # Get info about texture nodes for debugging
+            material_info = {
+                "name": new_mat.name,
+                "has_nodes": new_mat.use_nodes,
+                "node_count": len(new_mat.node_tree.nodes),
+                "texture_nodes": []
+            }
+            
+            for node in new_mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    connections = []
+                    for output in node.outputs:
+                        for link in output.links:
+                            connections.append(f"{output.name} → {link.to_node.name}.{link.to_socket.name}")
+                    
+                    material_info["texture_nodes"].append({
+                        "name": node.name,
+                        "image": node.image.name,
+                        "colorspace": node.image.colorspace_settings.name,
+                        "connections": connections
+                    })
+            
+            return {
+                "success": True,
+                "message": f"Created new material and applied texture {texture_id} to {object_name}",
+                "material": new_mat.name,
+                "maps": texture_maps,
+                "material_info": material_info
+            }
+            
+        except Exception as e:
+            print(f"Error in set_texture: {str(e)}")
+            traceback.print_exc()
+            return {"error": f"Failed to apply texture: {str(e)}"}
+
+    def get_polyhaven_status(self):
+        """Get the current status of PolyHaven integration"""
+        enabled = bpy.context.scene.blendermcp_use_polyhaven
+        if enabled:
+            return {"enabled": True, "message": "PolyHaven integration is enabled and ready to use."}
+        else:
+            return {
+                "enabled": False, 
+                "message": """PolyHaven integration is currently disabled. To enable it:
+                            1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
+                            2. Check the 'Use assets from Poly Haven' checkbox
+                            3. Restart the connection to Claude"""
+        }
+
+# Blender UI Panel
+class BLENDERMCP_PT_Panel(bpy.types.Panel):
+    bl_label = "Blender MCP"
+    bl_idname = "BLENDERMCP_PT_Panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'BlenderMCP'
+    
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        
+        layout.prop(scene, "blendermcp_port")
+        layout.prop(scene, "blendermcp_use_polyhaven", text="Use assets from Poly Haven")
+        
+        if not scene.blendermcp_server_running:
+            layout.operator("blendermcp.start_server", text="Start MCP Server")
+        else:
+            layout.operator("blendermcp.stop_server", text="Stop MCP Server")
+            layout.label(text=f"Running on port {scene.blendermcp_port}")
+
+# Operator to start the server
+class BLENDERMCP_OT_StartServer(bpy.types.Operator):
+    bl_idname = "blendermcp.start_server"
+    bl_label = "Connect to Claude"
+    bl_description = "Start the BlenderMCP server to connect with Claude"
+    
+    def execute(self, context):
+        scene = context.scene
+        
+        # Create a new server instance
+        if not hasattr(bpy.types, "blendermcp_server") or not bpy.types.blendermcp_server:
+            bpy.types.blendermcp_server = BlenderMCPServer(port=scene.blendermcp_port)
+        
+        # Start the server
+        bpy.types.blendermcp_server.start()
+        scene.blendermcp_server_running = True
+        
+        return {'FINISHED'}
+
+# Operator to stop the server
+class BLENDERMCP_OT_StopServer(bpy.types.Operator):
+    bl_idname = "blendermcp.stop_server"
+    bl_label = "Stop the connection to Claude"
+    bl_description = "Stop the connection to Claude"
+    
+    def execute(self, context):
+        scene = context.scene
+        
+        # Stop the server if it exists
+        if hasattr(bpy.types, "blendermcp_server") and bpy.types.blendermcp_server:
+            bpy.types.blendermcp_server.stop()
+            del bpy.types.blendermcp_server
+        
+        scene.blendermcp_server_running = False
+        
+        return {'FINISHED'}
+
+# Registration functions
+def register():
+    bpy.types.Scene.blendermcp_port = IntProperty(
+        name="Port",
+        description="Port for the BlenderMCP server",
+        default=9876,
+        min=1024,
+        max=65535
+    )
+    
+    bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
+        name="Server Running",
+        default=False
+    )
+    
+    bpy.types.Scene.blendermcp_use_polyhaven = bpy.props.BoolProperty(
+        name="Use Poly Haven",
+        description="Enable Poly Haven asset integration",
+        default=False
+    )
+    
+    bpy.utils.register_class(BLENDERMCP_PT_Panel)
+    bpy.utils.register_class(BLENDERMCP_OT_StartServer)
+    bpy.utils.register_class(BLENDERMCP_OT_StopServer)
+    
+    print("BlenderMCP addon registered")
+
+def unregister():
+    # Stop the server if it's running
+    if hasattr(bpy.types, "blendermcp_server") and bpy.types.blendermcp_server:
+        bpy.types.blendermcp_server.stop()
+        del bpy.types.blendermcp_server
+    
+    bpy.utils.unregister_class(BLENDERMCP_PT_Panel)
+    bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
+    bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
+    
+    del bpy.types.Scene.blendermcp_port
+    del bpy.types.Scene.blendermcp_server_running
+    del bpy.types.Scene.blendermcp_use_polyhaven
+    
+    print("BlenderMCP addon unregistered")
+
+if __name__ == "__main__":
+    register()
+```
+
+`main.py`:
+
+```py
+from blender_mcp.server import main as server_main
+
+def main():
+    """Entry point for the blender-mcp package"""
+    server_main()
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`pyproject.toml`:
+
+```toml
+[project]
+name = "blender-mcp"
+version = "1.1.0"
+description = "Blender integration through the Model Context Protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Your Name", email = "your.email@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp[cli]>=1.3.0",
+]
+
+[project.scripts]
+blender-mcp = "blender_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/blender-mcp"
+"Bug Tracker" = "https://github.com/yourusername/blender-mcp/issues"
+
+```
+
+`src/blender_mcp/__init__.py`:
+
+```py
+"""Blender integration through the Model Context Protocol."""
+
+__version__ = "0.1.0"
+
+# Expose key classes and functions for easier imports
+from .server import BlenderConnection, get_blender_connection
+
+```
+
+`src/blender_mcp/server.py`:
+
+```py
+# blender_mcp_server.py
+from mcp.server.fastmcp import FastMCP, Context, Image
+import socket
+import json
+import asyncio
+import logging
+from dataclasses import dataclass
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Dict, Any, List
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, 
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("BlenderMCPServer")
+
+@dataclass
+class BlenderConnection:
+    host: str
+    port: int
+    sock: socket.socket = None  # Changed from 'socket' to 'sock' to avoid naming conflict
+    
+    def connect(self) -> bool:
+        """Connect to the Blender addon socket server"""
+        if self.sock:
+            return True
+            
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((self.host, self.port))
+            logger.info(f"Connected to Blender at {self.host}:{self.port}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to connect to Blender: {str(e)}")
+            self.sock = None
+            return False
+    
+    def disconnect(self):
+        """Disconnect from the Blender addon"""
+        if self.sock:
+            try:
+                self.sock.close()
+            except Exception as e:
+                logger.error(f"Error disconnecting from Blender: {str(e)}")
+            finally:
+                self.sock = None
+
+    def receive_full_response(self, sock, buffer_size=8192):
+        """Receive the complete response, potentially in multiple chunks"""
+        chunks = []
+        # Use a consistent timeout value that matches the addon's timeout
+        sock.settimeout(15.0)  # Match the addon's timeout
+        
+        try:
+            while True:
+                try:
+                    chunk = sock.recv(buffer_size)
+                    if not chunk:
+                        # If we get an empty chunk, the connection might be closed
+                        if not chunks:  # If we haven't received anything yet, this is an error
+                            raise Exception("Connection closed before receiving any data")
+                        break
+                    
+                    chunks.append(chunk)
+                    
+                    # Check if we've received a complete JSON object
+                    try:
+                        data = b''.join(chunks)
+                        json.loads(data.decode('utf-8'))
+                        # If we get here, it parsed successfully
+                        logger.info(f"Received complete response ({len(data)} bytes)")
+                        return data
+                    except json.JSONDecodeError:
+                        # Incomplete JSON, continue receiving
+                        continue
+                except socket.timeout:
+                    # If we hit a timeout during receiving, break the loop and try to use what we have
+                    logger.warning("Socket timeout during chunked receive")
+                    break
+                except (ConnectionError, BrokenPipeError, ConnectionResetError) as e:
+                    logger.error(f"Socket connection error during receive: {str(e)}")
+                    raise  # Re-raise to be handled by the caller
+        except socket.timeout:
+            logger.warning("Socket timeout during chunked receive")
+        except Exception as e:
+            logger.error(f"Error during receive: {str(e)}")
+            raise
+            
+        # If we get here, we either timed out or broke out of the loop
+        # Try to use what we have
+        if chunks:
+            data = b''.join(chunks)
+            logger.info(f"Returning data after receive completion ({len(data)} bytes)")
+            try:
+                # Try to parse what we have
+                json.loads(data.decode('utf-8'))
+                return data
+            except json.JSONDecodeError:
+                # If we can't parse it, it's incomplete
+                raise Exception("Incomplete JSON response received")
+        else:
+            raise Exception("No data received")
+
+    def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+        """Send a command to Blender and return the response"""
+        if not self.sock and not self.connect():
+            raise ConnectionError("Not connected to Blender")
+        
+        command = {
+            "type": command_type,
+            "params": params or {}
+        }
+        
+        try:
+            # Log the command being sent
+            logger.info(f"Sending command: {command_type} with params: {params}")
+            
+            # Send the command
+            self.sock.sendall(json.dumps(command).encode('utf-8'))
+            logger.info(f"Command sent, waiting for response...")
+            
+            # Set a timeout for receiving - use the same timeout as in receive_full_response
+            self.sock.settimeout(15.0)  # Match the addon's timeout
+            
+            # Receive the response using the improved receive_full_response method
+            response_data = self.receive_full_response(self.sock)
+            logger.info(f"Received {len(response_data)} bytes of data")
+            
+            response = json.loads(response_data.decode('utf-8'))
+            logger.info(f"Response parsed, status: {response.get('status', 'unknown')}")
+            
+            if response.get("status") == "error":
+                logger.error(f"Blender error: {response.get('message')}")
+                raise Exception(response.get("message", "Unknown error from Blender"))
+            
+            return response.get("result", {})
+        except socket.timeout:
+            logger.error("Socket timeout while waiting for response from Blender")
+            # Don't try to reconnect here - let the get_blender_connection handle reconnection
+            # Just invalidate the current socket so it will be recreated next time
+            self.sock = None
+            raise Exception("Timeout waiting for Blender response - try simplifying your request")
+        except (ConnectionError, BrokenPipeError, ConnectionResetError) as e:
+            logger.error(f"Socket connection error: {str(e)}")
+            self.sock = None
+            raise Exception(f"Connection to Blender lost: {str(e)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON response from Blender: {str(e)}")
+            # Try to log what was received
+            if 'response_data' in locals() and response_data:
+                logger.error(f"Raw response (first 200 bytes): {response_data[:200]}")
+            raise Exception(f"Invalid response from Blender: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error communicating with Blender: {str(e)}")
+            # Don't try to reconnect here - let the get_blender_connection handle reconnection
+            self.sock = None
+            raise Exception(f"Communication error with Blender: {str(e)}")
+
+@asynccontextmanager
+async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
+    """Manage server startup and shutdown lifecycle"""
+    # We don't need to create a connection here since we're using the global connection
+    # for resources and tools
+    
+    try:
+        # Just log that we're starting up
+        logger.info("BlenderMCP server starting up")
+        
+        # Try to connect to Blender on startup to verify it's available
+        try:
+            # This will initialize the global connection if needed
+            blender = get_blender_connection()
+            logger.info("Successfully connected to Blender on startup")
+        except Exception as e:
+            logger.warning(f"Could not connect to Blender on startup: {str(e)}")
+            logger.warning("Make sure the Blender addon is running before using Blender resources or tools")
+        
+        # Return an empty context - we're using the global connection
+        yield {}
+    finally:
+        # Clean up the global connection on shutdown
+        global _blender_connection
+        if _blender_connection:
+            logger.info("Disconnecting from Blender on shutdown")
+            _blender_connection.disconnect()
+            _blender_connection = None
+        logger.info("BlenderMCP server shut down")
+
+# Create the MCP server with lifespan support
+mcp = FastMCP(
+    "BlenderMCP",
+    description="Blender integration through the Model Context Protocol",
+    lifespan=server_lifespan
+)
+
+# Resource endpoints
+
+# Global connection for resources (since resources can't access context)
+_blender_connection = None
+_polyhaven_enabled = False  # Add this global variable
+
+def get_blender_connection():
+    """Get or create a persistent Blender connection"""
+    global _blender_connection, _polyhaven_enabled  # Add _polyhaven_enabled to globals
+    
+    # If we have an existing connection, check if it's still valid
+    if _blender_connection is not None:
+        try:
+            # First check if PolyHaven is enabled by sending a ping command
+            result = _blender_connection.send_command("get_polyhaven_status")
+            # Store the PolyHaven status globally
+            _polyhaven_enabled = result.get("enabled", False)
+            return _blender_connection
+        except Exception as e:
+            # Connection is dead, close it and create a new one
+            logger.warning(f"Existing connection is no longer valid: {str(e)}")
+            try:
+                _blender_connection.disconnect()
+            except:
+                pass
+            _blender_connection = None
+    
+    # Create a new connection if needed
+    if _blender_connection is None:
+        _blender_connection = BlenderConnection(host="localhost", port=9876)
+        if not _blender_connection.connect():
+            logger.error("Failed to connect to Blender")
+            _blender_connection = None
+            raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
+        logger.info("Created new persistent connection to Blender")
+    
+    return _blender_connection
+
+
+@mcp.tool()
+def get_scene_info(ctx: Context) -> str:
+    """Get detailed information about the current Blender scene"""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_scene_info")
+        
+        # Just return the JSON representation of what Blender sent us
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting scene info from Blender: {str(e)}")
+        return f"Error getting scene info: {str(e)}"
+
+@mcp.tool()
+def get_object_info(ctx: Context, object_name: str) -> str:
+    """
+    Get detailed information about a specific object in the Blender scene.
+    
+    Parameters:
+    - object_name: The name of the object to get information about
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_object_info", {"name": object_name})
+        
+        # Just return the JSON representation of what Blender sent us
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error getting object info from Blender: {str(e)}")
+        return f"Error getting object info: {str(e)}"
+
+
+
+@mcp.tool()
+def create_object(
+    ctx: Context,
+    type: str = "CUBE",
+    name: str = None,
+    location: List[float] = None,
+    rotation: List[float] = None,
+    scale: List[float] = None
+) -> str:
+    """
+    Create a new object in the Blender scene.
+    
+    Parameters:
+    - type: Object type (CUBE, SPHERE, CYLINDER, PLANE, CONE, TORUS, EMPTY, CAMERA, LIGHT)
+    - name: Optional name for the object
+    - location: Optional [x, y, z] location coordinates
+    - rotation: Optional [x, y, z] rotation in radians
+    - scale: Optional [x, y, z] scale factors
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        # Set default values for missing parameters
+        loc = location or [0, 0, 0]
+        rot = rotation or [0, 0, 0]
+        sc = scale or [1, 1, 1]
+        
+        params = {
+            "type": type,
+            "location": loc,
+            "rotation": rot,
+            "scale": sc
+        }
+        
+        if name:
+            params["name"] = name
+            
+        result = blender.send_command("create_object", params)
+        return f"Created {type} object: {result['name']}"
+    except Exception as e:
+        logger.error(f"Error creating object: {str(e)}")
+        return f"Error creating object: {str(e)}"
+
+@mcp.tool()
+def modify_object(
+    ctx: Context,
+    name: str,
+    location: List[float] = None,
+    rotation: List[float] = None,
+    scale: List[float] = None,
+    visible: bool = None
+) -> str:
+    """
+    Modify an existing object in the Blender scene.
+    
+    Parameters:
+    - name: Name of the object to modify
+    - location: Optional [x, y, z] location coordinates
+    - rotation: Optional [x, y, z] rotation in radians
+    - scale: Optional [x, y, z] scale factors
+    - visible: Optional boolean to set visibility
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        params = {"name": name}
+        
+        if location is not None:
+            params["location"] = location
+        if rotation is not None:
+            params["rotation"] = rotation
+        if scale is not None:
+            params["scale"] = scale
+        if visible is not None:
+            params["visible"] = visible
+            
+        result = blender.send_command("modify_object", params)
+        return f"Modified object: {result['name']}"
+    except Exception as e:
+        logger.error(f"Error modifying object: {str(e)}")
+        return f"Error modifying object: {str(e)}"
+
+@mcp.tool()
+def delete_object(ctx: Context, name: str) -> str:
+    """
+    Delete an object from the Blender scene.
+    
+    Parameters:
+    - name: Name of the object to delete
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        result = blender.send_command("delete_object", {"name": name})
+        return f"Deleted object: {name}"
+    except Exception as e:
+        logger.error(f"Error deleting object: {str(e)}")
+        return f"Error deleting object: {str(e)}"
+
+@mcp.tool()
+def set_material(
+    ctx: Context,
+    object_name: str,
+    material_name: str = None,
+    color: List[float] = None
+) -> str:
+    """
+    Set or create a material for an object.
+    
+    Parameters:
+    - object_name: Name of the object to apply the material to
+    - material_name: Optional name of the material to use or create
+    - color: Optional [R, G, B] color values (0.0-1.0)
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        params = {"object_name": object_name}
+        
+        if material_name:
+            params["material_name"] = material_name
+        if color:
+            params["color"] = color
+            
+        result = blender.send_command("set_material", params)
+        return f"Applied material to {object_name}: {result.get('material_name', 'unknown')}"
+    except Exception as e:
+        logger.error(f"Error setting material: {str(e)}")
+        return f"Error setting material: {str(e)}"
+
+@mcp.tool()
+def execute_blender_code(ctx: Context, code: str) -> str:
+    """
+    Execute arbitrary Python code in Blender.
+    
+    Parameters:
+    - code: The Python code to execute
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        result = blender.send_command("execute_code", {"code": code})
+        return f"Code executed successfully: {result.get('result', '')}"
+    except Exception as e:
+        logger.error(f"Error executing code: {str(e)}")
+        return f"Error executing code: {str(e)}"
+
+@mcp.tool()
+def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
+    """
+    Get a list of categories for a specific asset type on Polyhaven.
+    
+    Parameters:
+    - asset_type: The type of asset to get categories for (hdris, textures, models, all)
+    """
+    try:
+        blender = get_blender_connection()
+        if not _polyhaven_enabled:
+            return "PolyHaven integration is disabled. Select it in the sidebar in BlenderMCP, then run it again."
+        result = blender.send_command("get_polyhaven_categories", {"asset_type": asset_type})
+        
+        if "error" in result:
+            return f"Error: {result['error']}"
+        
+        # Format the categories in a more readable way
+        categories = result["categories"]
+        formatted_output = f"Categories for {asset_type}:\n\n"
+        
+        # Sort categories by count (descending)
+        sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
+        
+        for category, count in sorted_categories:
+            formatted_output += f"- {category}: {count} assets\n"
+        
+        return formatted_output
+    except Exception as e:
+        logger.error(f"Error getting Polyhaven categories: {str(e)}")
+        return f"Error getting Polyhaven categories: {str(e)}"
+
+@mcp.tool()
+def search_polyhaven_assets(
+    ctx: Context,
+    asset_type: str = "all",
+    categories: str = None
+) -> str:
+    """
+    Search for assets on Polyhaven with optional filtering.
+    
+    Parameters:
+    - asset_type: Type of assets to search for (hdris, textures, models, all)
+    - categories: Optional comma-separated list of categories to filter by
+    
+    Returns a list of matching assets with basic information.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("search_polyhaven_assets", {
+            "asset_type": asset_type,
+            "categories": categories
+        })
+        
+        if "error" in result:
+            return f"Error: {result['error']}"
+        
+        # Format the assets in a more readable way
+        assets = result["assets"]
+        total_count = result["total_count"]
+        returned_count = result["returned_count"]
+        
+        formatted_output = f"Found {total_count} assets"
+        if categories:
+            formatted_output += f" in categories: {categories}"
+        formatted_output += f"\nShowing {returned_count} assets:\n\n"
+        
+        # Sort assets by download count (popularity)
+        sorted_assets = sorted(assets.items(), key=lambda x: x[1].get("download_count", 0), reverse=True)
+        
+        for asset_id, asset_data in sorted_assets:
+            formatted_output += f"- {asset_data.get('name', asset_id)} (ID: {asset_id})\n"
+            formatted_output += f"  Type: {['HDRI', 'Texture', 'Model'][asset_data.get('type', 0)]}\n"
+            formatted_output += f"  Categories: {', '.join(asset_data.get('categories', []))}\n"
+            formatted_output += f"  Downloads: {asset_data.get('download_count', 'Unknown')}\n\n"
+        
+        return formatted_output
+    except Exception as e:
+        logger.error(f"Error searching Polyhaven assets: {str(e)}")
+        return f"Error searching Polyhaven assets: {str(e)}"
+
+@mcp.tool()
+def download_polyhaven_asset(
+    ctx: Context,
+    asset_id: str,
+    asset_type: str,
+    resolution: str = "1k",
+    file_format: str = None
+) -> str:
+    """
+    Download and import a Polyhaven asset into Blender.
+    
+    Parameters:
+    - asset_id: The ID of the asset to download
+    - asset_type: The type of asset (hdris, textures, models)
+    - resolution: The resolution to download (e.g., 1k, 2k, 4k)
+    - file_format: Optional file format (e.g., hdr, exr for HDRIs; jpg, png for textures; gltf, fbx for models)
+    
+    Returns a message indicating success or failure.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("download_polyhaven_asset", {
+            "asset_id": asset_id,
+            "asset_type": asset_type,
+            "resolution": resolution,
+            "file_format": file_format
+        })
+        
+        if "error" in result:
+            return f"Error: {result['error']}"
+        
+        if result.get("success"):
+            message = result.get("message", "Asset downloaded and imported successfully")
+            
+            # Add additional information based on asset type
+            if asset_type == "hdris":
+                return f"{message}. The HDRI has been set as the world environment."
+            elif asset_type == "textures":
+                material_name = result.get("material", "")
+                maps = ", ".join(result.get("maps", []))
+                return f"{message}. Created material '{material_name}' with maps: {maps}."
+            elif asset_type == "models":
+                return f"{message}. The model has been imported into the current scene."
+            else:
+                return message
+        else:
+            return f"Failed to download asset: {result.get('message', 'Unknown error')}"
+    except Exception as e:
+        logger.error(f"Error downloading Polyhaven asset: {str(e)}")
+        return f"Error downloading Polyhaven asset: {str(e)}"
+
+@mcp.tool()
+def set_texture(
+    ctx: Context,
+    object_name: str,
+    texture_id: str
+) -> str:
+    """
+    Apply a previously downloaded Polyhaven texture to an object.
+    
+    Parameters:
+    - object_name: Name of the object to apply the texture to
+    - texture_id: ID of the Polyhaven texture to apply (must be downloaded first)
+    
+    Returns a message indicating success or failure.
+    """
+    try:
+        # Get the global connection
+        blender = get_blender_connection()
+        
+        result = blender.send_command("set_texture", {
+            "object_name": object_name,
+            "texture_id": texture_id
+        })
+        
+        if "error" in result:
+            return f"Error: {result['error']}"
+        
+        if result.get("success"):
+            material_name = result.get("material", "")
+            maps = ", ".join(result.get("maps", []))
+            
+            # Add detailed material info
+            material_info = result.get("material_info", {})
+            node_count = material_info.get("node_count", 0)
+            has_nodes = material_info.get("has_nodes", False)
+            texture_nodes = material_info.get("texture_nodes", [])
+            
+            output = f"Successfully applied texture '{texture_id}' to {object_name}.\n"
+            output += f"Using material '{material_name}' with maps: {maps}.\n\n"
+            output += f"Material has nodes: {has_nodes}\n"
+            output += f"Total node count: {node_count}\n\n"
+            
+            if texture_nodes:
+                output += "Texture nodes:\n"
+                for node in texture_nodes:
+                    output += f"- {node['name']} using image: {node['image']}\n"
+                    if node['connections']:
+                        output += "  Connections:\n"
+                        for conn in node['connections']:
+                            output += f"    {conn}\n"
+            else:
+                output += "No texture nodes found in the material.\n"
+            
+            return output
+        else:
+            return f"Failed to apply texture: {result.get('message', 'Unknown error')}"
+    except Exception as e:
+        logger.error(f"Error applying texture: {str(e)}")
+        return f"Error applying texture: {str(e)}"
+
+@mcp.tool()
+def get_polyhaven_status(ctx: Context) -> str:
+    """
+    Check if PolyHaven integration is enabled in Blender.
+    Returns a message indicating whether PolyHaven features are available.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_polyhaven_status")
+        enabled = result.get("enabled", False)
+        message = result.get("message", "")
+        
+        return message
+    except Exception as e:
+        logger.error(f"Error checking PolyHaven status: {str(e)}")
+        return f"Error checking PolyHaven status: {str(e)}"
+
+@mcp.prompt()
+def asset_creation_strategy() -> str:
+    """Defines the preferred strategy for creating assets in Blender"""
+    return """When creating 3D content in Blender, always start by checking if PolyHaven is available:
+
+    0. Before anything, always check the scene from get_scene_info()
+    1. First use get_polyhaven_status() to verify if PolyHaven integration is enabled.
+
+    2. If PolyHaven is enabled:
+       - For objects/models: Use download_polyhaven_asset() with asset_type="models"
+       - For materials/textures: Use download_polyhaven_asset() with asset_type="textures"
+       - For environment lighting: Use download_polyhaven_asset() with asset_type="hdris"
+
+    3. If PolyHaven is disabled or when falling back to basic tools:
+       - create_object() for basic primitives (CUBE, SPHERE, CYLINDER, etc.)
+       - set_material() for basic colors and materials
+
+    Only fall back to basic creation tools when:
+    - PolyHaven is disabled
+    - A simple primitive is explicitly requested
+    - No suitable PolyHaven asset exists
+    - The task specifically requires a basic material/color
+    """
+
+# Main execution
+
+def main():
+    """Run the MCP server"""
+    mcp.run()
+
+if __name__ == "__main__":
+    main()
+```
+
+`uv.lock`:
+
+```lock
+version = 1
+revision = 1
+requires-python = ">=3.10"
+
+[[package]]
+name = "annotated-types"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz", hash = "sha256:aff07c09a53a08bc8cfccb9c85b05f1aa9a2a6f23728d790723543408344ce89", size = 16081 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl", hash = "sha256:1f02e8b43a8fbbc3f3e0d4f0f4bfc8131bcb4eebe8849b8e5c773f3a1c582a53", size = 13643 },
+]
+
+[[package]]
+name = "anyio"
+version = "4.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "idna" },
+    { name = "sniffio" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/73/199a98fc2dae33535d6b8e8e6ec01f8c1d76c9adb096c6b7d64823038cde/anyio-4.8.0.tar.gz", hash = "sha256:1d9fe889df5212298c0c0723fa20479d1b94883a2df44bd3897aa91083316f7a", size = 181126 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/eb/e7f063ad1fec6b3178a3cd82d1a3c4de82cccf283fc42746168188e1cdd5/anyio-4.8.0-py3-none-any.whl", hash = "sha256:b5011f270ab5eb0abf13385f851315585cc37ef330dd88e27ec3d34d651fd47a", size = 96041 },
+]
+
+[[package]]
+name = "blender-mcp"
+version = "1.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "mcp", extra = ["cli"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "mcp", extras = ["cli"], specifier = ">=1.3.0" }]
+
+[[package]]
+name = "certifi"
+version = "2025.1.31"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/ab/c9f1e32b7b1bf505bf26f0ef697775960db7932abeb7b516de930ba2705f/certifi-2025.1.31.tar.gz", hash = "sha256:3d5da6925056f6f18f119200434a4780a94263f10d1c21d032a6f6b2baa20651", size = 167577 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/fc/bce832fd4fd99766c04d1ee0eead6b0ec6486fb100ae5e74c1d91292b982/certifi-2025.1.31-py3-none-any.whl", hash = "sha256:ca78db4565a652026a4db2bcdf68f2fb589ea80d0be70e03929ed730746b84fe", size = 166393 },
+]
+
+[[package]]
+name = "click"
+version = "8.1.8"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b9/2e/0090cbf739cee7d23781ad4b89a9894a41538e4fcf4c31dcdd705b78eb8b/click-8.1.8.tar.gz", hash = "sha256:ed53c9d8990d83c2a27deae68e4ee337473f6330c040a31d4225c9574d16096a", size = 226593 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/d4/7ebdbd03970677812aac39c869717059dbb71a4cfc033ca6e5221787892c/click-8.1.8-py3-none-any.whl", hash = "sha256:63c132bbbed01578a06712a2d1f497bb62d9c1c0d329b7903a866228027263b2", size = 98188 },
+]
+
+[[package]]
+name = "colorama"
+version = "0.4.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/53/6f443c9a4a8358a93a6792e2acffb9d9d5cb0a5cfd8802644b7b1c9a02e4/colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44", size = 27697 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335 },
+]
+
+[[package]]
+name = "exceptiongroup"
+version = "1.2.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/09/35/2495c4ac46b980e4ca1f6ad6db102322ef3ad2410b79fdde159a4b0f3b92/exceptiongroup-1.2.2.tar.gz", hash = "sha256:47c2edf7c6738fafb49fd34290706d1a1a2f4d1c6df275526b62cbb4aa5393cc", size = 28883 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/02/cc/b7e31358aac6ed1ef2bb790a9746ac2c69bcb3c8588b41616914eb106eaf/exceptiongroup-1.2.2-py3-none-any.whl", hash = "sha256:3111b9d131c238bec2f8f516e123e14ba243563fb135d3fe885990585aa7795b", size = 16453 },
+]
+
+[[package]]
+name = "h11"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/38/3af3d3633a34a3316095b39c8e8fb4853a28a536e55d347bd8d8e9a14b03/h11-0.14.0.tar.gz", hash = "sha256:8f19fbbe99e72420ff35c00b27a34cb9937e902a8b810e2c88300c6f0a3b699d", size = 100418 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/95/04/ff642e65ad6b90db43e668d70ffb6736436c7ce41fcc549f4e9472234127/h11-0.14.0-py3-none-any.whl", hash = "sha256:e3fe4ac4b851c468cc8363d500db52c2ead036020723024a109d37346efaa761", size = 58259 },
+]
+
+[[package]]
+name = "httpcore"
+version = "1.0.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "h11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6a/41/d7d0a89eb493922c37d343b607bc1b5da7f5be7e383740b4753ad8943e90/httpcore-1.0.7.tar.gz", hash = "sha256:8551cb62a169ec7162ac7be8d4817d561f60e08eaa485234898414bb5a8a0b4c", size = 85196 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/f5/72347bc88306acb359581ac4d52f23c0ef445b57157adedb9aee0cd689d2/httpcore-1.0.7-py3-none-any.whl", hash = "sha256:a3fff8f43dc260d5bd363d9f9cf1830fa3a458b332856f34282de498ed420edd", size = 78551 },
+]
+
+[[package]]
+name = "httpx"
+version = "0.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
+    { name = "httpcore" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517 },
+]
+
+[[package]]
+name = "httpx-sse"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/60/8f4281fa9bbf3c8034fd54c0e7412e66edbab6bc74c4996bd616f8d0406e/httpx-sse-0.4.0.tar.gz", hash = "sha256:1e81a3a3070ce322add1d3529ed42eb5f70817f45ed6ec915ab753f961139721", size = 12624 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/9b/a181f281f65d776426002f330c31849b86b31fc9d848db62e16f03ff739f/httpx_sse-0.4.0-py3-none-any.whl", hash = "sha256:f329af6eae57eaa2bdfd962b42524764af68075ea87370a2de920af5341e318f", size = 7819 },
+]
+
+[[package]]
+name = "idna"
+version = "3.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/70/7703c29685631f5a7590aa73f1f1d3fa9a380e654b86af429e0934a32f7d/idna-3.10.tar.gz", hash = "sha256:12f65c9b470abda6dc35cf8e63cc574b1c52b11df2c86030af0ac09b01b13ea9", size = 190490 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl", hash = "sha256:946d195a0d259cbba61165e88e65941f16e9b36ea6ddb97f00452bae8b1287d3", size = 70442 },
+]
+
+[[package]]
+name = "markdown-it-py"
+version = "3.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mdurl" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/71/3b932df36c1a044d397a1f92d1cf91ee0a503d91e470cbd670aa66b07ed0/markdown-it-py-3.0.0.tar.gz", hash = "sha256:e3f60a94fa066dc52ec76661e37c851cb232d92f9886b15cb560aaada2df8feb", size = 74596 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/d7/1ec15b46af6af88f19b8e5ffea08fa375d433c998b8a7639e76935c14f1f/markdown_it_py-3.0.0-py3-none-any.whl", hash = "sha256:355216845c60bd96232cd8d8c40e8f9765cc86f46880e43a8fd22dc1a1a8cab1", size = 87528 },
+]
+
+[[package]]
+name = "mcp"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx" },
+    { name = "httpx-sse" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sse-starlette" },
+    { name = "starlette" },
+    { name = "uvicorn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/b6/81e5f2490290351fc97bf46c24ff935128cb7d34d68e3987b522f26f7ada/mcp-1.3.0.tar.gz", hash = "sha256:f409ae4482ce9d53e7ac03f3f7808bcab735bdfc0fba937453782efb43882d45", size = 150235 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/d2/a9e87b506b2094f5aa9becc1af5178842701b27217fa43877353da2577e3/mcp-1.3.0-py3-none-any.whl", hash = "sha256:2829d67ce339a249f803f22eba5e90385eafcac45c94b00cab6cef7e8f217211", size = 70672 },
+]
+
+[package.optional-dependencies]
+cli = [
+    { name = "python-dotenv" },
+    { name = "typer" },
+]
+
+[[package]]
+name = "mdurl"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979 },
+]
+
+[[package]]
+name = "pydantic"
+version = "2.10.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-types" },
+    { name = "pydantic-core" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b7/ae/d5220c5c52b158b1de7ca89fc5edb72f304a70a4c540c84c8844bf4008de/pydantic-2.10.6.tar.gz", hash = "sha256:ca5daa827cce33de7a42be142548b0096bf05a7e7b365aebfa5f8eeec7128236", size = 761681 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/3c/8cc1cc84deffa6e25d2d0c688ebb80635dfdbf1dbea3e30c541c8cf4d860/pydantic-2.10.6-py3-none-any.whl", hash = "sha256:427d664bf0b8a2b34ff5dd0f5a18df00591adcee7198fbd71981054cef37b584", size = 431696 },
+]
+
+[[package]]
+name = "pydantic-core"
+version = "2.27.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/01/f3e5ac5e7c25833db5eb555f7b7ab24cd6f8c322d3a3ad2d67a952dc0abc/pydantic_core-2.27.2.tar.gz", hash = "sha256:eb026e5a4c1fee05726072337ff51d1efb6f59090b7da90d30ea58625b1ffb39", size = 413443 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/bc/fed5f74b5d802cf9a03e83f60f18864e90e3aed7223adaca5ffb7a8d8d64/pydantic_core-2.27.2-cp310-cp310-macosx_10_12_x86_64.whl", hash = "sha256:2d367ca20b2f14095a8f4fa1210f5a7b78b8a20009ecced6b12818f455b1e9fa", size = 1895938 },
+    { url = "https://files.pythonhosted.org/packages/71/2a/185aff24ce844e39abb8dd680f4e959f0006944f4a8a0ea372d9f9ae2e53/pydantic_core-2.27.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:491a2b73db93fab69731eaee494f320faa4e093dbed776be1a829c2eb222c34c", size = 1815684 },
+    { url = "https://files.pythonhosted.org/packages/c3/43/fafabd3d94d159d4f1ed62e383e264f146a17dd4d48453319fd782e7979e/pydantic_core-2.27.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:7969e133a6f183be60e9f6f56bfae753585680f3b7307a8e555a948d443cc05a", size = 1829169 },
+    { url = "https://files.pythonhosted.org/packages/a2/d1/f2dfe1a2a637ce6800b799aa086d079998959f6f1215eb4497966efd2274/pydantic_core-2.27.2-cp310-cp310-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:3de9961f2a346257caf0aa508a4da705467f53778e9ef6fe744c038119737ef5", size = 1867227 },
+    { url = "https://files.pythonhosted.org/packages/7d/39/e06fcbcc1c785daa3160ccf6c1c38fea31f5754b756e34b65f74e99780b5/pydantic_core-2.27.2-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:e2bb4d3e5873c37bb3dd58714d4cd0b0e6238cebc4177ac8fe878f8b3aa8e74c", size = 2037695 },
+    { url = "https://files.pythonhosted.org/packages/7a/67/61291ee98e07f0650eb756d44998214231f50751ba7e13f4f325d95249ab/pydantic_core-2.27.2-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:280d219beebb0752699480fe8f1dc61ab6615c2046d76b7ab7ee38858de0a4e7", size = 2741662 },
+    { url = "https://files.pythonhosted.org/packages/32/90/3b15e31b88ca39e9e626630b4c4a1f5a0dfd09076366f4219429e6786076/pydantic_core-2.27.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:47956ae78b6422cbd46f772f1746799cbb862de838fd8d1fbd34a82e05b0983a", size = 1993370 },
+    { url = "https://files.pythonhosted.org/packages/ff/83/c06d333ee3a67e2e13e07794995c1535565132940715931c1c43bfc85b11/pydantic_core-2.27.2-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:14d4a5c49d2f009d62a2a7140d3064f686d17a5d1a268bc641954ba181880236", size = 1996813 },
+    { url = "https://files.pythonhosted.org/packages/7c/f7/89be1c8deb6e22618a74f0ca0d933fdcb8baa254753b26b25ad3acff8f74/pydantic_core-2.27.2-cp310-cp310-musllinux_1_1_aarch64.whl", hash = "sha256:337b443af21d488716f8d0b6164de833e788aa6bd7e3a39c005febc1284f4962", size = 2005287 },
+    { url = "https://files.pythonhosted.org/packages/b7/7d/8eb3e23206c00ef7feee17b83a4ffa0a623eb1a9d382e56e4aa46fd15ff2/pydantic_core-2.27.2-cp310-cp310-musllinux_1_1_armv7l.whl", hash = "sha256:03d0f86ea3184a12f41a2d23f7ccb79cdb5a18e06993f8a45baa8dfec746f0e9", size = 2128414 },
+    { url = "https://files.pythonhosted.org/packages/4e/99/fe80f3ff8dd71a3ea15763878d464476e6cb0a2db95ff1c5c554133b6b83/pydantic_core-2.27.2-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:7041c36f5680c6e0f08d922aed302e98b3745d97fe1589db0a3eebf6624523af", size = 2155301 },
+    { url = "https://files.pythonhosted.org/packages/2b/a3/e50460b9a5789ca1451b70d4f52546fa9e2b420ba3bfa6100105c0559238/pydantic_core-2.27.2-cp310-cp310-win32.whl", hash = "sha256:50a68f3e3819077be2c98110c1f9dcb3817e93f267ba80a2c05bb4f8799e2ff4", size = 1816685 },
+    { url = "https://files.pythonhosted.org/packages/57/4c/a8838731cb0f2c2a39d3535376466de6049034d7b239c0202a64aaa05533/pydantic_core-2.27.2-cp310-cp310-win_amd64.whl", hash = "sha256:e0fd26b16394ead34a424eecf8a31a1f5137094cabe84a1bcb10fa6ba39d3d31", size = 1982876 },
+    { url = "https://files.pythonhosted.org/packages/c2/89/f3450af9d09d44eea1f2c369f49e8f181d742f28220f88cc4dfaae91ea6e/pydantic_core-2.27.2-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:8e10c99ef58cfdf2a66fc15d66b16c4a04f62bca39db589ae8cba08bc55331bc", size = 1893421 },
+    { url = "https://files.pythonhosted.org/packages/9e/e3/71fe85af2021f3f386da42d291412e5baf6ce7716bd7101ea49c810eda90/pydantic_core-2.27.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:26f32e0adf166a84d0cb63be85c562ca8a6fa8de28e5f0d92250c6b7e9e2aff7", size = 1814998 },
+    { url = "https://files.pythonhosted.org/packages/a6/3c/724039e0d848fd69dbf5806894e26479577316c6f0f112bacaf67aa889ac/pydantic_core-2.27.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8c19d1ea0673cd13cc2f872f6c9ab42acc4e4f492a7ca9d3795ce2b112dd7e15", size = 1826167 },
+    { url = "https://files.pythonhosted.org/packages/2b/5b/1b29e8c1fb5f3199a9a57c1452004ff39f494bbe9bdbe9a81e18172e40d3/pydantic_core-2.27.2-cp311-cp311-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:5e68c4446fe0810e959cdff46ab0a41ce2f2c86d227d96dc3847af0ba7def306", size = 1865071 },
+    { url = "https://files.pythonhosted.org/packages/89/6c/3985203863d76bb7d7266e36970d7e3b6385148c18a68cc8915fd8c84d57/pydantic_core-2.27.2-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:d9640b0059ff4f14d1f37321b94061c6db164fbe49b334b31643e0528d100d99", size = 2036244 },
+    { url = "https://files.pythonhosted.org/packages/0e/41/f15316858a246b5d723f7d7f599f79e37493b2e84bfc789e58d88c209f8a/pydantic_core-2.27.2-cp311-cp311-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:40d02e7d45c9f8af700f3452f329ead92da4c5f4317ca9b896de7ce7199ea459", size = 2737470 },
+    { url = "https://files.pythonhosted.org/packages/a8/7c/b860618c25678bbd6d1d99dbdfdf0510ccb50790099b963ff78a124b754f/pydantic_core-2.27.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1c1fd185014191700554795c99b347d64f2bb637966c4cfc16998a0ca700d048", size = 1992291 },
+    { url = "https://files.pythonhosted.org/packages/bf/73/42c3742a391eccbeab39f15213ecda3104ae8682ba3c0c28069fbcb8c10d/pydantic_core-2.27.2-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:d81d2068e1c1228a565af076598f9e7451712700b673de8f502f0334f281387d", size = 1994613 },
+    { url = "https://files.pythonhosted.org/packages/94/7a/941e89096d1175d56f59340f3a8ebaf20762fef222c298ea96d36a6328c5/pydantic_core-2.27.2-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:1a4207639fb02ec2dbb76227d7c751a20b1a6b4bc52850568e52260cae64ca3b", size = 2002355 },
+    { url = "https://files.pythonhosted.org/packages/6e/95/2359937a73d49e336a5a19848713555605d4d8d6940c3ec6c6c0ca4dcf25/pydantic_core-2.27.2-cp311-cp311-musllinux_1_1_armv7l.whl", hash = "sha256:3de3ce3c9ddc8bbd88f6e0e304dea0e66d843ec9de1b0042b0911c1663ffd474", size = 2126661 },
+    { url = "https://files.pythonhosted.org/packages/2b/4c/ca02b7bdb6012a1adef21a50625b14f43ed4d11f1fc237f9d7490aa5078c/pydantic_core-2.27.2-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:30c5f68ded0c36466acede341551106821043e9afaad516adfb6e8fa80a4e6a6", size = 2153261 },
+    { url = "https://files.pythonhosted.org/packages/72/9d/a241db83f973049a1092a079272ffe2e3e82e98561ef6214ab53fe53b1c7/pydantic_core-2.27.2-cp311-cp311-win32.whl", hash = "sha256:c70c26d2c99f78b125a3459f8afe1aed4d9687c24fd677c6a4436bc042e50d6c", size = 1812361 },
+    { url = "https://files.pythonhosted.org/packages/e8/ef/013f07248041b74abd48a385e2110aa3a9bbfef0fbd97d4e6d07d2f5b89a/pydantic_core-2.27.2-cp311-cp311-win_amd64.whl", hash = "sha256:08e125dbdc505fa69ca7d9c499639ab6407cfa909214d500897d02afb816e7cc", size = 1982484 },
+    { url = "https://files.pythonhosted.org/packages/10/1c/16b3a3e3398fd29dca77cea0a1d998d6bde3902fa2706985191e2313cc76/pydantic_core-2.27.2-cp311-cp311-win_arm64.whl", hash = "sha256:26f0d68d4b235a2bae0c3fc585c585b4ecc51382db0e3ba402a22cbc440915e4", size = 1867102 },
+    { url = "https://files.pythonhosted.org/packages/d6/74/51c8a5482ca447871c93e142d9d4a92ead74de6c8dc5e66733e22c9bba89/pydantic_core-2.27.2-cp312-cp312-macosx_10_12_x86_64.whl", hash = "sha256:9e0c8cfefa0ef83b4da9588448b6d8d2a2bf1a53c3f1ae5fca39eb3061e2f0b0", size = 1893127 },
+    { url = "https://files.pythonhosted.org/packages/d3/f3/c97e80721735868313c58b89d2de85fa80fe8dfeeed84dc51598b92a135e/pydantic_core-2.27.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:83097677b8e3bd7eaa6775720ec8e0405f1575015a463285a92bfdfe254529ef", size = 1811340 },
+    { url = "https://files.pythonhosted.org/packages/9e/91/840ec1375e686dbae1bd80a9e46c26a1e0083e1186abc610efa3d9a36180/pydantic_core-2.27.2-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:172fce187655fece0c90d90a678424b013f8fbb0ca8b036ac266749c09438cb7", size = 1822900 },
+    { url = "https://files.pythonhosted.org/packages/f6/31/4240bc96025035500c18adc149aa6ffdf1a0062a4b525c932065ceb4d868/pydantic_core-2.27.2-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:519f29f5213271eeeeb3093f662ba2fd512b91c5f188f3bb7b27bc5973816934", size = 1869177 },
+    { url = "https://files.pythonhosted.org/packages/fa/20/02fbaadb7808be578317015c462655c317a77a7c8f0ef274bc016a784c54/pydantic_core-2.27.2-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:05e3a55d124407fffba0dd6b0c0cd056d10e983ceb4e5dbd10dda135c31071d6", size = 2038046 },
+    { url = "https://files.pythonhosted.org/packages/06/86/7f306b904e6c9eccf0668248b3f272090e49c275bc488a7b88b0823444a4/pydantic_core-2.27.2-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:9c3ed807c7b91de05e63930188f19e921d1fe90de6b4f5cd43ee7fcc3525cb8c", size = 2685386 },
+    { url = "https://files.pythonhosted.org/packages/8d/f0/49129b27c43396581a635d8710dae54a791b17dfc50c70164866bbf865e3/pydantic_core-2.27.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6fb4aadc0b9a0c063206846d603b92030eb6f03069151a625667f982887153e2", size = 1997060 },
+    { url = "https://files.pythonhosted.org/packages/0d/0f/943b4af7cd416c477fd40b187036c4f89b416a33d3cc0ab7b82708a667aa/pydantic_core-2.27.2-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:28ccb213807e037460326424ceb8b5245acb88f32f3d2777427476e1b32c48c4", size = 2004870 },
+    { url = "https://files.pythonhosted.org/packages/35/40/aea70b5b1a63911c53a4c8117c0a828d6790483f858041f47bab0b779f44/pydantic_core-2.27.2-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:de3cd1899e2c279b140adde9357c4495ed9d47131b4a4eaff9052f23398076b3", size = 1999822 },
+    { url = "https://files.pythonhosted.org/packages/f2/b3/807b94fd337d58effc5498fd1a7a4d9d59af4133e83e32ae39a96fddec9d/pydantic_core-2.27.2-cp312-cp312-musllinux_1_1_armv7l.whl", hash = "sha256:220f892729375e2d736b97d0e51466252ad84c51857d4d15f5e9692f9ef12be4", size = 2130364 },
+    { url = "https://files.pythonhosted.org/packages/fc/df/791c827cd4ee6efd59248dca9369fb35e80a9484462c33c6649a8d02b565/pydantic_core-2.27.2-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:a0fcd29cd6b4e74fe8ddd2c90330fd8edf2e30cb52acda47f06dd615ae72da57", size = 2158303 },
+    { url = "https://files.pythonhosted.org/packages/9b/67/4e197c300976af185b7cef4c02203e175fb127e414125916bf1128b639a9/pydantic_core-2.27.2-cp312-cp312-win32.whl", hash = "sha256:1e2cb691ed9834cd6a8be61228471d0a503731abfb42f82458ff27be7b2186fc", size = 1834064 },
+    { url = "https://files.pythonhosted.org/packages/1f/ea/cd7209a889163b8dcca139fe32b9687dd05249161a3edda62860430457a5/pydantic_core-2.27.2-cp312-cp312-win_amd64.whl", hash = "sha256:cc3f1a99a4f4f9dd1de4fe0312c114e740b5ddead65bb4102884b384c15d8bc9", size = 1989046 },
+    { url = "https://files.pythonhosted.org/packages/bc/49/c54baab2f4658c26ac633d798dab66b4c3a9bbf47cff5284e9c182f4137a/pydantic_core-2.27.2-cp312-cp312-win_arm64.whl", hash = "sha256:3911ac9284cd8a1792d3cb26a2da18f3ca26c6908cc434a18f730dc0db7bfa3b", size = 1885092 },
+    { url = "https://files.pythonhosted.org/packages/41/b1/9bc383f48f8002f99104e3acff6cba1231b29ef76cfa45d1506a5cad1f84/pydantic_core-2.27.2-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:7d14bd329640e63852364c306f4d23eb744e0f8193148d4044dd3dacdaacbd8b", size = 1892709 },
+    { url = "https://files.pythonhosted.org/packages/10/6c/e62b8657b834f3eb2961b49ec8e301eb99946245e70bf42c8817350cbefc/pydantic_core-2.27.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:82f91663004eb8ed30ff478d77c4d1179b3563df6cdb15c0817cd1cdaf34d154", size = 1811273 },
+    { url = "https://files.pythonhosted.org/packages/ba/15/52cfe49c8c986e081b863b102d6b859d9defc63446b642ccbbb3742bf371/pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:71b24c7d61131bb83df10cc7e687433609963a944ccf45190cfc21e0887b08c9", size = 1823027 },
+    { url = "https://files.pythonhosted.org/packages/b1/1c/b6f402cfc18ec0024120602bdbcebc7bdd5b856528c013bd4d13865ca473/pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:fa8e459d4954f608fa26116118bb67f56b93b209c39b008277ace29937453dc9", size = 1868888 },
+    { url = "https://files.pythonhosted.org/packages/bd/7b/8cb75b66ac37bc2975a3b7de99f3c6f355fcc4d89820b61dffa8f1e81677/pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:ce8918cbebc8da707ba805b7fd0b382816858728ae7fe19a942080c24e5b7cd1", size = 2037738 },
+    { url = "https://files.pythonhosted.org/packages/c8/f1/786d8fe78970a06f61df22cba58e365ce304bf9b9f46cc71c8c424e0c334/pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:eda3f5c2a021bbc5d976107bb302e0131351c2ba54343f8a496dc8783d3d3a6a", size = 2685138 },
+    { url = "https://files.pythonhosted.org/packages/a6/74/d12b2cd841d8724dc8ffb13fc5cef86566a53ed358103150209ecd5d1999/pydantic_core-2.27.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bd8086fa684c4775c27f03f062cbb9eaa6e17f064307e86b21b9e0abc9c0f02e", size = 1997025 },
+    { url = "https://files.pythonhosted.org/packages/a0/6e/940bcd631bc4d9a06c9539b51f070b66e8f370ed0933f392db6ff350d873/pydantic_core-2.27.2-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:8d9b3388db186ba0c099a6d20f0604a44eabdeef1777ddd94786cdae158729e4", size = 2004633 },
+    { url = "https://files.pythonhosted.org/packages/50/cc/a46b34f1708d82498c227d5d80ce615b2dd502ddcfd8376fc14a36655af1/pydantic_core-2.27.2-cp313-cp313-musllinux_1_1_aarch64.whl", hash = "sha256:7a66efda2387de898c8f38c0cf7f14fca0b51a8ef0b24bfea5849f1b3c95af27", size = 1999404 },
+    { url = "https://files.pythonhosted.org/packages/ca/2d/c365cfa930ed23bc58c41463bae347d1005537dc8db79e998af8ba28d35e/pydantic_core-2.27.2-cp313-cp313-musllinux_1_1_armv7l.whl", hash = "sha256:18a101c168e4e092ab40dbc2503bdc0f62010e95d292b27827871dc85450d7ee", size = 2130130 },
+    { url = "https://files.pythonhosted.org/packages/f4/d7/eb64d015c350b7cdb371145b54d96c919d4db516817f31cd1c650cae3b21/pydantic_core-2.27.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:ba5dd002f88b78a4215ed2f8ddbdf85e8513382820ba15ad5ad8955ce0ca19a1", size = 2157946 },
+    { url = "https://files.pythonhosted.org/packages/a4/99/bddde3ddde76c03b65dfd5a66ab436c4e58ffc42927d4ff1198ffbf96f5f/pydantic_core-2.27.2-cp313-cp313-win32.whl", hash = "sha256:1ebaf1d0481914d004a573394f4be3a7616334be70261007e47c2a6fe7e50130", size = 1834387 },
+    { url = "https://files.pythonhosted.org/packages/71/47/82b5e846e01b26ac6f1893d3c5f9f3a2eb6ba79be26eef0b759b4fe72946/pydantic_core-2.27.2-cp313-cp313-win_amd64.whl", hash = "sha256:953101387ecf2f5652883208769a79e48db18c6df442568a0b5ccd8c2723abee", size = 1990453 },
+    { url = "https://files.pythonhosted.org/packages/51/b2/b2b50d5ecf21acf870190ae5d093602d95f66c9c31f9d5de6062eb329ad1/pydantic_core-2.27.2-cp313-cp313-win_arm64.whl", hash = "sha256:ac4dbfd1691affb8f48c2c13241a2e3b60ff23247cbcf981759c768b6633cf8b", size = 1885186 },
+    { url = "https://files.pythonhosted.org/packages/46/72/af70981a341500419e67d5cb45abe552a7c74b66326ac8877588488da1ac/pydantic_core-2.27.2-pp310-pypy310_pp73-macosx_10_12_x86_64.whl", hash = "sha256:2bf14caea37e91198329b828eae1618c068dfb8ef17bb33287a7ad4b61ac314e", size = 1891159 },
+    { url = "https://files.pythonhosted.org/packages/ad/3d/c5913cccdef93e0a6a95c2d057d2c2cba347815c845cda79ddd3c0f5e17d/pydantic_core-2.27.2-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:b0cb791f5b45307caae8810c2023a184c74605ec3bcbb67d13846c28ff731ff8", size = 1768331 },
+    { url = "https://files.pythonhosted.org/packages/f6/f0/a3ae8fbee269e4934f14e2e0e00928f9346c5943174f2811193113e58252/pydantic_core-2.27.2-pp310-pypy310_pp73-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:688d3fd9fcb71f41c4c015c023d12a79d1c4c0732ec9eb35d96e3388a120dcf3", size = 1822467 },
+    { url = "https://files.pythonhosted.org/packages/d7/7a/7bbf241a04e9f9ea24cd5874354a83526d639b02674648af3f350554276c/pydantic_core-2.27.2-pp310-pypy310_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3d591580c34f4d731592f0e9fe40f9cc1b430d297eecc70b962e93c5c668f15f", size = 1979797 },
+    { url = "https://files.pythonhosted.org/packages/4f/5f/4784c6107731f89e0005a92ecb8a2efeafdb55eb992b8e9d0a2be5199335/pydantic_core-2.27.2-pp310-pypy310_pp73-manylinux_2_5_i686.manylinux1_i686.whl", hash = "sha256:82f986faf4e644ffc189a7f1aafc86e46ef70372bb153e7001e8afccc6e54133", size = 1987839 },
+    { url = "https://files.pythonhosted.org/packages/6d/a7/61246562b651dff00de86a5f01b6e4befb518df314c54dec187a78d81c84/pydantic_core-2.27.2-pp310-pypy310_pp73-musllinux_1_1_aarch64.whl", hash = "sha256:bec317a27290e2537f922639cafd54990551725fc844249e64c523301d0822fc", size = 1998861 },
+    { url = "https://files.pythonhosted.org/packages/86/aa/837821ecf0c022bbb74ca132e117c358321e72e7f9702d1b6a03758545e2/pydantic_core-2.27.2-pp310-pypy310_pp73-musllinux_1_1_armv7l.whl", hash = "sha256:0296abcb83a797db256b773f45773da397da75a08f5fcaef41f2044adec05f50", size = 2116582 },
+    { url = "https://files.pythonhosted.org/packages/81/b0/5e74656e95623cbaa0a6278d16cf15e10a51f6002e3ec126541e95c29ea3/pydantic_core-2.27.2-pp310-pypy310_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:0d75070718e369e452075a6017fbf187f788e17ed67a3abd47fa934d001863d9", size = 2151985 },
+    { url = "https://files.pythonhosted.org/packages/63/37/3e32eeb2a451fddaa3898e2163746b0cffbbdbb4740d38372db0490d67f3/pydantic_core-2.27.2-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:7e17b560be3c98a8e3aa66ce828bdebb9e9ac6ad5466fba92eb74c4c95cb1151", size = 2004715 },
+]
+
+[[package]]
+name = "pydantic-settings"
+version = "2.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/88/82/c79424d7d8c29b994fb01d277da57b0a9b09cc03c3ff875f9bd8a86b2145/pydantic_settings-2.8.1.tar.gz", hash = "sha256:d5c663dfbe9db9d5e1c646b2e161da12f0d734d422ee56f567d0ea2cee4e8585", size = 83550 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/53/a64f03044927dc47aafe029c42a5b7aabc38dfb813475e0e1bf71c4a59d0/pydantic_settings-2.8.1-py3-none-any.whl", hash = "sha256:81942d5ac3d905f7f3ee1a70df5dfb62d5569c12f51a5a647defc1c3d9ee2e9c", size = 30839 },
+]
+
+[[package]]
+name = "pygments"
+version = "2.19.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/2d/c3338d48ea6cc0feb8446d8e6937e1408088a72a39937982cc6111d17f84/pygments-2.19.1.tar.gz", hash = "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f", size = 4968581 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8a/0b/9fcc47d19c48b59121088dd6da2488a49d5f72dacf8262e2790a1d2c7d15/pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c", size = 1225293 },
+]
+
+[[package]]
+name = "python-dotenv"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/57/e84d88dfe0aec03b7a2d4327012c1627ab5f03652216c63d49846d7a6c58/python-dotenv-1.0.1.tar.gz", hash = "sha256:e324ee90a023d808f1959c46bcbc04446a10ced277783dc6ee09987c37ec10ca", size = 39115 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/3e/b68c118422ec867fa7ab88444e1274aa40681c606d59ac27de5a5588f082/python_dotenv-1.0.1-py3-none-any.whl", hash = "sha256:f7b63ef50f1b690dddf550d03497b66d609393b40b564ed0d674909a68ebf16a", size = 19863 },
+]
+
+[[package]]
+name = "rich"
+version = "13.9.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "pygments" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ab/3a/0316b28d0761c6734d6bc14e770d85506c986c85ffb239e688eeaab2c2bc/rich-13.9.4.tar.gz", hash = "sha256:439594978a49a09530cff7ebc4b5c7103ef57baf48d5ea3184f21d9a2befa098", size = 223149 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/71/39c7c0d87f8d4e6c020a393182060eaefeeae6c01dab6a84ec346f2567df/rich-13.9.4-py3-none-any.whl", hash = "sha256:6049d5e6ec054bf2779ab3358186963bac2ea89175919d699e378b99738c2a90", size = 242424 },
+]
+
+[[package]]
+name = "shellingham"
+version = "1.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/58/15/8b3609fd3830ef7b27b655beb4b4e9c62313a4e8da8c676e142cc210d58e/shellingham-1.5.4.tar.gz", hash = "sha256:8dbca0739d487e5bd35ab3ca4b36e11c4078f3a234bfce294b0a0291363404de", size = 10310 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/f9/0595336914c5619e5f28a1fb793285925a8cd4b432c9da0a987836c7f822/shellingham-1.5.4-py2.py3-none-any.whl", hash = "sha256:7ecfff8f2fd72616f7481040475a65b2bf8af90a56c89140852d1120324e8686", size = 9755 },
+]
+
+[[package]]
+name = "sniffio"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235 },
+]
+
+[[package]]
+name = "sse-starlette"
+version = "2.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "starlette" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/a4/80d2a11af59fe75b48230846989e93979c892d3a20016b42bb44edb9e398/sse_starlette-2.2.1.tar.gz", hash = "sha256:54470d5f19274aeed6b2d473430b08b4b379ea851d953b11d7f1c4a2c118b419", size = 17376 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d9/e0/5b8bd393f27f4a62461c5cf2479c75a2cc2ffa330976f9f00f5f6e4f50eb/sse_starlette-2.2.1-py3-none-any.whl", hash = "sha256:6410a3d3ba0c89e7675d4c273a301d64649c03a5ef1ca101f10b47f895fd0e99", size = 10120 },
+]
+
+[[package]]
+name = "starlette"
+version = "0.46.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/44/b6/fb9a32e3c5d59b1e383c357534c63c2d3caa6f25bf3c59dd89d296ecbaec/starlette-0.46.0.tar.gz", hash = "sha256:b359e4567456b28d473d0193f34c0de0ed49710d75ef183a74a5ce0499324f50", size = 2575568 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/94/8af675a62e3c91c2dee47cf92e602cfac86e8767b1a1ac3caf1b327c2ab0/starlette-0.46.0-py3-none-any.whl", hash = "sha256:913f0798bd90ba90a9156383bcf1350a17d6259451d0d8ee27fc0cf2db609038", size = 71991 },
+]
+
+[[package]]
+name = "typer"
+version = "0.15.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "rich" },
+    { name = "shellingham" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8b/6f/3991f0f1c7fcb2df31aef28e0594d8d54b05393a0e4e34c65e475c2a5d41/typer-0.15.2.tar.gz", hash = "sha256:ab2fab47533a813c49fe1f16b1a370fd5819099c00b119e0633df65f22144ba5", size = 100711 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7f/fc/5b29fea8cee020515ca82cc68e3b8e1e34bb19a3535ad854cac9257b414c/typer-0.15.2-py3-none-any.whl", hash = "sha256:46a499c6107d645a9c13f7ee46c5d5096cae6f5fc57dd11eccbbb9ae3e44ddfc", size = 45061 },
+]
+
+[[package]]
+name = "typing-extensions"
+version = "4.12.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/db/f35a00659bc03fec321ba8bce9420de607a1d37f8342eee1863174c69557/typing_extensions-4.12.2.tar.gz", hash = "sha256:1a7ead55c7e559dd4dee8856e3a88b41225abfe1ce8df57b7c13915fe121ffb8", size = 85321 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/9f/ad63fc0248c5379346306f8668cda6e2e2e9c95e01216d2b8ffd9ff037d0/typing_extensions-4.12.2-py3-none-any.whl", hash = "sha256:04e5ca0351e0f3f85c6853954072df659d0d13fac324d0072316b67d7794700d", size = 37438 },
+]
+
+[[package]]
+name = "uvicorn"
+version = "0.34.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "h11" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4b/4d/938bd85e5bf2edeec766267a5015ad969730bb91e31b44021dfe8b22df6c/uvicorn-0.34.0.tar.gz", hash = "sha256:404051050cd7e905de2c9a7e61790943440b3416f49cb409f965d9dcd0fa73e9", size = 76568 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/14/33a3a1352cfa71812a3a21e8c9bfb83f60b0011f5e36f2b1399d51928209/uvicorn-0.34.0-py3-none-any.whl", hash = "sha256:023dc038422502fa28a09c7a30bf2b6991512da7dcdb8fd35fe57cfc154126f4", size = 62315 },
+]
+
+```
