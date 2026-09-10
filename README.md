@@ -674,7 +674,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://lolc2.github.io [collection of C2 frameworks that leverage legitimate services to evade detection]
 
 > Debugging
-- https://github.com/stars/gmh5225/lists/debugger [List]
+- https://github.com/gmh5225/gmh5225/lists/debugger [List]
 - https://github.com/cheat-engine/cheat-engine
 - https://github.com/SinaKarvandi/Hypervisor-From-Scratch [Hypervisor]
 - https://github.com/JasonGoemaat/CheatEngineMonoHelper [CE Mono Helper]
@@ -1705,7 +1705,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/DLLHSC [DLL Hijack SCanner]
 
 > Hook
-- https://github.com/stars/gmh5225/lists/hook [Lists]
+- https://github.com/gmh5225/gmh5225/lists/hook [Lists]
 - https://github.com/gmh5225/Detours
 - https://github.com/gmh5225/DetoursNT
 - https://github.com/gmh5225/ntminhook [A modified version of MinHook that only uses the Windows Native API]
