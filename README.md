@@ -571,7 +571,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/guided-hacking/GH_D3D11_Hook [DX11]
 - https://github.com/gogo9211/Discord-Overlay-Hook [DX11]
 - https://github.com/ocornut/imgui/commit/923bd2fd217c1dc1e75fa92b0284d3817904988b [DX11/12 ResizeBuffers]
-- https://github.com/marlkiller/d3dhook_imgui [d3d opengl hook imgui x86/x64]
+- https://github.com/gmh5225/d3dhook_imgui [d3d opengl hook imgui x86/x64]
 - [Universal graphical hook for a D3D9-D3D12, OpenGL and Vulkan based games](https://github.com/Rebzzel/kiero)
 - https://github.com/jmpews/Dobby [a lightweight, multi-platform, multi-architecture hook framework]
 - https://github.com/Sh0ckFR/Universal-Dear-ImGui-Hook [An universal Dear ImGui Hook]
