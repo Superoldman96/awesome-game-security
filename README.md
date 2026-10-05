@@ -677,7 +677,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/gmh5225/gmh5225/lists/debugger [List]
 - https://github.com/cheat-engine/cheat-engine
 - https://github.com/SinaKarvandi/Hypervisor-From-Scratch [Hypervisor]
-- https://github.com/JasonGoemaat/CheatEngineMonoHelper [CE Mono Helper]
+- https://github.com/gmh5225/CheatEngineMonoHelper [CE Mono Helper]
 - https://github.com/gmh5225/frida-ceserver [CE Server For IOS]
 - https://github.com/gmh5225/ceserver-ios [Porting ceserver to iOS.Dynamic analysis]
 - https://github.com/gmh5225/ceserver-ios [An iOS port of Cheat Engine's ceserver]
