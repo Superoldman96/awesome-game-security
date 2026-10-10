@@ -1842,6 +1842,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/TrungNguyen1909/aarch64-sysreg-ida [A IDA plugin to show ARM MSRs nicely]
 - https://github.com/danielplohmann/gui-plugin-template [A template for cross-compatible GUI plugins]
 - https://github.com/williballenthin/ida-settings [Python library and GUI plugin for fetching and editing IDA Pro plugin configuration via Hex-Rays HCLI/ida-config.json]
+- https://github.com/AlonSoko/ida-plugin-lens [IDA Pro plugin for Edit > Plugins: icons, grouping, version labels, and hcli-driven update status]
 - https://github.com/3641397194-wq/ida-zh-cn [Runtime Simplified-Chinese UI plugin for IDA Pro 9.x that localizes menus and dialogs without patching IDA binaries]
 - https://github.com/gmh5225/IDA-MapSymbolParser [IDA Map File Symbol Renamer]
 - https://github.com/gmh5225/IDA-KallsymsSymbolRenamer [IDA kallsyms Renamer]
