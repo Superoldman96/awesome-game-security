@@ -4,6 +4,8 @@ Append-only journal of ingest / lint / skill-sync activity.
 
 ---
 
+- **2026-10-10** — lint (agent): catalog scan — **Overviews** (9): `anti-cheat`, `dma-attack`, `game-engine`, `game-hacking`, `graphics-api`, `mobile-security`, `overview`, `reverse-engineering`, `windows-kernel`; **Concepts** (51); **Entities** (4024); index vs disk — 4084 paths, 0 missing, 0 dead, 0 duplicate; overview wikilink spot-check — 0 broken (12318 links); concept spot-check — 0 broken (2391 links); index wikilink scan — 0 broken (830 links); 6 expected cross-kind slug collisions ([[game-hacking]], [[anti-cheat]], [[reverse-engineering]], [[il2cpp]], [[byovd]], [[dma]]); wiki populated — bootstrap not required; `index.md` unchanged.
+
 - **2026-10-10** — ingest `description:bmjubairdadu/kernel-loader`: entity [[kernel-loader]] (Kotlin Compose OTA/embedded `.ko` match; libsu insmod; Magisk/KernelSU/APatch; RT/QX misc IOCTL physical-memory R/W; Linux 4.9–6.6); cited on [[overviews/mobile-security]] kernel-driver lane and [[overviews/game-hacking]] Cheat list; `index.md` entity blurb unchanged.
 
 - **2026-10-10** — ingest `readme:categories`: Cheat ~2869 (+1; bmjubairdadu/[[kernel-loader]] rooted Android kernel-match OTA `.ko` loader with vermagic patch, insmod -f, SELinux; Magisk/KernelSU/APatch; RT/QX misc-device physical-memory IOCTLs; Android Kernel Driver) / Anti Cheat ~779 / other major section counts stable; 41 sections; synced projected README-map counts on [[overviews/overview]], [[overviews/game-hacking]], [[overviews/dma-attack]], [[overviews/reverse-engineering]], and [[overviews/mobile-security]]; entity [[kernel-loader]]; light `index.md` section notes (no per-category pages).
