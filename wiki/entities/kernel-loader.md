@@ -1,5 +1,5 @@
 ---
-title: kernel-loader
+title: Kernel Loader
 kind: entity
 topics: [mobile-security, game-hacking, reverse-engineering]
 sources:
@@ -21,4 +21,4 @@ Targets arm64 developers and researchers who need reliable kernel-level memory a
 
 ## Related
 
-[[integrated-kernel-module]] · [[vermagic]] · [[kernelsu]] · [[magisk]] · [[android-kernel-hacking-toolkit]] · [[overviews/mobile-security]] · [[overviews/game-hacking]] · [[mobile-anti-cheat]]
+[[integrated-kernel-module]] · [[vermagic]] · [[kernelsu]] · [[magisk]] · [[apatch]] · [[android-kernel-hacking-toolkit]] · [[overviews/mobile-security]] · [[overviews/game-hacking]] · [[mobile-anti-cheat]]
