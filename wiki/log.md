@@ -4,6 +4,8 @@ Append-only journal of ingest / lint / skill-sync activity.
 
 ---
 
+- **2026-10-10** — lint (agent): catalog scan — **Overviews** (9): `anti-cheat`, `dma-attack`, `game-engine`, `game-hacking`, `graphics-api`, `mobile-security`, `overview`, `reverse-engineering`, `windows-kernel`; **Concepts** (51); **Entities** (4025); index vs disk — 4085 paths, 0 missing, 0 dead, 0 duplicate; overview wikilink spot-check — 0 broken (12322 links); concept spot-check — 0 broken (2391 links); index wikilink scan — 0 broken; 6 expected cross-kind slug collisions ([[game-hacking]], [[anti-cheat]], [[reverse-engineering]], [[il2cpp]], [[byovd]], [[dma]]); wiki populated — bootstrap not required; `index.md` unchanged; no link repairs.
+
 - **2026-10-10** — ingest `description:AlonSoko/ida-plugin-lens`: refreshed entity [[ida-plugin-lens]] (Capabilities: Edit›Plugins icons/grouping/version labels, hcli in-IDA upgrades; Python IDA 9.0+; malware/game analyst plugin stacks); cited on [[overviews/game-hacking]] IDA infrastructure lane; corrected [[overviews/reverse-engineering]] menu-organizer vs settings wording; `index.md` entity blurb sync.
 
 - **2026-10-10** — ingest `readme:categories`: Cheat ~2870 (+1; AlonSoko/[[ida-plugin-lens]] IDA Pro 9.0+ Edit›Plugins menu organizer — icons, hcli repo grouping, version/update tags, in-IDA upgrades; Cheat / RE Tools) / Anti Cheat ~779 / other major section counts stable; 41 sections (`NeverC & NeverD` placeholder); synced projected README-map counts on [[overviews/overview]], [[overviews/game-hacking]], [[overviews/dma-attack]], and [[overviews/reverse-engineering]]; entity [[ida-plugin-lens]]; light `index.md` section notes (no per-category pages).
