@@ -1,5 +1,5 @@
 ---
-title: ida-plugin-lens
+title: Plugin Lens
 kind: entity
 topics: [reverse-engineering, game-hacking]
 sources:
@@ -9,15 +9,24 @@ updated: 2026-10-10
 confidence: medium
 ---
 
-# ida-plugin-lens
+# Plugin Lens
 
-**IDA Pro** GUI plugin (Python; **IDA 9.0+**) that reorganizes **Edit › Plugins** for analysts running large **hcli** / **ida-plugin.json** ecosystems. Assigns icons from plugin manifests, bundled artwork, or user `plugin-lens` images without overwriting plugin-set icons; groups built-in, hcli-installed (by repository), and manual plugins; shows version superscripts and update tags; can run **hcli** upgrade flows from inside IDA when newer releases are reported. (source: wiki/sources/descriptions/AlonSoko__ida-plugin-lens.md)
+**Plugin Lens** (AlonSoko) is a Python **IDA Pro** GUI plugin (**IDA 9.0+**) that reorganizes **Edit › Plugins** for reverse engineers, malware analysts, and game-security researchers who rely on large **hcli** and **ida-plugin.json** plugin stacks.
+
+## Capabilities
+
+- **Icons:** from each plugin’s `ida-plugin.json` logo, bundled artwork for built-in entries, or custom images in the user `plugin-lens` folder—without overwriting icons a plugin already sets.
+- **Grouping:** built-in plugins, hcli-installed plugins (by repository), and manually installed plugins.
+- **Version visibility:** superscript version numbers and tags when hcli reports newer releases.
+- **Updates:** a menu action runs hcli’s upgrade flow inside IDA for selected plugins.
+
+(source: wiki/sources/descriptions/AlonSoko__ida-plugin-lens.md)
 
 Workflow infrastructure—not decompilation or automation. Complements [[ida-settings]] configuration management and [[ida-plugin-repository]] manifest discovery.
 
 ## Links
 
-- Repo: https://github.com/AlonSoko/ida-plugin-lens
+- Repo: https://github.com/AlonSoko/ida-plugin-lens (Cheat / RE Tools)
 
 ## Related
 
