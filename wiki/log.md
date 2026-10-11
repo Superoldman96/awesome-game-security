@@ -4,6 +4,8 @@ Append-only journal of ingest / lint / skill-sync activity.
 
 ---
 
+- **2026-10-11** — lint (agent): catalog scan — **Overviews** (9): `anti-cheat`, `dma-attack`, `game-engine`, `game-hacking`, `graphics-api`, `mobile-security`, `overview`, `reverse-engineering`, `windows-kernel`; **Concepts** (51); **Entities** (4027); index vs disk — 4087 paths, 0 missing, 0 dead; overview/concept wikilink spot-check — 0 broken (15559 links); index wikilink scan — 0 broken; 6 expected cross-kind slug collisions ([[game-hacking]], [[anti-cheat]], [[reverse-engineering]], [[il2cpp]], [[byovd]], [[dma]]); wiki populated — bootstrap not required; `index.md` unchanged; no link repairs.
+
 - **2026-10-11** — ingest `description:gjones01/NullCS`: refreshed entity [[nullcs]] (demoparser2/awpy per-engagement windows; 1D-CNN on aim/mouse/visibility/timing + XGBoost over ~450 player features; Next.js + FastAPI-style desktop/upload workflows; human-review-first CS2 demo screening); cited on [[overviews/anti-cheat]] offline demo evidence lane + [[ai-aimbot-detection]] corpus; `index.md` entity blurb sync.
 
 - **2026-10-11** — ingest `description:robbe1912/motorstorm-mv-recomp`: refreshed entity [[motorstorm-mv-recomp]] (WIP PS3 PPU/SPU ps3recomp static translation; CMake/Python lift; Cell HLE + D3D12/FFmpeg; Havok/SPURS/SPU-ELF + source-coverage auditing; preservation/RE focus); cited on [[concepts/static-runtime-evidence]] PS3 static-recomp cluster + [[overviews/game-hacking]] console static-recomp lane; `index.md` entity blurb sync.
