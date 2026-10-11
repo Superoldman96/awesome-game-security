@@ -7,7 +7,8 @@ sources:
   - wiki/sources/descriptions/HullaBrian__ttd-capa-cpp.md
   - wiki/sources/descriptions/vs-sr-dev__saturnkit.md
   - wiki/sources/descriptions/wivi514__Dead_Rising_2_Case_Zero_Xenon_Recomp.md
-updated: 2026-10-07
+  - wiki/sources/descriptions/robbe1912__motorstorm-mv-recomp.md
+updated: 2026-10-11
 confidence: high
 ---
 
@@ -49,7 +50,7 @@ State which protections were identified, which recovery steps were applied, and 
 
 ## Reference-trace validation
 
-Static recompilation projects such as [[jsrf-recomp]] (OG Xbox XBE→native macOS ARM64 via xboxrecomp) pair translated C output with an extensive diagnostics harness that validates behavior against reference emulator traces—illustrating how static translation claims should be corroborated with runtime or trace-aligned evidence before treating recompiled builds as faithful. (source: wiki/sources/descriptions/andeecollard__jsrf-recomp.md) [[saturnkit]] (vs-sr-dev; Python SH-2 analysis + static recomp to C++ with a C++20 Saturn hardware runtime for native PC ports) splits the same static/runtime boundary across analysis tooling and an embedded per-title port submodule model. (source: wiki/sources/descriptions/vs-sr-dev__saturnkit.md) Xbox 360 XenonRecomp ports such as [[dead-rising-2-case-zero-xenon-recomp]] (wivi514; Case Zero XBLA; XenonRecomp + XenosRecomp; kernel high-level emulation with **honest-failure stubs**; jump-table recovery + recompilation-pitfall documentation) and [[mcla-pc]] (Midnight Club: LA; XenonRecomp + Xenos→DXIL replay) show how partially implemented kernel/GPU runtime services must be labeled explicitly when static PPC translation outruns host emulation coverage. (source: wiki/sources/descriptions/wivi514__Dead_Rising_2_Case_Zero_Xenon_Recomp.md)
+Static recompilation projects such as [[jsrf-recomp]] (OG Xbox XBE→native macOS ARM64 via xboxrecomp) pair translated C output with an extensive diagnostics harness that validates behavior against reference emulator traces—illustrating how static translation claims should be corroborated with runtime or trace-aligned evidence before treating recompiled builds as faithful. (source: wiki/sources/descriptions/andeecollard__jsrf-recomp.md) [[saturnkit]] (vs-sr-dev; Python SH-2 analysis + static recomp to C++ with a C++20 Saturn hardware runtime for native PC ports) splits the same static/runtime boundary across analysis tooling and an embedded per-title port submodule model. (source: wiki/sources/descriptions/vs-sr-dev__saturnkit.md) Xbox 360 XenonRecomp ports such as [[dead-rising-2-case-zero-xenon-recomp]] (wivi514; Case Zero XBLA; XenonRecomp + XenosRecomp; kernel high-level emulation with **honest-failure stubs**; jump-table recovery + recompilation-pitfall documentation) and [[mcla-pc]] (Midnight Club: LA; XenonRecomp + Xenos→DXIL replay) show how partially implemented kernel/GPU runtime services must be labeled explicitly when static PPC translation outruns host emulation coverage. (source: wiki/sources/descriptions/wivi514__Dead_Rising_2_Case_Zero_Xenon_Recomp.md) [[motorstorm-mv-recomp]] (robbe1912; PS3 *MotorStorm: Monument Valley* WIP; static PPU/SPU translation via ps3recomp instead of full Cell emulation; **source-coverage auditing** with retail binaries and lift output kept local) illustrates the same uncertainty labeling for incomplete native ports aimed at preservation RE rather than finished gameplay. (source: wiki/sources/descriptions/robbe1912__motorstorm-mv-recomp.md)
 
 ## Behavioral capability from TTD traces
 
@@ -57,4 +58,4 @@ Full-process **Time Travel Debugging (TTD)** recordings capture executed API cal
 
 ## Related
 
-[[binary-evidence]] · [[binary-diffing]] · [[dynamic-binary-instrumentation]] · [[jsrf-recomp]] · [[saturnkit]] · [[dead-rising-2-case-zero-xenon-recomp]] · [[mcla-pc]] · [[ttd-capa-cpp]] · [[mixed-boolean-arithmetic]] · [[control-flow-flattening]] · [[research-rigor]] · [[overviews/reverse-engineering]] · [[overviews/windows-kernel]] · [[overviews/game-engine]]
+[[binary-evidence]] · [[binary-diffing]] · [[dynamic-binary-instrumentation]] · [[jsrf-recomp]] · [[saturnkit]] · [[motorstorm-mv-recomp]] · [[dead-rising-2-case-zero-xenon-recomp]] · [[mcla-pc]] · [[ttd-capa-cpp]] · [[mixed-boolean-arithmetic]] · [[control-flow-flattening]] · [[research-rigor]] · [[overviews/reverse-engineering]] · [[overviews/windows-kernel]] · [[overviews/game-engine]]
