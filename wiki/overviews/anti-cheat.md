@@ -18,6 +18,7 @@ sources:
   - wiki/sources/descriptions/Parko-Developer__guard-game.md
   - wiki/sources/descriptions/Driw0x__CS2Guard.md
   - wiki/sources/descriptions/oykuoner__YAACS-AntiCheat.md
+  - wiki/sources/descriptions/gjones01__NullCS.md
   - wiki/sources/descriptions/NetVar1337__apex-anticheat-lab.md
   - wiki/sources/descriptions/Nimdy__detect-FPS-hackers.md
   - wiki/sources/descriptions/zelect0r__zamr.md
@@ -1311,7 +1312,7 @@ Long-form kernel AC architecture primer [How Kernel Anti-Cheats Work](https://s4
 
 **Offline CS2 demo review:** [[cs2-overwatch]] (magicnothief; Python offline demo pipeline; hard rules, ray-cast visibility, ML behavior scoring on CS2CD, calibrated suspicion tiers, optional local LLM summaries; browser UI + CLI; privacy-preserving local review; Anti Cheat / Analysis Framework) beside demo-telemetry research such as [[yaacs-anticheat]] and explainable scoring tools such as [[cs2-tracker]]. (source: wiki/sources/descriptions/magicnothief__cs2-overwatch.md)
 
-**Offline CS2 demo evidence tables:** [[nullcs]] (gjones01; offline `.dem` pipeline; tick-level aim/visibility feature extraction; player ranking with tabular evidence for human review—no automated bans; Anti Cheat / Analysis Framework) beside [[cs2-overwatch]] and [[yaacs-anticheat]] demo-telemetry lanes. (source: wiki/sources/README-categories.md)
+**Offline CS2 demo evidence tables:** [[nullcs]] (gjones01; demoparser2/awpy `.dem` → per-engagement windows; CNN on aim/mouse/visibility/timing sequences + XGBoost over ~450 player features for lobby rankings; Next.js + FastAPI-style upload/desktop workflows; tabular evidence for human review—no automated bans; Anti Cheat / Analysis Framework) beside [[cs2-overwatch]] and [[yaacs-anticheat]] demo-telemetry lanes. (source: wiki/sources/descriptions/gjones01__NullCS.md)
 
 **FPS behavioral research lab:** [[apex-anticheat-lab]] (NetVar1337; Python server-side input telemetry; aim kinematics, reaction times, recoil regularity, triggerbot signatures; per-cohort baselines; analyst-review ranking; YARA loader/HWID-spoofer rules; read-only PowerShell host driver/PCIe/vulnerable-driver-blocklist survey; match-integrity SQL; FPS cheat taxonomy + threshold calibration docs; Anti Cheat / Open Source Anti Cheat System) beside demo-telemetry ML stacks such as [[yaacs-anticheat]] and [[cs2guard]]. (source: wiki/sources/descriptions/NetVar1337__apex-anticheat-lab.md)
 

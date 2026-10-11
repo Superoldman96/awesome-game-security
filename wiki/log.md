@@ -4,6 +4,8 @@ Append-only journal of ingest / lint / skill-sync activity.
 
 ---
 
+- **2026-10-11** — ingest `description:gjones01/NullCS`: refreshed entity [[nullcs]] (demoparser2/awpy per-engagement windows; 1D-CNN on aim/mouse/visibility/timing + XGBoost over ~450 player features; Next.js + FastAPI-style desktop/upload workflows; human-review-first CS2 demo screening); cited on [[overviews/anti-cheat]] offline demo evidence lane + [[ai-aimbot-detection]] corpus; `index.md` entity blurb sync.
+
 - **2026-10-11** — ingest `description:robbe1912/motorstorm-mv-recomp`: refreshed entity [[motorstorm-mv-recomp]] (WIP PS3 PPU/SPU ps3recomp static translation; CMake/Python lift; Cell HLE + D3D12/FFmpeg; Havok/SPURS/SPU-ELF + source-coverage auditing; preservation/RE focus); cited on [[concepts/static-runtime-evidence]] PS3 static-recomp cluster + [[overviews/game-hacking]] console static-recomp lane; `index.md` entity blurb sync.
 
 - **2026-10-11** — ingest `readme:categories`: Cheat ~2871 (+1; robbe1912/[[motorstorm-mv-recomp]] PS3 MotorStorm MV source-only ps3recomp static-recomp/translation tooling; Cheat / RE Tools) / Anti Cheat ~780 (+1; gjones01/[[nullcs]] offline CS2 demo tick-level aim/visibility evidence tables for human review—not auto-ban) / other major section counts stable; 41 sections (`NeverC & NeverD` placeholder); synced projected README-map counts on [[overviews/overview]], [[overviews/game-hacking]], [[overviews/dma-attack]], [[overviews/reverse-engineering]], and [[overviews/anti-cheat]]; entities [[motorstorm-mv-recomp]], [[nullcs]]; light `index.md` section notes (no per-category pages).
