@@ -4,6 +4,8 @@ Append-only journal of ingest / lint / skill-sync activity.
 
 ---
 
+- **2026-10-11** — lint (agent): catalog scan — **Overviews** (9): `anti-cheat`, `dma-attack`, `game-engine`, `game-hacking`, `graphics-api`, `mobile-security`, `overview`, `reverse-engineering`, `windows-kernel`; **Concepts** (51); **Entities** (4027); index vs disk — 4087 paths, 0 missing, 0 dead, 0 duplicate; overview wikilink spot-check — 0 broken (12331 links); concept spot-check — 0 broken (2394 links); index wikilink scan — 0 broken (834 links); 6 expected cross-kind slug collisions ([[game-hacking]], [[anti-cheat]], [[reverse-engineering]], [[il2cpp]], [[byovd]], [[dma]]); wiki populated — bootstrap not required; `index.md` unchanged; no link repairs.
+
 - **2026-10-11** — lint (agent): catalog scan — **Overviews** (9): `anti-cheat`, `dma-attack`, `game-engine`, `game-hacking`, `graphics-api`, `mobile-security`, `overview`, `reverse-engineering`, `windows-kernel`; **Concepts** (51); **Entities** (4027); index vs disk — 4087 paths, 0 missing, 0 dead; overview/concept wikilink spot-check — 0 broken (15559 links); index wikilink scan — 0 broken; 6 expected cross-kind slug collisions ([[game-hacking]], [[anti-cheat]], [[reverse-engineering]], [[il2cpp]], [[byovd]], [[dma]]); wiki populated — bootstrap not required; `index.md` unchanged; no link repairs.
 
 - **2026-10-11** — ingest `description:gjones01/NullCS`: refreshed entity [[nullcs]] (demoparser2/awpy per-engagement windows; 1D-CNN on aim/mouse/visibility/timing + XGBoost over ~450 player features; Next.js + FastAPI-style desktop/upload workflows; human-review-first CS2 demo screening); cited on [[overviews/anti-cheat]] offline demo evidence lane + [[ai-aimbot-detection]] corpus; `index.md` entity blurb sync.
