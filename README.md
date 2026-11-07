@@ -419,7 +419,7 @@ npx skills add https://github.com/gmh5225/awesome-game-security --skill reverse-
 - https://github.com/dufernst/LegionCore-7.3.5 [wow]
 - https://github.com/RageProject/5.4.7-Wow-source [wow]
 - https://github.com/SkyFire/MopCore547 [wow]
-- https://github.com/Arctium/WoW-Launcher [wow launcher]
+- https://github.com/gmh5225/WoW-Launcher [wow launcher]
 - https://github.com/skMetinek/Non-Newtonian-New-York [Spider-Man Remastered Mod]
 - https://github.com/playgameservices/cpp-android-basic-samples [Sample games using the Google Play Games C++ SDK]
 - https://github.com/pafuhana1213/KawaiiPhysics [Simple fake Physics for UnrealEngine4 & 5]
